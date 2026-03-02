@@ -1,0 +1,22 @@
+{
+  "categories": ["tiles", "sprites", "fx", "ui"],
+  "ignore": ["raw/**", "**/*.gif"],
+  "semanticPrefixes": {
+    "tiles": "tile",
+    "sprites": "sprite",
+    "fx": "fx",
+    "ui": "ui"
+  },
+  "spritesheets": [
+    {
+      "match": "tiles/atlas_*16x16.png",
+      "category": "tiles",
+      "frame": { "width": 16, "height": 16 }
+    },
+    {
+      "match": "fx/**/*.png",
+      "category": "fx",
+      "frame": { "width": 32, "height": 32 }
+    }
+  ]
+}

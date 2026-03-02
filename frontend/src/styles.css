@@ -1,0 +1,23 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  background: linear-gradient(180deg, #eef2ff 0%, #f8fafc 45%, #ecfeff 100%);
+  color: #0f172a;
+  overflow: hidden;
+}
+
+app-root {
+  display: block;
+  height: 100%;
+}
