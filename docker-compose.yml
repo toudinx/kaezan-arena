@@ -1,0 +1,25 @@
+version: "3.9"
+
+services:
+  backend:
+    image: mcr.microsoft.com/dotnet/sdk:9.0
+    container_name: kaezan-backend-dev
+    working_dir: /workspace/backend/src/KaezanArena.Api
+    command: >
+      bash -lc "dotnet restore && dotnet run --urls http://0.0.0.0:5080"
+    volumes:
+      - ./:/workspace
+    ports:
+      - "5080:5080"
+
+  frontend:
+    image: node:22
+    container_name: kaezan-frontend-dev
+    working_dir: /workspace/frontend
+    command: >
+      bash -lc "npm install && echo 'Frontend scaffold running on placeholder port 4200' && sleep infinity"
+    volumes:
+      - ./:/workspace
+    ports:
+      - "4200:4200"
+

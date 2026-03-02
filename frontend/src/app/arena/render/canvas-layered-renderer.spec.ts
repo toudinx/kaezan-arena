@@ -1,0 +1,185 @@
+import { ArenaScene } from "../engine/arena-engine.types";
+import { CanvasLayeredRenderer } from "./canvas-layered-renderer";
+
+describe("CanvasLayeredRenderer effective target marker", () => {
+  it("uses effectiveTargetEntityId as an entity id and hides marker when entity is missing", () => {
+    const context = createContextStub();
+    const renderer = new CanvasLayeredRenderer(context.context as unknown as CanvasRenderingContext2D);
+    const viewport = {
+      canvasWidth: 480,
+      canvasHeight: 420,
+      originX: 0,
+      originY: 0
+    };
+    const scene = createScene();
+
+    (renderer as any).drawLockedTargetMarker(scene, viewport);
+    expect(context.arcCallCount).toBeGreaterThan(0);
+
+    context.reset();
+    scene.effectiveTargetEntityId = "dragon";
+    (renderer as any).drawLockedTargetMarker(scene, viewport);
+    expect(context.arcCallCount).toBe(0);
+
+    context.reset();
+    scene.effectiveTargetEntityId = "mob.missing";
+    (renderer as any).drawLockedTargetMarker(scene, viewport);
+    expect(context.arcCallCount).toBe(0);
+
+    context.reset();
+    scene.effectiveTargetEntityId = null;
+    (renderer as any).drawLockedTargetMarker(scene, viewport);
+    expect(context.arcCallCount).toBe(0);
+  });
+});
+
+describe("CanvasLayeredRenderer floating number palette", () => {
+  it("resolves Tibia-style colors by damage context and element", () => {
+    const context = createContextStub();
+    const renderer = new CanvasLayeredRenderer(context.context as unknown as CanvasRenderingContext2D);
+    const resolveColor = (entry: unknown) => (renderer as any).resolveDamageNumberFillColor(entry);
+
+    expect(resolveColor(createDamageEntry({ element: 6 }))).toBe("#ffffff");
+    expect(resolveColor(createDamageEntry({ element: 1 }))).toBe("#ff9f2d");
+    expect(resolveColor(createDamageEntry({ isDamageReceived: true, element: 1 }))).toBe("#ef4444");
+    expect(resolveColor(createDamageEntry({ isHeal: true, kind: "heal" }))).toBe("#39ff14");
+    expect(resolveColor(createDamageEntry({ isShieldChange: true, shieldChangeDirection: "gain" }))).toBe("#93c5fd");
+    expect(resolveColor(createDamageEntry({ isShieldChange: true, shieldChangeDirection: "loss" }))).toBe("#3b82f6");
+  });
+
+  it("increases crit size deterministically by ~25%", () => {
+    const context = createContextStub();
+    const renderer = new CanvasLayeredRenderer(context.context as unknown as CanvasRenderingContext2D);
+    const base = (renderer as any).computeDamageNumberEntryFontSizePx(16, createDamageEntry({ isCrit: false }), 0.5);
+    const crit = (renderer as any).computeDamageNumberEntryFontSizePx(16, createDamageEntry({ isCrit: true }), 0.5);
+
+    expect(crit).toBeGreaterThan(base);
+    expect(crit).toBeGreaterThanOrEqual(Math.floor(base * 1.2));
+  });
+});
+
+function createContextStub(): ContextStub {
+  const canvas = document.createElement("canvas");
+  canvas.width = 480;
+  canvas.height = 420;
+
+  const stub: ContextStub = {
+    arcCallCount: 0,
+    context: {
+      canvas,
+      getTransform: () => new DOMMatrix(),
+      clearRect: () => undefined,
+      save: () => undefined,
+      restore: () => undefined,
+      beginPath: () => undefined,
+      moveTo: () => undefined,
+      lineTo: () => undefined,
+      closePath: () => undefined,
+      arc: () => {
+        stub.arcCallCount += 1;
+      },
+      stroke: () => undefined,
+      fill: () => undefined,
+      setLineDash: () => undefined,
+      drawImage: () => undefined
+    },
+    reset: () => {
+      stub.arcCallCount = 0;
+    }
+  };
+
+  return stub;
+}
+
+function createScene(): ArenaScene {
+  return {
+    columns: 7,
+    rows: 7,
+    tileSize: 48,
+    playerTile: { x: 3, y: 3 },
+    effectiveTargetEntityId: "mob.42",
+    lockedTargetEntityId: "mob.42",
+    groundTargetPos: null,
+    actorsById: {
+      player_demo: {
+        actorId: "player_demo",
+        kind: "player",
+        tileX: 3,
+        tileY: 3,
+        hp: 120,
+        maxHp: 120
+      },
+      "mob.42": {
+        actorId: "mob.42",
+        kind: "mob",
+        mobType: 4,
+        tileX: 4,
+        tileY: 3,
+        hp: 10,
+        maxHp: 10
+      },
+      "mob.99": {
+        actorId: "mob.99",
+        kind: "mob",
+        mobType: 4,
+        tileX: 5,
+        tileY: 3,
+        hp: 10,
+        maxHp: 10
+      }
+    },
+    actorVisualsById: {},
+    skillsById: {},
+    tiles: [],
+    sprites: [],
+    decals: [],
+    activeBuffs: [],
+    activePois: [],
+    fxInstances: [],
+    attackFxInstances: [],
+    damageNumbers: []
+  };
+}
+
+interface ContextStub {
+  arcCallCount: number;
+  context: {
+    canvas: HTMLCanvasElement;
+    getTransform: () => DOMMatrix;
+    clearRect: (...args: unknown[]) => void;
+    save: (...args: unknown[]) => void;
+    restore: (...args: unknown[]) => void;
+    beginPath: (...args: unknown[]) => void;
+    moveTo: (...args: unknown[]) => void;
+    lineTo: (...args: unknown[]) => void;
+    closePath: (...args: unknown[]) => void;
+    arc: (...args: unknown[]) => void;
+    stroke: (...args: unknown[]) => void;
+    fill: (...args: unknown[]) => void;
+    setLineDash: (...args: unknown[]) => void;
+    drawImage: (...args: unknown[]) => void;
+    [key: string]: unknown;
+  };
+  reset: () => void;
+}
+
+function createDamageEntry(overrides: Partial<ArenaScene["damageNumbers"][number]>): ArenaScene["damageNumbers"][number] {
+  return {
+    actorId: "mob.42",
+    amount: 3,
+    isCrit: false,
+    kind: "damage",
+    isHeal: false,
+    isShieldChange: false,
+    isDamageReceived: false,
+    sourceEntityId: "player_demo",
+    targetEntityId: "mob.42",
+    element: 6,
+    tilePos: { x: 4, y: 3 },
+    stackIndex: 0,
+    spawnOrder: 0,
+    elapsedMs: 0,
+    durationMs: 900,
+    ...overrides
+  };
+}

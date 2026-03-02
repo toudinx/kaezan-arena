@@ -1,0 +1,11 @@
+<div class="cooldown-frame">
+  <img class="frame-image" [src]="frameUrl" alt="Cooldown frame" />
+  <div
+    class="cooldown-fill"
+    [style.background]="
+      'conic-gradient(#22c55e ' + percentReady + '%, rgba(15,23,42,0.75) 0)'
+    "
+  ></div>
+  <span class="label">{{ remaining }} ms</span>
+</div>
+

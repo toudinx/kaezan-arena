@@ -1,0 +1,7 @@
+<div class="hud-bar">
+  <div class="hud-track">
+    <div class="hud-fill hud-fill--hp" [style.width.%]="hpPercent"></div>
+    <div class="hud-fill hud-fill--shield" [style.width.%]="shieldPercentOfMaxHp"></div>
+  </div>
+  <span class="hud-label">{{ value }}/{{ max }} (+{{ shield }})</span>
+</div>

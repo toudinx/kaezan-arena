@@ -1,0 +1,39 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v8.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v8.0": {
+      "KaezanArena.Application/1.0.0": {
+        "dependencies": {
+          "KaezanArena.Domain": "1.0.0"
+        },
+        "runtime": {
+          "KaezanArena.Application.dll": {}
+        }
+      },
+      "KaezanArena.Domain/1.0.0": {
+        "runtime": {
+          "KaezanArena.Domain.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
+      }
+    }
+  },
+  "libraries": {
+    "KaezanArena.Application/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "KaezanArena.Domain/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}

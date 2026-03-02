@@ -1,0 +1,6 @@
+{
+  "KaezanArena.Api, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null": "C:\\AI PROJECT\\kaezan-arena\\backend\\src\\KaezanArena.Api",
+  "KaezanArena.Application, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null": "C:\\AI PROJECT\\kaezan-arena\\backend\\src\\KaezanArena.Application",
+  "KaezanArena.Domain, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null": "C:\\AI PROJECT\\kaezan-arena\\backend\\src\\KaezanArena.Domain",
+  "KaezanArena.Infrastructure, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null": "C:\\AI PROJECT\\kaezan-arena\\backend\\src\\KaezanArena.Infrastructure"
+}

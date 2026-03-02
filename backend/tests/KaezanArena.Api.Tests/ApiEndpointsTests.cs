@@ -1,0 +1,3882 @@
+using System.Net;
+using System.Net.Http.Json;
+using KaezanArena.Api.Battle;
+using KaezanArena.Api.Contracts.Battle;
+using KaezanArena.Api.Contracts.Effects;
+using KaezanArena.Api.Contracts.Health;
+using Microsoft.AspNetCore.Mvc.Testing;
+
+namespace KaezanArena.Api.Tests;
+
+public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Program>>
+{
+    private const int ArenaWidth = 7;
+    private const int ArenaHeight = 7;
+    private const int PlayerTileX = 3;
+    private const int PlayerTileY = 3;
+    private const int MaxAliveMobs = 10;
+    private const int EarlyMobConcurrentCap = 6;
+    private const int EarlyMobConcurrentCapDurationMs = 75000;
+    private const int StepDeltaMs = 250;
+    private const int GlobalCooldownMs = 400;
+    private const int HealCooldownMs = 7000;
+    private const int GuardCooldownMs = 10000;
+    private const int AltarCooldownMs = 12000;
+    private const int AltarSummonSpawnCount = 2;
+    private const int HealPercentOfMaxHp = 22;
+    private const int HealAmplifierBonusPercent = 10;
+    private const int HealAmplifierDurationMs = 8000;
+    private const string HealAmplifierBuffId = "healing_amplifier";
+    private readonly HttpClient _client;
+
+    public ApiEndpointsTests(WebApplicationFactory<Program> factory)
+    {
+        _client = factory.CreateClient();
+    }
+
+    [Fact]
+    public async Task GetHealth_ReturnsOk()
+    {
+        var response = await _client.GetAsync("/health");
+        var payload = await response.Content.ReadFromJsonAsync<HealthResponseDto>();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(payload);
+        Assert.Equal("ok", payload.Status);
+    }
+
+    [Fact]
+    public async Task GetApiPing_ReturnsPongTrue()
+    {
+        var response = await _client.GetAsync("/api/ping");
+        var payload = await response.Content.ReadFromJsonAsync<Dictionary<string, bool>>();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(payload);
+        Assert.True(payload.TryGetValue("pong", out var pong));
+        Assert.True(pong);
+    }
+
+    [Fact]
+    public async Task PostBattleStart_WithFixedSeed_IsDeterministicAndInBounds()
+    {
+        const int seed = 1337;
+        var first = await StartBattleAsync("arena-seed-a", "player-seed-a", seed);
+        var second = await StartBattleAsync("arena-seed-b", "player-seed-b", seed);
+
+        Assert.Equal(seed, first.Seed);
+        Assert.Equal(seed, second.Seed);
+        Assert.Equal("started", first.BattleStatus);
+        Assert.Equal("up", first.FacingDirection);
+        Assert.Equal(0, first.GlobalCooldownRemainingMs);
+        Assert.Equal(GlobalCooldownMs, first.GlobalCooldownTotalMs);
+        Assert.Equal(ElementType.Physical, first.PlayerBaseElement);
+        Assert.Null(first.WeaponElement);
+        Assert.Equal(0, second.GlobalCooldownRemainingMs);
+        Assert.Equal(GlobalCooldownMs, second.GlobalCooldownTotalMs);
+        Assert.Equal(ElementType.Physical, second.PlayerBaseElement);
+        Assert.Null(second.WeaponElement);
+        AssertArenaInvariants(first.Actors, "player-seed-a");
+        AssertArenaInvariants(second.Actors, "player-seed-b");
+
+        var firstMobTiles = first.Actors
+            .Where(actor => actor.Kind == "mob")
+            .OrderBy(actor => actor.ActorId, StringComparer.Ordinal)
+            .Select(actor => (actor.ActorId, actor.TileX, actor.TileY))
+            .ToList();
+        var secondMobTiles = second.Actors
+            .Where(actor => actor.Kind == "mob")
+            .OrderBy(actor => actor.ActorId, StringComparer.Ordinal)
+            .Select(actor => (actor.ActorId, actor.TileX, actor.TileY))
+            .ToList();
+
+        Assert.Equal(firstMobTiles, secondMobTiles);
+    }
+
+    [Fact]
+    public async Task PostBattleStart_SpawnsMobsInPreferredRingWhenAvailable()
+    {
+        var start = await StartBattleAsync("arena-ring-spawn", "player-ring-spawn", 1337);
+        AssertArenaInvariants(start.Actors, "player-ring-spawn");
+
+        var mobTiles = start.Actors
+            .Where(actor => actor.Kind == "mob")
+            .Select(actor => (actor.TileX, actor.TileY))
+            .ToList();
+
+        Assert.Equal(GetExpectedMobCapForTick(start.Tick), mobTiles.Count);
+        Assert.All(mobTiles, tile =>
+        {
+            var distance = ComputeChebyshevDistance(tile.TileX, tile.TileY, PlayerTileX, PlayerTileY);
+            Assert.InRange(distance, 2, 4);
+        });
+    }
+
+    [Fact]
+    public async Task PostBattleStart_MobTypes_AreExposedInSnapshot()
+    {
+        var start = await StartBattleAsync("arena-mob-types", "player-mob-types", 1337);
+        AssertArenaInvariants(start.Actors, "player-mob-types");
+
+        var mobTypes = start.Actors
+            .Where(actor => actor.Kind == "mob")
+            .Select(actor => actor.MobType)
+            .Where(type => type is not null)
+            .Cast<MobArchetype>()
+            .ToHashSet();
+
+        Assert.Contains(MobArchetype.MeleeBrute, mobTypes);
+        Assert.Contains(MobArchetype.RangedArcher, mobTypes);
+        Assert.Contains(MobArchetype.MeleeDemon, mobTypes);
+        Assert.Contains(MobArchetype.RangedDragon, mobTypes);
+    }
+
+    [Fact]
+    public async Task PostBattleStep_CooldownDecrementsByStepDeltaAndBlocksSpam()
+    {
+        var start = await StartBattleAsync("arena-cooldown-rules", "player-cooldown-rules", 4242);
+        var firstCast = await StepBattleAsync(
+            start.BattleId,
+            start.Tick,
+            [new BattleCommandDto("cast_skill", "exori")]);
+        AssertArenaInvariants(firstCast.Actors, "player-cooldown-rules");
+
+        var exoriAfterCast = GetSkill(firstCast, "exori");
+        Assert.Equal(1200, exoriAfterCast.CooldownRemainingMs);
+        Assert.Equal(GlobalCooldownMs, firstCast.GlobalCooldownRemainingMs);
+        Assert.True(Assert.Single(firstCast.CommandResults).Ok);
+        var exoriFxTiles = firstCast.Events
+            .OfType<FxSpawnEventDto>()
+            .Where(evt => evt.FxId == "fx.skill.exori")
+            .Select(evt => (evt.TileX, evt.TileY))
+            .OrderBy(tile => tile.TileY)
+            .ThenBy(tile => tile.TileX)
+            .ToList();
+        Assert.Equal(8, exoriFxTiles.Count);
+        Assert.DoesNotContain((PlayerTileX, PlayerTileY), exoriFxTiles);
+        Assert.Contains((2, 2), exoriFxTiles);
+        Assert.Contains((3, 2), exoriFxTiles);
+        Assert.Contains((4, 4), exoriFxTiles);
+
+        var secondCast = await StepBattleAsync(
+            start.BattleId,
+            firstCast.Tick,
+            [new BattleCommandDto("cast_skill", "exori")]);
+        AssertArenaInvariants(secondCast.Actors, "player-cooldown-rules");
+
+        var result = Assert.Single(secondCast.CommandResults);
+        Assert.False(result.Ok);
+        Assert.Equal("cooldown", result.Reason);
+        Assert.Equal(GlobalCooldownMs - StepDeltaMs, secondCast.GlobalCooldownRemainingMs);
+        Assert.DoesNotContain(secondCast.Events.OfType<FxSpawnEventDto>(), fx => fx.FxId == "fx.skill.exori");
+
+        var exoriAfterSecondCast = GetSkill(secondCast, "exori");
+        Assert.Equal(1200 - StepDeltaMs, exoriAfterSecondCast.CooldownRemainingMs);
+
+        var readyStep = await WaitUntilSkillReadyAsync(start.BattleId, secondCast.Tick, "exori", "player-cooldown-rules");
+        Assert.Equal(0, GetSkill(readyStep, "exori").CooldownRemainingMs);
+
+        var clampedStep = await StepBattleAsync(start.BattleId, readyStep.Tick, []);
+        AssertArenaInvariants(clampedStep.Actors, "player-cooldown-rules");
+        Assert.Equal(0, GetSkill(clampedStep, "exori").CooldownRemainingMs);
+    }
+
+    [Fact]
+    public async Task PostBattleStep_GlobalCooldown_BlocksOtherSkillUntilElapsed()
+    {
+        var start = await StartBattleAsync("arena-gcd-01", "player-gcd-01", 4343);
+        AssertArenaInvariants(start.Actors, "player-gcd-01");
+        Assert.Equal(0, start.GlobalCooldownRemainingMs);
+        Assert.Equal(GlobalCooldownMs, start.GlobalCooldownTotalMs);
+
+        var firstCast = await StepBattleAsync(
+            start.BattleId,
+            start.Tick,
+            [new BattleCommandDto("cast_skill", "exori")]);
+        AssertArenaInvariants(firstCast.Actors, "player-gcd-01");
+        Assert.True(Assert.Single(firstCast.CommandResults).Ok);
+        Assert.Equal(GlobalCooldownMs, firstCast.GlobalCooldownRemainingMs);
+        Assert.Equal(1200, GetSkill(firstCast, "exori").CooldownRemainingMs);
+
+        var blockedByGcd = await StepBattleAsync(
+            start.BattleId,
+            firstCast.Tick,
+            [new BattleCommandDto("cast_skill", "exori_min")]);
+        AssertArenaInvariants(blockedByGcd.Actors, "player-gcd-01");
+
+        var blockedResult = Assert.Single(blockedByGcd.CommandResults);
+        Assert.False(blockedResult.Ok);
+        Assert.Equal("global_cooldown", blockedResult.Reason);
+        Assert.Equal(GlobalCooldownMs - StepDeltaMs, blockedByGcd.GlobalCooldownRemainingMs);
+        Assert.Equal(0, GetSkill(blockedByGcd, "exori_min").CooldownRemainingMs);
+        Assert.DoesNotContain(
+            blockedByGcd.Events.OfType<FxSpawnEventDto>(),
+            evt => evt.FxId == "fx.skill.exori_min");
+
+        var castAfterGcd = await StepBattleAsync(
+            start.BattleId,
+            blockedByGcd.Tick,
+            [new BattleCommandDto("cast_skill", "exori_min")]);
+        AssertArenaInvariants(castAfterGcd.Actors, "player-gcd-01");
+
+        Assert.True(Assert.Single(castAfterGcd.CommandResults).Ok);
+        Assert.Equal(GlobalCooldownMs, castAfterGcd.GlobalCooldownRemainingMs);
+        Assert.Equal(800, GetSkill(castAfterGcd, "exori_min").CooldownRemainingMs);
+    }
+
+    [Fact]
+    public async Task PostBattleStart_ProvidesHealAndGuardSkillsWithExpectedCooldowns()
+    {
+        var start = await StartBattleAsync("arena-active-sustain-skills", "player-active-sustain-skills", 1337);
+        AssertArenaInvariants(start.Actors, "player-active-sustain-skills");
+
+        var heal = Assert.Single(start.Skills, skill => skill.SkillId == "heal");
+        var guard = Assert.Single(start.Skills, skill => skill.SkillId == "guard");
+        Assert.Equal(0, heal.CooldownRemainingMs);
+        Assert.Equal(HealCooldownMs, heal.CooldownTotalMs);
+        Assert.Equal(0, guard.CooldownRemainingMs);
+        Assert.Equal(GuardCooldownMs, guard.CooldownTotalMs);
+    }
+
+    [Fact]
+    public async Task PostBattleStep_HealSkill_IncreasesHpAndClampsToMax()
+    {
+        var playerId = "player-heal-skill";
+        var start = await StartBattleAsync("arena-heal-skill", playerId, 1337);
+        AssertArenaInvariants(start.Actors, playerId);
+
+        var warmup = await StepBattleAsync(start.BattleId, start.Tick, []);
+        AssertArenaInvariants(warmup.Actors, playerId);
+
+        var previousStep = warmup;
+        for (var stepIndex = 0; stepIndex < 220; stepIndex += 1)
+        {
+            var healReady = GetSkill(previousStep, "heal").CooldownRemainingMs == 0;
+            var commands = healReady ? new[] { new BattleCommandDto("cast_skill", "heal") } : Array.Empty<BattleCommandDto>();
+            var step = await StepBattleAsync(start.BattleId, previousStep.Tick, commands);
+            AssertArenaInvariants(step.Actors, playerId);
+
+            if (commands.Length == 0)
+            {
+                previousStep = step;
+                if (step.BattleStatus == "defeat")
+                {
+                    break;
+                }
+
+                continue;
+            }
+
+            var result = Assert.Single(step.CommandResults);
+            if (!result.Ok)
+            {
+                previousStep = step;
+                continue;
+            }
+
+            Assert.Equal(HealCooldownMs, GetSkill(step, "heal").CooldownRemainingMs);
+
+            var previousPlayer = GetActor(previousStep.Actors, playerId);
+            if (previousPlayer.Hp >= previousPlayer.MaxHp)
+            {
+                previousStep = step;
+                continue;
+            }
+
+            var currentPlayer = GetActor(step.Actors, playerId);
+            var skillHealEvents = step.Events
+                .OfType<HealNumberEventDto>()
+                .Where(evt => evt.ActorId == playerId && evt.Source == "skill_heal")
+                .ToList();
+            if (skillHealEvents.Count == 0)
+            {
+                previousStep = step;
+                continue;
+            }
+
+            var totalSkillHeal = skillHealEvents.Sum(evt => evt.Amount);
+            var maxSkillHeal = (int)Math.Floor(previousPlayer.MaxHp * 0.22d);
+            Assert.InRange(totalSkillHeal, 1, maxSkillHeal);
+            Assert.InRange(currentPlayer.Hp, 0, currentPlayer.MaxHp);
+            Assert.True(currentPlayer.Hp <= Math.Min(previousPlayer.MaxHp, previousPlayer.Hp + totalSkillHeal));
+            Assert.Contains(
+                step.Events.OfType<FxSpawnEventDto>(),
+                evt => evt.FxId == "fx.hit.small" && evt.TileX == PlayerTileX && evt.TileY == PlayerTileY);
+            return;
+        }
+
+        throw new Xunit.Sdk.XunitException("Expected to validate at least one successful heal cast on a non-full HP player.");
+    }
+
+    [Fact]
+    public async Task PostBattleStep_GuardSkill_IncreasesShieldAndNeverExceedsCap()
+    {
+        var playerId = "player-guard-skill";
+        var start = await StartBattleAsync("arena-guard-skill", playerId, 1337);
+        AssertArenaInvariants(start.Actors, playerId);
+
+        var warmup = await StepBattleAsync(start.BattleId, start.Tick, []);
+        AssertArenaInvariants(warmup.Actors, playerId);
+
+        var cast = await StepBattleAsync(
+            start.BattleId,
+            warmup.Tick,
+            [new BattleCommandDto("cast_skill", "guard")]);
+        AssertArenaInvariants(cast.Actors, playerId);
+
+        var result = Assert.Single(cast.CommandResults);
+        Assert.True(result.Ok);
+        Assert.Equal(GuardCooldownMs, GetSkill(cast, "guard").CooldownRemainingMs);
+
+        var previousPlayer = GetActor(warmup.Actors, playerId);
+        var currentPlayer = GetActor(cast.Actors, playerId);
+        var playerAutoAttackTriggered = cast.Events
+            .OfType<DamageNumberEventDto>()
+            .Any(evt =>
+                evt.AttackerEntityId == playerId &&
+                evt.TargetEntityId.StartsWith("mob.", StringComparison.Ordinal) &&
+                evt.DamageAmount == 3);
+        var incomingDamage = cast.Events
+            .OfType<DamageNumberEventDto>()
+            .Where(evt => evt.TargetEntityId == playerId)
+            .Sum(evt => evt.DamageAmount);
+        var guardGain = (int)Math.Floor(previousPlayer.MaxHp * 0.15d);
+        var expectedShieldBeforeDamage = Math.Min(
+            previousPlayer.MaxShield,
+            previousPlayer.Shield + guardGain + (playerAutoAttackTriggered ? 5 : 0));
+        var expectedShieldAfterDamage = Math.Max(0, expectedShieldBeforeDamage - incomingDamage);
+
+        Assert.Equal(expectedShieldAfterDamage, currentPlayer.Shield);
+        Assert.InRange(currentPlayer.Shield, 0, currentPlayer.MaxShield);
+        Assert.Contains(
+            cast.Events.OfType<FxSpawnEventDto>(),
+            evt => evt.FxId == "fx.hit.small" && evt.TileX == PlayerTileX && evt.TileY == PlayerTileY);
+    }
+
+    [Fact]
+    public async Task PostBattleStep_HealAndGuard_SetCooldownsWithoutNeedingTargets()
+    {
+        var playerId = "player-no-target-heal-guard";
+        var seed = await FindSeedAsync(payload =>
+            payload.Actors
+                .Where(actor => actor.Kind == "mob")
+                .All(actor => ComputeChebyshevDistance(actor.TileX, actor.TileY, PlayerTileX, PlayerTileY) >= 3));
+        var start = await StartBattleAsync("arena-no-target-heal-guard", playerId, seed);
+        AssertArenaInvariants(start.Actors, playerId);
+
+        var healCast = await StepBattleAsync(
+            start.BattleId,
+            start.Tick,
+            [new BattleCommandDto("cast_skill", "heal")]);
+        AssertArenaInvariants(healCast.Actors, playerId);
+        Assert.True(Assert.Single(healCast.CommandResults).Ok);
+        Assert.Equal(HealCooldownMs, GetSkill(healCast, "heal").CooldownRemainingMs);
+
+        var readyForGuard = await WaitUntilSkillReadyAsync(start.BattleId, healCast.Tick, "guard", playerId);
+        var guardCast = await StepBattleAsync(
+            start.BattleId,
+            readyForGuard.Tick,
+            [new BattleCommandDto("cast_skill", "guard")]);
+        AssertArenaInvariants(guardCast.Actors, playerId);
+        Assert.True(Assert.Single(guardCast.CommandResults).Ok);
+        Assert.Equal(GuardCooldownMs, GetSkill(guardCast, "guard").CooldownRemainingMs);
+    }
+
+    [Fact]
+    public async Task PostBattleStep_GlobalCooldown_BlocksHealAndGuardWhenIssuedDuringGcd()
+    {
+        var start = await StartBattleAsync("arena-gcd-heal-guard", "player-gcd-heal-guard", 1337);
+        AssertArenaInvariants(start.Actors, "player-gcd-heal-guard");
+
+        var firstCast = await StepBattleAsync(
+            start.BattleId,
+            start.Tick,
+            [new BattleCommandDto("cast_skill", "exori")]);
+        AssertArenaInvariants(firstCast.Actors, "player-gcd-heal-guard");
+        Assert.True(Assert.Single(firstCast.CommandResults).Ok);
+        Assert.Equal(GlobalCooldownMs, firstCast.GlobalCooldownRemainingMs);
+
+        var blocked = await StepBattleAsync(
+            start.BattleId,
+            firstCast.Tick,
+            [new BattleCommandDto("cast_skill", "heal"), new BattleCommandDto("cast_skill", "guard")]);
+        AssertArenaInvariants(blocked.Actors, "player-gcd-heal-guard");
+
+        Assert.Equal(2, blocked.CommandResults.Count);
+        Assert.All(blocked.CommandResults, result =>
+        {
+            Assert.False(result.Ok);
+            Assert.Equal("global_cooldown", result.Reason);
+        });
+        Assert.Equal(0, GetSkill(blocked, "heal").CooldownRemainingMs);
+        Assert.Equal(0, GetSkill(blocked, "guard").CooldownRemainingMs);
+    }
+
+    [Fact]
+    public async Task PostBattleStep_GlobalCooldown_DoesNotBlockPlayerAutoAttack()
+    {
+        var playerId = "player-gcd-auto-attack";
+        var start = await StartBattleAsync("arena-gcd-auto-attack", playerId, 1337);
+        AssertArenaInvariants(start.Actors, playerId);
+
+        var currentTick = start.Tick;
+        var skills = start.Skills;
+        var sawAutoAttackDuringGcd = false;
+
+        for (var stepIndex = 0; stepIndex < 120; stepIndex += 1)
+        {
+            var step = await StepBattleAsync(
+                start.BattleId,
+                currentTick,
+                BuildReadySkillCommands(skills));
+            currentTick = step.Tick;
+            skills = step.Skills;
+            AssertArenaInvariants(step.Actors, playerId);
+
+            var playerAutoAttackHitDuringGcd = step.GlobalCooldownRemainingMs > 0
+                && step.Events.OfType<DamageNumberEventDto>().Any(evt =>
+                    evt.DamageAmount == 3
+                    && evt.TargetEntityId.StartsWith("mob.", StringComparison.Ordinal));
+
+            if (playerAutoAttackHitDuringGcd)
+            {
+                sawAutoAttackDuringGcd = true;
+                break;
+            }
+
+            if (step.BattleStatus == "defeat")
+            {
+                break;
+            }
+        }
+
+        Assert.True(
+            sawAutoAttackDuringGcd,
+            "Expected at least one player auto-attack damage event while global cooldown was active.");
+    }
+
+    [Fact]
+    public async Task PostBattleStep_CastNoTarget_StillSetsCooldownAndReturnsOk()
+    {
+        var playerId = "player-no-target-cooldown";
+        BattleStartResponseDto? start = null;
+        BattleStepResponseDto? cast = null;
+        for (var seed = 1; seed <= 300; seed += 1)
+        {
+            var candidateStart = await StartBattleAsync("arena-no-target-cooldown", playerId, seed);
+            AssertArenaInvariants(candidateStart.Actors, playerId);
+            var candidateCast = await StepBattleAsync(
+                candidateStart.BattleId,
+                candidateStart.Tick,
+                [new BattleCommandDto("cast_skill", "exori")]);
+            AssertArenaInvariants(candidateCast.Actors, playerId);
+
+            var candidateResult = Assert.Single(candidateCast.CommandResults);
+            if (candidateResult.Ok && candidateResult.Reason == "no_target")
+            {
+                start = candidateStart;
+                cast = candidateCast;
+                break;
+            }
+        }
+
+        Assert.NotNull(start);
+        Assert.NotNull(cast);
+
+        var castResult = Assert.Single(cast!.CommandResults);
+        Assert.True(castResult.Ok);
+        Assert.Equal("no_target", castResult.Reason);
+        Assert.Equal(1200, GetSkill(cast, "exori").CooldownRemainingMs);
+        Assert.DoesNotContain(
+            cast.Events.OfType<DamageNumberEventDto>(),
+            evt =>
+                evt.AttackerEntityId == playerId &&
+                evt.TargetEntityId.StartsWith("mob.slime.", StringComparison.Ordinal) &&
+                evt.ElementType == ElementType.Fire);
+    }
+
+    [Fact]
+    public async Task PostBattleStep_PlayerDamage_ConsumesShieldBeforeHp()
+    {
+        var playerId = "player-shield-priority";
+        var start = await StartBattleAsync("arena-shield-priority", playerId, 1337);
+        AssertArenaInvariants(start.Actors, playerId);
+
+        var shieldGainStep = await StepBattleAsync(
+            start.BattleId,
+            start.Tick,
+            [new BattleCommandDto("cast_skill", "exori")]);
+        AssertArenaInvariants(shieldGainStep.Actors, playerId);
+
+        var previousStep = shieldGainStep;
+        for (var stepIndex = 0; stepIndex < 140; stepIndex += 1)
+        {
+            var step = await StepBattleAsync(start.BattleId, previousStep.Tick, []);
+            AssertArenaInvariants(step.Actors, playerId);
+
+            var playerDamageEvents = step.Events
+                .OfType<DamageNumberEventDto>()
+                .Where(evt => evt.TargetEntityId == playerId)
+                .ToList();
+            if (playerDamageEvents.Count == 0)
+            {
+                previousStep = step;
+                if (step.BattleStatus == "defeat")
+                {
+                    break;
+                }
+
+                continue;
+            }
+
+            var previousPlayer = GetActor(previousStep.Actors, playerId);
+            var currentPlayer = GetActor(step.Actors, playerId);
+            var autoAttackTriggered = step.Events
+                .OfType<DamageNumberEventDto>()
+                .Any(evt =>
+                    evt.TargetEntityId.StartsWith("mob.slime.", StringComparison.Ordinal) &&
+                    evt.DamageAmount == 3);
+            var shieldBeforeDamage = Math.Min(
+                previousPlayer.MaxShield,
+                previousPlayer.Shield + (autoAttackTriggered ? 5 : 0));
+            var incomingDamage = playerDamageEvents.Sum(evt => evt.DamageAmount);
+            if (shieldBeforeDamage == 0 || incomingDamage == 0)
+            {
+                previousStep = step;
+                continue;
+            }
+
+            var absorbed = Math.Min(shieldBeforeDamage, incomingDamage);
+            var expectedShield = shieldBeforeDamage - absorbed;
+            var expectedHp = Math.Max(0, previousPlayer.Hp - (incomingDamage - absorbed));
+
+            Assert.Equal(expectedShield, currentPlayer.Shield);
+            Assert.Equal(expectedHp, currentPlayer.Hp);
+            return;
+        }
+
+        throw new Xunit.Sdk.XunitException("Expected at least one player damage step to validate shield absorption.");
+    }
+
+    [Fact]
+    public async Task PostBattleStep_PlayerShieldCapAndDefeat_ResetShield()
+    {
+        var playerId = "player-shield-cap";
+        var start = await StartBattleAsync("arena-shield-cap", playerId, 1337);
+        AssertArenaInvariants(start.Actors, playerId);
+
+        var startPlayer = GetActor(start.Actors, playerId);
+        Assert.Equal((int)Math.Floor(startPlayer.MaxHp * 0.8d), startPlayer.MaxShield);
+
+        var currentTick = start.Tick;
+        var currentSkills = start.Skills;
+        var sawPositiveShield = false;
+        var sawDefeat = false;
+
+        for (var stepIndex = 0; stepIndex < 500; stepIndex += 1)
+        {
+            var commands = BuildReadySkillCommands(currentSkills);
+            var step = await StepBattleAsync(start.BattleId, currentTick, commands);
+            currentTick = step.Tick;
+            currentSkills = step.Skills;
+            AssertArenaInvariants(step.Actors, playerId);
+
+            var player = GetActor(step.Actors, playerId);
+            Assert.InRange(player.Shield, 0, player.MaxShield);
+            sawPositiveShield = sawPositiveShield || player.Shield > 0;
+
+            if (step.BattleStatus == "defeat")
+            {
+                Assert.Equal(0, player.Hp);
+                Assert.Equal(0, player.Shield);
+                sawDefeat = true;
+                break;
+            }
+        }
+
+        Assert.True(sawPositiveShield, "Expected shield to increase at least once.");
+        if (sawDefeat)
+        {
+            return;
+        }
+    }
+
+    [Fact]
+    public async Task PostBattleStep_AfterDefeat_CastIsRejected()
+    {
+        var playerId = "player-defeat-cast-reject";
+        var start = await StartBattleAsync("arena-defeat-cast-reject", playerId, 1337);
+        AssertArenaInvariants(start.Actors, playerId);
+
+        var currentTick = start.Tick;
+        BattleStepResponseDto? defeatStep = null;
+        for (var stepIndex = 0; stepIndex < 200; stepIndex += 1)
+        {
+            var step = await StepBattleAsync(start.BattleId, currentTick, []);
+            currentTick = step.Tick;
+            AssertArenaInvariants(step.Actors, playerId);
+            if (step.BattleStatus == "defeat")
+            {
+                defeatStep = step;
+                break;
+            }
+        }
+
+        Assert.NotNull(defeatStep);
+        var rejected = await StepBattleAsync(
+            start.BattleId,
+            defeatStep!.Tick,
+            [new BattleCommandDto("cast_skill", "exori")]);
+        AssertArenaInvariants(rejected.Actors, playerId);
+
+        var result = Assert.Single(rejected.CommandResults);
+        Assert.False(result.Ok);
+        Assert.Equal("defeat", result.Reason);
+    }
+
+    [Fact]
+    public async Task PostBattleStep_PlayerLifeLeech_HealsAfterPlayerDamage()
+    {
+        var playerId = "player-life-leech";
+        var start = await StartBattleAsync("arena-life-leech", playerId, 1337);
+        AssertArenaInvariants(start.Actors, playerId);
+
+        BattleStepResponseDto? reducedHpStep = null;
+        var currentTick = start.Tick;
+        for (var stepIndex = 0; stepIndex < 100; stepIndex += 1)
+        {
+            var step = await StepBattleAsync(start.BattleId, currentTick, []);
+            currentTick = step.Tick;
+            AssertArenaInvariants(step.Actors, playerId);
+
+            var player = GetActor(step.Actors, playerId);
+            if (player.Hp < player.MaxHp)
+            {
+                reducedHpStep = step;
+                break;
+            }
+
+            if (step.BattleStatus == "defeat")
+            {
+                break;
+            }
+        }
+
+        Assert.NotNull(reducedHpStep);
+        var previousStep = reducedHpStep!;
+        var currentSkills = reducedHpStep!.Skills;
+
+        for (var stepIndex = 0; stepIndex < 160; stepIndex += 1)
+        {
+            var commands = BuildReadySkillCommands(currentSkills);
+            var step = await StepBattleAsync(start.BattleId, previousStep.Tick, commands);
+            currentSkills = step.Skills;
+            AssertArenaInvariants(step.Actors, playerId);
+
+            var healEvents = step.Events
+                .OfType<HealNumberEventDto>()
+                .Where(evt => evt.ActorId == playerId && evt.Source == "life_leech")
+                .ToList();
+            if (healEvents.Count == 0)
+            {
+                previousStep = step;
+                if (step.BattleStatus == "defeat")
+                {
+                    break;
+                }
+
+                continue;
+            }
+
+            var incomingDamage = step.Events
+                .OfType<DamageNumberEventDto>()
+                .Where(evt => evt.TargetEntityId == playerId)
+                .Sum(evt => evt.DamageAmount);
+            if (incomingDamage > 0)
+            {
+                previousStep = step;
+                continue;
+            }
+
+            var previousPlayer = GetActor(previousStep.Actors, playerId);
+            var currentPlayer = GetActor(step.Actors, playerId);
+            var totalHeal = healEvents.Sum(evt => evt.Amount);
+            var expectedHp = Math.Min(currentPlayer.MaxHp, previousPlayer.Hp + totalHeal);
+
+            Assert.True(totalHeal > 0, "Expected positive life leech heal amount.");
+            Assert.Equal(expectedHp, currentPlayer.Hp);
+            Assert.True(currentPlayer.Hp > previousPlayer.Hp, "Expected life leech to increase player HP.");
+            return;
+        }
+
+        throw new Xunit.Sdk.XunitException("Expected to observe a life leech heal event with net HP gain.");
+    }
+
+    [Fact]
+    public async Task PostBattleStep_ExoriMas_UsesManhattanRadiusTwoShape()
+    {
+        var start = await StartBattleAsync("arena-exori-mas-shape", "player-exori-mas-shape", 2025);
+        var cast = await StepBattleAsync(
+            start.BattleId,
+            start.Tick,
+            [new BattleCommandDto("cast_skill", "exori_mas")]);
+        AssertArenaInvariants(cast.Actors, "player-exori-mas-shape");
+
+        var fxTiles = cast.Events
+            .OfType<FxSpawnEventDto>()
+            .Where(evt => evt.FxId == "fx.skill.exori_mas")
+            .Select(evt => (evt.TileX, evt.TileY))
+            .OrderBy(tile => tile.TileY)
+            .ThenBy(tile => tile.TileX)
+            .ToList();
+
+        Assert.Equal(12, fxTiles.Count);
+        Assert.All(fxTiles, tile =>
+        {
+            var manhattan = Math.Abs(tile.TileX - PlayerTileX) + Math.Abs(tile.TileY - PlayerTileY);
+            Assert.True(manhattan <= 2);
+        });
+        Assert.DoesNotContain((PlayerTileX, PlayerTileY), fxTiles);
+        Assert.Contains((3, 1), fxTiles);
+        Assert.Contains((1, 3), fxTiles);
+        Assert.Contains((5, 3), fxTiles);
+        Assert.Contains((3, 5), fxTiles);
+        Assert.DoesNotContain((2, 1), fxTiles);
+        Assert.DoesNotContain((5, 5), fxTiles);
+    }
+
+    [Fact]
+    public async Task PostBattleStep_SetFacing_ChangesExoriMinFrontalTargeting()
+    {
+        var start = await StartBattleAsync("arena-facing-14", "player-facing-14", 2026);
+        AssertArenaInvariants(start.Actors, "player-facing-14");
+
+        var castUp = await StepBattleAsync(
+            start.BattleId,
+            start.Tick,
+            [new BattleCommandDto("cast_skill", "exori_min")]);
+        AssertArenaInvariants(castUp.Actors, "player-facing-14");
+
+        Assert.True(Assert.Single(castUp.CommandResults).Ok);
+        var upFxTiles = castUp.Events
+            .OfType<FxSpawnEventDto>()
+            .Where(evt => evt.FxId == "fx.skill.exori_min")
+            .Select(evt => (evt.TileX, evt.TileY))
+            .ToList();
+        Assert.Equal(3, upFxTiles.Count);
+        Assert.Contains((2, 2), upFxTiles);
+        Assert.Contains((3, 2), upFxTiles);
+        Assert.Contains((4, 2), upFxTiles);
+        Assert.DoesNotContain((PlayerTileX, PlayerTileY), upFxTiles);
+
+        var afterCooldown = await WaitUntilSkillReadyAsync(start.BattleId, castUp.Tick, "exori_min", "player-facing-14");
+        var setFacing = await StepBattleAsync(
+            start.BattleId,
+            afterCooldown.Tick,
+            [new BattleCommandDto("set_facing", Dir: "right")]);
+        AssertArenaInvariants(setFacing.Actors, "player-facing-14");
+        Assert.Equal("right", setFacing.FacingDirection);
+        Assert.True(Assert.Single(setFacing.CommandResults).Ok);
+
+        var castRight = await StepBattleAsync(
+            start.BattleId,
+            setFacing.Tick,
+            [new BattleCommandDto("cast_skill", "exori_min")]);
+        AssertArenaInvariants(castRight.Actors, "player-facing-14");
+
+        var rightResult = Assert.Single(castRight.CommandResults);
+        Assert.True(rightResult.Ok);
+        var rightFxTiles = castRight.Events
+            .OfType<FxSpawnEventDto>()
+            .Where(evt => evt.FxId == "fx.skill.exori_min")
+            .Select(evt => (evt.TileX, evt.TileY))
+            .ToList();
+        Assert.Equal(3, rightFxTiles.Count);
+        Assert.Contains((4, 2), rightFxTiles);
+        Assert.Contains((4, 3), rightFxTiles);
+        Assert.Contains((4, 4), rightFxTiles);
+        Assert.DoesNotContain((PlayerTileX, PlayerTileY), rightFxTiles);
+    }
+
+    [Fact]
+    public async Task PostBattleStep_MovePlayer_AllowsCardinalAndDiagonal_WhenOpen()
+    {
+        var cardinalPlayerId = "player-move-cardinal";
+        var cardinalStart = await StartBattleAsync("arena-move-cardinal", cardinalPlayerId, 1337);
+        AssertArenaInvariants(cardinalStart.Actors, cardinalPlayerId);
+
+        var cardinalStep = await StepBattleAsync(
+            cardinalStart.BattleId,
+            cardinalStart.Tick,
+            [BuildMoveCommand("right")]);
+        AssertArenaInvariants(cardinalStep.Actors, cardinalPlayerId);
+        var cardinalResult = Assert.Single(cardinalStep.CommandResults);
+        Assert.True(cardinalResult.Ok);
+        var cardinalPlayer = GetActor(cardinalStep.Actors, cardinalPlayerId);
+        Assert.Equal(PlayerTileX + 1, cardinalPlayer.TileX);
+        Assert.Equal(PlayerTileY, cardinalPlayer.TileY);
+        Assert.Equal("right", cardinalStep.FacingDirection);
+
+        var diagonalPlayerId = "player-move-diagonal";
+        var diagonalStart = await StartBattleAsync("arena-move-diagonal", diagonalPlayerId, 1337);
+        AssertArenaInvariants(diagonalStart.Actors, diagonalPlayerId);
+
+        var diagonalStep = await StepBattleAsync(
+            diagonalStart.BattleId,
+            diagonalStart.Tick,
+            [BuildMoveCommand("ne")]);
+        AssertArenaInvariants(diagonalStep.Actors, diagonalPlayerId);
+        var diagonalResult = Assert.Single(diagonalStep.CommandResults);
+        Assert.True(diagonalResult.Ok);
+        var diagonalPlayer = GetActor(diagonalStep.Actors, diagonalPlayerId);
+        Assert.Equal(PlayerTileX + 1, diagonalPlayer.TileX);
+        Assert.Equal(PlayerTileY - 1, diagonalPlayer.TileY);
+        Assert.Equal("up_right", diagonalStep.FacingDirection);
+    }
+
+    [Fact]
+    public async Task PostBattleStep_MovePlayer_DiagonalCornerRule_BlocksWhenAdjacentCardinalOccupied()
+    {
+        const int maxSeed = 500;
+        for (var seed = 1; seed <= maxSeed; seed += 1)
+        {
+            var playerId = $"player-move-corner-{seed}";
+            var start = await StartBattleAsync($"arena-move-corner-{seed}", playerId, seed);
+            var afterMobMove = await StepBattleAsync(start.BattleId, start.Tick, []);
+
+            var hasHorizontalBlocker = afterMobMove.Actors.Any(actor =>
+                actor.Kind == "mob" &&
+                actor.TileX == PlayerTileX + 1 &&
+                actor.TileY == PlayerTileY);
+            var hasVerticalBlocker = afterMobMove.Actors.Any(actor =>
+                actor.Kind == "mob" &&
+                actor.TileX == PlayerTileX &&
+                actor.TileY == PlayerTileY - 1);
+            var diagonalDestinationOccupied = afterMobMove.Actors.Any(actor =>
+                actor.TileX == PlayerTileX + 1 &&
+                actor.TileY == PlayerTileY - 1);
+
+            if ((!hasHorizontalBlocker && !hasVerticalBlocker) || diagonalDestinationOccupied)
+            {
+                continue;
+            }
+
+            var blockedStep = await StepBattleAsync(
+                start.BattleId,
+                afterMobMove.Tick,
+                [BuildMoveCommand("ne")]);
+            AssertArenaInvariants(blockedStep.Actors, playerId);
+
+            var result = Assert.Single(blockedStep.CommandResults);
+            Assert.False(result.Ok);
+            Assert.Equal("move_blocked", result.Reason);
+            var player = GetActor(blockedStep.Actors, playerId);
+            Assert.Equal(PlayerTileX, player.TileX);
+            Assert.Equal(PlayerTileY, player.TileY);
+            return;
+        }
+
+        throw new Xunit.Sdk.XunitException($"No seed in range 1..{maxSeed} produced a corner-blocked diagonal scenario.");
+    }
+
+    [Fact]
+    public async Task PostBattleStep_MovePlayer_CannotMoveIntoOccupiedTile()
+    {
+        const int maxSeed = 500;
+        for (var seed = 1; seed <= maxSeed; seed += 1)
+        {
+            var playerId = $"player-move-occupied-{seed}";
+            var start = await StartBattleAsync($"arena-move-occupied-{seed}", playerId, seed);
+            var afterMobMove = await StepBattleAsync(start.BattleId, start.Tick, []);
+
+            var destinationOccupied = afterMobMove.Actors.Any(actor =>
+                actor.Kind == "mob" &&
+                actor.TileX == PlayerTileX + 1 &&
+                actor.TileY == PlayerTileY);
+            if (!destinationOccupied)
+            {
+                continue;
+            }
+
+            var blockedStep = await StepBattleAsync(
+                start.BattleId,
+                afterMobMove.Tick,
+                [BuildMoveCommand("right")]);
+            AssertArenaInvariants(blockedStep.Actors, playerId);
+
+            var result = Assert.Single(blockedStep.CommandResults);
+            Assert.False(result.Ok);
+            Assert.Equal("move_blocked", result.Reason);
+            var player = GetActor(blockedStep.Actors, playerId);
+            Assert.Equal(PlayerTileX, player.TileX);
+            Assert.Equal(PlayerTileY, player.TileY);
+            return;
+        }
+
+        throw new Xunit.Sdk.XunitException($"No seed in range 1..{maxSeed} produced an occupied-tile movement scenario.");
+    }
+
+    [Fact]
+    public async Task PostBattleStep_MovePlayer_CannotMoveOutOfBounds()
+    {
+        const int maxSeed = 500;
+        for (var seed = 1; seed <= maxSeed; seed += 1)
+        {
+            var playerId = $"player-move-bounds-{seed}";
+            var start = await StartBattleAsync($"arena-move-bounds-{seed}", playerId, seed);
+            var currentTick = start.Tick;
+            var reachedTopEdge = true;
+
+            for (var moveCount = 0; moveCount < 3; moveCount += 1)
+            {
+                var moveStep = await StepBattleAsync(
+                    start.BattleId,
+                    currentTick,
+                    [BuildMoveCommand("up")]);
+                currentTick = moveStep.Tick;
+
+                if (moveStep.CommandResults.Count != 1 || !moveStep.CommandResults[0].Ok)
+                {
+                    reachedTopEdge = false;
+                    break;
+                }
+
+                var playerAfterMove = GetActor(moveStep.Actors, playerId);
+                var expectedY = PlayerTileY - (moveCount + 1);
+                if (playerAfterMove.TileX != PlayerTileX || playerAfterMove.TileY != expectedY)
+                {
+                    reachedTopEdge = false;
+                    break;
+                }
+
+                if (moveCount < 2)
+                {
+                    var cooldownWait = await StepBattleAsync(start.BattleId, currentTick, []);
+                    currentTick = cooldownWait.Tick;
+                }
+            }
+
+            if (!reachedTopEdge)
+            {
+                continue;
+            }
+
+            var waitOne = await StepBattleAsync(start.BattleId, currentTick, []);
+            var waitTwo = await StepBattleAsync(start.BattleId, waitOne.Tick, []);
+            var blockedStep = await StepBattleAsync(
+                start.BattleId,
+                waitTwo.Tick,
+                [BuildMoveCommand("up")]);
+
+            if (blockedStep.CommandResults.Count != 1)
+            {
+                continue;
+            }
+
+            var result = blockedStep.CommandResults[0];
+            var player = GetActor(blockedStep.Actors, playerId);
+            if (!result.Ok &&
+                result.Reason == "move_blocked" &&
+                player.TileX == PlayerTileX &&
+                player.TileY == 0)
+            {
+                AssertArenaInvariants(blockedStep.Actors, playerId);
+                return;
+            }
+        }
+
+        throw new Xunit.Sdk.XunitException($"No seed in range 1..{maxSeed} produced an out-of-bounds movement scenario.");
+    }
+
+    [Fact]
+    public async Task PostBattleStep_MovePlayer_CooldownPreventsMovingEveryTick()
+    {
+        var playerId = "player-move-cooldown";
+        var start = await StartBattleAsync("arena-move-cooldown", playerId, 1337);
+        AssertArenaInvariants(start.Actors, playerId);
+
+        var firstMove = await StepBattleAsync(
+            start.BattleId,
+            start.Tick,
+            [BuildMoveCommand("right")]);
+        AssertArenaInvariants(firstMove.Actors, playerId);
+        var firstMoveResult = Assert.Single(firstMove.CommandResults);
+        Assert.True(firstMoveResult.Ok);
+        var movedPlayer = GetActor(firstMove.Actors, playerId);
+        Assert.Equal(PlayerTileX + 1, movedPlayer.TileX);
+        Assert.Equal(PlayerTileY, movedPlayer.TileY);
+
+        var blockedByCooldown = await StepBattleAsync(
+            start.BattleId,
+            firstMove.Tick,
+            [BuildMoveCommand("right")]);
+        AssertArenaInvariants(blockedByCooldown.Actors, playerId);
+
+        var blockedResult = Assert.Single(blockedByCooldown.CommandResults);
+        Assert.False(blockedResult.Ok);
+        Assert.Equal("cooldown", blockedResult.Reason);
+        var playerAfterBlockedMove = GetActor(blockedByCooldown.Actors, playerId);
+        Assert.Equal(movedPlayer.TileX, playerAfterBlockedMove.TileX);
+        Assert.Equal(movedPlayer.TileY, playerAfterBlockedMove.TileY);
+    }
+
+    [Fact]
+    public async Task PostBattleStep_MovePlayer_IsDeterministicForSameSeedAndCommandSequence()
+    {
+        const int seed = 1337;
+        var playerId = "player-move-determinism";
+        var firstStart = await StartBattleAsync("arena-move-determinism-a", playerId, seed);
+        var secondStart = await StartBattleAsync("arena-move-determinism-b", playerId, seed);
+        AssertArenaInvariants(firstStart.Actors, playerId);
+        AssertArenaInvariants(secondStart.Actors, playerId);
+
+        var scriptedCommands = new IReadOnlyList<BattleCommandDto>[]
+        {
+            [BuildMoveCommand("right")],
+            [BuildMoveCommand("up")],
+            [],
+            [BuildMoveCommand("ne")],
+            [],
+            [BuildMoveCommand("left")],
+            [BuildMoveCommand("sw")],
+            []
+        };
+
+        var firstTick = firstStart.Tick;
+        var secondTick = secondStart.Tick;
+        for (var stepIndex = 0; stepIndex < scriptedCommands.Length; stepIndex += 1)
+        {
+            var commands = scriptedCommands[stepIndex];
+            var firstStep = await StepBattleAsync(firstStart.BattleId, firstTick, commands);
+            var secondStep = await StepBattleAsync(secondStart.BattleId, secondTick, commands);
+            firstTick = firstStep.Tick;
+            secondTick = secondStep.Tick;
+            AssertArenaInvariants(firstStep.Actors, playerId);
+            AssertArenaInvariants(secondStep.Actors, playerId);
+
+            var firstPlayer = GetActor(firstStep.Actors, playerId);
+            var secondPlayer = GetActor(secondStep.Actors, playerId);
+            Assert.Equal(firstPlayer.TileX, secondPlayer.TileX);
+            Assert.Equal(firstPlayer.TileY, secondPlayer.TileY);
+            Assert.Equal(firstStep.FacingDirection, secondStep.FacingDirection);
+            Assert.Equal(
+                firstStep.CommandResults.Select(result => $"{result.Index}:{result.Type}:{result.Ok}:{result.Reason}").ToList(),
+                secondStep.CommandResults.Select(result => $"{result.Index}:{result.Type}:{result.Ok}:{result.Reason}").ToList());
+            Assert.Equal(
+                firstStep.Events.Select(ToEventSignature).ToList(),
+                secondStep.Events.Select(ToEventSignature).ToList());
+        }
+    }
+
+    [Fact]
+    public async Task PostBattleStep_InteractPoi_OutOfRangeFails()
+    {
+        var playerId = "player-interact-poi-out-range";
+        var start = await StartBattleAsync("arena-interact-poi-out-range", playerId, 1337);
+        AssertArenaInvariants(start.Actors, playerId);
+        var chest = Assert.Single(start.ActivePois, poi => poi.Type == "chest");
+
+        var moveAway = await StepBattleAsync(
+            start.BattleId,
+            start.Tick,
+            [BuildMoveCommand("nw")]);
+        AssertArenaInvariants(moveAway.Actors, playerId);
+        Assert.True(Assert.Single(moveAway.CommandResults).Ok);
+
+        var movedPlayer = GetActor(moveAway.Actors, playerId);
+        Assert.True(ComputeChebyshevDistance(movedPlayer.TileX, movedPlayer.TileY, chest.Pos.X, chest.Pos.Y) > 1);
+
+        var step = await StepBattleAsync(
+            start.BattleId,
+            moveAway.Tick,
+            [BuildInteractPoiCommand(chest.PoiId)]);
+        AssertArenaInvariants(step.Actors, playerId);
+
+        var result = Assert.Single(step.CommandResults);
+        Assert.Equal("interact_poi", result.Type);
+        Assert.False(result.Ok);
+        Assert.Equal("out_of_range", result.Reason);
+        Assert.Contains(
+            step.Events.OfType<InteractFailedEventDto>(),
+            evt => evt.PoiId == chest.PoiId && evt.Reason == "out_of_range");
+        Assert.Contains(step.ActivePois, poi => poi.PoiId == chest.PoiId);
+    }
+
+    [Fact]
+    public async Task PostBattleStep_InteractPoi_InRangeSucceedsAndConsumesPoi()
+    {
+        var playerId = "player-interact-poi-in-range";
+        var start = await StartBattleAsync("arena-interact-poi-in-range", playerId, 1337);
+        AssertArenaInvariants(start.Actors, playerId);
+        Assert.NotEmpty(start.ActivePois);
+
+        var player = GetActor(start.Actors, playerId);
+        var inRangePoi = start.ActivePois
+            .OrderBy(poi => poi.PoiId, StringComparer.Ordinal)
+            .First(poi => ComputeChebyshevDistance(player.TileX, player.TileY, poi.Pos.X, poi.Pos.Y) <= 1);
+
+        var step = await StepBattleAsync(
+            start.BattleId,
+            start.Tick,
+            [BuildInteractPoiCommand(inRangePoi.PoiId)]);
+        AssertArenaInvariants(step.Actors, playerId);
+
+        var result = Assert.Single(step.CommandResults);
+        Assert.Equal("interact_poi", result.Type);
+        Assert.True(result.Ok);
+        Assert.Null(result.Reason);
+        Assert.Contains(
+            step.Events.OfType<PoiInteractedEventDto>(),
+            evt => evt.PoiId == inRangePoi.PoiId && evt.PoiType == inRangePoi.Type);
+        Assert.DoesNotContain(step.ActivePois, poi => poi.PoiId == inRangePoi.PoiId);
+    }
+
+    [Fact]
+    public async Task PostBattleStep_ChestSpawnSchedule_IsDeterministicBySeed()
+    {
+        const int seed = 1337;
+        var playerId = "player-poi-chest-determinism";
+        var firstStart = await StartBattleAsync("arena-poi-chest-determinism-a", playerId, seed);
+        var secondStart = await StartBattleAsync("arena-poi-chest-determinism-b", playerId, seed);
+        AssertArenaInvariants(firstStart.Actors, playerId);
+        AssertArenaInvariants(secondStart.Actors, playerId);
+
+        var firstInitialChest = Assert.Single(firstStart.ActivePois, poi => poi.Type == "chest");
+        var secondInitialChest = Assert.Single(secondStart.ActivePois, poi => poi.Type == "chest");
+        var firstConsumeInitialChest = await StepBattleAsync(
+            firstStart.BattleId,
+            firstStart.Tick,
+            [BuildInteractPoiCommand(firstInitialChest.PoiId)]);
+        var secondConsumeInitialChest = await StepBattleAsync(
+            secondStart.BattleId,
+            secondStart.Tick,
+            [BuildInteractPoiCommand(secondInitialChest.PoiId)]);
+        AssertArenaInvariants(firstConsumeInitialChest.Actors, playerId);
+        AssertArenaInvariants(secondConsumeInitialChest.Actors, playerId);
+        Assert.True(Assert.Single(firstConsumeInitialChest.CommandResults).Ok);
+        Assert.True(Assert.Single(secondConsumeInitialChest.CommandResults).Ok);
+        Assert.DoesNotContain(firstConsumeInitialChest.ActivePois, poi => poi.Type == "chest");
+        Assert.DoesNotContain(secondConsumeInitialChest.ActivePois, poi => poi.Type == "chest");
+
+        var firstCurrent = firstConsumeInitialChest;
+        var secondCurrent = secondConsumeInitialChest;
+        BattleStepResponseDto? firstSpawnStep = null;
+        BattleStepResponseDto? secondSpawnStep = null;
+        BattlePoiDto? firstSpawnChest = null;
+        BattlePoiDto? secondSpawnChest = null;
+        for (var stepIndex = 0; stepIndex < 1120; stepIndex += 1)
+        {
+            var sustainCommands = new List<BattleCommandDto>();
+            if (GetCooldownRemainingMs(firstCurrent.Skills, "heal") == 0)
+            {
+                sustainCommands.Add(new BattleCommandDto("cast_skill", "heal"));
+            }
+            else if (GetCooldownRemainingMs(firstCurrent.Skills, "guard") == 0)
+            {
+                sustainCommands.Add(new BattleCommandDto("cast_skill", "guard"));
+            }
+            else
+            {
+                sustainCommands.AddRange(BuildReadySkillCommands(firstCurrent.Skills));
+            }
+
+            var firstStep = await StepBattleAsync(firstStart.BattleId, firstCurrent.Tick, sustainCommands);
+            var secondStep = await StepBattleAsync(secondStart.BattleId, secondCurrent.Tick, sustainCommands);
+            firstCurrent = firstStep;
+            secondCurrent = secondStep;
+            AssertArenaInvariants(firstStep.Actors, playerId);
+            AssertArenaInvariants(secondStep.Actors, playerId);
+
+            var firstChest = firstStep.ActivePois
+                .Where(poi => poi.Type == "chest")
+                .OrderBy(poi => poi.PoiId, StringComparer.Ordinal)
+                .FirstOrDefault();
+            var secondChest = secondStep.ActivePois
+                .Where(poi => poi.Type == "chest")
+                .OrderBy(poi => poi.PoiId, StringComparer.Ordinal)
+                .FirstOrDefault();
+            Assert.Equal(firstChest is null, secondChest is null);
+            if (firstChest is null || secondChest is null)
+            {
+                continue;
+            }
+
+            firstSpawnStep = firstStep;
+            secondSpawnStep = secondStep;
+            firstSpawnChest = firstChest;
+            secondSpawnChest = secondChest;
+            break;
+        }
+
+        Assert.NotNull(firstSpawnStep);
+        Assert.NotNull(secondSpawnStep);
+        Assert.NotNull(firstSpawnChest);
+        Assert.NotNull(secondSpawnChest);
+        Assert.Equal(firstSpawnStep!.Tick, secondSpawnStep!.Tick);
+        Assert.Equal(firstSpawnChest!.PoiId, secondSpawnChest!.PoiId);
+        Assert.Equal(firstSpawnChest.Type, secondSpawnChest.Type);
+        Assert.Equal(firstSpawnChest.Pos.X, secondSpawnChest.Pos.X);
+        Assert.Equal(firstSpawnChest.Pos.Y, secondSpawnChest.Pos.Y);
+    }
+
+    [Fact]
+    public async Task PostBattleStep_AltarSpawnSchedule_IsDeterministicBySeed()
+    {
+        const int seed = 1337;
+        var playerId = "player-poi-altar-determinism";
+        var firstStart = await StartBattleAsync("arena-poi-altar-determinism-a", playerId, seed);
+        var secondStart = await StartBattleAsync("arena-poi-altar-determinism-b", playerId, seed);
+        AssertArenaInvariants(firstStart.Actors, playerId);
+        AssertArenaInvariants(secondStart.Actors, playerId);
+
+        BattleStepResponseDto? firstSpawnStep = null;
+        BattleStepResponseDto? secondSpawnStep = null;
+        BattlePoiDto? firstSpawnAltar = null;
+        BattlePoiDto? secondSpawnAltar = null;
+        var firstCurrentTick = firstStart.Tick;
+        var secondCurrentTick = secondStart.Tick;
+        IReadOnlyList<SkillStateDto> firstCurrentSkills = firstStart.Skills;
+        for (var stepIndex = 0; stepIndex < 1400; stepIndex += 1)
+        {
+            var commands = BuildSustainCommands(firstCurrentSkills);
+            var firstStep = await StepBattleAsync(firstStart.BattleId, firstCurrentTick, commands);
+            var secondStep = await StepBattleAsync(secondStart.BattleId, secondCurrentTick, commands);
+            firstCurrentTick = firstStep.Tick;
+            secondCurrentTick = secondStep.Tick;
+            firstCurrentSkills = firstStep.Skills;
+            AssertArenaInvariants(firstStep.Actors, playerId);
+            AssertArenaInvariants(secondStep.Actors, playerId);
+
+            var firstAltar = firstStep.ActivePois
+                .Where(poi => poi.Type == "altar")
+                .OrderBy(poi => poi.PoiId, StringComparer.Ordinal)
+                .FirstOrDefault();
+            var secondAltar = secondStep.ActivePois
+                .Where(poi => poi.Type == "altar")
+                .OrderBy(poi => poi.PoiId, StringComparer.Ordinal)
+                .FirstOrDefault();
+            Assert.Equal(firstAltar is null, secondAltar is null);
+            if (firstAltar is null || secondAltar is null)
+            {
+                continue;
+            }
+
+            firstSpawnStep = firstStep;
+            secondSpawnStep = secondStep;
+            firstSpawnAltar = firstAltar;
+            secondSpawnAltar = secondAltar;
+            break;
+        }
+
+        Assert.NotNull(firstSpawnStep);
+        Assert.NotNull(secondSpawnStep);
+        Assert.NotNull(firstSpawnAltar);
+        Assert.NotNull(secondSpawnAltar);
+        Assert.Equal(firstSpawnStep!.Tick, secondSpawnStep!.Tick);
+        Assert.Equal(firstSpawnAltar!.PoiId, secondSpawnAltar!.PoiId);
+        Assert.Equal(firstSpawnAltar.Type, secondSpawnAltar.Type);
+        Assert.Equal(firstSpawnAltar.Pos.X, secondSpawnAltar.Pos.X);
+        Assert.Equal(firstSpawnAltar.Pos.Y, secondSpawnAltar.Pos.Y);
+    }
+
+    [Fact]
+    public async Task PostBattleStep_InteractAltar_EnforcesGlobalCooldown()
+    {
+        const int seed = 1337;
+        var playerId = "player-altar-cooldown";
+        var start = await StartBattleAsync("arena-altar-cooldown", playerId, seed);
+        AssertArenaInvariants(start.Actors, playerId);
+        Assert.Equal(0, start.AltarCooldownRemainingMs);
+
+        var activation = await ActivateFirstAvailableAltarAsync(start, playerId, maxSteps: 2000);
+        AssertArenaInvariants(activation.ActivatedStep.Actors, playerId);
+        Assert.True(activation.ActivatedStep.AltarCooldownRemainingMs > 0);
+        Assert.InRange(activation.ActivatedStep.AltarCooldownRemainingMs, 1, AltarCooldownMs);
+
+        var current = activation.ActivatedStep;
+        var sawCooldownRejection = false;
+        for (var stepIndex = 0; stepIndex < 2000; stepIndex += 1)
+        {
+            if (current.BattleStatus == "defeat")
+            {
+                break;
+            }
+
+            var commands = new List<BattleCommandDto>();
+            var altar = current.ActivePois
+                .Where(poi => poi.Type == "altar")
+                .OrderBy(poi => poi.PoiId, StringComparer.Ordinal)
+                .FirstOrDefault();
+            if (altar is null)
+            {
+                commands.AddRange(BuildSustainCommands(current.Skills));
+            }
+            else
+            {
+                var player = GetActor(current.Actors, playerId);
+                var distance = ComputeChebyshevDistance(player.TileX, player.TileY, altar.Pos.X, altar.Pos.Y);
+                if (distance > 1)
+                {
+                    commands.Add(BuildMoveCommand(ResolveMoveDirectionToward(player.TileX, player.TileY, altar.Pos.X, altar.Pos.Y)));
+                }
+
+                commands.Add(BuildInteractPoiCommand(altar.PoiId));
+            }
+
+            var step = await StepBattleAsync(start.BattleId, current.Tick, commands);
+            current = step;
+            AssertArenaInvariants(step.Actors, playerId);
+            if (step.CommandResults.Any(result =>
+                    result.Type == "interact_poi" &&
+                    !result.Ok &&
+                    result.Reason == "cooldown") &&
+                step.Events.OfType<InteractFailedEventDto>().Any(evt => evt.Reason == "cooldown"))
+            {
+                sawCooldownRejection = true;
+                break;
+            }
+        }
+
+        Assert.True(sawCooldownRejection, "Expected altar interaction to fail with cooldown while altar cooldown was active.");
+    }
+
+    [Fact]
+    public async Task PostBattleStep_InteractAltar_SummonsUpToTwoMobsDeterministically_AndRespectsPoiOccupancy()
+    {
+        const int seed = 1337;
+        var playerId = "player-altar-summon";
+        var firstStart = await StartBattleAsync("arena-altar-summon-a", playerId, seed);
+        var secondStart = await StartBattleAsync("arena-altar-summon-b", playerId, seed);
+        AssertArenaInvariants(firstStart.Actors, playerId);
+        AssertArenaInvariants(secondStart.Actors, playerId);
+
+        var firstActivation = await ActivateFirstAvailableAltarAsync(firstStart, playerId, maxSteps: 2000);
+        var secondActivation = await ActivateFirstAvailableAltarAsync(secondStart, playerId, maxSteps: 2000);
+        AssertArenaInvariants(firstActivation.ActivatedStep.Actors, playerId);
+        AssertArenaInvariants(secondActivation.ActivatedStep.Actors, playerId);
+
+        var firstActivationEvent = Assert.Single(firstActivation.ActivatedStep.Events.OfType<AltarActivatedEventDto>());
+        var secondActivationEvent = Assert.Single(secondActivation.ActivatedStep.Events.OfType<AltarActivatedEventDto>());
+        Assert.Equal(AltarSummonSpawnCount, firstActivationEvent.RequestedCount);
+        Assert.Equal(AltarSummonSpawnCount, secondActivationEvent.RequestedCount);
+        Assert.InRange(firstActivationEvent.SpawnedCount, 0, AltarSummonSpawnCount);
+        Assert.Equal(firstActivationEvent.SpawnedCount, secondActivationEvent.SpawnedCount);
+
+        var firstMobCountBefore = firstActivation.ActorsBeforeActivation.Count(actor => actor.Kind == "mob");
+        var firstMobCountAfter = firstActivation.ActivatedStep.Actors.Count(actor => actor.Kind == "mob");
+        Assert.Equal(firstActivationEvent.SpawnedCount, firstMobCountAfter - firstMobCountBefore);
+        Assert.DoesNotContain(firstActivation.ActivatedStep.ActivePois, poi => poi.PoiId == firstActivation.ConsumedPoiId);
+
+        var secondMobCountBefore = secondActivation.ActorsBeforeActivation.Count(actor => actor.Kind == "mob");
+        var secondMobCountAfter = secondActivation.ActivatedStep.Actors.Count(actor => actor.Kind == "mob");
+        Assert.Equal(secondActivationEvent.SpawnedCount, secondMobCountAfter - secondMobCountBefore);
+        Assert.DoesNotContain(secondActivation.ActivatedStep.ActivePois, poi => poi.PoiId == secondActivation.ConsumedPoiId);
+
+        var firstMobSignature = firstActivation.ActivatedStep.Actors
+            .Where(actor => actor.Kind == "mob")
+            .OrderBy(actor => actor.ActorId, StringComparer.Ordinal)
+            .Select(actor => $"{actor.ActorId}:{actor.TileX}:{actor.TileY}:{actor.Hp}")
+            .ToList();
+        var secondMobSignature = secondActivation.ActivatedStep.Actors
+            .Where(actor => actor.Kind == "mob")
+            .OrderBy(actor => actor.ActorId, StringComparer.Ordinal)
+            .Select(actor => $"{actor.ActorId}:{actor.TileX}:{actor.TileY}:{actor.Hp}")
+            .ToList();
+        Assert.Equal(firstMobSignature, secondMobSignature);
+
+        AssertNoMobOnPoiTile(firstActivation.ActivatedStep);
+        AssertNoMobOnPoiTile(secondActivation.ActivatedStep);
+    }
+
+    [Fact]
+    public async Task PostBattleStep_InteractChest_InRangeAppliesHealingAmplifierBuff()
+    {
+        var playerId = "player-interact-chest-buff";
+        var start = await StartBattleAsync("arena-interact-chest-buff", playerId, 1337);
+        AssertArenaInvariants(start.Actors, playerId);
+
+        var player = GetActor(start.Actors, playerId);
+        var chest = Assert.Single(start.ActivePois, poi => poi.Type == "chest");
+        Assert.True(ComputeChebyshevDistance(player.TileX, player.TileY, chest.Pos.X, chest.Pos.Y) <= 1);
+
+        var step = await StepBattleAsync(
+            start.BattleId,
+            start.Tick,
+            [BuildInteractPoiCommand(chest.PoiId)]);
+        AssertArenaInvariants(step.Actors, playerId);
+
+        var result = Assert.Single(step.CommandResults);
+        Assert.Equal("interact_poi", result.Type);
+        Assert.True(result.Ok);
+        Assert.Contains(
+            step.Events.OfType<PoiInteractedEventDto>(),
+            evt => evt.PoiId == chest.PoiId && evt.PoiType == "chest");
+        Assert.Contains(
+            step.Events.OfType<BuffAppliedEventDto>(),
+            evt => evt.BuffId == HealAmplifierBuffId && evt.DurationMs == HealAmplifierDurationMs);
+        var activeBuff = Assert.Single(step.ActiveBuffs, buff => buff.BuffId == HealAmplifierBuffId);
+        Assert.InRange(activeBuff.RemainingMs, 1, HealAmplifierDurationMs);
+        Assert.DoesNotContain(step.ActivePois, poi => poi.PoiId == chest.PoiId);
+    }
+
+    [Fact]
+    public async Task PostBattleStep_HealingAmplifier_BoostsHealAndExpires()
+    {
+        var playerId = "player-heal-amp";
+        var start = await StartBattleAsync("arena-heal-amp", playerId, 1337);
+        AssertArenaInvariants(start.Actors, playerId);
+
+        var chest = Assert.Single(start.ActivePois, poi => poi.Type == "chest");
+        var interact = await StepBattleAsync(
+            start.BattleId,
+            start.Tick,
+            [BuildInteractPoiCommand(chest.PoiId)]);
+        AssertArenaInvariants(interact.Actors, playerId);
+        Assert.True(Assert.Single(interact.CommandResults).Ok);
+        Assert.Contains(interact.ActiveBuffs, buff => buff.BuffId == HealAmplifierBuffId && buff.RemainingMs > 0);
+
+        var maxHp = GetActor(interact.Actors, playerId).MaxHp;
+        var baseHeal = (int)Math.Floor(maxHp * (HealPercentOfMaxHp / 100.0d));
+        var bonusHeal = (int)Math.Floor(maxHp * (HealAmplifierBonusPercent / 100.0d));
+
+        var current = interact;
+        BattleStepResponseDto? preBuffedHealStep = null;
+        for (var stepIndex = 0; stepIndex < 32; stepIndex += 1)
+        {
+            AssertArenaInvariants(current.Actors, playerId);
+            if (current.BattleStatus == "defeat")
+            {
+                break;
+            }
+
+            var player = GetActor(current.Actors, playerId);
+            var missingHp = player.MaxHp - player.Hp;
+            var healReady = GetSkill(current, "heal").CooldownRemainingMs == 0;
+            var buffRemaining = GetBuffRemainingMs(current.ActiveBuffs, HealAmplifierBuffId);
+            if (buffRemaining > 0 && healReady && missingHp >= baseHeal + bonusHeal)
+            {
+                preBuffedHealStep = current;
+                break;
+            }
+
+            current = await StepBattleAsync(start.BattleId, current.Tick, []);
+        }
+
+        Assert.NotNull(preBuffedHealStep);
+        var beforeBuffedHeal = GetActor(preBuffedHealStep!.Actors, playerId);
+        var buffedHealCast = await StepBattleAsync(
+            start.BattleId,
+            preBuffedHealStep.Tick,
+            [new BattleCommandDto("cast_skill", "heal")]);
+        AssertArenaInvariants(buffedHealCast.Actors, playerId);
+        Assert.True(Assert.Single(buffedHealCast.CommandResults).Ok);
+        var buffedHealEvent = Assert.Single(
+            buffedHealCast.Events.OfType<HealNumberEventDto>(),
+            evt => evt.ActorId == playerId && evt.Source == "skill_heal");
+        var expectedBuffedHeal = Math.Min(
+            beforeBuffedHeal.MaxHp - beforeBuffedHeal.Hp,
+            baseHeal + bonusHeal);
+        Assert.Equal(expectedBuffedHeal, buffedHealEvent.Amount);
+
+        current = buffedHealCast;
+        BattleStepResponseDto? preBaseHealStep = null;
+        for (var stepIndex = 0; stepIndex < 220; stepIndex += 1)
+        {
+            AssertArenaInvariants(current.Actors, playerId);
+            if (current.BattleStatus == "defeat")
+            {
+                break;
+            }
+
+            var player = GetActor(current.Actors, playerId);
+            var missingHp = player.MaxHp - player.Hp;
+            var healReady = GetSkill(current, "heal").CooldownRemainingMs == 0;
+            var buffRemaining = GetBuffRemainingMs(current.ActiveBuffs, HealAmplifierBuffId);
+            if (buffRemaining == 0 && healReady && missingHp > 0)
+            {
+                preBaseHealStep = current;
+                break;
+            }
+
+            current = await StepBattleAsync(start.BattleId, current.Tick, []);
+        }
+
+        Assert.NotNull(preBaseHealStep);
+        var beforeBaseHeal = GetActor(preBaseHealStep!.Actors, playerId);
+        var baseHealCast = await StepBattleAsync(
+            start.BattleId,
+            preBaseHealStep.Tick,
+            [new BattleCommandDto("cast_skill", "heal")]);
+        AssertArenaInvariants(baseHealCast.Actors, playerId);
+        Assert.True(Assert.Single(baseHealCast.CommandResults).Ok);
+        var baseHealEvent = Assert.Single(
+            baseHealCast.Events.OfType<HealNumberEventDto>(),
+            evt => evt.ActorId == playerId && evt.Source == "skill_heal");
+        var expectedBaseHeal = Math.Min(
+            beforeBaseHeal.MaxHp - beforeBaseHeal.Hp,
+            baseHeal);
+        Assert.Equal(expectedBaseHeal, baseHealEvent.Amount);
+        Assert.True(baseHealEvent.Amount <= baseHeal);
+    }
+
+    [Fact]
+    public async Task PostBattleStep_MobsMoveTowardPlayer_ThenAutoAttacksTrigger()
+    {
+        var playerId = "player-auto-attacks";
+        var start = await StartBattleAsync("arena-auto-attacks", playerId, 1337);
+        AssertArenaInvariants(start.Actors, playerId);
+
+        var initialMinDistance = start.Actors
+            .Where(actor => actor.Kind == "mob")
+            .Select(actor => ComputeChebyshevDistance(actor.TileX, actor.TileY, PlayerTileX, PlayerTileY))
+            .Min();
+
+        var currentTick = start.Tick;
+        var gotCloser = false;
+        var gotAdjacent = false;
+        var sawPlayerDamage = false;
+        var sawMobDamage = false;
+        var sawPhysicalElementEvent = false;
+
+        for (var stepIndex = 0; stepIndex < 24; stepIndex += 1)
+        {
+            var step = await StepBattleAsync(start.BattleId, currentTick, []);
+            currentTick = step.Tick;
+            AssertArenaInvariants(step.Actors, playerId);
+
+            var mobDistances = step.Actors
+                .Where(actor => actor.Kind == "mob")
+                .Select(actor => ComputeChebyshevDistance(actor.TileX, actor.TileY, PlayerTileX, PlayerTileY))
+                .ToList();
+
+            if (mobDistances.Count > 0)
+            {
+                gotCloser = gotCloser || mobDistances.Min() < initialMinDistance;
+                gotAdjacent = gotAdjacent || mobDistances.Any(distance => distance <= 1);
+            }
+
+            sawPlayerDamage = sawPlayerDamage || step.Events
+                .OfType<DamageNumberEventDto>()
+                .Any(evt => evt.TargetEntityId == playerId && evt.DamageAmount > 0);
+
+            sawMobDamage = sawMobDamage || step.Events
+                .OfType<DamageNumberEventDto>()
+                .Any(evt => evt.TargetEntityId.StartsWith("mob.slime.", StringComparison.Ordinal) && evt.DamageAmount == 3);
+
+            sawPhysicalElementEvent = sawPhysicalElementEvent
+                || step.Events.OfType<FxSpawnEventDto>().Any(evt => evt.Element == ElementType.Physical)
+                || step.Events.OfType<DamageNumberEventDto>().Any(evt => evt.ElementType == ElementType.Physical);
+
+            if (gotCloser && gotAdjacent && sawPlayerDamage && sawMobDamage && sawPhysicalElementEvent)
+            {
+                break;
+            }
+        }
+
+        Assert.True(gotCloser, "Expected at least one mob to reduce distance to player.");
+        Assert.True(gotAdjacent, "Expected at least one mob to become adjacent to player.");
+        Assert.True(sawPlayerDamage, "Expected mob auto-attack damage on player.");
+        Assert.True(sawMobDamage, "Expected player auto-attack damage on mobs.");
+        Assert.True(sawPhysicalElementEvent, "Expected at least one emitted battle event with Physical element.");
+    }
+
+    [Fact]
+    public async Task PostBattleStep_RangedMobs_DoNotRemainFarForLong()
+    {
+        var playerId = "player-ranged-band";
+        var start = await StartBattleAsync("arena-ranged-band", playerId, 1337);
+        AssertArenaInvariants(start.Actors, playerId);
+
+        var trackedRangedMobIds = start.Actors
+            .Where(IsRangedMob)
+            .Select(actor => actor.ActorId)
+            .ToList();
+        Assert.NotEmpty(trackedRangedMobIds);
+
+        var farStreakByMobId = trackedRangedMobIds.ToDictionary(id => id, _ => 0, StringComparer.Ordinal);
+        var currentTick = start.Tick;
+
+        for (var stepIndex = 0; stepIndex < 180; stepIndex += 1)
+        {
+            var step = await StepBattleAsync(start.BattleId, currentTick, []);
+            currentTick = step.Tick;
+            AssertArenaInvariants(step.Actors, playerId);
+
+            foreach (var mobId in trackedRangedMobIds)
+            {
+                var mob = step.Actors.FirstOrDefault(actor => actor.ActorId == mobId && IsRangedMob(actor));
+                if (mob is null)
+                {
+                    farStreakByMobId[mobId] = 0;
+                    continue;
+                }
+
+                var distance = ComputeChebyshevDistance(mob.TileX, mob.TileY, PlayerTileX, PlayerTileY);
+                if (distance >= 4)
+                {
+                    farStreakByMobId[mobId] += 1;
+                    Assert.True(
+                        farStreakByMobId[mobId] <= 4,
+                        $"Ranged mob '{mobId}' remained at distance >= 4 for too long.");
+                }
+                else
+                {
+                    farStreakByMobId[mobId] = 0;
+                }
+            }
+
+            if (step.BattleStatus == "defeat")
+            {
+                break;
+            }
+        }
+    }
+
+    [Fact]
+    public async Task PostBattleStep_RangedCommitWindow_PreventsImmediateKitingAfterCloseHit()
+    {
+        var playerId = "player-ranged-commit";
+        var start = await StartBattleAsync("arena-ranged-commit", playerId, 1337);
+        AssertArenaInvariants(start.Actors, playerId);
+
+        var currentTick = start.Tick;
+        for (var stepIndex = 0; stepIndex < 420; stepIndex += 1)
+        {
+            var step = await StepBattleAsync(start.BattleId, currentTick, []);
+            currentTick = step.Tick;
+            AssertArenaInvariants(step.Actors, playerId);
+
+            foreach (var damage in step.Events.OfType<DamageNumberEventDto>())
+            {
+                if (damage.TargetEntityId != playerId || string.IsNullOrWhiteSpace(damage.AttackerEntityId))
+                {
+                    continue;
+                }
+
+                var attacker = step.Actors.FirstOrDefault(actor => actor.ActorId == damage.AttackerEntityId && IsRangedMob(actor));
+                if (attacker is null)
+                {
+                    continue;
+                }
+
+                var nextStep = await StepBattleAsync(start.BattleId, currentTick, []);
+                currentTick = nextStep.Tick;
+                AssertArenaInvariants(nextStep.Actors, playerId);
+
+                var attackerNext = nextStep.Actors.FirstOrDefault(actor => actor.ActorId == attacker.ActorId && IsRangedMob(actor));
+                if (attackerNext is null)
+                {
+                    break;
+                }
+
+                Assert.Equal(attacker.TileX, attackerNext.TileX);
+                Assert.Equal(attacker.TileY, attackerNext.TileY);
+                return;
+            }
+
+            if (step.BattleStatus == "defeat")
+            {
+                break;
+            }
+        }
+
+        throw new Xunit.Sdk.XunitException("Expected a close ranged hit scenario to validate commit-window anti-kite behavior.");
+    }
+
+    [Fact]
+    public async Task PostBattleStep_RangedBehavior_IsDeterministicForSameSeed()
+    {
+        var firstStart = await StartBattleAsync("arena-ranged-determinism-a", "player-ranged-determinism", 1337);
+        var secondStart = await StartBattleAsync("arena-ranged-determinism-b", "player-ranged-determinism", 1337);
+        AssertArenaInvariants(firstStart.Actors, "player-ranged-determinism");
+        AssertArenaInvariants(secondStart.Actors, "player-ranged-determinism");
+
+        var firstTick = firstStart.Tick;
+        var secondTick = secondStart.Tick;
+
+        for (var stepIndex = 0; stepIndex < 72; stepIndex += 1)
+        {
+            var firstStep = await StepBattleAsync(firstStart.BattleId, firstTick, []);
+            var secondStep = await StepBattleAsync(secondStart.BattleId, secondTick, []);
+            firstTick = firstStep.Tick;
+            secondTick = secondStep.Tick;
+
+            AssertArenaInvariants(firstStep.Actors, "player-ranged-determinism");
+            AssertArenaInvariants(secondStep.Actors, "player-ranged-determinism");
+
+            var firstRanged = firstStep.Actors
+                .Where(IsRangedMob)
+                .OrderBy(actor => actor.ActorId, StringComparer.Ordinal)
+                .Select(actor => $"{actor.ActorId}:{actor.TileX}:{actor.TileY}:{actor.Hp}")
+                .ToList();
+            var secondRanged = secondStep.Actors
+                .Where(IsRangedMob)
+                .OrderBy(actor => actor.ActorId, StringComparer.Ordinal)
+                .Select(actor => $"{actor.ActorId}:{actor.TileX}:{actor.TileY}:{actor.Hp}")
+                .ToList();
+
+            Assert.Equal(firstRanged, secondRanged);
+            Assert.Equal(
+                firstStep.Events.Select(ToEventSignature).ToList(),
+                secondStep.Events.Select(ToEventSignature).ToList());
+        }
+    }
+
+    [Fact]
+    public async Task PostBattleStep_KinaReflectPassive_ReflectsMeleeDamage()
+    {
+        var playerId = "player-reflect-melee";
+        var start = await StartBattleAsync("arena-reflect-melee", playerId, 1337);
+        AssertArenaInvariants(start.Actors, playerId);
+
+        var currentTick = start.Tick;
+        var previousPlayerShield = GetActor(start.Actors, playerId).Shield;
+        for (var stepIndex = 0; stepIndex < 260; stepIndex += 1)
+        {
+            var step = await StepBattleAsync(start.BattleId, currentTick, []);
+            currentTick = step.Tick;
+            AssertArenaInvariants(step.Actors, playerId);
+
+            if (previousPlayerShield > 0)
+            {
+                previousPlayerShield = GetActor(step.Actors, playerId).Shield;
+                if (step.BattleStatus == "defeat")
+                {
+                    break;
+                }
+
+                continue;
+            }
+
+            var meleeHit = step.Events
+                .OfType<DamageNumberEventDto>()
+                .FirstOrDefault(evt =>
+                {
+                    if (evt.TargetEntityId != playerId || string.IsNullOrWhiteSpace(evt.AttackerEntityId) || evt.DamageAmount != 2)
+                    {
+                        return false;
+                    }
+
+                    var attacker = step.Actors.FirstOrDefault(actor => actor.ActorId == evt.AttackerEntityId);
+                    return attacker is not null && IsMeleeMob(attacker);
+                });
+
+            if (meleeHit is null)
+            {
+                previousPlayerShield = GetActor(step.Actors, playerId).Shield;
+                if (step.BattleStatus == "defeat")
+                {
+                    break;
+                }
+
+                continue;
+            }
+
+            var matchingReflectEvents = step.Events
+                .OfType<ReflectEventDto>()
+                .Where(evt => evt.TargetEntityId == meleeHit.AttackerEntityId)
+                .ToList();
+            Assert.NotEmpty(matchingReflectEvents);
+            Assert.Contains(
+                matchingReflectEvents,
+                evt =>
+                    evt.SourceEntityId == playerId &&
+                    evt.Amount == 1 &&
+                    evt.ElementType == ElementType.Physical);
+            var reflectEvent = matchingReflectEvents[0];
+
+            Assert.Contains(
+                step.Events.OfType<DamageNumberEventDto>(),
+                evt =>
+                    evt.AttackerEntityId == playerId &&
+                    evt.TargetEntityId == meleeHit.AttackerEntityId &&
+                    evt.ElementType == ElementType.Physical &&
+                    evt.DamageAmount > 0 &&
+                    evt.DamageAmount <= reflectEvent.Amount);
+            return;
+        }
+
+        throw new Xunit.Sdk.XunitException("Expected melee mob damage with Kina reflect passive response.");
+    }
+
+    [Fact]
+    public async Task PostBattleStep_KinaReflectPassive_AppliesRangedMultiplier()
+    {
+        var playerId = "player-reflect-ranged";
+        var start = await StartBattleAsync("arena-reflect-ranged", playerId, 1337);
+        AssertArenaInvariants(start.Actors, playerId);
+
+        var currentTick = start.Tick;
+        var previousPlayerShield = GetActor(start.Actors, playerId).Shield;
+        for (var stepIndex = 0; stepIndex < 320; stepIndex += 1)
+        {
+            var step = await StepBattleAsync(start.BattleId, currentTick, []);
+            currentTick = step.Tick;
+            AssertArenaInvariants(step.Actors, playerId);
+
+            if (previousPlayerShield > 0)
+            {
+                previousPlayerShield = GetActor(step.Actors, playerId).Shield;
+                if (step.BattleStatus == "defeat")
+                {
+                    break;
+                }
+
+                continue;
+            }
+
+            var rangedHit = step.Events
+                .OfType<DamageNumberEventDto>()
+                .FirstOrDefault(evt =>
+                {
+                    if (evt.TargetEntityId != playerId || string.IsNullOrWhiteSpace(evt.AttackerEntityId) || evt.DamageAmount <= 0)
+                    {
+                        return false;
+                    }
+
+                    var attacker = step.Actors.FirstOrDefault(actor => actor.ActorId == evt.AttackerEntityId);
+                    return attacker is not null && IsRangedMob(attacker);
+                });
+
+            if (rangedHit is null)
+            {
+                previousPlayerShield = GetActor(step.Actors, playerId).Shield;
+                if (step.BattleStatus == "defeat")
+                {
+                    break;
+                }
+
+                continue;
+            }
+
+            var expectedReflectedBase = Math.Max(1, (int)Math.Floor(rangedHit.DamageAmount * 0.2d));
+            var expectedReflected = expectedReflectedBase * 2;
+            var matchingReflectEvents = step.Events
+                .OfType<ReflectEventDto>()
+                .Where(evt => evt.TargetEntityId == rangedHit.AttackerEntityId)
+                .ToList();
+            Assert.NotEmpty(matchingReflectEvents);
+            Assert.Contains(matchingReflectEvents, evt => evt.Amount == expectedReflected);
+            var reflectEvent = matchingReflectEvents[0];
+
+            Assert.Contains(
+                step.Events.OfType<DamageNumberEventDto>(),
+                evt =>
+                    evt.AttackerEntityId == playerId &&
+                    evt.TargetEntityId == rangedHit.AttackerEntityId &&
+                    evt.ElementType == ElementType.Physical &&
+                    evt.DamageAmount > 0 &&
+                    evt.DamageAmount <= reflectEvent.Amount);
+            return;
+        }
+
+        throw new Xunit.Sdk.XunitException("Expected ranged mob damage with reflect multiplier response.");
+    }
+
+    [Fact]
+    public async Task PostBattleStep_KinaReflectPassive_DoesNotRecurse()
+    {
+        var playerId = "player-reflect-no-recursion";
+        var start = await StartBattleAsync("arena-reflect-no-recursion", playerId, 1337);
+        AssertArenaInvariants(start.Actors, playerId);
+
+        var currentTick = start.Tick;
+        var sawReflect = false;
+        for (var stepIndex = 0; stepIndex < 220; stepIndex += 1)
+        {
+            var step = await StepBattleAsync(start.BattleId, currentTick, []);
+            currentTick = step.Tick;
+            AssertArenaInvariants(step.Actors, playerId);
+
+            var reflectEvents = step.Events.OfType<ReflectEventDto>().ToList();
+            if (reflectEvents.Count == 0)
+            {
+                if (step.BattleStatus == "defeat")
+                {
+                    break;
+                }
+
+                continue;
+            }
+
+            sawReflect = true;
+            Assert.All(reflectEvents, reflectEvent =>
+            {
+                Assert.Equal(playerId, reflectEvent.SourceEntityId);
+                Assert.NotEqual(playerId, reflectEvent.TargetEntityId);
+                Assert.True(reflectEvent.Amount > 0);
+            });
+
+            // A recursion would produce additional reflect chains or reflected hits against the player.
+            Assert.DoesNotContain(
+                reflectEvents,
+                reflectEvent => string.Equals(reflectEvent.TargetEntityId, playerId, StringComparison.Ordinal));
+        }
+
+        Assert.True(sawReflect, "Expected at least one reflect event during simulation.");
+    }
+
+    [Fact]
+    public async Task PostBattleStep_Avalanche_GroundTarget_DamagesMobInsideAoe()
+    {
+        var playerId = "player-avalanche-hit";
+        var start = await StartBattleAsync("arena-avalanche-hit", playerId, 1337);
+        AssertArenaInvariants(start.Actors, playerId);
+
+        var currentTick = start.Tick;
+        for (var stepIndex = 0; stepIndex < 220; stepIndex += 1)
+        {
+            var step = await StepBattleAsync(start.BattleId, currentTick, []);
+            currentTick = step.Tick;
+            AssertArenaInvariants(step.Actors, playerId);
+
+            var avalancheReady = GetSkill(step, "avalanche").CooldownRemainingMs == 0;
+            var adjacentMeleeMob = step.Actors
+                .Where(actor => actor.Kind == "mob" && IsMeleeMob(actor))
+                .OrderBy(actor => actor.ActorId, StringComparer.Ordinal)
+                .FirstOrDefault(actor => ComputeChebyshevDistance(actor.TileX, actor.TileY, PlayerTileX, PlayerTileY) <= 1);
+            if (!avalancheReady || adjacentMeleeMob is null)
+            {
+                if (step.BattleStatus == "defeat")
+                {
+                    break;
+                }
+
+                continue;
+            }
+
+            var cast = await StepBattleAsync(
+                start.BattleId,
+                currentTick,
+                [
+                    new BattleCommandDto("set_ground_target", GroundTileX: adjacentMeleeMob.TileX, GroundTileY: adjacentMeleeMob.TileY),
+                    new BattleCommandDto("cast_skill", "avalanche")
+                ]);
+            currentTick = cast.Tick;
+            AssertArenaInvariants(cast.Actors, playerId);
+
+            Assert.True(cast.CommandResults.Count >= 2);
+            Assert.True(cast.CommandResults[0].Ok);
+            Assert.True(cast.CommandResults[1].Ok);
+            Assert.Equal(2500, GetSkill(cast, "avalanche").CooldownRemainingMs);
+            Assert.Contains(
+                cast.Events.OfType<DamageNumberEventDto>(),
+                evt =>
+                    evt.TargetEntityId == adjacentMeleeMob.ActorId &&
+                    evt.ElementType == ElementType.Ice &&
+                    evt.DamageAmount > 0);
+            return;
+        }
+
+        throw new Xunit.Sdk.XunitException("Expected avalanche cast to damage at least one melee mob in AoE.");
+    }
+
+    [Fact]
+    public async Task PostBattleStep_Avalanche_NoTargets_StillConsumesCooldown()
+    {
+        var playerId = "player-avalanche-no-hit";
+        var seed = await FindSeedAsync(payload =>
+            payload.Actors
+                .Where(actor => actor.Kind == "mob")
+                .All(actor => actor.TileX < 1 || actor.TileX > 5 || actor.TileY < 0 || actor.TileY > 2));
+        var start = await StartBattleAsync("arena-avalanche-no-hit", playerId, seed);
+        AssertArenaInvariants(start.Actors, playerId);
+
+        var cast = await StepBattleAsync(
+            start.BattleId,
+            start.Tick,
+            [
+                new BattleCommandDto("set_ground_target", GroundTileX: 3, GroundTileY: 0),
+                new BattleCommandDto("cast_skill", "avalanche")
+            ]);
+        AssertArenaInvariants(cast.Actors, playerId);
+
+        Assert.True(cast.CommandResults.Count >= 2);
+        Assert.True(cast.CommandResults[0].Ok);
+        Assert.True(cast.CommandResults[1].Ok);
+        Assert.Equal(2500, GetSkill(cast, "avalanche").CooldownRemainingMs);
+        Assert.DoesNotContain(
+            cast.Events.OfType<DamageNumberEventDto>(),
+            evt =>
+                evt.AttackerEntityId == playerId &&
+                evt.TargetEntityId.StartsWith("mob.", StringComparison.Ordinal) &&
+                evt.ElementType == ElementType.Ice &&
+                evt.DamageAmount > 0);
+    }
+
+    [Fact]
+    public async Task PostBattleStep_Avalanche_OutOfRange_FailsWithoutDamageOrCooldown()
+    {
+        var playerId = "player-avalanche-out-of-range";
+        var start = await StartBattleAsync("arena-avalanche-out-of-range", playerId, 1337);
+        AssertArenaInvariants(start.Actors, playerId);
+        Assert.Equal(0, GetCooldownRemainingMs(start.Skills, "avalanche"));
+
+        var cast = await StepBattleAsync(
+            start.BattleId,
+            start.Tick,
+            [
+                new BattleCommandDto("set_ground_target", GroundTileX: 0, GroundTileY: 0),
+                new BattleCommandDto("cast_skill", "avalanche")
+            ]);
+        AssertArenaInvariants(cast.Actors, playerId);
+
+        Assert.True(cast.CommandResults.Count >= 2);
+        Assert.True(cast.CommandResults[0].Ok);
+        Assert.False(cast.CommandResults[1].Ok);
+        Assert.Equal("out_of_range", cast.CommandResults[1].Reason);
+        Assert.Equal(0, GetSkill(cast, "avalanche").CooldownRemainingMs);
+        Assert.DoesNotContain(
+            cast.Events.OfType<DamageNumberEventDto>(),
+            evt =>
+                evt.AttackerEntityId == playerId &&
+                evt.TargetEntityId.StartsWith("mob.", StringComparison.Ordinal) &&
+                evt.ElementType == ElementType.Ice &&
+                evt.DamageAmount > 0);
+    }
+
+    [Fact]
+    public async Task PostBattleStep_BruteCleave_AbilityTriggers()
+    {
+        var start = await StartBattleAsync("arena-brute-cleave", "player-brute-cleave", 1337);
+        AssertArenaInvariants(start.Actors, "player-brute-cleave");
+
+        var currentTick = start.Tick;
+        for (var stepIndex = 0; stepIndex < 120; stepIndex += 1)
+        {
+            var step = await StepBattleAsync(start.BattleId, currentTick, []);
+            currentTick = step.Tick;
+            AssertArenaInvariants(step.Actors, "player-brute-cleave");
+            if (step.Events.OfType<FxSpawnEventDto>().Any(evt => evt.FxId == "fx.mob.brute.cleave"))
+            {
+                return;
+            }
+        }
+
+        throw new Xunit.Sdk.XunitException("Expected brute cleave ability FX to trigger.");
+    }
+
+    [Fact]
+    public async Task PostBattleStep_ArcherPowerShot_AbilityTriggers()
+    {
+        var start = await StartBattleAsync("arena-archer-shot", "player-archer-shot", 1337);
+        AssertArenaInvariants(start.Actors, "player-archer-shot");
+
+        var currentTick = start.Tick;
+        for (var stepIndex = 0; stepIndex < 120; stepIndex += 1)
+        {
+            var step = await StepBattleAsync(start.BattleId, currentTick, []);
+            currentTick = step.Tick;
+            AssertArenaInvariants(step.Actors, "player-archer-shot");
+            if (step.Events.OfType<FxSpawnEventDto>().Any(evt => evt.FxId == "fx.mob.archer.power_shot"))
+            {
+                return;
+            }
+        }
+
+        throw new Xunit.Sdk.XunitException("Expected archer power shot ability FX to trigger.");
+    }
+
+    [Fact]
+    public async Task PostBattleStep_DemonBeam_AbilityTriggers()
+    {
+        var start = await StartBattleAsync("arena-demon-beam", "player-demon-beam", 1337);
+        AssertArenaInvariants(start.Actors, "player-demon-beam");
+
+        var currentTick = start.Tick;
+        for (var stepIndex = 0; stepIndex < 160; stepIndex += 1)
+        {
+            var step = await StepBattleAsync(start.BattleId, currentTick, []);
+            currentTick = step.Tick;
+            AssertArenaInvariants(step.Actors, "player-demon-beam");
+            if (step.Events.OfType<FxSpawnEventDto>().Any(evt => evt.FxId == "fx.mob.demon.beam"))
+            {
+                return;
+            }
+        }
+
+        throw new Xunit.Sdk.XunitException("Expected demon beam ability FX to trigger.");
+    }
+
+    [Fact]
+    public async Task PostBattleStep_DragonBreath_AbilityTriggers()
+    {
+        var start = await StartBattleAsync("arena-dragon-breath", "player-dragon-breath", 1337);
+        AssertArenaInvariants(start.Actors, "player-dragon-breath");
+
+        var currentTick = start.Tick;
+        for (var stepIndex = 0; stepIndex < 160; stepIndex += 1)
+        {
+            var step = await StepBattleAsync(start.BattleId, currentTick, []);
+            currentTick = step.Tick;
+            AssertArenaInvariants(step.Actors, "player-dragon-breath");
+            if (step.Events.OfType<FxSpawnEventDto>().Any(evt => evt.FxId == "fx.mob.dragon.breath"))
+            {
+                return;
+            }
+        }
+
+        throw new Xunit.Sdk.XunitException("Expected dragon breath ability FX to trigger.");
+    }
+
+    [Fact]
+    public void MobShapePlanner_LineForward_RotatesByFacing()
+    {
+        var up = MobShapePlanner.BuildForwardLineTiles(3, 3, "up", 4);
+        Assert.Equal(new[] { (3, 2), (3, 1), (3, 0), (3, -1) }, up);
+
+        var right = MobShapePlanner.BuildForwardLineTiles(3, 3, "right", 4);
+        Assert.Equal(new[] { (4, 3), (5, 3), (6, 3), (7, 3) }, right);
+    }
+
+    [Fact]
+    public void MobShapePlanner_ConeForward_RotatesByFacing()
+    {
+        var up = MobShapePlanner.BuildForwardConeTiles(3, 3, "up");
+        Assert.Equal(9, up.Count);
+        Assert.Contains((3, 2), up);
+        Assert.Contains((2, 1), up);
+        Assert.Contains((4, 1), up);
+        Assert.Contains((1, 0), up);
+        Assert.Contains((5, 0), up);
+
+        var right = MobShapePlanner.BuildForwardConeTiles(3, 3, "right");
+        Assert.Equal(9, right.Count);
+        Assert.Contains((4, 3), right);
+        Assert.Contains((5, 2), right);
+        Assert.Contains((5, 4), right);
+        Assert.Contains((6, 1), right);
+        Assert.Contains((6, 5), right);
+    }
+
+    [Fact]
+    public async Task PostBattleStep_MobAbilityCooldowns_CycleAcrossTicks()
+    {
+        var start = await StartBattleAsync("arena-mob-cooldowns", "player-mob-cooldowns", 1337);
+        AssertArenaInvariants(start.Actors, "player-mob-cooldowns");
+
+        var currentTick = start.Tick;
+        var bruteAbilityTicks = new HashSet<int>();
+        var archerAbilityTicks = new HashSet<int>();
+
+        for (var stepIndex = 0; stepIndex < 220; stepIndex += 1)
+        {
+            var step = await StepBattleAsync(start.BattleId, currentTick, []);
+            currentTick = step.Tick;
+            AssertArenaInvariants(step.Actors, "player-mob-cooldowns");
+
+            if (step.Events.OfType<FxSpawnEventDto>().Any(evt => evt.FxId == "fx.mob.brute.cleave"))
+            {
+                bruteAbilityTicks.Add(step.Tick);
+            }
+
+            if (step.Events.OfType<FxSpawnEventDto>().Any(evt => evt.FxId == "fx.mob.archer.power_shot"))
+            {
+                archerAbilityTicks.Add(step.Tick);
+            }
+        }
+
+        Assert.True(bruteAbilityTicks.Count >= 2, "Expected brute ability to trigger on multiple ticks.");
+        Assert.True(archerAbilityTicks.Count >= 2, "Expected archer ability to trigger on multiple ticks.");
+    }
+
+    [Fact]
+    public async Task PostBattleStep_PlayerAutoAttack_NoTarget_EmitsNoHitFx()
+    {
+        var playerId = "player-no-target-aa";
+        var seed = await FindSeedAsync(payload =>
+            payload.Actors
+                .Where(actor => actor.Kind == "mob")
+                .All(actor => ComputeChebyshevDistance(actor.TileX, actor.TileY, PlayerTileX, PlayerTileY) >= 3));
+        var start = await StartBattleAsync("arena-no-target-aa", playerId, seed);
+        AssertArenaInvariants(start.Actors, playerId);
+
+        var quietStep = await StepBattleAsync(start.BattleId, start.Tick, []);
+        AssertArenaInvariants(quietStep.Actors, playerId);
+
+        var mobTiles = quietStep.Actors
+            .Where(actor => actor.Kind == "mob")
+            .Select(actor => (actor.TileX, actor.TileY))
+            .ToHashSet();
+
+        // No player auto-attack should happen: no mob should take the deterministic player AA damage.
+        Assert.DoesNotContain(
+            quietStep.Events.OfType<DamageNumberEventDto>(),
+            evt => evt.TargetEntityId.StartsWith("mob.slime.", StringComparison.Ordinal) && evt.DamageAmount == 3);
+
+        Assert.DoesNotContain(
+            quietStep.Events.OfType<FxSpawnEventDto>(),
+            evt => evt.FxId == "fx.hit.small" && mobTiles.Contains((evt.TileX, evt.TileY)));
+    }
+
+    [Fact]
+    public async Task PostBattleStep_SetTargetAndClearTarget_UpdatesSnapshotState()
+    {
+        var playerId = "player-set-clear-target";
+        var start = await StartBattleAsync("arena-set-clear-target", playerId, 1337);
+        AssertArenaInvariants(start.Actors, playerId);
+        Assert.Null(start.LockedTargetEntityId);
+        Assert.Null(start.GroundTargetPos);
+
+        var targetMobId = start.Actors
+            .Where(actor => actor.Kind == "mob")
+            .OrderBy(actor => actor.ActorId, StringComparer.Ordinal)
+            .Select(actor => actor.ActorId)
+            .First();
+        var setTarget = await StepBattleAsync(
+            start.BattleId,
+            start.Tick,
+            [new BattleCommandDto("set_target", TargetEntityId: targetMobId)]);
+        AssertArenaInvariants(setTarget.Actors, playerId);
+        Assert.True(Assert.Single(setTarget.CommandResults).Ok);
+        Assert.Equal(targetMobId, setTarget.LockedTargetEntityId);
+        Assert.Equal(targetMobId, setTarget.EffectiveTargetEntityId);
+
+        var clearTarget = await StepBattleAsync(
+            start.BattleId,
+            setTarget.Tick,
+            [new BattleCommandDto("set_target", TargetEntityId: null)]);
+        AssertArenaInvariants(clearTarget.Actors, playerId);
+        Assert.True(Assert.Single(clearTarget.CommandResults).Ok);
+        Assert.Null(clearTarget.LockedTargetEntityId);
+        Assert.Equal(ResolveExpectedEffectiveFallbackTargetId(clearTarget.Actors, playerId), clearTarget.EffectiveTargetEntityId);
+    }
+
+    [Fact]
+    public async Task PostBattleStep_SetGroundTargetAndClear_UpdatesSnapshotState()
+    {
+        var playerId = "player-set-ground-target";
+        var start = await StartBattleAsync("arena-set-ground-target", playerId, 1337);
+        AssertArenaInvariants(start.Actors, playerId);
+        Assert.Null(start.GroundTargetPos);
+
+        var setGround = await StepBattleAsync(
+            start.BattleId,
+            start.Tick,
+            [new BattleCommandDto("set_ground_target", GroundTileX: 1, GroundTileY: 5)]);
+        AssertArenaInvariants(setGround.Actors, playerId);
+        Assert.True(Assert.Single(setGround.CommandResults).Ok);
+        Assert.NotNull(setGround.GroundTargetPos);
+        Assert.Equal(1, setGround.GroundTargetPos!.X);
+        Assert.Equal(5, setGround.GroundTargetPos.Y);
+
+        var clearGround = await StepBattleAsync(
+            start.BattleId,
+            setGround.Tick,
+            [new BattleCommandDto("set_ground_target")]);
+        AssertArenaInvariants(clearGround.Actors, playerId);
+        Assert.True(Assert.Single(clearGround.CommandResults).Ok);
+        Assert.Null(clearGround.GroundTargetPos);
+    }
+
+    [Fact]
+    public async Task PostBattleStep_SetTarget_AutoFacesTowardLockedEnemy()
+    {
+        var playerId = "player-set-target-auto-face";
+        var seed = await FindSeedAsync(payload =>
+            payload.Actors
+                .Where(actor => actor.Kind == "mob")
+                .Any(actor =>
+                {
+                    var deltaX = actor.TileX - PlayerTileX;
+                    var deltaY = actor.TileY - PlayerTileY;
+                    return deltaX > 0 && Math.Abs(deltaX) >= Math.Abs(deltaY);
+                }));
+        var start = await StartBattleAsync("arena-set-target-auto-face", playerId, seed);
+        AssertArenaInvariants(start.Actors, playerId);
+
+        var target = start.Actors
+            .Where(actor => actor.Kind == "mob")
+            .OrderBy(actor => actor.ActorId, StringComparer.Ordinal)
+            .First(actor =>
+            {
+                var deltaX = actor.TileX - PlayerTileX;
+                var deltaY = actor.TileY - PlayerTileY;
+                return deltaX > 0 && Math.Abs(deltaX) >= Math.Abs(deltaY);
+            });
+
+        var setTarget = await StepBattleAsync(
+            start.BattleId,
+            start.Tick,
+            [new BattleCommandDto("set_target", TargetEntityId: target.ActorId)]);
+        AssertArenaInvariants(setTarget.Actors, playerId);
+        Assert.True(Assert.Single(setTarget.CommandResults).Ok);
+        Assert.Equal(target.ActorId, setTarget.LockedTargetEntityId);
+        Assert.Equal(target.ActorId, setTarget.EffectiveTargetEntityId);
+        Assert.Equal("right", setTarget.FacingDirection);
+    }
+
+    [Fact]
+    public async Task PostBattleStep_SetFacingAndSetTarget_SameTick_FacingUsesExplicitSetFacingPriority()
+    {
+        var playerId = "player-facing-priority";
+        var start = await StartBattleAsync("arena-facing-priority", playerId, 1337);
+        AssertArenaInvariants(start.Actors, playerId);
+
+        var targetMobId = start.Actors
+            .Where(actor => actor.Kind == "mob")
+            .OrderBy(actor => actor.ActorId, StringComparer.Ordinal)
+            .Select(actor => actor.ActorId)
+            .First();
+
+        var step = await StepBattleAsync(
+            start.BattleId,
+            start.Tick,
+            [
+                new BattleCommandDto("set_target", TargetEntityId: targetMobId),
+                new BattleCommandDto("set_facing", Dir: "left")
+            ]);
+        AssertArenaInvariants(step.Actors, playerId);
+        Assert.Equal("left", step.FacingDirection);
+        Assert.Equal(targetMobId, step.LockedTargetEntityId);
+        Assert.Equal(targetMobId, step.EffectiveTargetEntityId);
+    }
+
+    [Fact]
+    public async Task PostBattleStep_SetGroundTarget_AutoFacesTowardTargetTile()
+    {
+        var playerId = "player-set-ground-auto-face";
+        var start = await StartBattleAsync("arena-set-ground-auto-face", playerId, 1337);
+        AssertArenaInvariants(start.Actors, playerId);
+
+        var faceRight = await StepBattleAsync(
+            start.BattleId,
+            start.Tick,
+            [new BattleCommandDto("set_facing", Dir: "right")]);
+        AssertArenaInvariants(faceRight.Actors, playerId);
+        Assert.Equal("right", faceRight.FacingDirection);
+
+        var setGround = await StepBattleAsync(
+            start.BattleId,
+            faceRight.Tick,
+            [new BattleCommandDto("set_ground_target", GroundTileX: PlayerTileX, GroundTileY: PlayerTileY - 2)]);
+        AssertArenaInvariants(setGround.Actors, playerId);
+        Assert.True(Assert.Single(setGround.CommandResults).Ok);
+        Assert.NotNull(setGround.GroundTargetPos);
+        Assert.Equal(PlayerTileX, setGround.GroundTargetPos!.X);
+        Assert.Equal(PlayerTileY - 2, setGround.GroundTargetPos.Y);
+        Assert.Equal("up", setGround.FacingDirection);
+    }
+
+    [Fact]
+    public async Task PostBattleStep_TargetAndGroundFacing_IsDeterministicForSameSeed()
+    {
+        const int seed = 1337;
+        var firstStart = await StartBattleAsync("arena-target-ground-face-det-a", "player-target-ground-face", seed);
+        var secondStart = await StartBattleAsync("arena-target-ground-face-det-b", "player-target-ground-face", seed);
+        AssertArenaInvariants(firstStart.Actors, "player-target-ground-face");
+        AssertArenaInvariants(secondStart.Actors, "player-target-ground-face");
+
+        var targetMobId = firstStart.Actors
+            .Where(actor => actor.Kind == "mob")
+            .OrderBy(actor => actor.ActorId, StringComparer.Ordinal)
+            .Select(actor => actor.ActorId)
+            .First();
+
+        var firstTargetStep = await StepBattleAsync(
+            firstStart.BattleId,
+            firstStart.Tick,
+            [new BattleCommandDto("set_target", TargetEntityId: targetMobId)]);
+        var secondTargetStep = await StepBattleAsync(
+            secondStart.BattleId,
+            secondStart.Tick,
+            [new BattleCommandDto("set_target", TargetEntityId: targetMobId)]);
+
+        AssertArenaInvariants(firstTargetStep.Actors, "player-target-ground-face");
+        AssertArenaInvariants(secondTargetStep.Actors, "player-target-ground-face");
+        Assert.Equal(firstTargetStep.FacingDirection, secondTargetStep.FacingDirection);
+        Assert.Equal(firstTargetStep.EffectiveTargetEntityId, secondTargetStep.EffectiveTargetEntityId);
+        Assert.Equal(firstTargetStep.LockedTargetEntityId, secondTargetStep.LockedTargetEntityId);
+        Assert.Equal(
+            firstTargetStep.Events.Select(ToEventSignature).ToList(),
+            secondTargetStep.Events.Select(ToEventSignature).ToList());
+
+        var firstGroundStep = await StepBattleAsync(
+            firstStart.BattleId,
+            firstTargetStep.Tick,
+            [new BattleCommandDto("set_ground_target", GroundTileX: 1, GroundTileY: 1)]);
+        var secondGroundStep = await StepBattleAsync(
+            secondStart.BattleId,
+            secondTargetStep.Tick,
+            [new BattleCommandDto("set_ground_target", GroundTileX: 1, GroundTileY: 1)]);
+
+        AssertArenaInvariants(firstGroundStep.Actors, "player-target-ground-face");
+        AssertArenaInvariants(secondGroundStep.Actors, "player-target-ground-face");
+        Assert.Equal(firstGroundStep.FacingDirection, secondGroundStep.FacingDirection);
+        Assert.Equal(firstGroundStep.EffectiveTargetEntityId, secondGroundStep.EffectiveTargetEntityId);
+        Assert.Equal(firstGroundStep.LockedTargetEntityId, secondGroundStep.LockedTargetEntityId);
+        Assert.Equal(firstGroundStep.GroundTargetPos?.X, secondGroundStep.GroundTargetPos?.X);
+        Assert.Equal(firstGroundStep.GroundTargetPos?.Y, secondGroundStep.GroundTargetPos?.Y);
+        Assert.Equal(
+            firstGroundStep.Events.Select(ToEventSignature).ToList(),
+            secondGroundStep.Events.Select(ToEventSignature).ToList());
+    }
+
+    [Fact]
+    public async Task PostBattleStep_TargetLock_PrefersLockedMobForPlayerAutoAttackWhenValid()
+    {
+        var playerId = "player-target-lock-preference";
+        var start = await StartBattleAsync("arena-target-lock-preference", playerId, 1337);
+        AssertArenaInvariants(start.Actors, playerId);
+
+        var currentTick = start.Tick;
+        string? lockTargetId = null;
+        for (var stepIndex = 0; stepIndex < 120; stepIndex += 1)
+        {
+            var step = await StepBattleAsync(start.BattleId, currentTick, []);
+            currentTick = step.Tick;
+            AssertArenaInvariants(step.Actors, playerId);
+
+            var adjacentMobs = step.Actors
+                .Where(actor =>
+                    actor.Kind == "mob" &&
+                    ComputeChebyshevDistance(actor.TileX, actor.TileY, PlayerTileX, PlayerTileY) <= 1)
+                .OrderBy(actor => actor.ActorId, StringComparer.Ordinal)
+                .ToList();
+            if (adjacentMobs.Count < 2)
+            {
+                if (step.BattleStatus == "defeat")
+                {
+                    break;
+                }
+
+                continue;
+            }
+
+            lockTargetId = adjacentMobs[^1].ActorId;
+            break;
+        }
+
+        Assert.False(string.IsNullOrWhiteSpace(lockTargetId), "Expected to find at least two adjacent mobs to lock one deterministically.");
+
+        var setTargetStep = await StepBattleAsync(
+            start.BattleId,
+            currentTick,
+            [new BattleCommandDto("set_target", TargetEntityId: lockTargetId)]);
+        currentTick = setTargetStep.Tick;
+        AssertArenaInvariants(setTargetStep.Actors, playerId);
+        Assert.True(Assert.Single(setTargetStep.CommandResults).Ok);
+        Assert.Equal(lockTargetId, setTargetStep.LockedTargetEntityId);
+
+        var sawLockedTargetInRange = false;
+        for (var stepIndex = 0; stepIndex < 120; stepIndex += 1)
+        {
+            var step = await StepBattleAsync(start.BattleId, currentTick, []);
+            currentTick = step.Tick;
+            AssertArenaInvariants(step.Actors, playerId);
+            Assert.Equal(lockTargetId, step.LockedTargetEntityId);
+
+            var lockedTargetActor = step.Actors.FirstOrDefault(actor => actor.ActorId == lockTargetId);
+            var lockIsInRange = lockedTargetActor is not null &&
+                                ComputeChebyshevDistance(lockedTargetActor.TileX, lockedTargetActor.TileY, PlayerTileX, PlayerTileY) <= 1;
+            if (lockIsInRange)
+            {
+                sawLockedTargetInRange = true;
+            }
+
+            var playerAutoAttack = step.Events
+                .OfType<DamageNumberEventDto>()
+                .FirstOrDefault(evt =>
+                    evt.AttackerEntityId == playerId &&
+                    evt.DamageAmount == 3);
+            if (playerAutoAttack is null || !lockIsInRange)
+            {
+                if (step.BattleStatus == "defeat")
+                {
+                    break;
+                }
+
+                continue;
+            }
+
+            Assert.Equal(lockTargetId, playerAutoAttack.TargetEntityId);
+            return;
+        }
+
+        Assert.True(sawLockedTargetInRange, "Expected locked target to become valid and in melee range.");
+        throw new Xunit.Sdk.XunitException("Expected a player auto-attack that honors the valid locked target.");
+    }
+
+    [Fact]
+    public async Task PostBattleStep_InvalidLockedTarget_ClearsLockAndFallsBackToDefaultAutoAttackSelection()
+    {
+        var playerId = "player-invalid-lock-fallback";
+        var start = await StartBattleAsync("arena-invalid-lock-fallback", playerId, 1337);
+        AssertArenaInvariants(start.Actors, playerId);
+
+        const string invalidTargetId = "mob.invalid.lock";
+        var setInvalidLock = await StepBattleAsync(
+            start.BattleId,
+            start.Tick,
+            [new BattleCommandDto("set_target", TargetEntityId: invalidTargetId)]);
+        AssertArenaInvariants(setInvalidLock.Actors, playerId);
+        Assert.True(Assert.Single(setInvalidLock.CommandResults).Ok);
+        Assert.Null(setInvalidLock.LockedTargetEntityId);
+        Assert.Equal(ResolveExpectedEffectiveFallbackTargetId(setInvalidLock.Actors, playerId), setInvalidLock.EffectiveTargetEntityId);
+
+        var currentTick = setInvalidLock.Tick;
+        for (var stepIndex = 0; stepIndex < 120; stepIndex += 1)
+        {
+            var step = await StepBattleAsync(start.BattleId, currentTick, []);
+            currentTick = step.Tick;
+            AssertArenaInvariants(step.Actors, playerId);
+            Assert.Null(step.LockedTargetEntityId);
+            Assert.Equal(ResolveExpectedEffectiveFallbackTargetId(step.Actors, playerId), step.EffectiveTargetEntityId);
+
+            var playerAutoAttack = step.Events
+                .OfType<DamageNumberEventDto>()
+                .FirstOrDefault(evt =>
+                    evt.AttackerEntityId == playerId &&
+                    evt.DamageAmount == 3);
+            if (playerAutoAttack is null)
+            {
+                if (step.BattleStatus == "defeat")
+                {
+                    break;
+                }
+
+                continue;
+            }
+
+            Assert.NotEqual(invalidTargetId, playerAutoAttack.TargetEntityId);
+            Assert.StartsWith("mob.", playerAutoAttack.TargetEntityId, StringComparison.Ordinal);
+            var expectedFacing = ResolveFacingDirectionTowardTile(
+                sourceTileX: PlayerTileX,
+                sourceTileY: PlayerTileY,
+                targetTileX: playerAutoAttack.TargetTileX,
+                targetTileY: playerAutoAttack.TargetTileY,
+                currentFacingDirection: step.FacingDirection);
+            Assert.Equal(expectedFacing, step.FacingDirection);
+            return;
+        }
+
+        throw new Xunit.Sdk.XunitException("Expected player auto-attack fallback when locked target id is invalid.");
+    }
+
+    [Fact]
+    public async Task PostBattleStep_LockedTargetDies_ClearsLockEntityId()
+    {
+        var playerId = "player-lock-death-facing-follow";
+        var start = await StartBattleAsync("arena-lock-death-facing-follow", playerId, 1337);
+        AssertArenaInvariants(start.Actors, playerId);
+
+        var currentTick = start.Tick;
+        string? lockTargetId = null;
+        for (var stepIndex = 0; stepIndex < 120; stepIndex += 1)
+        {
+            var step = await StepBattleAsync(start.BattleId, currentTick, []);
+            currentTick = step.Tick;
+            AssertArenaInvariants(step.Actors, playerId);
+
+            var adjacentMobs = step.Actors
+                .Where(actor =>
+                    actor.Kind == "mob" &&
+                    ComputeChebyshevDistance(actor.TileX, actor.TileY, PlayerTileX, PlayerTileY) <= 1)
+                .OrderBy(actor => actor.ActorId, StringComparer.Ordinal)
+                .ToList();
+            if (adjacentMobs.Count < 2)
+            {
+                if (step.BattleStatus == "defeat")
+                {
+                    break;
+                }
+
+                continue;
+            }
+
+            lockTargetId = adjacentMobs[^1].ActorId;
+            break;
+        }
+
+        Assert.False(string.IsNullOrWhiteSpace(lockTargetId), "Expected to find at least two adjacent mobs to exercise lock->fallback facing follow.");
+
+        var setTargetStep = await StepBattleAsync(
+            start.BattleId,
+            currentTick,
+            [new BattleCommandDto("set_target", TargetEntityId: lockTargetId)]);
+        currentTick = setTargetStep.Tick;
+        AssertArenaInvariants(setTargetStep.Actors, playerId);
+        Assert.True(Assert.Single(setTargetStep.CommandResults).Ok);
+        Assert.Equal(lockTargetId, setTargetStep.LockedTargetEntityId);
+
+        var observedLockedTargetDeath = false;
+        for (var stepIndex = 0; stepIndex < 240; stepIndex += 1)
+        {
+            var step = await StepBattleAsync(start.BattleId, currentTick, []);
+            currentTick = step.Tick;
+            AssertArenaInvariants(step.Actors, playerId);
+
+            if (!observedLockedTargetDeath && step.Actors.All(actor => actor.ActorId != lockTargetId))
+            {
+                observedLockedTargetDeath = true;
+                Assert.Null(step.LockedTargetEntityId);
+                Assert.Equal(ResolveExpectedEffectiveFallbackTargetId(step.Actors, playerId), step.EffectiveTargetEntityId);
+            }
+
+            if (!observedLockedTargetDeath)
+            {
+                if (step.BattleStatus == "defeat")
+                {
+                    break;
+                }
+
+                continue;
+            }
+
+            return;
+        }
+
+        Assert.True(observedLockedTargetDeath, "Expected the locked target to die before validating fallback-facing behavior.");
+        throw new Xunit.Sdk.XunitException("Expected locked target death to clear lock deterministically.");
+    }
+
+    [Fact]
+    public async Task PostBattleStep_PlayerAutoAttack_EmitsHitFxOnDamagedMobTile()
+    {
+        var playerId = "player-hit-fx-tile";
+        var start = await StartBattleAsync("arena-hit-fx-tile", playerId, 1337);
+        AssertArenaInvariants(start.Actors, playerId);
+
+        var currentTick = start.Tick;
+        for (var stepIndex = 0; stepIndex < 40; stepIndex += 1)
+        {
+            var step = await StepBattleAsync(start.BattleId, currentTick, []);
+            currentTick = step.Tick;
+            AssertArenaInvariants(step.Actors, playerId);
+
+            var mobDamageEvents = step.Events
+                .OfType<DamageNumberEventDto>()
+                .Where(evt =>
+                    evt.TargetEntityId.StartsWith("mob.slime.", StringComparison.Ordinal) &&
+                    evt.DamageAmount == 3 &&
+                    !evt.IsCrit)
+                .ToList();
+            if (mobDamageEvents.Count == 0)
+            {
+                continue;
+            }
+
+            var hitFxEvents = step.Events
+                .OfType<FxSpawnEventDto>()
+                .Where(evt => evt.FxId == "fx.hit.small")
+                .ToList();
+            Assert.NotEmpty(hitFxEvents);
+
+            foreach (var mobDamage in mobDamageEvents)
+            {
+                var damagedMob = Assert.Single(step.Actors, actor => actor.ActorId == mobDamage.TargetEntityId);
+                Assert.Contains(hitFxEvents, fx => fx.TileX == damagedMob.TileX && fx.TileY == damagedMob.TileY);
+            }
+
+            return;
+        }
+
+        throw new Xunit.Sdk.XunitException("Player auto-attack non-final mob damage event was not observed.");
+    }
+
+    [Fact]
+    public async Task PostBattleStep_RespawnRandomly_StaysInBoundsAndNoOverlap()
+    {
+        var playerId = "player-respawn-random";
+        var start = await StartBattleAsync("arena-respawn-random", playerId, 2027);
+        AssertArenaInvariants(start.Actors, playerId);
+
+        var currentTick = start.Tick;
+        var currentSkills = start.Skills;
+        var previousMobIds = start.Actors
+            .Where(actor => actor.Kind == "mob")
+            .Select(actor => actor.ActorId)
+            .ToHashSet(StringComparer.Ordinal);
+        string? deadMobId = null;
+
+        for (var stepIndex = 0; stepIndex < 160; stepIndex += 1)
+        {
+            var commands = BuildReadySkillCommands(currentSkills);
+            var step = await StepBattleAsync(start.BattleId, currentTick, commands);
+            currentTick = step.Tick;
+            currentSkills = step.Skills;
+            AssertArenaInvariants(step.Actors, playerId);
+
+            var mobIds = step.Actors
+                .Where(actor => actor.Kind == "mob")
+                .Select(actor => actor.ActorId)
+                .ToHashSet(StringComparer.Ordinal);
+
+            if (deadMobId is null)
+            {
+                deadMobId = previousMobIds.FirstOrDefault(mobId => !mobIds.Contains(mobId));
+            }
+
+            if (deadMobId is not null && mobIds.Contains(deadMobId))
+            {
+                var respawnedMob = Assert.Single(step.Actors, actor => actor.ActorId == deadMobId);
+                Assert.Equal(respawnedMob.MaxHp, respawnedMob.Hp);
+                Assert.True(respawnedMob.MaxHp > 0);
+                var respawnDistance = ComputeChebyshevDistance(respawnedMob.TileX, respawnedMob.TileY, PlayerTileX, PlayerTileY);
+                Assert.InRange(respawnDistance, 2, 4);
+                return;
+            }
+
+            previousMobIds = mobIds;
+            if (step.BattleStatus == "defeat")
+            {
+                break;
+            }
+        }
+
+        throw new Xunit.Sdk.XunitException("Expected to observe a mob death followed by deterministic respawn.");
+    }
+
+    [Fact]
+    public async Task PostBattleStep_RespawnFillsBackToMaxAliveMobs()
+    {
+        var playerId = "player-respawn-cap";
+        var start = await StartBattleAsync("arena-respawn-cap", playerId, 2029);
+        AssertArenaInvariants(start.Actors, playerId);
+        var targetMobCap = GetExpectedMobCapForTick(start.Tick);
+        Assert.Equal(targetMobCap, start.Actors.Count(actor => actor.Kind == "mob"));
+
+        var currentTick = start.Tick;
+        var currentSkills = start.Skills;
+        var sawBelowCap = false;
+
+        for (var stepIndex = 0; stepIndex < 160; stepIndex += 1)
+        {
+            var commands = sawBelowCap ? Array.Empty<BattleCommandDto>() : BuildReadySkillCommands(currentSkills);
+            var step = await StepBattleAsync(start.BattleId, currentTick, commands);
+            currentTick = step.Tick;
+            currentSkills = step.Skills;
+            AssertArenaInvariants(step.Actors, playerId);
+
+            var mobCount = step.Actors.Count(actor => actor.Kind == "mob");
+            if (!sawBelowCap && mobCount < targetMobCap)
+            {
+                sawBelowCap = true;
+                continue;
+            }
+
+            if (sawBelowCap && mobCount == targetMobCap)
+            {
+                return;
+            }
+
+            if (step.BattleStatus == "defeat")
+            {
+                break;
+            }
+        }
+
+        Assert.True(sawBelowCap, "Expected to observe mob count drop below max cap before refill.");
+        throw new Xunit.Sdk.XunitException("Expected respawn to refill mob count back to max cap.");
+    }
+
+    [Fact]
+    public async Task PostEffectsAoePlan_ReturnsTileSpawns()
+    {
+        var request = new AoePlanRequestDto(
+            Center: new AoePlanCenterDto(5, 8),
+            Radius: 1,
+            Shape: "square",
+            FxId: "fx.hit.small");
+
+        var response = await _client.PostAsJsonAsync("/api/v1/effects/aoe-plan", request);
+        var payload = await response.Content.ReadFromJsonAsync<AoePlanResponseDto>();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(payload);
+        Assert.Equal(9, payload.Spawns.Count);
+        Assert.Equal(new AoePlanSpawnDto(4, 7, "fx.hit.small"), payload.Spawns[0]);
+        Assert.Equal(new AoePlanSpawnDto(5, 8, "fx.hit.small"), payload.Spawns[4]);
+        Assert.Equal(new AoePlanSpawnDto(6, 9, "fx.hit.small"), payload.Spawns[8]);
+    }
+
+    [Fact]
+    public async Task PostEffectsAoePlan_WithInvalidFxId_ReturnsBadRequest()
+    {
+        var request = new AoePlanRequestDto(
+            Center: new AoePlanCenterDto(2, 2),
+            Radius: 1,
+            Shape: "square",
+            FxId: "fx/hit/small");
+
+        var response = await _client.PostAsJsonAsync("/api/v1/effects/aoe-plan", request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PostBattleStep_DamageEvents_IncludeAttackerAndTargetPositions()
+    {
+        var playerId = "player-causality-damage";
+        var start = await StartBattleAsync("arena-causality-damage", playerId, 1337);
+        AssertArenaInvariants(start.Actors, playerId);
+
+        var currentTick = start.Tick;
+        for (var stepIndex = 0; stepIndex < 140; stepIndex += 1)
+        {
+            var step = await StepBattleAsync(start.BattleId, currentTick, []);
+            currentTick = step.Tick;
+            AssertArenaInvariants(step.Actors, playerId);
+
+            var matchedDamage = step.Events
+                .OfType<DamageNumberEventDto>()
+                .FirstOrDefault(evt =>
+                    !string.IsNullOrWhiteSpace(evt.AttackerEntityId)
+                    && !evt.IsKill
+                    && step.Actors.Any(actor => actor.ActorId == evt.AttackerEntityId)
+                    && step.Actors.Any(actor => actor.ActorId == evt.TargetEntityId));
+            if (matchedDamage is null)
+            {
+                if (step.BattleStatus == "defeat")
+                {
+                    break;
+                }
+
+                continue;
+            }
+
+            var attacker = Assert.Single(step.Actors, actor => actor.ActorId == matchedDamage.AttackerEntityId);
+            var target = Assert.Single(step.Actors, actor => actor.ActorId == matchedDamage.TargetEntityId);
+
+            Assert.Equal(attacker.TileX, matchedDamage.AttackerTileX);
+            Assert.Equal(attacker.TileY, matchedDamage.AttackerTileY);
+            Assert.Equal(target.TileX, matchedDamage.TargetTileX);
+            Assert.Equal(target.TileY, matchedDamage.TargetTileY);
+            Assert.True(matchedDamage.DamageAmount > 0);
+            Assert.True(matchedDamage.HitId > 0);
+            return;
+        }
+
+        throw new Xunit.Sdk.XunitException("Expected a non-lethal damage event with attacker and target metadata.");
+    }
+
+    [Fact]
+    public async Task PostBattleStep_AutoAttacks_EmitMeleeAndRangedAttackFx()
+    {
+        var playerId = "player-causality-traces";
+        var start = await StartBattleAsync("arena-causality-traces", playerId, 1337);
+        AssertArenaInvariants(start.Actors, playerId);
+
+        var currentTick = start.Tick;
+        var sawPlayerMeleeSwing = false;
+        var sawRangedMobProjectile = false;
+
+        for (var stepIndex = 0; stepIndex < 220; stepIndex += 1)
+        {
+            var step = await StepBattleAsync(start.BattleId, currentTick, []);
+            currentTick = step.Tick;
+            AssertArenaInvariants(step.Actors, playerId);
+
+            var attackFxEvents = step.Events.OfType<AttackFxEventDto>().ToList();
+            var damageEvents = step.Events.OfType<DamageNumberEventDto>().ToList();
+
+            if (!sawPlayerMeleeSwing)
+            {
+                var playerAutoAttack = damageEvents.FirstOrDefault(evt =>
+                    evt.AttackerEntityId == playerId &&
+                    evt.TargetEntityId.StartsWith("mob.", StringComparison.Ordinal) &&
+                    evt.DamageAmount == 3);
+                if (playerAutoAttack is not null)
+                {
+                    Assert.Contains(
+                        attackFxEvents,
+                        fx =>
+                            fx.FxKind == CombatFxKind.MeleeSwing &&
+                            fx.FromTileX == PlayerTileX &&
+                            fx.FromTileY == PlayerTileY &&
+                            fx.ToTileX == playerAutoAttack.TargetTileX &&
+                            fx.ToTileY == playerAutoAttack.TargetTileY);
+                    sawPlayerMeleeSwing = true;
+                }
+            }
+
+            if (!sawRangedMobProjectile)
+            {
+                var rangedMobAutoAttack = damageEvents.FirstOrDefault(evt =>
+                {
+                    if (evt.TargetEntityId != playerId || evt.DamageAmount <= 0 || string.IsNullOrWhiteSpace(evt.AttackerEntityId))
+                    {
+                        return false;
+                    }
+
+                    var attacker = step.Actors.FirstOrDefault(actor => actor.ActorId == evt.AttackerEntityId);
+                    return attacker is not null &&
+                           (attacker.MobType == MobArchetype.RangedArcher || attacker.MobType == MobArchetype.RangedDragon);
+                });
+
+                if (rangedMobAutoAttack is not null)
+                {
+                    Assert.Contains(
+                        attackFxEvents,
+                        fx =>
+                            fx.FxKind == CombatFxKind.RangedProjectile &&
+                            fx.FromTileX == rangedMobAutoAttack.AttackerTileX &&
+                            fx.FromTileY == rangedMobAutoAttack.AttackerTileY &&
+                            fx.ToTileX == rangedMobAutoAttack.TargetTileX &&
+                            fx.ToTileY == rangedMobAutoAttack.TargetTileY);
+                    sawRangedMobProjectile = true;
+                }
+            }
+
+            if (sawPlayerMeleeSwing && sawRangedMobProjectile)
+            {
+                return;
+            }
+
+            if (step.BattleStatus == "defeat")
+            {
+                break;
+            }
+        }
+
+        Assert.True(sawPlayerMeleeSwing, "Expected at least one player melee attack trace event.");
+        Assert.True(sawRangedMobProjectile, "Expected at least one ranged mob projectile trace event.");
+    }
+
+    [Fact]
+    public async Task PostBattleStep_CausalityEventOrdering_IsDeterministicAcrossRuns()
+    {
+        var firstStart = await StartBattleAsync("arena-causality-order-a", "player-causality-order", 1337);
+        var secondStart = await StartBattleAsync("arena-causality-order-b", "player-causality-order", 1337);
+        AssertArenaInvariants(firstStart.Actors, "player-causality-order");
+        AssertArenaInvariants(secondStart.Actors, "player-causality-order");
+
+        var firstTick = firstStart.Tick;
+        var secondTick = secondStart.Tick;
+
+        for (var stepIndex = 0; stepIndex < 36; stepIndex += 1)
+        {
+            var firstStep = await StepBattleAsync(firstStart.BattleId, firstTick, []);
+            var secondStep = await StepBattleAsync(secondStart.BattleId, secondTick, []);
+            firstTick = firstStep.Tick;
+            secondTick = secondStep.Tick;
+
+            AssertArenaInvariants(firstStep.Actors, "player-causality-order");
+            AssertArenaInvariants(secondStep.Actors, "player-causality-order");
+
+            var firstSignatures = firstStep.Events.Select(ToEventSignature).ToList();
+            var secondSignatures = secondStep.Events.Select(ToEventSignature).ToList();
+            Assert.Equal(firstSignatures, secondSignatures);
+
+            var orderedCausalityIds = GetOrderedCausalityIds(firstStep.Events).ToList();
+            if (orderedCausalityIds.Count <= 1)
+            {
+                continue;
+            }
+
+            for (var i = 1; i < orderedCausalityIds.Count; i += 1)
+            {
+                Assert.True(
+                    orderedCausalityIds[i - 1] < orderedCausalityIds[i],
+                    $"Causality ids are not strictly increasing within tick {firstStep.Tick}.");
+            }
+        }
+    }
+
+    [Fact]
+    public async Task PostBattleStep_MobDeath_EmitsDeathEventExactlyOnce()
+    {
+        var playerId = "player-death-event-once";
+        var start = await StartBattleAsync("arena-death-event-once", playerId, 1337);
+        AssertArenaInvariants(start.Actors, playerId);
+
+        var currentTick = start.Tick;
+        var currentSkills = start.Skills;
+        for (var stepIndex = 0; stepIndex < 180; stepIndex += 1)
+        {
+            var commands = BuildReadySkillCommands(currentSkills);
+            var step = await StepBattleAsync(start.BattleId, currentTick, commands);
+            currentTick = step.Tick;
+            currentSkills = step.Skills;
+            AssertArenaInvariants(step.Actors, playerId);
+
+            var firstDeath = step.Events.OfType<DeathEventDto>().FirstOrDefault(evt => evt.EntityType == "mob");
+            if (firstDeath is null)
+            {
+                if (step.BattleStatus == "defeat")
+                {
+                    break;
+                }
+
+                continue;
+            }
+
+            Assert.Equal(step.Tick, firstDeath.TickIndex);
+            Assert.InRange(firstDeath.TileX, 0, ArenaWidth - 1);
+            Assert.InRange(firstDeath.TileY, 0, ArenaHeight - 1);
+            Assert.NotNull(firstDeath.MobType);
+            Assert.False(string.IsNullOrWhiteSpace(firstDeath.KillerEntityId));
+
+            var sameEntityDeaths = step.Events
+                .OfType<DeathEventDto>()
+                .Count(evt => evt.EntityId == firstDeath.EntityId);
+            Assert.Equal(1, sameEntityDeaths);
+            return;
+        }
+
+        throw new Xunit.Sdk.XunitException("Expected at least one mob death event.");
+    }
+
+    [Fact]
+    public async Task PostBattleStep_MobDeath_CorpseDecalTicksDownAndExpiresDeterministically()
+    {
+        var playerId = "player-corpse-decal-expiry";
+        var start = await StartBattleAsync("arena-corpse-decal-expiry", playerId, 1337);
+        AssertArenaInvariants(start.Actors, playerId);
+        Assert.Empty(start.Decals);
+
+        var currentTick = start.Tick;
+        var currentSkills = start.Skills;
+        BattleStepResponseDto? deathStep = null;
+        DeathEventDto? deathEvent = null;
+        for (var stepIndex = 0; stepIndex < 200; stepIndex += 1)
+        {
+            var commands = BuildReadySkillCommands(currentSkills);
+            var step = await StepBattleAsync(start.BattleId, currentTick, commands);
+            currentTick = step.Tick;
+            currentSkills = step.Skills;
+            AssertArenaInvariants(step.Actors, playerId);
+
+            deathEvent = step.Events.OfType<DeathEventDto>().FirstOrDefault(evt => evt.EntityType == "mob");
+            if (deathEvent is null)
+            {
+                if (step.BattleStatus == "defeat")
+                {
+                    break;
+                }
+
+                continue;
+            }
+
+            deathStep = step;
+            break;
+        }
+
+        Assert.NotNull(deathStep);
+        Assert.NotNull(deathEvent);
+
+        var corpseAtDeathTick = Assert.Single(
+            deathStep!.Decals,
+            decal => decal.EntityId == deathEvent!.EntityId && decal.DecalKind == DecalKind.Corpse);
+        Assert.Equal(1200, corpseAtDeathTick.TotalMs);
+        Assert.Equal(1200, corpseAtDeathTick.RemainingMs);
+        Assert.Equal(deathStep.Tick, corpseAtDeathTick.CreatedTick);
+        Assert.Equal(deathEvent!.TileX, corpseAtDeathTick.TileX);
+        Assert.Equal(deathEvent.TileY, corpseAtDeathTick.TileY);
+
+        var expectedRemaining = new[] { 950, 700, 450, 200 };
+        var sawCorpseWithFullMobCap = false;
+        var previousTick = deathStep.Tick;
+
+        foreach (var expected in expectedRemaining)
+        {
+            var nextStep = await StepBattleAsync(start.BattleId, previousTick, []);
+            previousTick = nextStep.Tick;
+            AssertArenaInvariants(nextStep.Actors, playerId);
+
+            var corpse = Assert.Single(
+                nextStep.Decals,
+                decal => decal.EntityId == deathEvent.EntityId && decal.DecalKind == DecalKind.Corpse);
+            Assert.Equal(expected, corpse.RemainingMs);
+            if (nextStep.Actors.Count(actor => actor.Kind == "mob") == GetExpectedMobCapForTick(nextStep.Tick))
+            {
+                sawCorpseWithFullMobCap = true;
+            }
+        }
+
+        var expirationStep = await StepBattleAsync(start.BattleId, previousTick, []);
+        AssertArenaInvariants(expirationStep.Actors, playerId);
+        Assert.DoesNotContain(
+            expirationStep.Decals,
+            decal => decal.EntityId == deathEvent.EntityId && decal.DecalKind == DecalKind.Corpse);
+        Assert.True(
+            sawCorpseWithFullMobCap,
+            "Expected a step where a corpse decal coexists with the full live mob count, proving decals do not block live occupancy.");
+    }
+
+    [Fact]
+    public async Task PostBattleStep_MobDeath_EmitsDeathBurstCombatFx()
+    {
+        var playerId = "player-death-burst-fx";
+        var start = await StartBattleAsync("arena-death-burst-fx", playerId, 1337);
+        AssertArenaInvariants(start.Actors, playerId);
+
+        var currentTick = start.Tick;
+        var currentSkills = start.Skills;
+        for (var stepIndex = 0; stepIndex < 180; stepIndex += 1)
+        {
+            var commands = BuildReadySkillCommands(currentSkills);
+            var step = await StepBattleAsync(start.BattleId, currentTick, commands);
+            currentTick = step.Tick;
+            currentSkills = step.Skills;
+            AssertArenaInvariants(step.Actors, playerId);
+
+            var deathEvent = step.Events.OfType<DeathEventDto>().FirstOrDefault(evt => evt.EntityType == "mob");
+            if (deathEvent is null)
+            {
+                if (step.BattleStatus == "defeat")
+                {
+                    break;
+                }
+
+                continue;
+            }
+
+            Assert.Contains(
+                step.Events.OfType<AttackFxEventDto>(),
+                fx =>
+                    fx.FxKind == CombatFxKind.DeathBurst &&
+                    fx.FromTileX == deathEvent.TileX &&
+                    fx.FromTileY == deathEvent.TileY &&
+                    fx.ToTileX == deathEvent.TileX &&
+                    fx.ToTileY == deathEvent.TileY &&
+                    fx.CreatedAtTick == step.Tick);
+            return;
+        }
+
+        throw new Xunit.Sdk.XunitException("Expected a mob death with a matching death burst combat FX event.");
+    }
+
+    [Fact]
+    public async Task PostBattleStep_AssistAutoHeal_TriggersWhenBelowThreshold()
+    {
+        var playerId = "player-assist-auto-heal";
+        var start = await StartBattleAsync("arena-assist-auto-heal", playerId, 1337);
+        AssertArenaInvariants(start.Actors, playerId);
+
+        var currentTick = start.Tick;
+        BattleStepResponseDto? latest = null;
+        for (var i = 0; i < 20; i += 1)
+        {
+            latest = await StepBattleAsync(start.BattleId, currentTick, []);
+            currentTick = latest.Tick;
+            AssertArenaInvariants(latest.Actors, playerId);
+
+            var player = GetActor(latest.Actors, playerId);
+            if (player.Hp < player.MaxHp)
+            {
+                break;
+            }
+        }
+
+        Assert.NotNull(latest);
+        var configured = await StepBattleAsync(
+            start.BattleId,
+            currentTick,
+            [new BattleCommandDto("set_assist_config", AssistConfig: BuildAssistConfig(
+                enabled: true,
+                autoHealEnabled: true,
+                healAtHpPercent: 99,
+                autoGuardEnabled: false,
+                guardAtHpPercent: 60,
+                autoOffenseEnabled: false,
+                offenseMode: "cooldown_spam",
+                maxAutoCastsPerTick: 1))]);
+        currentTick = configured.Tick;
+        AssertArenaInvariants(configured.Actors, playerId);
+
+        for (var i = 0; i < 24; i += 1)
+        {
+            var step = i == 0
+                ? configured
+                : await StepBattleAsync(start.BattleId, currentTick, []);
+            currentTick = step.Tick;
+            AssertArenaInvariants(step.Actors, playerId);
+
+            var assistCast = step.Events
+                .OfType<AssistCastEventDto>()
+                .FirstOrDefault(evt => evt.SkillId == "heal" && evt.Reason == "auto_heal");
+            if (assistCast is null)
+            {
+                continue;
+            }
+
+            Assert.Contains(
+                step.Events.OfType<HealNumberEventDto>(),
+                evt => evt.ActorId == playerId && evt.Source == "skill_heal" && evt.Amount > 0);
+            Assert.Equal(HealCooldownMs, GetSkill(step, "heal").CooldownRemainingMs);
+            return;
+        }
+
+        throw new Xunit.Sdk.XunitException("Expected assist auto-heal cast with applied healing event.");
+    }
+
+    [Fact]
+    public async Task PostBattleStep_AssistAutoGuard_HasPriorityOverAutoHeal()
+    {
+        var playerId = "player-assist-guard-priority";
+        var start = await StartBattleAsync("arena-assist-guard-priority", playerId, 1337);
+        AssertArenaInvariants(start.Actors, playerId);
+
+        var currentTick = start.Tick;
+        BattleStepResponseDto? damagedStep = null;
+        for (var i = 0; i < 20; i += 1)
+        {
+            var step = await StepBattleAsync(start.BattleId, currentTick, []);
+            currentTick = step.Tick;
+            AssertArenaInvariants(step.Actors, playerId);
+
+            var player = GetActor(step.Actors, playerId);
+            if (player.Hp < player.MaxHp)
+            {
+                damagedStep = step;
+                break;
+            }
+        }
+
+        Assert.NotNull(damagedStep);
+        var configured = await StepBattleAsync(
+            start.BattleId,
+            currentTick,
+            [new BattleCommandDto("set_assist_config", AssistConfig: BuildAssistConfig(
+                enabled: true,
+                autoHealEnabled: true,
+                healAtHpPercent: 99,
+                autoGuardEnabled: true,
+                guardAtHpPercent: 99,
+                autoOffenseEnabled: false,
+                offenseMode: "cooldown_spam",
+                maxAutoCastsPerTick: 1))]);
+        currentTick = configured.Tick;
+        AssertArenaInvariants(configured.Actors, playerId);
+
+        for (var i = 0; i < 16; i += 1)
+        {
+            var step = i == 0
+                ? configured
+                : await StepBattleAsync(start.BattleId, currentTick, []);
+            currentTick = step.Tick;
+            AssertArenaInvariants(step.Actors, playerId);
+
+            var assistCasts = step.Events.OfType<AssistCastEventDto>().ToList();
+            if (assistCasts.Count == 0)
+            {
+                continue;
+            }
+
+            Assert.Contains(assistCasts, evt => evt.SkillId == "guard" && evt.Reason == "auto_guard");
+            Assert.DoesNotContain(assistCasts, evt => evt.SkillId == "heal" && evt.Reason == "auto_heal");
+            Assert.Equal(GuardCooldownMs, GetSkill(step, "guard").CooldownRemainingMs);
+            Assert.Equal(0, GetSkill(step, "heal").CooldownRemainingMs);
+            return;
+        }
+
+        throw new Xunit.Sdk.XunitException("Expected assist guard cast to take priority over heal.");
+    }
+
+    [Fact]
+    public async Task PostBattleStep_AssistAutoOffense_CastsAtMostOneSkillPerTick()
+    {
+        var playerId = "player-assist-auto-offense";
+        var start = await StartBattleAsync("arena-assist-auto-offense", playerId, 1337);
+        AssertArenaInvariants(start.Actors, playerId);
+
+        var currentTick = start.Tick;
+        var configured = await StepBattleAsync(
+            start.BattleId,
+            currentTick,
+            [new BattleCommandDto("set_assist_config", AssistConfig: BuildAssistConfig(
+                enabled: true,
+                autoHealEnabled: false,
+                healAtHpPercent: 40,
+                autoGuardEnabled: false,
+                guardAtHpPercent: 60,
+                autoOffenseEnabled: true,
+                offenseMode: "cooldown_spam",
+                maxAutoCastsPerTick: 1))]);
+        currentTick = configured.Tick;
+        AssertArenaInvariants(configured.Actors, playerId);
+
+        for (var i = 0; i < 16; i += 1)
+        {
+            var step = i == 0
+                ? configured
+                : await StepBattleAsync(start.BattleId, currentTick, []);
+            currentTick = step.Tick;
+            AssertArenaInvariants(step.Actors, playerId);
+
+            var offenseCasts = step.Events
+                .OfType<AssistCastEventDto>()
+                .Where(evt => evt.Reason == "auto_offense")
+                .ToList();
+            if (offenseCasts.Count == 0)
+            {
+                continue;
+            }
+
+            Assert.Single(offenseCasts);
+            var offensiveSkillCooldowns = new[] { "avalanche", "exori_mas", "exori", "exori_min" }
+                .Select(skillId => GetSkill(step, skillId))
+                .Count(skill => skill.CooldownRemainingMs > 0);
+            Assert.Equal(1, offensiveSkillCooldowns);
+            return;
+        }
+
+        throw new Xunit.Sdk.XunitException("Expected assist auto-offense to cast a single skill.");
+    }
+
+    [Fact]
+    public async Task PostBattleStep_AssistManualCastCommand_OverridesAutoCasting()
+    {
+        var playerId = "player-assist-manual-override";
+        var start = await StartBattleAsync("arena-assist-manual-override", playerId, 1337);
+        AssertArenaInvariants(start.Actors, playerId);
+
+        var step = await StepBattleAsync(
+            start.BattleId,
+            start.Tick,
+            [
+                new BattleCommandDto("set_assist_config", AssistConfig: BuildAssistConfig(
+                    enabled: true,
+                    autoHealEnabled: true,
+                    healAtHpPercent: 99,
+                    autoGuardEnabled: true,
+                    guardAtHpPercent: 99,
+                    autoOffenseEnabled: true,
+                    offenseMode: "cooldown_spam",
+                    maxAutoCastsPerTick: 1)),
+                new BattleCommandDto("cast_skill", "exori")
+            ]);
+        AssertArenaInvariants(step.Actors, playerId);
+
+        var castResult = step.CommandResults.First(result => result.Type == "cast_skill");
+        Assert.True(castResult.Ok);
+        Assert.Equal(1200, GetSkill(step, "exori").CooldownRemainingMs);
+        Assert.DoesNotContain(step.Events.OfType<AssistCastEventDto>(), _ => true);
+    }
+
+    [Fact]
+    public async Task PostBattleStep_AssistBehavior_IsDeterministicForSameSeed()
+    {
+        var firstStart = await StartBattleAsync("arena-assist-determinism-a", "player-assist-determinism", 1337);
+        var secondStart = await StartBattleAsync("arena-assist-determinism-b", "player-assist-determinism", 1337);
+        AssertArenaInvariants(firstStart.Actors, "player-assist-determinism");
+        AssertArenaInvariants(secondStart.Actors, "player-assist-determinism");
+
+        var firstTick = firstStart.Tick;
+        var secondTick = secondStart.Tick;
+        var assistConfigCommand = new BattleCommandDto(
+            "set_assist_config",
+            AssistConfig: BuildAssistConfig(
+                enabled: true,
+                autoHealEnabled: true,
+                healAtHpPercent: 45,
+                autoGuardEnabled: true,
+                guardAtHpPercent: 65,
+                autoOffenseEnabled: true,
+                offenseMode: "cooldown_spam",
+                maxAutoCastsPerTick: 1));
+
+        for (var stepIndex = 0; stepIndex < 40; stepIndex += 1)
+        {
+            var commands = stepIndex == 0
+                ? new[] { assistConfigCommand }
+                : Array.Empty<BattleCommandDto>();
+
+            var firstStep = await StepBattleAsync(firstStart.BattleId, firstTick, commands);
+            var secondStep = await StepBattleAsync(secondStart.BattleId, secondTick, commands);
+            firstTick = firstStep.Tick;
+            secondTick = secondStep.Tick;
+
+            AssertArenaInvariants(firstStep.Actors, "player-assist-determinism");
+            AssertArenaInvariants(secondStep.Actors, "player-assist-determinism");
+            Assert.Equal(firstStep.FacingDirection, secondStep.FacingDirection);
+            Assert.Equal(firstStep.EffectiveTargetEntityId, secondStep.EffectiveTargetEntityId);
+            Assert.Equal(firstStep.LockedTargetEntityId, secondStep.LockedTargetEntityId);
+            Assert.Equal(firstStep.AssistConfig.Enabled, secondStep.AssistConfig.Enabled);
+            Assert.Equal(firstStep.AssistConfig.AutoHealEnabled, secondStep.AssistConfig.AutoHealEnabled);
+            Assert.Equal(firstStep.AssistConfig.HealAtHpPercent, secondStep.AssistConfig.HealAtHpPercent);
+            Assert.Equal(firstStep.AssistConfig.AutoGuardEnabled, secondStep.AssistConfig.AutoGuardEnabled);
+            Assert.Equal(firstStep.AssistConfig.GuardAtHpPercent, secondStep.AssistConfig.GuardAtHpPercent);
+            Assert.Equal(firstStep.AssistConfig.AutoOffenseEnabled, secondStep.AssistConfig.AutoOffenseEnabled);
+            Assert.Equal(firstStep.AssistConfig.OffenseMode, secondStep.AssistConfig.OffenseMode);
+            Assert.Equal(firstStep.AssistConfig.MaxAutoCastsPerTick, secondStep.AssistConfig.MaxAutoCastsPerTick);
+            Assert.Equal(
+                (firstStep.AssistConfig.AutoSkills ?? new Dictionary<string, bool>())
+                    .OrderBy(entry => entry.Key, StringComparer.Ordinal)
+                    .ToList(),
+                (secondStep.AssistConfig.AutoSkills ?? new Dictionary<string, bool>())
+                    .OrderBy(entry => entry.Key, StringComparer.Ordinal)
+                    .ToList());
+
+            var firstActors = firstStep.Actors
+                .OrderBy(actor => actor.ActorId, StringComparer.Ordinal)
+                .Select(actor => $"{actor.ActorId}:{actor.TileX}:{actor.TileY}:{actor.Hp}:{actor.Shield}")
+                .ToList();
+            var secondActors = secondStep.Actors
+                .OrderBy(actor => actor.ActorId, StringComparer.Ordinal)
+                .Select(actor => $"{actor.ActorId}:{actor.TileX}:{actor.TileY}:{actor.Hp}:{actor.Shield}")
+                .ToList();
+            Assert.Equal(firstActors, secondActors);
+            Assert.Equal(
+                firstStep.Events.Select(ToEventSignature).ToList(),
+                secondStep.Events.Select(ToEventSignature).ToList());
+        }
+    }
+
+    private async Task<BattleStartResponseDto> StartBattleAsync(string arenaId, string playerId, int? seed)
+    {
+        var response = await _client.PostAsJsonAsync(
+            "/api/v1/battle/start",
+            new BattleStartRequestDto(arenaId, playerId, seed));
+        var payload = await response.Content.ReadFromJsonAsync<BattleStartResponseDto>();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(payload);
+        return payload;
+    }
+
+    private async Task<BattleStepResponseDto> StepBattleAsync(
+        string battleId,
+        int clientTick,
+        IReadOnlyList<BattleCommandDto> commands)
+    {
+        var response = await _client.PostAsJsonAsync(
+            "/api/v1/battle/step",
+            new BattleStepRequestDto(battleId, clientTick, commands));
+        var payload = await response.Content.ReadFromJsonAsync<BattleStepResponseDto>();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(payload);
+        return payload;
+    }
+
+    private async Task<BattleStepResponseDto> WaitUntilSkillReadyAsync(
+        string battleId,
+        int tick,
+        string skillId,
+        string playerId)
+    {
+        var currentTick = tick;
+        BattleStepResponseDto? latest = null;
+        for (var i = 0; i < 20; i += 1)
+        {
+            latest = await StepBattleAsync(battleId, currentTick, []);
+            currentTick = latest.Tick;
+            AssertArenaInvariants(latest.Actors, playerId);
+            if (GetSkill(latest, skillId).CooldownRemainingMs == 0)
+            {
+                return latest;
+            }
+        }
+
+        throw new Xunit.Sdk.XunitException($"Skill '{skillId}' did not become ready within expected steps.");
+    }
+
+    private async Task<BattleStepResponseDto> WaitForMobCountAsync(
+        string battleId,
+        int tick,
+        string playerId,
+        int targetMobCount,
+        string? skillIdWhenReady,
+        int maxSteps)
+    {
+        var currentTick = tick;
+        BattleStepResponseDto? latest = null;
+
+        for (var i = 0; i < maxSteps; i += 1)
+        {
+            var commands = Array.Empty<BattleCommandDto>();
+            if (skillIdWhenReady is not null && latest is not null && GetSkill(latest, skillIdWhenReady).CooldownRemainingMs == 0)
+            {
+                commands = [new BattleCommandDto("cast_skill", skillIdWhenReady)];
+            }
+
+            latest = await StepBattleAsync(battleId, currentTick, commands);
+            currentTick = latest.Tick;
+            AssertArenaInvariants(latest.Actors, playerId);
+            if (latest.Actors.Count(actor => actor.Kind == "mob") == targetMobCount)
+            {
+                return latest;
+            }
+        }
+
+        throw new Xunit.Sdk.XunitException($"Expected mob count {targetMobCount} not reached within {maxSteps} steps.");
+    }
+
+    private async Task<int> FindSeedAsync(Func<BattleStartResponseDto, bool> predicate, int maxSeed = 500)
+    {
+        for (var seed = 1; seed <= maxSeed; seed += 1)
+        {
+            var payload = await StartBattleAsync(
+                arenaId: $"seed-scan-arena-{seed}",
+                playerId: $"seed-scan-player-{seed}",
+                seed: seed);
+            if (predicate(payload))
+            {
+                return seed;
+            }
+        }
+
+        throw new Xunit.Sdk.XunitException($"No suitable seed found in range 1..{maxSeed}.");
+    }
+
+    private async Task<AltarActivationResult> ActivateFirstAvailableAltarAsync(
+        BattleStartResponseDto start,
+        string playerId,
+        int maxSteps)
+    {
+        var currentTick = start.Tick;
+        IReadOnlyList<ActorStateDto> currentActors = start.Actors;
+        IReadOnlyList<SkillStateDto> currentSkills = start.Skills;
+        IReadOnlyList<BattlePoiDto> currentPois = start.ActivePois;
+
+        for (var stepIndex = 0; stepIndex < maxSteps; stepIndex += 1)
+        {
+            var commands = new List<BattleCommandDto>();
+            string? attemptedPoiId = null;
+            var altar = currentPois
+                .Where(poi => poi.Type == "altar")
+                .OrderBy(poi => poi.PoiId, StringComparer.Ordinal)
+                .FirstOrDefault();
+            if (altar is null)
+            {
+                commands.AddRange(BuildSustainCommands(currentSkills));
+            }
+            else
+            {
+                var player = GetActor(currentActors, playerId);
+                var distance = ComputeChebyshevDistance(player.TileX, player.TileY, altar.Pos.X, altar.Pos.Y);
+                if (distance > 1)
+                {
+                    commands.Add(BuildMoveCommand(ResolveMoveDirectionToward(player.TileX, player.TileY, altar.Pos.X, altar.Pos.Y)));
+                }
+
+                if (distance <= 2)
+                {
+                    attemptedPoiId = altar.PoiId;
+                    commands.Add(BuildInteractPoiCommand(altar.PoiId));
+                }
+            }
+
+            var actorsBeforeStep = currentActors;
+            var step = await StepBattleAsync(start.BattleId, currentTick, commands);
+            AssertArenaInvariants(step.Actors, playerId);
+            currentTick = step.Tick;
+            currentActors = step.Actors;
+            currentSkills = step.Skills;
+            currentPois = step.ActivePois;
+
+            if (attemptedPoiId is not null &&
+                step.CommandResults.Any(result =>
+                    result.Type == "interact_poi" &&
+                    result.Ok &&
+                    result.Reason is null))
+            {
+                return new AltarActivationResult(step, actorsBeforeStep, attemptedPoiId);
+            }
+        }
+
+        throw new Xunit.Sdk.XunitException("Failed to activate an altar within expected steps.");
+    }
+
+    private static int ComputeChebyshevDistance(int sourceTileX, int sourceTileY, int targetTileX, int targetTileY)
+    {
+        return Math.Max(Math.Abs(sourceTileX - targetTileX), Math.Abs(sourceTileY - targetTileY));
+    }
+
+    private static string? ResolveExpectedEffectiveFallbackTargetId(IReadOnlyList<ActorStateDto> actors, string playerId)
+    {
+        var player = GetActor(actors, playerId);
+        return actors
+            .Where(actor => actor.Kind == "mob")
+            .OrderBy(actor => ComputeChebyshevDistance(actor.TileX, actor.TileY, player.TileX, player.TileY))
+            .ThenBy(actor => actor.ActorId, StringComparer.Ordinal)
+            .Select(actor => actor.ActorId)
+            .FirstOrDefault();
+    }
+
+    private static string ResolveFacingDirectionTowardTile(
+        int sourceTileX,
+        int sourceTileY,
+        int targetTileX,
+        int targetTileY,
+        string currentFacingDirection)
+    {
+        var deltaX = targetTileX - sourceTileX;
+        var deltaY = targetTileY - sourceTileY;
+        if (deltaX == 0 && deltaY == 0)
+        {
+            return currentFacingDirection;
+        }
+
+        if (Math.Abs(deltaX) >= Math.Abs(deltaY))
+        {
+            if (deltaX > 0)
+            {
+                return "right";
+            }
+
+            if (deltaX < 0)
+            {
+                return "left";
+            }
+        }
+        else
+        {
+            if (deltaY > 0)
+            {
+                return "down";
+            }
+
+            if (deltaY < 0)
+            {
+                return "up";
+            }
+        }
+
+        return currentFacingDirection;
+    }
+
+    private static BattleCommandDto[] BuildSustainCommands(IReadOnlyList<SkillStateDto> skills)
+    {
+        if (GetCooldownRemainingMs(skills, "heal") == 0)
+        {
+            return [new BattleCommandDto("cast_skill", "heal")];
+        }
+
+        if (GetCooldownRemainingMs(skills, "guard") == 0)
+        {
+            return [new BattleCommandDto("cast_skill", "guard")];
+        }
+
+        return BuildReadySkillCommands(skills);
+    }
+
+    private static string ResolveMoveDirectionToward(int sourceTileX, int sourceTileY, int targetTileX, int targetTileY)
+    {
+        var stepX = Math.Sign(targetTileX - sourceTileX);
+        var stepY = Math.Sign(targetTileY - sourceTileY);
+        if (stepX == 0 && stepY < 0)
+        {
+            return "up";
+        }
+
+        if (stepX == 0 && stepY > 0)
+        {
+            return "down";
+        }
+
+        if (stepX < 0 && stepY == 0)
+        {
+            return "left";
+        }
+
+        if (stepX > 0 && stepY == 0)
+        {
+            return "right";
+        }
+
+        if (stepX > 0 && stepY < 0)
+        {
+            return "ne";
+        }
+
+        if (stepX > 0 && stepY > 0)
+        {
+            return "se";
+        }
+
+        if (stepX < 0 && stepY < 0)
+        {
+            return "nw";
+        }
+
+        if (stepX < 0 && stepY > 0)
+        {
+            return "sw";
+        }
+
+        return "up";
+    }
+
+    private static int GetExpectedMobCapForTick(int tick)
+    {
+        var elapsedMs = tick * StepDeltaMs;
+        return elapsedMs < EarlyMobConcurrentCapDurationMs
+            ? EarlyMobConcurrentCap
+            : MaxAliveMobs;
+    }
+
+    private static bool IsRangedMob(ActorStateDto actor)
+    {
+        return actor.MobType is MobArchetype.RangedArcher or MobArchetype.RangedDragon;
+    }
+
+    private static bool IsMeleeMob(ActorStateDto actor)
+    {
+        return actor.MobType is MobArchetype.MeleeBrute or MobArchetype.MeleeDemon;
+    }
+
+    private static IEnumerable<int> GetOrderedCausalityIds(IReadOnlyList<BattleEventDto> events)
+    {
+        foreach (var battleEvent in events)
+        {
+            if (battleEvent is AttackFxEventDto attackFx)
+            {
+                yield return attackFx.EventId;
+                continue;
+            }
+
+            if (battleEvent is DamageNumberEventDto damageEvent)
+            {
+                yield return damageEvent.HitId;
+            }
+        }
+    }
+
+    private static string ToEventSignature(BattleEventDto battleEvent)
+    {
+        return battleEvent switch
+        {
+            FxSpawnEventDto fx =>
+                $"fx:{fx.FxId}:{fx.TileX}:{fx.TileY}:{fx.Layer}:{fx.DurationMs}:{(int)fx.Element}",
+            AttackFxEventDto attackFx =>
+                $"attack:{(int)attackFx.FxKind}:{attackFx.FromTileX}:{attackFx.FromTileY}:{attackFx.ToTileX}:{attackFx.ToTileY}:{(int)attackFx.ElementType}:{attackFx.DurationMs}:{attackFx.CreatedAtTick}:{attackFx.EventId}",
+            DamageNumberEventDto damage =>
+                $"damage:{damage.AttackerEntityId}:{damage.AttackerTileX}:{damage.AttackerTileY}:{damage.TargetEntityId}:{damage.TargetTileX}:{damage.TargetTileY}:{damage.DamageAmount}:{(int)damage.ElementType}:{damage.IsKill}:{damage.IsCrit}:{damage.HitId}",
+            DeathEventDto death =>
+                $"death:{death.EntityId}:{death.EntityType}:{(int?)death.MobType}:{death.TileX}:{death.TileY}:{(int?)death.ElementType}:{death.KillerEntityId}:{death.TickIndex}",
+            HealNumberEventDto heal =>
+                $"heal:{heal.ActorId}:{heal.Amount}:{heal.Source}",
+            ReflectEventDto reflect =>
+                $"reflect:{reflect.SourceEntityId}:{reflect.SourceTileX}:{reflect.SourceTileY}:{reflect.TargetEntityId}:{reflect.TargetTileX}:{reflect.TargetTileY}:{reflect.Amount}:{(int)reflect.ElementType}:{(int?)reflect.TargetMobType}",
+            AssistCastEventDto assistCast =>
+                $"assist:{assistCast.SkillId}:{assistCast.Reason}",
+            PoiInteractedEventDto poiInteracted =>
+                $"poi_interacted:{poiInteracted.PoiId}:{poiInteracted.PoiType}:{poiInteracted.TileX}:{poiInteracted.TileY}",
+            InteractFailedEventDto interactFailed =>
+                $"interact_failed:{interactFailed.PoiId}:{interactFailed.Reason}",
+            BuffAppliedEventDto buffApplied =>
+                $"buff_applied:{buffApplied.BuffId}:{buffApplied.DurationMs}",
+            AltarActivatedEventDto altarActivated =>
+                $"altar_activated:{altarActivated.RequestedCount}:{altarActivated.SpawnedCount}",
+            _ => battleEvent.GetType().Name
+        };
+    }
+
+    private static void AssertNoMobOnPoiTile(BattleStepResponseDto step)
+    {
+        var activePoiTiles = step.ActivePois
+            .Select(poi => (poi.Pos.X, poi.Pos.Y))
+            .ToHashSet();
+        Assert.DoesNotContain(
+            step.Actors.Where(actor => actor.Kind == "mob"),
+            mob => activePoiTiles.Contains((mob.TileX, mob.TileY)));
+    }
+
+    private static void AssertArenaInvariants(IReadOnlyList<ActorStateDto> actors, string playerId)
+    {
+        Assert.NotEmpty(actors);
+        Assert.All(actors, actor =>
+        {
+            Assert.InRange(actor.TileX, 0, ArenaWidth - 1);
+            Assert.InRange(actor.TileY, 0, ArenaHeight - 1);
+            Assert.True(actor.MaxShield >= 0);
+            Assert.InRange(actor.Shield, 0, actor.MaxShield);
+            if (actor.Kind == "mob")
+            {
+                Assert.NotNull(actor.MobType);
+            }
+        });
+
+        var uniqueTiles = new HashSet<(int TileX, int TileY)>();
+        foreach (var actor in actors)
+        {
+            Assert.True(
+                uniqueTiles.Add((actor.TileX, actor.TileY)),
+                $"Duplicate occupancy at ({actor.TileX},{actor.TileY}).");
+        }
+
+        var player = GetActor(actors, playerId);
+        Assert.Equal((int)Math.Floor(player.MaxHp * 0.8d), player.MaxShield);
+    }
+
+    private static ActorStateDto GetActor(IReadOnlyList<ActorStateDto> actors, string actorId)
+    {
+        return Assert.Single(actors, actor => actor.ActorId == actorId);
+    }
+
+    private static SkillStateDto GetSkill(BattleStepResponseDto payload, string skillId)
+    {
+        return Assert.Single(payload.Skills, skill => skill.SkillId == skillId);
+    }
+
+    private static int GetCooldownRemainingMs(IReadOnlyList<SkillStateDto> skills, string skillId)
+    {
+        return Assert.Single(skills, skill => skill.SkillId == skillId).CooldownRemainingMs;
+    }
+
+    private static int GetBuffRemainingMs(IReadOnlyList<BattleBuffDto> buffs, string buffId)
+    {
+        return buffs
+            .Where(buff => buff.BuffId == buffId)
+            .Select(buff => buff.RemainingMs)
+            .DefaultIfEmpty(0)
+            .Max();
+    }
+
+    private static BattleCommandDto BuildMoveCommand(string direction)
+    {
+        return new BattleCommandDto("move_player", Dir: direction);
+    }
+
+    private static BattleCommandDto BuildInteractPoiCommand(string poiId)
+    {
+        return new BattleCommandDto("interact_poi", PoiId: poiId);
+    }
+
+    private static BattleCommandDto[] BuildReadySkillCommands(IReadOnlyList<SkillStateDto> skills)
+    {
+        var commands = new List<BattleCommandDto>(capacity: 3);
+        if (GetCooldownRemainingMs(skills, "exori_mas") == 0)
+        {
+            commands.Add(new BattleCommandDto("cast_skill", "exori_mas"));
+        }
+
+        if (GetCooldownRemainingMs(skills, "exori") == 0)
+        {
+            commands.Add(new BattleCommandDto("cast_skill", "exori"));
+        }
+
+        if (GetCooldownRemainingMs(skills, "exori_min") == 0)
+        {
+            commands.Add(new BattleCommandDto("cast_skill", "exori_min"));
+        }
+
+        return [.. commands];
+    }
+
+    private static AssistConfigDto BuildAssistConfig(
+        bool enabled,
+        bool autoHealEnabled,
+        int healAtHpPercent,
+        bool autoGuardEnabled,
+        int guardAtHpPercent,
+        bool autoOffenseEnabled,
+        string offenseMode,
+        int maxAutoCastsPerTick)
+    {
+        return new AssistConfigDto(
+            Enabled: enabled,
+            AutoHealEnabled: autoHealEnabled,
+            HealAtHpPercent: healAtHpPercent,
+            AutoGuardEnabled: autoGuardEnabled,
+            GuardAtHpPercent: guardAtHpPercent,
+            AutoOffenseEnabled: autoOffenseEnabled,
+            OffenseMode: offenseMode,
+            AutoSkills: new Dictionary<string, bool>(StringComparer.Ordinal)
+            {
+                ["exori"] = true,
+                ["exori_min"] = true,
+                ["exori_mas"] = true,
+                ["avalanche"] = true
+            },
+            MaxAutoCastsPerTick: maxAutoCastsPerTick);
+    }
+
+    private sealed record AltarActivationResult(
+        BattleStepResponseDto ActivatedStep,
+        IReadOnlyList<ActorStateDto> ActorsBeforeActivation,
+        string ConsumedPoiId);
+}

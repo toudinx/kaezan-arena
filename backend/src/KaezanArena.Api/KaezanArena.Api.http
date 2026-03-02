@@ -1,0 +1,23 @@
+@KaezanArena.Api_HostAddress = http://localhost:5080
+
+GET {{KaezanArena.Api_HostAddress}}/health
+Accept: application/json
+
+###
+POST {{KaezanArena.Api_HostAddress}}/api/v1/battle/start
+Content-Type: application/json
+
+{
+  "arenaId": "arena-1",
+  "playerId": "player-1"
+}
+
+###
+POST {{KaezanArena.Api_HostAddress}}/api/v1/battle/step
+Content-Type: application/json
+
+{
+  "battleId": "battle-v1-arena-1-player-1",
+  "step": 0,
+  "action": "noop"
+}

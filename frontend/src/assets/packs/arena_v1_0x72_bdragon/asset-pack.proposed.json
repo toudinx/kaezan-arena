@@ -1,0 +1,1773 @@
+{
+  "packId": "arena_v1_0x72_bdragon",
+  "version": "1.0.0",
+  "generatedAtUtc": "2026-02-28T23:40:33.998Z",
+  "generator": "tools/assets/propose-asset-pack.mjs",
+  "source": {
+    "packDir": "frontend/src/assets/packs/arena_v1_0x72_bdragon",
+    "manifest": "frontend/src/assets/packs/arena_v1_0x72_bdragon/asset-pack.json",
+    "config": null
+  },
+  "notes": [
+    "Review semantic IDs before merge.",
+    "This file does not modify asset-pack.json automatically.",
+    "Spritesheet frames are included only when configured manually."
+  ],
+  "summary": {
+    "totalCandidates": 433,
+    "proposedAssets": 433,
+    "skippedAlreadyMapped": 5,
+    "skippedIgnored": 0,
+    "skippedNonImage": 4
+  },
+  "proposedAssets": {
+    "fx.retro.fx.pack1.05": {
+      "path": "fx/retro_fx_pack1/05.png",
+      "kind": "image"
+    },
+    "fx.retro.fx.pack1.08": {
+      "path": "fx/retro_fx_pack1/08.png",
+      "kind": "image"
+    },
+    "fx.retro.fx.pack1.10": {
+      "path": "fx/retro_fx_pack1/10.png",
+      "kind": "image"
+    },
+    "fx.retro.fx.pack1.12": {
+      "path": "fx/retro_fx_pack1/12.png",
+      "kind": "image"
+    },
+    "fx.retro.fx.pack1.13": {
+      "path": "fx/retro_fx_pack1/13.png",
+      "kind": "image"
+    },
+    "fx.retro.fx.pack1.20": {
+      "path": "fx/retro_fx_pack1/20.png",
+      "kind": "image"
+    },
+    "fx.retro.fx.pack1.21": {
+      "path": "fx/retro_fx_pack1/21.png",
+      "kind": "image"
+    },
+    "fx.retro.fx.pack1.22": {
+      "path": "fx/retro_fx_pack1/22.png",
+      "kind": "image"
+    },
+    "fx.retro.fx.pack1.29": {
+      "path": "fx/retro_fx_pack1/29.png",
+      "kind": "image"
+    },
+    "fx.retro.fx.pack1.31": {
+      "path": "fx/retro_fx_pack1/31.png",
+      "kind": "image"
+    },
+    "fx.retro.fx.pack1.36": {
+      "path": "fx/retro_fx_pack1/36.png",
+      "kind": "image"
+    },
+    "fx.retro.fx.pack1.38": {
+      "path": "fx/retro_fx_pack1/38.png",
+      "kind": "image"
+    },
+    "fx.retro.fx.pack1.42": {
+      "path": "fx/retro_fx_pack1/42.png",
+      "kind": "image"
+    },
+    "fx.retro.fx.pack1.44": {
+      "path": "fx/retro_fx_pack1/44.png",
+      "kind": "image"
+    },
+    "fx.retro.fx.pack1.47": {
+      "path": "fx/retro_fx_pack1/47.png",
+      "kind": "image"
+    },
+    "fx.retro.fx.pack1.52": {
+      "path": "fx/retro_fx_pack1/52.png",
+      "kind": "image"
+    },
+    "fx.retro.fx.pack1.54": {
+      "path": "fx/retro_fx_pack1/54.png",
+      "kind": "image"
+    },
+    "fx.retro.fx.pack1.55": {
+      "path": "fx/retro_fx_pack1/55.png",
+      "kind": "image"
+    },
+    "fx.retro.fx.pack1.56": {
+      "path": "fx/retro_fx_pack1/56.png",
+      "kind": "image"
+    },
+    "fx.retro.fx.pack2.01": {
+      "path": "fx/retro_fx_pack2/01.png",
+      "kind": "image"
+    },
+    "fx.retro.fx.pack2.02": {
+      "path": "fx/retro_fx_pack2/02.png",
+      "kind": "image"
+    },
+    "fx.retro.fx.pack2.03": {
+      "path": "fx/retro_fx_pack2/03.png",
+      "kind": "image"
+    },
+    "fx.retro.fx.pack2.04": {
+      "path": "fx/retro_fx_pack2/04.png",
+      "kind": "image"
+    },
+    "fx.retro.fx.pack2.05": {
+      "path": "fx/retro_fx_pack2/05.png",
+      "kind": "image"
+    },
+    "fx.retro.fx.pack2.06": {
+      "path": "fx/retro_fx_pack2/06.png",
+      "kind": "image"
+    },
+    "fx.retro.fx.pack2.07": {
+      "path": "fx/retro_fx_pack2/07.png",
+      "kind": "image"
+    },
+    "fx.retro.fx.pack2.08": {
+      "path": "fx/retro_fx_pack2/08.png",
+      "kind": "image"
+    },
+    "fx.retro.fx.pack2.09": {
+      "path": "fx/retro_fx_pack2/09.png",
+      "kind": "image"
+    },
+    "fx.retro.fx.pack2.10": {
+      "path": "fx/retro_fx_pack2/10.png",
+      "kind": "image"
+    },
+    "fx.retro.fx.pack2.11": {
+      "path": "fx/retro_fx_pack2/11.png",
+      "kind": "image"
+    },
+    "fx.retro.fx.pack2.12": {
+      "path": "fx/retro_fx_pack2/12.png",
+      "kind": "image"
+    },
+    "fx.retro.fx.pack2.13": {
+      "path": "fx/retro_fx_pack2/13.png",
+      "kind": "image"
+    },
+    "fx.retro.fx.pack2.14": {
+      "path": "fx/retro_fx_pack2/14.png",
+      "kind": "image"
+    },
+    "fx.retro.fx.pack2.15": {
+      "path": "fx/retro_fx_pack2/15.png",
+      "kind": "image"
+    },
+    "fx.retro.fx.pack2.16": {
+      "path": "fx/retro_fx_pack2/16.png",
+      "kind": "image"
+    },
+    "fx.retro.fx.pack2.17": {
+      "path": "fx/retro_fx_pack2/17.png",
+      "kind": "image"
+    },
+    "fx.retro.fx.pack2.18": {
+      "path": "fx/retro_fx_pack2/18.png",
+      "kind": "image"
+    },
+    "fx.retro.fx.pack2.19": {
+      "path": "fx/retro_fx_pack2/19.png",
+      "kind": "image"
+    },
+    "fx.retro.fx.pack2.20": {
+      "path": "fx/retro_fx_pack2/20.png",
+      "kind": "image"
+    },
+    "fx.retro.fx.pack2.21": {
+      "path": "fx/retro_fx_pack2/21.png",
+      "kind": "image"
+    },
+    "fx.retro.fx.pack2.22": {
+      "path": "fx/retro_fx_pack2/22.png",
+      "kind": "image"
+    },
+    "fx.retro.fx.pack2.23": {
+      "path": "fx/retro_fx_pack2/23.png",
+      "kind": "image"
+    },
+    "fx.retro.fx.pack2.24": {
+      "path": "fx/retro_fx_pack2/24.png",
+      "kind": "image"
+    },
+    "fx.retro.fx.pack2.25": {
+      "path": "fx/retro_fx_pack2/25.png",
+      "kind": "image"
+    },
+    "fx.retro.fx.pack2.26": {
+      "path": "fx/retro_fx_pack2/26.png",
+      "kind": "image"
+    },
+    "fx.retro.fx.pack2.27": {
+      "path": "fx/retro_fx_pack2/27.png",
+      "kind": "image"
+    },
+    "fx.retro.fx.pack2.28": {
+      "path": "fx/retro_fx_pack2/28.png",
+      "kind": "image"
+    },
+    "fx.retro.fx.pack2.29": {
+      "path": "fx/retro_fx_pack2/29.png",
+      "kind": "image"
+    },
+    "fx.retro.fx.pack2.30": {
+      "path": "fx/retro_fx_pack2/30.png",
+      "kind": "image"
+    },
+    "fx.retro.fx.pack2.31": {
+      "path": "fx/retro_fx_pack2/31.png",
+      "kind": "image"
+    },
+    "fx.retro.fx.pack2.32": {
+      "path": "fx/retro_fx_pack2/32.png",
+      "kind": "image"
+    },
+    "fx.retro.fx.pack2.33": {
+      "path": "fx/retro_fx_pack2/33.png",
+      "kind": "image"
+    },
+    "fx.retro.fx.pack2.34": {
+      "path": "fx/retro_fx_pack2/34.png",
+      "kind": "image"
+    },
+    "fx.retro.fx.pack2.35": {
+      "path": "fx/retro_fx_pack2/35.png",
+      "kind": "image"
+    },
+    "sprite.angel.idle.anim.f0": {
+      "path": "sprites/angel_idle_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.angel.idle.anim.f1": {
+      "path": "sprites/angel_idle_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.angel.idle.anim.f2": {
+      "path": "sprites/angel_idle_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.angel.idle.anim.f3": {
+      "path": "sprites/angel_idle_anim_f3.png",
+      "kind": "image"
+    },
+    "sprite.angel.run.anim.f0": {
+      "path": "sprites/angel_run_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.angel.run.anim.f1": {
+      "path": "sprites/angel_run_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.angel.run.anim.f2": {
+      "path": "sprites/angel_run_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.angel.run.anim.f3": {
+      "path": "sprites/angel_run_anim_f3.png",
+      "kind": "image"
+    },
+    "sprite.big.demon.idle.anim.f0": {
+      "path": "sprites/big_demon_idle_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.big.demon.idle.anim.f1": {
+      "path": "sprites/big_demon_idle_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.big.demon.idle.anim.f2": {
+      "path": "sprites/big_demon_idle_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.big.demon.idle.anim.f3": {
+      "path": "sprites/big_demon_idle_anim_f3.png",
+      "kind": "image"
+    },
+    "sprite.big.demon.run.anim.f0": {
+      "path": "sprites/big_demon_run_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.big.demon.run.anim.f1": {
+      "path": "sprites/big_demon_run_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.big.demon.run.anim.f2": {
+      "path": "sprites/big_demon_run_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.big.demon.run.anim.f3": {
+      "path": "sprites/big_demon_run_anim_f3.png",
+      "kind": "image"
+    },
+    "sprite.big.zombie.idle.anim.f0": {
+      "path": "sprites/big_zombie_idle_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.big.zombie.idle.anim.f1": {
+      "path": "sprites/big_zombie_idle_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.big.zombie.idle.anim.f2": {
+      "path": "sprites/big_zombie_idle_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.big.zombie.idle.anim.f3": {
+      "path": "sprites/big_zombie_idle_anim_f3.png",
+      "kind": "image"
+    },
+    "sprite.big.zombie.run.anim.f0": {
+      "path": "sprites/big_zombie_run_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.big.zombie.run.anim.f1": {
+      "path": "sprites/big_zombie_run_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.big.zombie.run.anim.f2": {
+      "path": "sprites/big_zombie_run_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.big.zombie.run.anim.f3": {
+      "path": "sprites/big_zombie_run_anim_f3.png",
+      "kind": "image"
+    },
+    "sprite.bomb.f0": {
+      "path": "sprites/bomb_f0.png",
+      "kind": "image"
+    },
+    "sprite.bomb.f1": {
+      "path": "sprites/bomb_f1.png",
+      "kind": "image"
+    },
+    "sprite.bomb.f2": {
+      "path": "sprites/bomb_f2.png",
+      "kind": "image"
+    },
+    "sprite.button.blue.down": {
+      "path": "sprites/button_blue_down.png",
+      "kind": "image"
+    },
+    "sprite.button.blue.up": {
+      "path": "sprites/button_blue_up.png",
+      "kind": "image"
+    },
+    "sprite.button.red.down": {
+      "path": "sprites/button_red_down.png",
+      "kind": "image"
+    },
+    "sprite.button.red.up": {
+      "path": "sprites/button_red_up.png",
+      "kind": "image"
+    },
+    "sprite.chest.empty.open.anim.f0": {
+      "path": "sprites/chest_empty_open_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.chest.empty.open.anim.f1": {
+      "path": "sprites/chest_empty_open_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.chest.empty.open.anim.f2": {
+      "path": "sprites/chest_empty_open_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.chest.full.open.anim.f0": {
+      "path": "sprites/chest_full_open_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.chest.full.open.anim.f1": {
+      "path": "sprites/chest_full_open_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.chest.full.open.anim.f2": {
+      "path": "sprites/chest_full_open_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.chest.mimic.open.anim.f0": {
+      "path": "sprites/chest_mimic_open_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.chest.mimic.open.anim.f1": {
+      "path": "sprites/chest_mimic_open_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.chest.mimic.open.anim.f2": {
+      "path": "sprites/chest_mimic_open_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.chort.idle.anim.f0": {
+      "path": "sprites/chort_idle_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.chort.idle.anim.f1": {
+      "path": "sprites/chort_idle_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.chort.idle.anim.f2": {
+      "path": "sprites/chort_idle_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.chort.idle.anim.f3": {
+      "path": "sprites/chort_idle_anim_f3.png",
+      "kind": "image"
+    },
+    "sprite.chort.run.anim.f0": {
+      "path": "sprites/chort_run_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.chort.run.anim.f1": {
+      "path": "sprites/chort_run_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.chort.run.anim.f2": {
+      "path": "sprites/chort_run_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.chort.run.anim.f3": {
+      "path": "sprites/chort_run_anim_f3.png",
+      "kind": "image"
+    },
+    "sprite.coin.anim.f0": {
+      "path": "sprites/coin_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.coin.anim.f1": {
+      "path": "sprites/coin_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.coin.anim.f2": {
+      "path": "sprites/coin_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.coin.anim.f3": {
+      "path": "sprites/coin_anim_f3.png",
+      "kind": "image"
+    },
+    "sprite.column.wall": {
+      "path": "sprites/column_wall.png",
+      "kind": "image"
+    },
+    "sprite.column": {
+      "path": "sprites/column.png",
+      "kind": "image"
+    },
+    "sprite.crate": {
+      "path": "sprites/crate.png",
+      "kind": "image"
+    },
+    "sprite.doc.idle.anim.f0": {
+      "path": "sprites/doc_idle_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.doc.idle.anim.f1": {
+      "path": "sprites/doc_idle_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.doc.idle.anim.f2": {
+      "path": "sprites/doc_idle_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.doc.idle.anim.f3": {
+      "path": "sprites/doc_idle_anim_f3.png",
+      "kind": "image"
+    },
+    "sprite.doc.run.anim.f0": {
+      "path": "sprites/doc_run_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.doc.run.anim.f1": {
+      "path": "sprites/doc_run_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.doc.run.anim.f2": {
+      "path": "sprites/doc_run_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.doc.run.anim.f3": {
+      "path": "sprites/doc_run_anim_f3.png",
+      "kind": "image"
+    },
+    "sprite.doors.frame.left": {
+      "path": "sprites/doors_frame_left.png",
+      "kind": "image"
+    },
+    "sprite.doors.frame.right": {
+      "path": "sprites/doors_frame_right.png",
+      "kind": "image"
+    },
+    "sprite.doors.frame.top": {
+      "path": "sprites/doors_frame_top.png",
+      "kind": "image"
+    },
+    "sprite.doors.leaf.closed": {
+      "path": "sprites/doors_leaf_closed.png",
+      "kind": "image"
+    },
+    "sprite.doors.leaf.open": {
+      "path": "sprites/doors_leaf_open.png",
+      "kind": "image"
+    },
+    "sprite.dwarf.f.hit.anim.f0": {
+      "path": "sprites/dwarf_f_hit_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.dwarf.f.idle.anim.f0": {
+      "path": "sprites/dwarf_f_idle_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.dwarf.f.idle.anim.f1": {
+      "path": "sprites/dwarf_f_idle_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.dwarf.f.idle.anim.f2": {
+      "path": "sprites/dwarf_f_idle_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.dwarf.f.idle.anim.f3": {
+      "path": "sprites/dwarf_f_idle_anim_f3.png",
+      "kind": "image"
+    },
+    "sprite.dwarf.f.run.anim.f0": {
+      "path": "sprites/dwarf_f_run_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.dwarf.f.run.anim.f1": {
+      "path": "sprites/dwarf_f_run_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.dwarf.f.run.anim.f2": {
+      "path": "sprites/dwarf_f_run_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.dwarf.f.run.anim.f3": {
+      "path": "sprites/dwarf_f_run_anim_f3.png",
+      "kind": "image"
+    },
+    "sprite.dwarf.m.hit.anim.f0": {
+      "path": "sprites/dwarf_m_hit_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.dwarf.m.idle.anim.f0": {
+      "path": "sprites/dwarf_m_idle_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.dwarf.m.idle.anim.f1": {
+      "path": "sprites/dwarf_m_idle_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.dwarf.m.idle.anim.f2": {
+      "path": "sprites/dwarf_m_idle_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.dwarf.m.idle.anim.f3": {
+      "path": "sprites/dwarf_m_idle_anim_f3.png",
+      "kind": "image"
+    },
+    "sprite.dwarf.m.run.anim.f0": {
+      "path": "sprites/dwarf_m_run_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.dwarf.m.run.anim.f1": {
+      "path": "sprites/dwarf_m_run_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.dwarf.m.run.anim.f2": {
+      "path": "sprites/dwarf_m_run_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.dwarf.m.run.anim.f3": {
+      "path": "sprites/dwarf_m_run_anim_f3.png",
+      "kind": "image"
+    },
+    "sprite.edge.down": {
+      "path": "sprites/edge_down.png",
+      "kind": "image"
+    },
+    "sprite.elf.f.hit.anim.f0": {
+      "path": "sprites/elf_f_hit_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.elf.f.idle.anim.f0": {
+      "path": "sprites/elf_f_idle_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.elf.f.idle.anim.f1": {
+      "path": "sprites/elf_f_idle_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.elf.f.idle.anim.f2": {
+      "path": "sprites/elf_f_idle_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.elf.f.idle.anim.f3": {
+      "path": "sprites/elf_f_idle_anim_f3.png",
+      "kind": "image"
+    },
+    "sprite.elf.f.run.anim.f0": {
+      "path": "sprites/elf_f_run_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.elf.f.run.anim.f1": {
+      "path": "sprites/elf_f_run_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.elf.f.run.anim.f2": {
+      "path": "sprites/elf_f_run_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.elf.f.run.anim.f3": {
+      "path": "sprites/elf_f_run_anim_f3.png",
+      "kind": "image"
+    },
+    "sprite.elf.m.hit.anim.f0": {
+      "path": "sprites/elf_m_hit_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.elf.m.idle.anim.f0": {
+      "path": "sprites/elf_m_idle_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.elf.m.idle.anim.f1": {
+      "path": "sprites/elf_m_idle_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.elf.m.idle.anim.f2": {
+      "path": "sprites/elf_m_idle_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.elf.m.idle.anim.f3": {
+      "path": "sprites/elf_m_idle_anim_f3.png",
+      "kind": "image"
+    },
+    "sprite.elf.m.run.anim.f0": {
+      "path": "sprites/elf_m_run_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.elf.m.run.anim.f1": {
+      "path": "sprites/elf_m_run_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.elf.m.run.anim.f2": {
+      "path": "sprites/elf_m_run_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.elf.m.run.anim.f3": {
+      "path": "sprites/elf_m_run_anim_f3.png",
+      "kind": "image"
+    },
+    "sprite.flask.big.blue": {
+      "path": "sprites/flask_big_blue.png",
+      "kind": "image"
+    },
+    "sprite.flask.big.green": {
+      "path": "sprites/flask_big_green.png",
+      "kind": "image"
+    },
+    "sprite.flask.big.red": {
+      "path": "sprites/flask_big_red.png",
+      "kind": "image"
+    },
+    "sprite.flask.big.yellow": {
+      "path": "sprites/flask_big_yellow.png",
+      "kind": "image"
+    },
+    "sprite.flask.blue": {
+      "path": "sprites/flask_blue.png",
+      "kind": "image"
+    },
+    "sprite.flask.green": {
+      "path": "sprites/flask_green.png",
+      "kind": "image"
+    },
+    "sprite.flask.red": {
+      "path": "sprites/flask_red.png",
+      "kind": "image"
+    },
+    "sprite.flask.yellow": {
+      "path": "sprites/flask_yellow.png",
+      "kind": "image"
+    },
+    "sprite.floor.1": {
+      "path": "sprites/floor_1.png",
+      "kind": "image"
+    },
+    "sprite.floor.2": {
+      "path": "sprites/floor_2.png",
+      "kind": "image"
+    },
+    "sprite.floor.3": {
+      "path": "sprites/floor_3.png",
+      "kind": "image"
+    },
+    "sprite.floor.4": {
+      "path": "sprites/floor_4.png",
+      "kind": "image"
+    },
+    "sprite.floor.5": {
+      "path": "sprites/floor_5.png",
+      "kind": "image"
+    },
+    "sprite.floor.6": {
+      "path": "sprites/floor_6.png",
+      "kind": "image"
+    },
+    "sprite.floor.7": {
+      "path": "sprites/floor_7.png",
+      "kind": "image"
+    },
+    "sprite.floor.8": {
+      "path": "sprites/floor_8.png",
+      "kind": "image"
+    },
+    "sprite.floor.ladder": {
+      "path": "sprites/floor_ladder.png",
+      "kind": "image"
+    },
+    "sprite.floor.spikes.anim.f0": {
+      "path": "sprites/floor_spikes_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.floor.spikes.anim.f1": {
+      "path": "sprites/floor_spikes_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.floor.spikes.anim.f2": {
+      "path": "sprites/floor_spikes_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.floor.spikes.anim.f3": {
+      "path": "sprites/floor_spikes_anim_f3.png",
+      "kind": "image"
+    },
+    "sprite.floor.stairs": {
+      "path": "sprites/floor_stairs.png",
+      "kind": "image"
+    },
+    "sprite.goblin.idle.anim.f0": {
+      "path": "sprites/goblin_idle_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.goblin.idle.anim.f1": {
+      "path": "sprites/goblin_idle_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.goblin.idle.anim.f2": {
+      "path": "sprites/goblin_idle_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.goblin.idle.anim.f3": {
+      "path": "sprites/goblin_idle_anim_f3.png",
+      "kind": "image"
+    },
+    "sprite.goblin.run.anim.f0": {
+      "path": "sprites/goblin_run_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.goblin.run.anim.f1": {
+      "path": "sprites/goblin_run_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.goblin.run.anim.f2": {
+      "path": "sprites/goblin_run_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.goblin.run.anim.f3": {
+      "path": "sprites/goblin_run_anim_f3.png",
+      "kind": "image"
+    },
+    "sprite.hole": {
+      "path": "sprites/hole.png",
+      "kind": "image"
+    },
+    "sprite.ice.zombie.anim.f0": {
+      "path": "sprites/ice_zombie_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.ice.zombie.anim.f1": {
+      "path": "sprites/ice_zombie_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.ice.zombie.anim.f2": {
+      "path": "sprites/ice_zombie_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.ice.zombie.anim.f3": {
+      "path": "sprites/ice_zombie_anim_f3.png",
+      "kind": "image"
+    },
+    "sprite.imp.idle.anim.f0": {
+      "path": "sprites/imp_idle_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.imp.idle.anim.f1": {
+      "path": "sprites/imp_idle_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.imp.idle.anim.f2": {
+      "path": "sprites/imp_idle_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.imp.idle.anim.f3": {
+      "path": "sprites/imp_idle_anim_f3.png",
+      "kind": "image"
+    },
+    "sprite.imp.run.anim.f0": {
+      "path": "sprites/imp_run_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.imp.run.anim.f1": {
+      "path": "sprites/imp_run_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.imp.run.anim.f2": {
+      "path": "sprites/imp_run_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.imp.run.anim.f3": {
+      "path": "sprites/imp_run_anim_f3.png",
+      "kind": "image"
+    },
+    "sprite.knight.f.hit.anim.f0": {
+      "path": "sprites/knight_f_hit_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.knight.f.idle.anim.f0": {
+      "path": "sprites/knight_f_idle_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.knight.f.idle.anim.f1": {
+      "path": "sprites/knight_f_idle_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.knight.f.idle.anim.f2": {
+      "path": "sprites/knight_f_idle_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.knight.f.idle.anim.f3": {
+      "path": "sprites/knight_f_idle_anim_f3.png",
+      "kind": "image"
+    },
+    "sprite.knight.f.run.anim.f0": {
+      "path": "sprites/knight_f_run_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.knight.f.run.anim.f1": {
+      "path": "sprites/knight_f_run_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.knight.f.run.anim.f2": {
+      "path": "sprites/knight_f_run_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.knight.f.run.anim.f3": {
+      "path": "sprites/knight_f_run_anim_f3.png",
+      "kind": "image"
+    },
+    "sprite.knight.m.hit.anim.f0": {
+      "path": "sprites/knight_m_hit_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.knight.m.idle.anim.f1": {
+      "path": "sprites/knight_m_idle_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.knight.m.idle.anim.f2": {
+      "path": "sprites/knight_m_idle_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.knight.m.idle.anim.f3": {
+      "path": "sprites/knight_m_idle_anim_f3.png",
+      "kind": "image"
+    },
+    "sprite.knight.m.run.anim.f0": {
+      "path": "sprites/knight_m_run_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.knight.m.run.anim.f1": {
+      "path": "sprites/knight_m_run_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.knight.m.run.anim.f2": {
+      "path": "sprites/knight_m_run_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.knight.m.run.anim.f3": {
+      "path": "sprites/knight_m_run_anim_f3.png",
+      "kind": "image"
+    },
+    "sprite.lever.left": {
+      "path": "sprites/lever_left.png",
+      "kind": "image"
+    },
+    "sprite.lever.right": {
+      "path": "sprites/lever_right.png",
+      "kind": "image"
+    },
+    "sprite.lizard.f.hit.anim.f0": {
+      "path": "sprites/lizard_f_hit_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.lizard.f.idle.anim.f0": {
+      "path": "sprites/lizard_f_idle_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.lizard.f.idle.anim.f1": {
+      "path": "sprites/lizard_f_idle_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.lizard.f.idle.anim.f2": {
+      "path": "sprites/lizard_f_idle_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.lizard.f.idle.anim.f3": {
+      "path": "sprites/lizard_f_idle_anim_f3.png",
+      "kind": "image"
+    },
+    "sprite.lizard.f.run.anim.f0": {
+      "path": "sprites/lizard_f_run_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.lizard.f.run.anim.f1": {
+      "path": "sprites/lizard_f_run_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.lizard.f.run.anim.f2": {
+      "path": "sprites/lizard_f_run_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.lizard.f.run.anim.f3": {
+      "path": "sprites/lizard_f_run_anim_f3.png",
+      "kind": "image"
+    },
+    "sprite.lizard.m.hit.anim.f0": {
+      "path": "sprites/lizard_m_hit_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.lizard.m.idle.anim.f0": {
+      "path": "sprites/lizard_m_idle_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.lizard.m.idle.anim.f1": {
+      "path": "sprites/lizard_m_idle_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.lizard.m.idle.anim.f2": {
+      "path": "sprites/lizard_m_idle_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.lizard.m.idle.anim.f3": {
+      "path": "sprites/lizard_m_idle_anim_f3.png",
+      "kind": "image"
+    },
+    "sprite.lizard.m.run.anim.f0": {
+      "path": "sprites/lizard_m_run_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.lizard.m.run.anim.f1": {
+      "path": "sprites/lizard_m_run_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.lizard.m.run.anim.f2": {
+      "path": "sprites/lizard_m_run_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.lizard.m.run.anim.f3": {
+      "path": "sprites/lizard_m_run_anim_f3.png",
+      "kind": "image"
+    },
+    "sprite.masked.orc.idle.anim.f0": {
+      "path": "sprites/masked_orc_idle_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.masked.orc.idle.anim.f1": {
+      "path": "sprites/masked_orc_idle_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.masked.orc.idle.anim.f2": {
+      "path": "sprites/masked_orc_idle_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.masked.orc.idle.anim.f3": {
+      "path": "sprites/masked_orc_idle_anim_f3.png",
+      "kind": "image"
+    },
+    "sprite.masked.orc.run.anim.f0": {
+      "path": "sprites/masked_orc_run_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.masked.orc.run.anim.f1": {
+      "path": "sprites/masked_orc_run_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.masked.orc.run.anim.f2": {
+      "path": "sprites/masked_orc_run_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.masked.orc.run.anim.f3": {
+      "path": "sprites/masked_orc_run_anim_f3.png",
+      "kind": "image"
+    },
+    "sprite.muddy.anim.f0": {
+      "path": "sprites/muddy_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.muddy.anim.f1": {
+      "path": "sprites/muddy_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.muddy.anim.f2": {
+      "path": "sprites/muddy_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.muddy.anim.f3": {
+      "path": "sprites/muddy_anim_f3.png",
+      "kind": "image"
+    },
+    "sprite.necromancer.anim.f0": {
+      "path": "sprites/necromancer_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.necromancer.anim.f1": {
+      "path": "sprites/necromancer_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.necromancer.anim.f2": {
+      "path": "sprites/necromancer_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.necromancer.anim.f3": {
+      "path": "sprites/necromancer_anim_f3.png",
+      "kind": "image"
+    },
+    "sprite.ogre.idle.anim.f0": {
+      "path": "sprites/ogre_idle_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.ogre.idle.anim.f1": {
+      "path": "sprites/ogre_idle_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.ogre.idle.anim.f2": {
+      "path": "sprites/ogre_idle_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.ogre.idle.anim.f3": {
+      "path": "sprites/ogre_idle_anim_f3.png",
+      "kind": "image"
+    },
+    "sprite.ogre.run.anim.f0": {
+      "path": "sprites/ogre_run_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.ogre.run.anim.f1": {
+      "path": "sprites/ogre_run_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.ogre.run.anim.f2": {
+      "path": "sprites/ogre_run_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.ogre.run.anim.f3": {
+      "path": "sprites/ogre_run_anim_f3.png",
+      "kind": "image"
+    },
+    "sprite.orc.shaman.idle.anim.f0": {
+      "path": "sprites/orc_shaman_idle_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.orc.shaman.idle.anim.f1": {
+      "path": "sprites/orc_shaman_idle_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.orc.shaman.idle.anim.f2": {
+      "path": "sprites/orc_shaman_idle_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.orc.shaman.idle.anim.f3": {
+      "path": "sprites/orc_shaman_idle_anim_f3.png",
+      "kind": "image"
+    },
+    "sprite.orc.shaman.run.anim.f0": {
+      "path": "sprites/orc_shaman_run_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.orc.shaman.run.anim.f1": {
+      "path": "sprites/orc_shaman_run_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.orc.shaman.run.anim.f2": {
+      "path": "sprites/orc_shaman_run_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.orc.shaman.run.anim.f3": {
+      "path": "sprites/orc_shaman_run_anim_f3.png",
+      "kind": "image"
+    },
+    "sprite.orc.warrior.idle.anim.f0": {
+      "path": "sprites/orc_warrior_idle_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.orc.warrior.idle.anim.f1": {
+      "path": "sprites/orc_warrior_idle_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.orc.warrior.idle.anim.f2": {
+      "path": "sprites/orc_warrior_idle_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.orc.warrior.idle.anim.f3": {
+      "path": "sprites/orc_warrior_idle_anim_f3.png",
+      "kind": "image"
+    },
+    "sprite.orc.warrior.run.anim.f0": {
+      "path": "sprites/orc_warrior_run_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.orc.warrior.run.anim.f1": {
+      "path": "sprites/orc_warrior_run_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.orc.warrior.run.anim.f2": {
+      "path": "sprites/orc_warrior_run_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.orc.warrior.run.anim.f3": {
+      "path": "sprites/orc_warrior_run_anim_f3.png",
+      "kind": "image"
+    },
+    "sprite.pumpkin.dude.idle.anim.f0": {
+      "path": "sprites/pumpkin_dude_idle_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.pumpkin.dude.idle.anim.f1": {
+      "path": "sprites/pumpkin_dude_idle_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.pumpkin.dude.idle.anim.f2": {
+      "path": "sprites/pumpkin_dude_idle_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.pumpkin.dude.idle.anim.f3": {
+      "path": "sprites/pumpkin_dude_idle_anim_f3.png",
+      "kind": "image"
+    },
+    "sprite.pumpkin.dude.run.anim.f0": {
+      "path": "sprites/pumpkin_dude_run_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.pumpkin.dude.run.anim.f1": {
+      "path": "sprites/pumpkin_dude_run_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.pumpkin.dude.run.anim.f2": {
+      "path": "sprites/pumpkin_dude_run_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.pumpkin.dude.run.anim.f3": {
+      "path": "sprites/pumpkin_dude_run_anim_f3.png",
+      "kind": "image"
+    },
+    "sprite.skelet.idle.anim.f0": {
+      "path": "sprites/skelet_idle_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.skelet.idle.anim.f1": {
+      "path": "sprites/skelet_idle_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.skelet.idle.anim.f2": {
+      "path": "sprites/skelet_idle_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.skelet.idle.anim.f3": {
+      "path": "sprites/skelet_idle_anim_f3.png",
+      "kind": "image"
+    },
+    "sprite.skelet.run.anim.f0": {
+      "path": "sprites/skelet_run_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.skelet.run.anim.f1": {
+      "path": "sprites/skelet_run_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.skelet.run.anim.f2": {
+      "path": "sprites/skelet_run_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.skelet.run.anim.f3": {
+      "path": "sprites/skelet_run_anim_f3.png",
+      "kind": "image"
+    },
+    "sprite.skull": {
+      "path": "sprites/skull.png",
+      "kind": "image"
+    },
+    "sprite.slug.anim.f0": {
+      "path": "sprites/slug_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.slug.anim.f1": {
+      "path": "sprites/slug_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.slug.anim.f2": {
+      "path": "sprites/slug_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.slug.anim.f3": {
+      "path": "sprites/slug_anim_f3.png",
+      "kind": "image"
+    },
+    "sprite.swampy.anim.f0": {
+      "path": "sprites/swampy_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.swampy.anim.f1": {
+      "path": "sprites/swampy_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.swampy.anim.f2": {
+      "path": "sprites/swampy_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.swampy.anim.f3": {
+      "path": "sprites/swampy_anim_f3.png",
+      "kind": "image"
+    },
+    "sprite.tiny.slug.anim.f0": {
+      "path": "sprites/tiny_slug_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.tiny.slug.anim.f1": {
+      "path": "sprites/tiny_slug_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.tiny.slug.anim.f2": {
+      "path": "sprites/tiny_slug_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.tiny.slug.anim.f3": {
+      "path": "sprites/tiny_slug_anim_f3.png",
+      "kind": "image"
+    },
+    "sprite.tiny.zombie.idle.anim.f0": {
+      "path": "sprites/tiny_zombie_idle_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.tiny.zombie.idle.anim.f1": {
+      "path": "sprites/tiny_zombie_idle_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.tiny.zombie.idle.anim.f2": {
+      "path": "sprites/tiny_zombie_idle_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.tiny.zombie.idle.anim.f3": {
+      "path": "sprites/tiny_zombie_idle_anim_f3.png",
+      "kind": "image"
+    },
+    "sprite.tiny.zombie.run.anim.f0": {
+      "path": "sprites/tiny_zombie_run_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.tiny.zombie.run.anim.f1": {
+      "path": "sprites/tiny_zombie_run_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.tiny.zombie.run.anim.f2": {
+      "path": "sprites/tiny_zombie_run_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.tiny.zombie.run.anim.f3": {
+      "path": "sprites/tiny_zombie_run_anim_f3.png",
+      "kind": "image"
+    },
+    "sprite.ui.heart.empty": {
+      "path": "sprites/ui_heart_empty.png",
+      "kind": "image"
+    },
+    "sprite.ui.heart.full": {
+      "path": "sprites/ui_heart_full.png",
+      "kind": "image"
+    },
+    "sprite.ui.heart.half": {
+      "path": "sprites/ui_heart_half.png",
+      "kind": "image"
+    },
+    "sprite.wall.banner.blue": {
+      "path": "sprites/wall_banner_blue.png",
+      "kind": "image"
+    },
+    "sprite.wall.banner.green": {
+      "path": "sprites/wall_banner_green.png",
+      "kind": "image"
+    },
+    "sprite.wall.banner.red": {
+      "path": "sprites/wall_banner_red.png",
+      "kind": "image"
+    },
+    "sprite.wall.banner.yellow": {
+      "path": "sprites/wall_banner_yellow.png",
+      "kind": "image"
+    },
+    "sprite.wall.edge.bottom.left": {
+      "path": "sprites/wall_edge_bottom_left.png",
+      "kind": "image"
+    },
+    "sprite.wall.edge.bottom.right": {
+      "path": "sprites/wall_edge_bottom_right.png",
+      "kind": "image"
+    },
+    "sprite.wall.edge.left": {
+      "path": "sprites/wall_edge_left.png",
+      "kind": "image"
+    },
+    "sprite.wall.edge.mid.left": {
+      "path": "sprites/wall_edge_mid_left.png",
+      "kind": "image"
+    },
+    "sprite.wall.edge.mid.right": {
+      "path": "sprites/wall_edge_mid_right.png",
+      "kind": "image"
+    },
+    "sprite.wall.edge.right": {
+      "path": "sprites/wall_edge_right.png",
+      "kind": "image"
+    },
+    "sprite.wall.edge.top.left": {
+      "path": "sprites/wall_edge_top_left.png",
+      "kind": "image"
+    },
+    "sprite.wall.edge.top.right": {
+      "path": "sprites/wall_edge_top_right.png",
+      "kind": "image"
+    },
+    "sprite.wall.edge.tshape.bottom.left": {
+      "path": "sprites/wall_edge_tshape_bottom_left.png",
+      "kind": "image"
+    },
+    "sprite.wall.edge.tshape.bottom.right": {
+      "path": "sprites/wall_edge_tshape_bottom_right.png",
+      "kind": "image"
+    },
+    "sprite.wall.edge.tshape.left": {
+      "path": "sprites/wall_edge_tshape_left.png",
+      "kind": "image"
+    },
+    "sprite.wall.edge.tshape.right": {
+      "path": "sprites/wall_edge_tshape_right.png",
+      "kind": "image"
+    },
+    "sprite.wall.fountain.basin.blue.anim.f0": {
+      "path": "sprites/wall_fountain_basin_blue_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.wall.fountain.basin.blue.anim.f1": {
+      "path": "sprites/wall_fountain_basin_blue_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.wall.fountain.basin.blue.anim.f2": {
+      "path": "sprites/wall_fountain_basin_blue_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.wall.fountain.basin.red.anim.f0": {
+      "path": "sprites/wall_fountain_basin_red_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.wall.fountain.basin.red.anim.f1": {
+      "path": "sprites/wall_fountain_basin_red_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.wall.fountain.basin.red.anim.f2": {
+      "path": "sprites/wall_fountain_basin_red_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.wall.fountain.mid.blue.anim.f0": {
+      "path": "sprites/wall_fountain_mid_blue_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.wall.fountain.mid.blue.anim.f1": {
+      "path": "sprites/wall_fountain_mid_blue_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.wall.fountain.mid.blue.anim.f2": {
+      "path": "sprites/wall_fountain_mid_blue_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.wall.fountain.mid.red.anim.f0": {
+      "path": "sprites/wall_fountain_mid_red_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.wall.fountain.mid.red.anim.f1": {
+      "path": "sprites/wall_fountain_mid_red_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.wall.fountain.mid.red.anim.f2": {
+      "path": "sprites/wall_fountain_mid_red_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.wall.fountain.top.1": {
+      "path": "sprites/wall_fountain_top_1.png",
+      "kind": "image"
+    },
+    "sprite.wall.fountain.top.2": {
+      "path": "sprites/wall_fountain_top_2.png",
+      "kind": "image"
+    },
+    "sprite.wall.fountain.top.3": {
+      "path": "sprites/wall_fountain_top_3.png",
+      "kind": "image"
+    },
+    "sprite.wall.goo.base": {
+      "path": "sprites/wall_goo_base.png",
+      "kind": "image"
+    },
+    "sprite.wall.goo": {
+      "path": "sprites/wall_goo.png",
+      "kind": "image"
+    },
+    "sprite.wall.hole.1": {
+      "path": "sprites/wall_hole_1.png",
+      "kind": "image"
+    },
+    "sprite.wall.hole.2": {
+      "path": "sprites/wall_hole_2.png",
+      "kind": "image"
+    },
+    "sprite.wall.left": {
+      "path": "sprites/wall_left.png",
+      "kind": "image"
+    },
+    "sprite.wall.mid": {
+      "path": "sprites/wall_mid.png",
+      "kind": "image"
+    },
+    "sprite.wall.outer.front.left": {
+      "path": "sprites/wall_outer_front_left.png",
+      "kind": "image"
+    },
+    "sprite.wall.outer.front.right": {
+      "path": "sprites/wall_outer_front_right.png",
+      "kind": "image"
+    },
+    "sprite.wall.outer.mid.left": {
+      "path": "sprites/wall_outer_mid_left.png",
+      "kind": "image"
+    },
+    "sprite.wall.outer.mid.right": {
+      "path": "sprites/wall_outer_mid_right.png",
+      "kind": "image"
+    },
+    "sprite.wall.outer.top.left": {
+      "path": "sprites/wall_outer_top_left.png",
+      "kind": "image"
+    },
+    "sprite.wall.outer.top.right": {
+      "path": "sprites/wall_outer_top_right.png",
+      "kind": "image"
+    },
+    "sprite.wall.right": {
+      "path": "sprites/wall_right.png",
+      "kind": "image"
+    },
+    "sprite.wall.top.left": {
+      "path": "sprites/wall_top_left.png",
+      "kind": "image"
+    },
+    "sprite.wall.top.mid": {
+      "path": "sprites/wall_top_mid.png",
+      "kind": "image"
+    },
+    "sprite.wall.top.right": {
+      "path": "sprites/wall_top_right.png",
+      "kind": "image"
+    },
+    "sprite.weapon.anime.sword": {
+      "path": "sprites/weapon_anime_sword.png",
+      "kind": "image"
+    },
+    "sprite.weapon.arrow": {
+      "path": "sprites/weapon_arrow.png",
+      "kind": "image"
+    },
+    "sprite.weapon.axe": {
+      "path": "sprites/weapon_axe.png",
+      "kind": "image"
+    },
+    "sprite.weapon.baton.with.spikes": {
+      "path": "sprites/weapon_baton_with_spikes.png",
+      "kind": "image"
+    },
+    "sprite.weapon.big.hammer": {
+      "path": "sprites/weapon_big_hammer.png",
+      "kind": "image"
+    },
+    "sprite.weapon.bow.2": {
+      "path": "sprites/weapon_bow_2.png",
+      "kind": "image"
+    },
+    "sprite.weapon.bow": {
+      "path": "sprites/weapon_bow.png",
+      "kind": "image"
+    },
+    "sprite.weapon.cleaver": {
+      "path": "sprites/weapon_cleaver.png",
+      "kind": "image"
+    },
+    "sprite.weapon.double.axe": {
+      "path": "sprites/weapon_double_axe.png",
+      "kind": "image"
+    },
+    "sprite.weapon.duel.sword": {
+      "path": "sprites/weapon_duel_sword.png",
+      "kind": "image"
+    },
+    "sprite.weapon.golden.sword": {
+      "path": "sprites/weapon_golden_sword.png",
+      "kind": "image"
+    },
+    "sprite.weapon.green.magic.staff": {
+      "path": "sprites/weapon_green_magic_staff.png",
+      "kind": "image"
+    },
+    "sprite.weapon.hammer": {
+      "path": "sprites/weapon_hammer.png",
+      "kind": "image"
+    },
+    "sprite.weapon.katana": {
+      "path": "sprites/weapon_katana.png",
+      "kind": "image"
+    },
+    "sprite.weapon.knife": {
+      "path": "sprites/weapon_knife.png",
+      "kind": "image"
+    },
+    "sprite.weapon.knight.sword": {
+      "path": "sprites/weapon_knight_sword.png",
+      "kind": "image"
+    },
+    "sprite.weapon.lavish.sword": {
+      "path": "sprites/weapon_lavish_sword.png",
+      "kind": "image"
+    },
+    "sprite.weapon.mace": {
+      "path": "sprites/weapon_mace.png",
+      "kind": "image"
+    },
+    "sprite.weapon.machete": {
+      "path": "sprites/weapon_machete.png",
+      "kind": "image"
+    },
+    "sprite.weapon.red.gem.sword": {
+      "path": "sprites/weapon_red_gem_sword.png",
+      "kind": "image"
+    },
+    "sprite.weapon.red.magic.staff": {
+      "path": "sprites/weapon_red_magic_staff.png",
+      "kind": "image"
+    },
+    "sprite.weapon.regular.sword": {
+      "path": "sprites/weapon_regular_sword.png",
+      "kind": "image"
+    },
+    "sprite.weapon.rusty.sword": {
+      "path": "sprites/weapon_rusty_sword.png",
+      "kind": "image"
+    },
+    "sprite.weapon.saw.sword": {
+      "path": "sprites/weapon_saw_sword.png",
+      "kind": "image"
+    },
+    "sprite.weapon.spear": {
+      "path": "sprites/weapon_spear.png",
+      "kind": "image"
+    },
+    "sprite.weapon.throwing.axe": {
+      "path": "sprites/weapon_throwing_axe.png",
+      "kind": "image"
+    },
+    "sprite.weapon.waraxe": {
+      "path": "sprites/weapon_waraxe.png",
+      "kind": "image"
+    },
+    "sprite.wizzard.f.hit.anim.f0": {
+      "path": "sprites/wizzard_f_hit_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.wizzard.f.idle.anim.f0": {
+      "path": "sprites/wizzard_f_idle_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.wizzard.f.idle.anim.f1": {
+      "path": "sprites/wizzard_f_idle_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.wizzard.f.idle.anim.f2": {
+      "path": "sprites/wizzard_f_idle_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.wizzard.f.idle.anim.f3": {
+      "path": "sprites/wizzard_f_idle_anim_f3.png",
+      "kind": "image"
+    },
+    "sprite.wizzard.f.run.anim.f0": {
+      "path": "sprites/wizzard_f_run_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.wizzard.f.run.anim.f1": {
+      "path": "sprites/wizzard_f_run_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.wizzard.f.run.anim.f2": {
+      "path": "sprites/wizzard_f_run_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.wizzard.f.run.anim.f3": {
+      "path": "sprites/wizzard_f_run_anim_f3.png",
+      "kind": "image"
+    },
+    "sprite.wizzard.m.hit.anim.f0": {
+      "path": "sprites/wizzard_m_hit_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.wizzard.m.idle.anim.f0": {
+      "path": "sprites/wizzard_m_idle_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.wizzard.m.idle.anim.f1": {
+      "path": "sprites/wizzard_m_idle_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.wizzard.m.idle.anim.f2": {
+      "path": "sprites/wizzard_m_idle_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.wizzard.m.idle.anim.f3": {
+      "path": "sprites/wizzard_m_idle_anim_f3.png",
+      "kind": "image"
+    },
+    "sprite.wizzard.m.run.anim.f0": {
+      "path": "sprites/wizzard_m_run_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.wizzard.m.run.anim.f1": {
+      "path": "sprites/wizzard_m_run_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.wizzard.m.run.anim.f2": {
+      "path": "sprites/wizzard_m_run_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.wizzard.m.run.anim.f3": {
+      "path": "sprites/wizzard_m_run_anim_f3.png",
+      "kind": "image"
+    },
+    "sprite.wogol.idle.anim.f0": {
+      "path": "sprites/wogol_idle_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.wogol.idle.anim.f1": {
+      "path": "sprites/wogol_idle_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.wogol.idle.anim.f2": {
+      "path": "sprites/wogol_idle_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.wogol.idle.anim.f3": {
+      "path": "sprites/wogol_idle_anim_f3.png",
+      "kind": "image"
+    },
+    "sprite.wogol.run.anim.f0": {
+      "path": "sprites/wogol_run_anim_f0.png",
+      "kind": "image"
+    },
+    "sprite.wogol.run.anim.f1": {
+      "path": "sprites/wogol_run_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.wogol.run.anim.f2": {
+      "path": "sprites/wogol_run_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.wogol.run.anim.f3": {
+      "path": "sprites/wogol_run_anim_f3.png",
+      "kind": "image"
+    },
+    "sprite.zombie.anim.f1": {
+      "path": "sprites/zombie_anim_f1.png",
+      "kind": "image"
+    },
+    "sprite.zombie.anim.f10": {
+      "path": "sprites/zombie_anim_f10.png",
+      "kind": "image"
+    },
+    "sprite.zombie.anim.f2": {
+      "path": "sprites/zombie_anim_f2.png",
+      "kind": "image"
+    },
+    "sprite.zombie.anim.f3": {
+      "path": "sprites/zombie_anim_f3.png",
+      "kind": "image"
+    },
+    "tile.0x72.dungeontilesetii.v1.7": {
+      "path": "tiles/0x72_DungeonTilesetII_v1.7.png",
+      "kind": "image"
+    },
+    "tile.atlas.walls.high.16x32": {
+      "path": "tiles/atlas_walls_high-16x32.png",
+      "kind": "image"
+    },
+    "tile.atlas.walls.low.16x16": {
+      "path": "tiles/atlas_walls_low-16x16.png",
+      "kind": "image"
+    },
+    "ui.pixel.ui.pack.3.02": {
+      "path": "ui/pixel_ui_pack_3/02.png",
+      "kind": "image"
+    },
+    "ui.pixel.ui.pack.3.03": {
+      "path": "ui/pixel_ui_pack_3/03.png",
+      "kind": "image"
+    },
+    "ui.pixel.ui.pack.3.04": {
+      "path": "ui/pixel_ui_pack_3/04.png",
+      "kind": "image"
+    },
+    "ui.pixel.ui.pack.3.05": {
+      "path": "ui/pixel_ui_pack_3/05.png",
+      "kind": "image"
+    },
+    "ui.pixel.ui.pack.3.06": {
+      "path": "ui/pixel_ui_pack_3/06.png",
+      "kind": "image"
+    },
+    "ui.pixel.ui.pack.3.07": {
+      "path": "ui/pixel_ui_pack_3/07.png",
+      "kind": "image"
+    },
+    "ui.pixel.ui.pack.3.all": {
+      "path": "ui/pixel_ui_pack_3/All.png",
+      "kind": "image"
+    }
+  },
+  "skipped": {
+    "alreadyMapped": [
+      "tiles/atlas_floor-16x16.png",
+      "sprites/knight_m_idle_anim_f0.png",
+      "fx/retro_fx_pack1/01.png",
+      "ui/pixel_ui_pack_3/00.png",
+      "ui/pixel_ui_pack_3/01.png"
+    ],
+    "ignoredByPattern": [],
+    "nonImageFiles": [
+      "tiles/tile_list_v1.7",
+      "fx/retro_fx_pack1/Introl 01.gif",
+      "fx/retro_fx_pack1/Introl 03.gif",
+      "fx/retro_fx_pack2/Preview 00.gif"
+    ]
+  }
+}
