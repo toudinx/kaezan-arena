@@ -20,6 +20,7 @@ describe("ArenaPageComponent pre-run account loading", () => {
         accountId: "dev_account",
         activeCharacterId: "char_b",
         version: 1,
+        echoFragmentsBalance: 0,
         characters: {
           char_a: {
             characterId: "char_a",
@@ -32,7 +33,9 @@ describe("ArenaPageComponent pre-run account loading", () => {
               equipmentInstances: {
                 wpn_a: { instanceId: "wpn_a", definitionId: "bronze_sword", isLocked: false }
               }
-            }
+            },
+            bestiaryKillsBySpecies: {},
+            primalCoreBySpecies: {}
           },
           char_b: {
             characterId: "char_b",
@@ -45,7 +48,9 @@ describe("ArenaPageComponent pre-run account loading", () => {
               equipmentInstances: {
                 wpn_b: { instanceId: "wpn_b", definitionId: "steel_axe", isLocked: false }
               }
-            }
+            },
+            bestiaryKillsBySpecies: {},
+            primalCoreBySpecies: {}
           }
         }
       },
@@ -72,6 +77,7 @@ describe("ArenaPageComponent pre-run account loading", () => {
         accountId: "dev_account",
         activeCharacterId: "char_active",
         version: 1,
+        echoFragmentsBalance: 0,
         characters: {
           char_active: {
             characterId: "char_active",
@@ -79,7 +85,9 @@ describe("ArenaPageComponent pre-run account loading", () => {
             level: 7,
             xp: 1337,
             equipment: {},
-            inventory: { materialStacks: {}, equipmentInstances: {} }
+            inventory: { materialStacks: {}, equipmentInstances: {} },
+            bestiaryKillsBySpecies: {},
+            primalCoreBySpecies: {}
           }
         }
       },
@@ -99,6 +107,7 @@ describe("ArenaPageComponent pre-run account loading", () => {
         accountId: "dev_account",
         activeCharacterId: "",
         version: 1,
+        echoFragmentsBalance: 0,
         characters: {}
       },
       itemCatalog: [],

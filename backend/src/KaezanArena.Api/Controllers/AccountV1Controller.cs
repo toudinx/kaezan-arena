@@ -1,4 +1,5 @@
 using KaezanArena.Api.Account;
+using KaezanArena.Api.Battle;
 using KaezanArena.Api.Contracts.Account;
 using KaezanArena.Api.Contracts.Common;
 using Microsoft.AspNetCore.Mvc;
@@ -11,10 +12,12 @@ public sealed class AccountV1Controller : ControllerBase
 {
     private const int MaxAwardSourcesPerRequest = 50;
     private readonly IAccountStateStore _accountStateStore;
+    private readonly IBattleStore _battleStore;
 
-    public AccountV1Controller(IAccountStateStore accountStateStore)
+    public AccountV1Controller(IAccountStateStore accountStateStore, IBattleStore battleStore)
     {
         _accountStateStore = accountStateStore;
+        _battleStore = battleStore;
     }
 
     [HttpGet("state")]
@@ -33,6 +36,29 @@ public sealed class AccountV1Controller : ControllerBase
                 .OrderBy(definition => definition.ItemId, StringComparer.Ordinal)
                 .Select(ToEquipmentDefinitionDto)
                 .ToList()));
+    }
+
+    [HttpGet("bestiary")]
+    public ActionResult<BestiaryOverviewResponseDto> GetBestiary([FromQuery] string? accountId)
+    {
+        var normalizedAccountId = string.IsNullOrWhiteSpace(accountId) ? "dev_account" : accountId.Trim();
+        var account = _accountStateStore.GetAccountState(normalizedAccountId);
+        if (!account.Characters.TryGetValue(account.ActiveCharacterId, out var character))
+        {
+            return BadRequest(BuildValidationError($"activeCharacterId '{account.ActiveCharacterId}' not found for account"));
+        }
+
+        return Ok(new BestiaryOverviewResponseDto(
+            SpeciesCatalog: AccountCatalog.SpeciesDefinitions
+                .Select(definition => new BestiarySpeciesDto(
+                    SpeciesId: definition.SpeciesId,
+                    DisplayName: definition.DisplayName))
+                .ToList(),
+            Character: new CharacterBestiaryStateDto(
+                CharacterId: character.CharacterId,
+                Name: character.Name,
+                BestiaryKillsBySpecies: ToSortedSpeciesCount(character.BestiaryKillsBySpecies),
+                PrimalCoreBySpecies: ToSortedSpeciesCount(character.PrimalCoreBySpecies))));
     }
 
     [HttpPost("active-character")]
@@ -195,11 +221,19 @@ public sealed class AccountV1Controller : ControllerBase
 
         try
         {
+            var normalizedBattleId = request.BattleId.Trim();
+            int? battleSeed = null;
+            if (_battleStore.TryGetBattleSeed(normalizedBattleId, out var resolvedBattleSeed))
+            {
+                battleSeed = resolvedBattleSeed;
+            }
+
             var result = _accountStateStore.AwardDrops(
                 accountId: request.AccountId.Trim(),
                 characterId: request.CharacterId.Trim(),
-                battleId: request.BattleId.Trim(),
-                sources: parsedSources);
+                battleId: normalizedBattleId,
+                sources: parsedSources,
+                battleSeed: battleSeed);
 
             return Ok(new AwardDropsResponseDto(
                 Awarded: result.Awarded
@@ -233,6 +267,7 @@ public sealed class AccountV1Controller : ControllerBase
             AccountId: account.AccountId,
             ActiveCharacterId: account.ActiveCharacterId,
             Version: account.Version,
+            EchoFragmentsBalance: account.EchoFragmentsBalance,
             Characters: characters);
     }
 
@@ -247,10 +282,7 @@ public sealed class AccountV1Controller : ControllerBase
         var equipmentInstances = new SortedDictionary<string, OwnedEquipmentInstanceDto>(StringComparer.Ordinal);
         foreach (var (instanceId, instance) in character.Inventory.EquipmentInstances.OrderBy(entry => entry.Key, StringComparer.Ordinal))
         {
-            equipmentInstances[instanceId] = new OwnedEquipmentInstanceDto(
-                InstanceId: instance.InstanceId,
-                DefinitionId: instance.DefinitionId,
-                IsLocked: instance.IsLocked);
+            equipmentInstances[instanceId] = ToOwnedEquipmentInstanceDto(instance);
         }
 
         return new CharacterStateDto(
@@ -264,7 +296,20 @@ public sealed class AccountV1Controller : ControllerBase
             Equipment: new CharacterEquipmentDto(
                 WeaponInstanceId: character.Equipment.WeaponInstanceId,
                 ArmorInstanceId: character.Equipment.ArmorInstanceId,
-                RelicInstanceId: character.Equipment.RelicInstanceId));
+                RelicInstanceId: character.Equipment.RelicInstanceId),
+            BestiaryKillsBySpecies: ToSortedSpeciesCount(character.BestiaryKillsBySpecies),
+            PrimalCoreBySpecies: ToSortedSpeciesCount(character.PrimalCoreBySpecies));
+    }
+
+    private static IReadOnlyDictionary<string, int> ToSortedSpeciesCount(IReadOnlyDictionary<string, int> source)
+    {
+        var sorted = new SortedDictionary<string, int>(StringComparer.Ordinal);
+        foreach (var (species, value) in source.OrderBy(entry => entry.Key, StringComparer.Ordinal))
+        {
+            sorted[species] = value;
+        }
+
+        return sorted;
     }
 
     private static ItemDefinitionDto ToItemDefinitionDto(ItemDefinition definition)
@@ -306,6 +351,19 @@ public sealed class AccountV1Controller : ControllerBase
             ItemId: dropEvent.ItemId,
             Quantity: dropEvent.Quantity,
             EquipmentInstanceId: dropEvent.EquipmentInstanceId,
+            RewardKind: dropEvent.RewardKind,
+            Species: dropEvent.Species,
             AwardedAtUtc: dropEvent.AwardedAtUtc);
+    }
+
+    private static OwnedEquipmentInstanceDto ToOwnedEquipmentInstanceDto(OwnedEquipmentInstance instance)
+    {
+        return new OwnedEquipmentInstanceDto(
+            InstanceId: instance.InstanceId,
+            DefinitionId: instance.DefinitionId,
+            IsLocked: instance.IsLocked,
+            OriginSpeciesId: instance.OriginSpeciesId,
+            Slot: instance.Slot,
+            Rarity: instance.Rarity);
     }
 }

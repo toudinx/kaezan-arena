@@ -28,14 +28,16 @@ export class BackpackWindowComponent implements OnChanges, OnDestroy {
   @Input() itemCatalogById: Readonly<Record<string, ItemDefinition>> = {};
   @Input() equipmentCatalogByItemId: Readonly<Record<string, EquipmentDefinition>> = {};
   @Input() equipInFlight = false;
+  @Input() salvageInFlight = false;
   @Input() highlightItemId: string | null = null;
   @Input() highlightRequestId = 0;
   @Input() forcedFilter: BackpackFilter | null = null;
   @Input() weaponFilterMode = false;
 
   @Output() readonly equipRequested = new EventEmitter<string>();
+  @Output() readonly salvageRequested = new EventEmitter<string>();
 
-  readonly filters: ReadonlyArray<BackpackFilter> = ["all", "materials", "weapons"];
+  readonly filters: ReadonlyArray<BackpackFilter> = ["all", "weapons", "armor", "relics"];
   selectedFilter: BackpackFilter = "all";
   selectedSlotId: string | null = null;
   inspectSlotId: string | null = null;
@@ -108,9 +110,7 @@ export class BackpackWindowComponent implements OnChanges, OnDestroy {
     if (
       this.weaponFilterMode &&
       slot &&
-      slot.kind === "equipment" &&
       slot.isWeapon &&
-      !!slot.instanceId &&
       !slot.isEquipped &&
       !this.equipInFlight
     ) {
@@ -151,7 +151,7 @@ export class BackpackWindowComponent implements OnChanges, OnDestroy {
     }
 
     if (action === "equip") {
-      if (slot.kind === "equipment" && slot.isWeapon && !!slot.instanceId && !slot.isEquipped && !this.equipInFlight) {
+      if (slot.isWeapon && !slot.isEquipped && !this.equipInFlight) {
         this.equipRequested.emit(slot.instanceId);
       }
       this.closeContextMenu();
@@ -183,7 +183,38 @@ export class BackpackWindowComponent implements OnChanges, OnDestroy {
   }
 
   canEquip(slot: BackpackSlot | null): boolean {
-    return !!slot && slot.kind === "equipment" && slot.isWeapon && !!slot.instanceId && !slot.isEquipped && !this.equipInFlight;
+    return !!slot && slot.isWeapon && !slot.isEquipped && !this.equipInFlight;
+  }
+
+  canSalvage(slot: BackpackSlot | null): boolean {
+    return !!slot &&
+      !!slot.originSpeciesId &&
+      this.resolveSalvagePrimalCoreReturn(slot.rarity) !== null;
+  }
+
+  getSelectedSlotSalvagePrimalCoreReturn(): number | null {
+    return this.resolveSalvagePrimalCoreReturn(this.selectedSlot?.rarity);
+  }
+
+  onSalvageSelectedSlot(): void {
+    const slot = this.selectedSlot;
+    if (!this.canSalvage(slot) || !slot?.instanceId) {
+      return;
+    }
+
+    const returnAmount = this.resolveSalvagePrimalCoreReturn(slot.rarity);
+    if (returnAmount === null) {
+      return;
+    }
+
+    const shouldProceed = typeof window === "undefined"
+      ? true
+      : window.confirm(`Salvage ${slot.displayName}? You will receive ${returnAmount} Primal Core.`);
+    if (!shouldProceed) {
+      return;
+    }
+
+    this.salvageRequested.emit(slot.instanceId);
   }
 
   isSlotPulsing(slotId: string): boolean {
@@ -258,5 +289,26 @@ export class BackpackWindowComponent implements OnChanges, OnDestroy {
     }
 
     this.pulsingSlotIds = nextPulsing;
+  }
+
+  private resolveSalvagePrimalCoreReturn(rarity: string | null | undefined): number | null {
+    const normalizedRarity = (rarity ?? "").trim().toLowerCase();
+    if (normalizedRarity === "common") {
+      return 12;
+    }
+
+    if (normalizedRarity === "rare") {
+      return 28;
+    }
+
+    if (normalizedRarity === "epic") {
+      return 96;
+    }
+
+    if (normalizedRarity === "legendary") {
+      return 250;
+    }
+
+    return null;
   }
 }

@@ -80,12 +80,24 @@
   image-rendering: pixelated;
 }
 
-.backpack__slot--material .backpack__icon {
-  color: #86efac;
-}
-
 .backpack__slot--weapon .backpack__icon {
   color: #93c5fd;
+}
+
+.backpack__slot--common {
+  border-color: #9ca3af;
+}
+
+.backpack__slot--rare {
+  border-color: #3b82f6;
+}
+
+.backpack__slot--epic {
+  border-color: #a855f7;
+}
+
+.backpack__slot--legendary {
+  border-color: #facc15;
 }
 
 .backpack__slot--selected {
@@ -95,6 +107,11 @@
 
 .backpack__slot--equipped {
   border-color: #22c55e;
+}
+
+.backpack__slot--ascendant {
+  border-color: #ef4444;
+  box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.45) inset;
 }
 
 .backpack__slot--pulse {
@@ -145,6 +162,27 @@
   border-radius: 0.28rem;
   background: rgba(2, 6, 23, 0.88);
   font-size: 0.72rem;
+}
+
+.backpack__tooltip-actions {
+  margin-top: 0.18rem;
+  display: flex;
+}
+
+.backpack__tooltip-actions button {
+  border: 1px solid #16a34a;
+  border-radius: 0.22rem;
+  background: linear-gradient(180deg, #14532d 0%, #052e16 100%);
+  color: #dcfce7;
+  font-size: 0.68rem;
+  line-height: 1;
+  padding: 0.32rem 0.44rem;
+  cursor: pointer;
+}
+
+.backpack__tooltip-actions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .backpack__context-menu {

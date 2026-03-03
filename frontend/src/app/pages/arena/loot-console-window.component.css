@@ -66,6 +66,10 @@
   text-decoration-color: rgba(148, 163, 184, 0.45);
 }
 
+.loot-console__item-text {
+  font: inherit;
+}
+
 .loot-console__item-link--common {
   color: #cbd5e1;
 }
@@ -76,6 +80,19 @@
 
 .loot-console__item-link--epic {
   color: #c4b5fd;
+}
+
+.loot-console__item-link--legendary {
+  color: #fbbf24;
+}
+
+.loot-console__item-link--ascendant {
+  color: #fecaca;
+  background: rgba(153, 27, 27, 0.28);
+  border: 1px solid #ef4444;
+  border-radius: 0.2rem;
+  padding: 0.02rem 0.16rem;
+  text-shadow: 0 0 7px rgba(239, 68, 68, 0.7);
 }
 
 .loot-console__item-link--other {

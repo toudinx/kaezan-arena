@@ -133,11 +133,13 @@
               [itemCatalogById]="itemCatalogByIdForUi"
               [equipmentCatalogByItemId]="equipmentCatalogByItemIdForUi"
               [equipInFlight]="accountRequestInFlight"
+              [salvageInFlight]="accountRequestInFlight"
               [highlightItemId]="backpackHighlightItemId"
               [highlightRequestId]="backpackHighlightRequestId"
               [forcedFilter]="backpackForcedFilter"
               [weaponFilterMode]="backpackWeaponFilterMode"
               (equipRequested)="onBackpackEquipRequested($event)"
+              (salvageRequested)="onBackpackSalvageRequested($event)"
             ></app-backpack-window>
           </div>
         </section>
@@ -194,9 +196,26 @@
             } @else if (selectedRightInfoTab === "bestiary") {
               <div class="pane-module pane-module--placeholder">
                 <h3>Bestiary</h3>
-                <p>Soon.</p>
+                @if (selectedCharacterBestiaryRows.length === 0) {
+                  <p>No species tracked yet.</p>
+                } @else {
+                  <div class="bestiary-v1-list">
+                    <div class="bestiary-v1-row bestiary-v1-row--header">
+                      <span>Species</span>
+                      <span>Kills</span>
+                      <span>Primal Core</span>
+                    </div>
+                    @for (row of selectedCharacterBestiaryRows; track row.species) {
+                      <div class="bestiary-v1-row">
+                        <span>{{ formatSpeciesLabel(row.species) }}</span>
+                        <strong>{{ row.kills }}</strong>
+                        <strong>{{ row.primalCore }}</strong>
+                      </div>
+                    }
+                  </div>
+                }
                 @if (bestiaryFocusEntry) {
-                  <p>
+                  <p class="bestiary-v1-focus">
                     Focus: {{ formatSpeciesLabel(bestiaryFocusEntry.species) }}
                     ({{ bestiaryFocusEntry.killsTotal }}/{{ bestiaryFocusEntry.nextChestAtKills }})
                   </p>

@@ -11,6 +11,8 @@ public sealed record DropEventDto(
     string ItemId,
     int Quantity,
     string? EquipmentInstanceId,
+    string RewardKind,
+    string? Species,
     DateTimeOffset AwardedAtUtc);
 
 public sealed record DropSourceDto(

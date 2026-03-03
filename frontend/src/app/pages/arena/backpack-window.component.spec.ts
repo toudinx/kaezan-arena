@@ -31,20 +31,20 @@ describe("BackpackWindowComponent", () => {
         weaponInstanceId: null
       },
       inventory: {
-        materialStacks: {
-          herb: 14
-        },
+        materialStacks: {},
         equipmentInstances: {
           "wpn-01": {
             instanceId: "wpn-01",
             definitionId: "blade_alpha",
-            isLocked: false
+            isLocked: false,
+            originSpeciesId: "melee_brute"
           }
         }
-      }
+      },
+      bestiaryKillsBySpecies: {},
+      primalCoreBySpecies: {}
     };
     const itemCatalogById: Record<string, ItemDefinition> = {
-      herb: { itemId: "herb", displayName: "Herb", kind: "material", stackable: true, rarity: "common" },
       blade_alpha: { itemId: "blade_alpha", displayName: "Axe of Dawn", kind: "equipment", stackable: false, rarity: "epic" }
     };
     const equipmentCatalogByItemId: Record<string, EquipmentDefinition> = {
@@ -79,17 +79,17 @@ describe("BackpackWindowComponent", () => {
   it("inspect action opens inspect popup for selected slot", () => {
     const component = createComponent();
     assignInventoryInputs(component);
-    const materialSlot = component.allSlots.find((slot) => slot.kind === "material");
-    expect(materialSlot).toBeTruthy();
+    const equipmentSlot = component.allSlots.find((slot) => slot.instanceId === "wpn-01");
+    expect(equipmentSlot).toBeTruthy();
 
-    component.selectSlot(materialSlot!.slotId);
+    component.selectSlot(equipmentSlot!.slotId);
     component.onSlotContextMenu(
-      materialSlot!,
+      equipmentSlot!,
       new MouseEvent("contextmenu", { clientX: 150, clientY: 120, bubbles: true })
     );
     component.onContextMenuAction("inspect");
 
-    expect(component.inspectSlotId).toBe(materialSlot!.slotId);
+    expect(component.inspectSlotId).toBe(equipmentSlot!.slotId);
     expect(component.contextMenu).toBeNull();
   });
 
@@ -106,5 +106,44 @@ describe("BackpackWindowComponent", () => {
     component.selectSlot(weaponSlot!.slotId);
 
     expect(emitted).toEqual(["wpn-01"]);
+  });
+
+  it("exposes only equipment filters and no Materials tab", () => {
+    const component = createComponent();
+
+    expect(component.filters).toEqual(["all", "weapons", "armor", "relics"]);
+    expect(component.filters.includes("materials" as never)).toBe(false);
+  });
+
+  it("salvage action emits salvageRequested after confirmation", () => {
+    const component = createComponent();
+    assignInventoryInputs(component);
+    const emitted: string[] = [];
+    component.salvageRequested.subscribe((instanceId) => emitted.push(instanceId));
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+
+    const weaponSlot = component.allSlots.find((slot) => slot.kind === "equipment" && slot.instanceId === "wpn-01");
+    expect(weaponSlot).toBeTruthy();
+    component.selectSlot(weaponSlot!.slotId);
+    component.onSalvageSelectedSlot();
+
+    expect(confirmSpy).toHaveBeenCalled();
+    expect(emitted).toEqual(["wpn-01"]);
+  });
+
+  it("salvage action does not emit when confirmation is canceled", () => {
+    const component = createComponent();
+    assignInventoryInputs(component);
+    const emitted: string[] = [];
+    component.salvageRequested.subscribe((instanceId) => emitted.push(instanceId));
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+
+    const weaponSlot = component.allSlots.find((slot) => slot.kind === "equipment" && slot.instanceId === "wpn-01");
+    expect(weaponSlot).toBeTruthy();
+    component.selectSlot(weaponSlot!.slotId);
+    component.onSalvageSelectedSlot();
+
+    expect(confirmSpy).toHaveBeenCalled();
+    expect(emitted).toEqual([]);
   });
 });

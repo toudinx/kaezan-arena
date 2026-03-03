@@ -1,5 +1,6 @@
 import { Routes } from '@angular/router';
 import { ArenaPageComponent } from './pages/arena/arena-page.component';
+import { BestiaryPageComponent } from './pages/bestiary/bestiary-page.component';
 import { HomePageComponent } from './pages/home/home-page.component';
 
 export const routes: Routes = [
@@ -10,6 +11,10 @@ export const routes: Routes = [
   {
     path: 'arena',
     component: ArenaPageComponent
+  },
+  {
+    path: 'bestiary',
+    component: BestiaryPageComponent
   },
   {
     path: '**',

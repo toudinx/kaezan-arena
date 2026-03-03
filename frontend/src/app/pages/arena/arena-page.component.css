@@ -565,6 +565,39 @@ canvas {
   padding: 0.24rem 0.32rem;
 }
 
+.bestiary-v1-list {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.bestiary-v1-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid #334155;
+  border-radius: 0.28rem;
+  background: #172132;
+  padding: 0.24rem 0.32rem;
+}
+
+.bestiary-v1-row--header {
+  background: #101827;
+  border-color: #3f4d62;
+  color: #93c5fd;
+  font-size: 0.66rem;
+  text-transform: uppercase;
+}
+
+.bestiary-v1-row strong {
+  font-size: 0.74rem;
+}
+
+.bestiary-v1-focus {
+  margin-top: 0.2rem;
+  color: #fbbf24;
+}
+
 .death-modal__backdrop {
   position: fixed;
   inset: 0;

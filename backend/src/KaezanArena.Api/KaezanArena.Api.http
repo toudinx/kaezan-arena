@@ -1,4 +1,4 @@
-@KaezanArena.Api_HostAddress = http://localhost:5080
+@KaezanArena.Api_HostAddress = http://localhost:5158
 
 GET {{KaezanArena.Api_HostAddress}}/health
 Accept: application/json

@@ -19,6 +19,8 @@ describe("loot-console.helpers", () => {
       itemId: "scrap_iron",
       quantity: 1,
       equipmentInstanceId: null,
+      rewardKind: "item",
+      species: null,
       awardedAtUtc: "2026-03-02T12:00:00.000Z",
       ...overrides
     };
@@ -41,12 +43,12 @@ describe("loot-console.helpers", () => {
 
     expect(lines.length).toBe(2);
     expect(lines[0].tick).toBe(106);
-    expect(lines[0].items).toEqual([
-      { itemId: "ember_core", displayName: "Ember Core", quantity: 1, rarity: "rare" },
-      { itemId: "scrap_iron", displayName: "Scrap Iron", quantity: 2, rarity: "common" }
+    expect(lines[0].items).toMatchObject([
+      { itemId: "ember_core", displayName: "Ember Core", quantity: 1, rarity: "rare", rewardKind: "item", isInventoryItem: true },
+      { itemId: "scrap_iron", displayName: "Scrap Iron", quantity: 2, rarity: "common", rewardKind: "item", isInventoryItem: true }
     ]);
-    expect(lines[1].items).toEqual([
-      { itemId: "unknown_item", displayName: "unknown_item", quantity: 3, rarity: "other" }
+    expect(lines[1].items).toMatchObject([
+      { itemId: "unknown_item", displayName: "unknown_item", quantity: 3, rarity: "other", rewardKind: "item", isInventoryItem: true }
     ]);
   });
 
@@ -106,6 +108,58 @@ describe("loot-console.helpers", () => {
 
     expect(formatLootConsoleLineText(lines[0])).toBe("Loot (mob@106): 2x Ember Core");
     expect(lootItemRarityClass(lines[0].items[0])).toBe("loot-console__item-link--epic");
+  });
+
+  it("maps ascendant rarity to dedicated highlight class", () => {
+    const lines = groupDropEventsToLootConsoleLines(
+      [createDropEvent({ tick: 201, sourceType: "mob", itemId: "wpn.ascendant_forged_blade", quantity: 1 })],
+      {
+        "wpn.ascendant_forged_blade": {
+          itemId: "wpn.ascendant_forged_blade",
+          displayName: "Ascendant Forged Blade",
+          kind: "equipment",
+          stackable: false,
+          rarity: "ascendant"
+        }
+      }
+    );
+
+    expect(lines).toHaveLength(1);
+    expect(lootItemRarityClass(lines[0].items[0])).toBe("loot-console__item-link--ascendant");
+  });
+
+  it("renders echo fragments and primal core with additive labels", () => {
+    const lines = groupDropEventsToLootConsoleLines(
+      [
+        createDropEvent({
+          dropEventId: "e1",
+          tick: 111,
+          sourceId: "mob.444",
+          itemId: "currency.echo_fragments",
+          quantity: 1,
+          rewardKind: "echo_fragments",
+          species: "melee_brute"
+        }),
+        createDropEvent({
+          dropEventId: "e2",
+          tick: 111,
+          sourceId: "mob.444",
+          itemId: "primal_core.melee_brute",
+          quantity: 1,
+          rewardKind: "primal_core",
+          species: "melee_brute"
+        })
+      ],
+      {}
+    );
+
+    expect(lines).toHaveLength(1);
+    expect(lines[0].items.map((item) => item.displayName)).toEqual([
+      "Echo Fragments",
+      "Primal Core (Melee Brute)"
+    ]);
+    expect(lines[0].items.every((item) => item.isInventoryItem === false)).toBe(true);
+    expect(formatLootConsoleLineText(lines[0])).toBe("Loot (mob@111): +1 Echo Fragments, +1 Primal Core (Melee Brute)");
   });
 
   it("autoscroll helper only sticks when near bottom", () => {

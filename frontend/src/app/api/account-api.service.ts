@@ -4,6 +4,9 @@ export interface OwnedEquipmentInstance {
   instanceId: string;
   definitionId: string;
   isLocked: boolean;
+  originSpeciesId?: string | null;
+  slot?: string | null;
+  rarity?: string | null;
 }
 
 export interface CharacterInventory {
@@ -24,12 +27,15 @@ export interface CharacterState {
   xp: number;
   inventory: CharacterInventory;
   equipment: CharacterEquipment;
+  bestiaryKillsBySpecies: Record<string, number>;
+  primalCoreBySpecies: Record<string, number>;
 }
 
 export interface AccountState {
   accountId: string;
   activeCharacterId: string;
   version: number;
+  echoFragmentsBalance: number;
   characters: Record<string, CharacterState>;
 }
 
@@ -67,6 +73,8 @@ export interface DropEvent {
   itemId: string;
   quantity: number;
   equipmentInstanceId?: string | null;
+  rewardKind: "item" | "echo_fragments" | "primal_core";
+  species?: string | null;
   awardedAtUtc: string;
 }
 
@@ -74,6 +82,45 @@ export interface AccountStateResponse {
   account: AccountState;
   itemCatalog: ItemDefinition[];
   equipmentCatalog: EquipmentDefinition[];
+}
+
+export interface BestiarySpecies {
+  speciesId: string;
+  displayName: string;
+}
+
+export interface CharacterBestiaryState {
+  characterId: string;
+  name: string;
+  bestiaryKillsBySpecies: Record<string, number>;
+  primalCoreBySpecies: Record<string, number>;
+}
+
+export interface BestiaryOverviewResponse {
+  speciesCatalog: BestiarySpecies[];
+  character: CharacterBestiaryState;
+}
+
+export type BestiaryCraftSlot = "Weapon" | "Armor" | "Relic";
+
+export interface BestiaryCraftResponse {
+  echoFragmentsBalance: number;
+  character: CharacterState;
+  craftedItem: OwnedEquipmentInstance;
+}
+
+export interface ItemRefineResponse {
+  echoFragmentsBalance: number;
+  character: CharacterState;
+  refinedItem: OwnedEquipmentInstance;
+}
+
+export interface ItemSalvageResponse {
+  echoFragmentsBalance: number;
+  character: CharacterState;
+  salvagedItemInstanceId: string;
+  speciesId: string;
+  primalCoreAwarded: number;
 }
 
 export interface AwardDropsResponse {
@@ -98,6 +145,41 @@ export class AccountApiService {
       "/api/v1/account/active-character",
       { accountId, characterId },
       "Set active character"
+    );
+  }
+
+  async getBestiaryOverview(accountId: string): Promise<BestiaryOverviewResponse> {
+    const encodedAccountId = encodeURIComponent(accountId.trim());
+    return this.getJson<BestiaryOverviewResponse>(
+      `/api/v1/account/bestiary?accountId=${encodedAccountId}`,
+      "Account bestiary"
+    );
+  }
+
+  async craftBestiaryItem(accountId: string, speciesId: string, slot: BestiaryCraftSlot): Promise<BestiaryCraftResponse> {
+    const encodedAccountId = encodeURIComponent(accountId.trim());
+    return this.postJson<{ speciesId: string; slot: BestiaryCraftSlot }, BestiaryCraftResponse>(
+      `/api/v1/bestiary/craft?accountId=${encodedAccountId}`,
+      { speciesId, slot },
+      "Bestiary craft"
+    );
+  }
+
+  async refineItem(accountId: string, itemInstanceId: string): Promise<ItemRefineResponse> {
+    const encodedAccountId = encodeURIComponent(accountId.trim());
+    return this.postJson<{ itemInstanceId: string }, ItemRefineResponse>(
+      `/api/v1/items/refine?accountId=${encodedAccountId}`,
+      { itemInstanceId },
+      "Item refine"
+    );
+  }
+
+  async salvageItem(accountId: string, itemInstanceId: string): Promise<ItemSalvageResponse> {
+    const encodedAccountId = encodeURIComponent(accountId.trim());
+    return this.postJson<{ itemInstanceId: string }, ItemSalvageResponse>(
+      `/api/v1/items/salvage?accountId=${encodedAccountId}`,
+      { itemInstanceId },
+      "Item salvage"
     );
   }
 
@@ -138,6 +220,7 @@ export class AccountApiService {
   }
 
   private async getJson<TResponse>(url: string, operationName: string): Promise<TResponse> {
+    this.warnIfAbsoluteUrl(url);
     let response: Response;
     try {
       response = await fetch(url, {
@@ -147,7 +230,9 @@ export class AccountApiService {
         }
       });
     } catch (error) {
-      throw new Error(`${operationName} failed: url=${url}; networkError=${this.stringifyError(error)}`);
+      const networkError = this.describeNetworkError(url, error);
+      this.warnIfProxyMayBeBypassed(url, error);
+      throw new Error(`${operationName} failed: url=${url}; networkError=${networkError}`);
     }
 
     return this.readJsonResponse<TResponse>(response, url, operationName);
@@ -158,6 +243,7 @@ export class AccountApiService {
     payload: TRequest,
     operationName: string
   ): Promise<TResponse> {
+    this.warnIfAbsoluteUrl(url);
     let response: Response;
     try {
       response = await fetch(url, {
@@ -169,7 +255,9 @@ export class AccountApiService {
         body: JSON.stringify(payload)
       });
     } catch (error) {
-      throw new Error(`${operationName} failed: url=${url}; networkError=${this.stringifyError(error)}`);
+      const networkError = this.describeNetworkError(url, error);
+      this.warnIfProxyMayBeBypassed(url, error);
+      throw new Error(`${operationName} failed: url=${url}; networkError=${networkError}`);
     }
 
     return this.readJsonResponse<TResponse>(response, url, operationName);
@@ -200,10 +288,56 @@ export class AccountApiService {
       return "unknown error";
     }
 
+    if (error instanceof Error) {
+      const causeMessage =
+        error.cause instanceof Error
+          ? `${error.cause.name}: ${error.cause.message}`
+          : error.cause
+            ? String(error.cause)
+            : null;
+      return causeMessage
+        ? `${error.name}: ${error.message}; cause=${causeMessage}`
+        : `${error.name}: ${error.message}`;
+    }
+
     try {
       return JSON.stringify(error);
     } catch {
       return String(error);
     }
+  }
+
+  private describeNetworkError(url: string, error: unknown): string {
+    const baseError = this.stringifyError(error);
+    const requestOrigin = typeof window !== "undefined" ? window.location.origin : "unknown";
+    return `error=${baseError}; requestOrigin=${requestOrigin}; isRelativeApiPath=${this.isRelativeApiPath(url)}`;
+  }
+
+  private warnIfAbsoluteUrl(url: string): void {
+    if (!/^https?:\/\//i.test(url)) {
+      return;
+    }
+
+    console.warn(
+      `[AccountApiService] Absolute URL detected (${url}). Use relative /api paths so Angular proxy can route requests.`
+    );
+  }
+
+  private warnIfProxyMayBeBypassed(url: string, error: unknown): void {
+    if (!this.isRelativeApiPath(url) || !this.isLikelyFetchNetworkError(error)) {
+      return;
+    }
+
+    console.warn(
+      "[AccountApiService] Relative /api request failed. Check Angular dev server proxy (--proxy-config proxy.conf.json) and backend at http://localhost:5158."
+    );
+  }
+
+  private isRelativeApiPath(url: string): boolean {
+    return /^\/api(?:\/|\?|$)/.test(url);
+  }
+
+  private isLikelyFetchNetworkError(error: unknown): boolean {
+    return error instanceof Error && /failed to fetch|network/i.test(`${error.name} ${error.message}`);
   }
 }

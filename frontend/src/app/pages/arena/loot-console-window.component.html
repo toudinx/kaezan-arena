@@ -15,9 +15,13 @@
         <p class="loot-console__line">
           <span class="loot-console__prefix">Loot ({{ formatPrefix(line) }}):</span>
           @for (item of line.items; track trackItemById($index, item); let itemIndex = $index) {
-            <button type="button" class="loot-console__item-link" [ngClass]="itemClass(item)" (click)="onItemClick(item.itemId)">
-              {{ item.quantity }}x {{ item.displayName }}
-            </button>
+            @if (item.isInventoryItem) {
+              <button type="button" class="loot-console__item-link" [ngClass]="itemClass(item)" (click)="onItemClick(item)">
+                {{ formatItemText(item) }}
+              </button>
+            } @else {
+              <span class="loot-console__item-text" [ngClass]="itemClass(item)">{{ formatItemText(item) }}</span>
+            }
             @if (itemIndex < line.items.length - 1) {
               <span>, </span>
             }

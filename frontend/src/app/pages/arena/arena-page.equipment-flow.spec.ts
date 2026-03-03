@@ -30,7 +30,9 @@ describe("ArenaPageComponent equipment flow", () => {
       inventory: {
         materialStacks: {},
         equipmentInstances
-      }
+      },
+      bestiaryKillsBySpecies: {},
+      primalCoreBySpecies: {}
     };
   }
 
@@ -53,6 +55,7 @@ describe("ArenaPageComponent equipment flow", () => {
       accountId: "dev",
       activeCharacterId: "char-1",
       version: 1,
+      echoFragmentsBalance: 0,
       characters: {
         "char-1": before
       }
@@ -77,5 +80,28 @@ describe("ArenaPageComponent equipment flow", () => {
     expect(component.selectedCharacterWeaponLabel).toBe("New Blade");
     expect(component.backpackWeaponFilterMode).toBe(false);
     expect(component.backpackForcedFilter).toBeNull();
+  });
+
+  it("resolves equipped rarity from item catalog when instance rarity is missing", () => {
+    const component = createComponent();
+    const character = createCharacter("wpn-old");
+    const accountState: AccountState = {
+      accountId: "dev",
+      activeCharacterId: "char-1",
+      version: 1,
+      echoFragmentsBalance: 0,
+      characters: {
+        "char-1": character
+      }
+    };
+
+    (component as any).accountState = accountState;
+    component.selectedCharacterId = "char-1";
+    (component as any).itemCatalogById = {
+      old_blade: { itemId: "old_blade", displayName: "Old Blade", kind: "equipment", stackable: false, rarity: "ascendant" },
+      new_blade: { itemId: "new_blade", displayName: "New Blade", kind: "equipment", stackable: false, rarity: "rare" }
+    } as Record<string, ItemDefinition>;
+
+    expect(component.selectedCharacterWeaponRarity).toBe("ascendant");
   });
 });

@@ -4,6 +4,7 @@ public sealed record AccountStateDto(
     string AccountId,
     string ActiveCharacterId,
     int Version,
+    long EchoFragmentsBalance,
     IReadOnlyDictionary<string, CharacterStateDto> Characters);
 
 public sealed record CharacterStateDto(
@@ -12,7 +13,9 @@ public sealed record CharacterStateDto(
     int Level,
     long Xp,
     CharacterInventoryDto Inventory,
-    CharacterEquipmentDto Equipment);
+    CharacterEquipmentDto Equipment,
+    IReadOnlyDictionary<string, int> BestiaryKillsBySpecies,
+    IReadOnlyDictionary<string, int> PrimalCoreBySpecies);
 
 public sealed record CharacterInventoryDto(
     IReadOnlyDictionary<string, long> MaterialStacks,
@@ -21,7 +24,10 @@ public sealed record CharacterInventoryDto(
 public sealed record OwnedEquipmentInstanceDto(
     string InstanceId,
     string DefinitionId,
-    bool IsLocked);
+    bool IsLocked,
+    string? OriginSpeciesId = null,
+    string? Slot = null,
+    string? Rarity = null);
 
 public sealed record CharacterEquipmentDto(
     string? WeaponInstanceId,

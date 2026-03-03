@@ -2,21 +2,30 @@ namespace KaezanArena.Api.Account;
 
 public static class AccountCatalog
 {
+    public static IReadOnlyList<SpeciesDefinition> SpeciesDefinitions { get; } =
+    [
+        new SpeciesDefinition("melee_brute", "Melee Brute"),
+        new SpeciesDefinition("ranged_archer", "Ranged Archer"),
+        new SpeciesDefinition("melee_demon", "Melee Demon"),
+        new SpeciesDefinition("ranged_dragon", "Ranged Dragon")
+    ];
+
     public static IReadOnlyList<ItemDefinition> ItemDefinitions { get; } =
     [
-        new ItemDefinition("mat.scrap_iron", "Scrap Iron", "material", true, "common"),
-        new ItemDefinition("mat.hardwood", "Hardwood", "material", true, "common"),
-        new ItemDefinition("mat.ember_core", "Ember Core", "material", true, "uncommon"),
-        new ItemDefinition("mat.dragon_scale", "Dragon Scale", "material", true, "uncommon"),
-        new ItemDefinition("mat.arcane_dust", "Arcane Dust", "material", true, "common"),
         new ItemDefinition("wpn.iron_blade", "Iron Blade", "equipment", false, "common"),
         new ItemDefinition("wpn.hunter_bow", "Hunter Bow", "equipment", false, "rare"),
         new ItemDefinition("wpn.ember_staff", "Ember Staff", "equipment", false, "rare"),
         new ItemDefinition("wpn.drake_fang", "Drake Fang", "equipment", false, "epic"),
+        new ItemDefinition("wpn.primal_forged_blade", "Primal Forged Blade", "equipment", false, "common"),
+        new ItemDefinition("wpn.ascendant_forged_blade", "Ascendant Forged Blade", "equipment", false, "ascendant"),
         new ItemDefinition("arm.guard_plate", "Guard Plate", "equipment", false, "common"),
         new ItemDefinition("arm.dragon_mail", "Dragon Mail", "equipment", false, "epic"),
+        new ItemDefinition("arm.primal_forged_mail", "Primal Forged Mail", "equipment", false, "common"),
+        new ItemDefinition("arm.ascendant_forged_mail", "Ascendant Forged Mail", "equipment", false, "ascendant"),
         new ItemDefinition("rel.rune_orb", "Rune Orb", "equipment", false, "rare"),
-        new ItemDefinition("rel.astral_codex", "Astral Codex", "equipment", false, "legendary")
+        new ItemDefinition("rel.astral_codex", "Astral Codex", "equipment", false, "legendary"),
+        new ItemDefinition("rel.primal_forged_emblem", "Primal Forged Emblem", "equipment", false, "common"),
+        new ItemDefinition("rel.ascendant_forged_emblem", "Ascendant Forged Emblem", "equipment", false, "ascendant")
     ];
 
     public static IReadOnlyList<EquipmentDefinition> EquipmentDefinitions { get; } =
@@ -62,6 +71,26 @@ public static class AccountCatalog
                 ["stat.attack"] = "18"
             }),
         new EquipmentDefinition(
+            "wpn.primal_forged_blade",
+            Slot: "weapon",
+            WeaponClass: "blade",
+            WeaponElement: null,
+            GameplayModifiers: new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["basic_combo"] = "cleave_short",
+                ["stat.attack"] = "10"
+            }),
+        new EquipmentDefinition(
+            "wpn.ascendant_forged_blade",
+            Slot: "weapon",
+            WeaponClass: "blade",
+            WeaponElement: "chaos",
+            GameplayModifiers: new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["basic_combo"] = "cleave_short",
+                ["stat.attack"] = "28"
+            }),
+        new EquipmentDefinition(
             "arm.guard_plate",
             Slot: "armor",
             WeaponClass: "",
@@ -84,6 +113,28 @@ public static class AccountCatalog
                 ["stat.vitality"] = "9"
             }),
         new EquipmentDefinition(
+            "arm.primal_forged_mail",
+            Slot: "armor",
+            WeaponClass: "",
+            WeaponElement: null,
+            GameplayModifiers: new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["damage_profile"] = "sturdy",
+                ["stat.defense"] = "9",
+                ["stat.vitality"] = "6"
+            }),
+        new EquipmentDefinition(
+            "arm.ascendant_forged_mail",
+            Slot: "armor",
+            WeaponClass: "",
+            WeaponElement: null,
+            GameplayModifiers: new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["damage_profile"] = "obsidian_guard",
+                ["stat.defense"] = "24",
+                ["stat.vitality"] = "14"
+            }),
+        new EquipmentDefinition(
             "rel.rune_orb",
             Slot: "relic",
             WeaponClass: "",
@@ -104,6 +155,28 @@ public static class AccountCatalog
                 ["focus"] = "astral_overdrive",
                 ["stat.attack"] = "7",
                 ["stat.vitality"] = "8"
+            }),
+        new EquipmentDefinition(
+            "rel.primal_forged_emblem",
+            Slot: "relic",
+            WeaponClass: "",
+            WeaponElement: null,
+            GameplayModifiers: new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["focus"] = "mana_echo",
+                ["stat.attack"] = "3",
+                ["stat.vitality"] = "4"
+            }),
+        new EquipmentDefinition(
+            "rel.ascendant_forged_emblem",
+            Slot: "relic",
+            WeaponClass: "",
+            WeaponElement: null,
+            GameplayModifiers: new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["focus"] = "astral_overdrive",
+                ["stat.attack"] = "12",
+                ["stat.vitality"] = "12"
             })
     ];
 
@@ -156,24 +229,6 @@ public static class AccountCatalog
         return EquipmentByItemId.TryGetValue(itemId, out definition!);
     }
 
-    public static string ResolveGuaranteedMaterial(string sourceType, string? species)
-    {
-        if (string.Equals(sourceType, "chest", StringComparison.OrdinalIgnoreCase))
-        {
-            return "mat.arcane_dust";
-        }
-
-        var normalizedSpecies = species?.Trim().ToLowerInvariant();
-        return normalizedSpecies switch
-        {
-            "melee_brute" => "mat.scrap_iron",
-            "ranged_archer" => "mat.hardwood",
-            "melee_demon" => "mat.ember_core",
-            "ranged_dragon" => "mat.dragon_scale",
-            _ => "mat.scrap_iron"
-        };
-    }
-
     public static int ResolveEquipmentDropChancePercent(string sourceType)
     {
         return string.Equals(sourceType, "chest", StringComparison.OrdinalIgnoreCase) ? 18 : 5;
@@ -185,5 +240,27 @@ public static class AccountCatalog
             ? "chest:default"
             : "mob:default";
         return EquipmentDropTables[key];
+    }
+
+    public static string ResolveCraftedCommonEquipmentItemId(EquipmentSlot slot)
+    {
+        return slot switch
+        {
+            EquipmentSlot.Weapon => "wpn.primal_forged_blade",
+            EquipmentSlot.Armor => "arm.primal_forged_mail",
+            EquipmentSlot.Relic => "rel.primal_forged_emblem",
+            _ => "wpn.primal_forged_blade"
+        };
+    }
+
+    public static string ResolveAscendantEquipmentItemId(EquipmentSlot slot)
+    {
+        return slot switch
+        {
+            EquipmentSlot.Weapon => "wpn.ascendant_forged_blade",
+            EquipmentSlot.Armor => "arm.ascendant_forged_mail",
+            EquipmentSlot.Relic => "rel.ascendant_forged_emblem",
+            _ => "wpn.ascendant_forged_blade"
+        };
     }
 }

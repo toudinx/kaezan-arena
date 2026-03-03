@@ -14,15 +14,12 @@ const outputDir = path.join(projectRoot, "src", "app", "api", "generated");
 const schemaOutputPath = path.join(outputDir, "schema.ts");
 const clientOutputPath = path.join(outputDir, "client.ts");
 const indexOutputPath = path.join(outputDir, "index.ts");
+const defaultSwaggerUrl = "http://localhost:5158/swagger/v1/swagger.json";
 
 const envSwaggerUrl = process.env.OPENAPI_URL?.trim();
 const candidateSwaggerUrls = envSwaggerUrl
   ? [envSwaggerUrl]
-  : [
-      "http://localhost:5080/swagger/v1/swagger.json",
-      "http://localhost:5080/openapi/v1.json",
-      "http://localhost:5080/swagger/v1/openapi.json"
-    ];
+  : [defaultSwaggerUrl];
 
 async function resolveSwaggerUrl() {
   for (const url of candidateSwaggerUrls) {
@@ -47,7 +44,7 @@ async function resolveSwaggerUrl() {
   throw new Error(
     [
       "Could not reach a Swagger/OpenAPI JSON endpoint.",
-      "Ensure backend is running on http://localhost:5080 or set OPENAPI_URL.",
+      `Ensure backend is running on ${defaultSwaggerUrl} or set OPENAPI_URL.`,
       `Tried: ${candidateSwaggerUrls.join(", ")}`
     ].join(" ")
   );

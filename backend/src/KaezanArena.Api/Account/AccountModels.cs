@@ -11,6 +11,7 @@ public sealed record AccountState(
     string AccountId,
     string ActiveCharacterId,
     int Version,
+    long EchoFragmentsBalance,
     IReadOnlyDictionary<string, CharacterState> Characters);
 
 public sealed record CharacterState(
@@ -19,7 +20,9 @@ public sealed record CharacterState(
     int Level,
     long Xp,
     CharacterInventory Inventory,
-    EquipmentState Equipment);
+    EquipmentState Equipment,
+    IReadOnlyDictionary<string, int> BestiaryKillsBySpecies,
+    IReadOnlyDictionary<string, int> PrimalCoreBySpecies);
 
 public sealed record CharacterInventory(
     IReadOnlyDictionary<string, long> MaterialStacks,
@@ -28,7 +31,10 @@ public sealed record CharacterInventory(
 public sealed record OwnedEquipmentInstance(
     string InstanceId,
     string DefinitionId,
-    bool IsLocked);
+    bool IsLocked,
+    string? OriginSpeciesId = null,
+    string? Slot = null,
+    string? Rarity = null);
 
 public sealed record EquipmentState(
     string? WeaponInstanceId,
@@ -72,6 +78,10 @@ public sealed record ItemDefinition(
     bool Stackable,
     string Rarity);
 
+public sealed record SpeciesDefinition(
+    string SpeciesId,
+    string DisplayName);
+
 public sealed record EquipmentDefinition(
     string ItemId,
     string Slot,
@@ -90,6 +100,8 @@ public sealed record DropEvent(
     string ItemId,
     int Quantity,
     string? EquipmentInstanceId,
+    string RewardKind,
+    string? Species,
     DateTimeOffset AwardedAtUtc);
 
 public sealed record DropEntry(
@@ -112,6 +124,23 @@ public sealed record DropSource(
 public sealed record AwardDropsResult(
     IReadOnlyList<DropEvent> Awarded,
     CharacterState Character);
+
+public sealed record BestiaryCraftResult(
+    AccountState Account,
+    CharacterState Character,
+    OwnedEquipmentInstance CraftedItem);
+
+public sealed record ItemRefineResult(
+    AccountState Account,
+    CharacterState Character,
+    OwnedEquipmentInstance RefinedItem);
+
+public sealed record ItemSalvageResult(
+    AccountState Account,
+    CharacterState Character,
+    string SalvagedItemInstanceId,
+    string SpeciesId,
+    int PrimalCoreAwarded);
 
 public sealed record EquipmentStatTotals(
     int Attack,

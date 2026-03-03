@@ -1,12 +1,17 @@
 import type { DropEvent, ItemDefinition } from "../../api/account-api.service";
 
-export type LootConsoleRarity = "common" | "rare" | "epic" | "other";
+export type LootConsoleRarity = "common" | "rare" | "epic" | "legendary" | "ascendant" | "other";
+export type LootConsoleRewardKind = DropEvent["rewardKind"];
 
 export type LootConsoleLineItem = Readonly<{
+  itemKey: string;
   itemId: string;
   displayName: string;
   quantity: number;
   rarity: LootConsoleRarity;
+  rewardKind: LootConsoleRewardKind;
+  species: string | null;
+  isInventoryItem: boolean;
 }>;
 
 export type LootConsoleLine = Readonly<{
@@ -18,6 +23,14 @@ export type LootConsoleLine = Readonly<{
   items: ReadonlyArray<LootConsoleLineItem>;
 }>;
 
+type MutableLootItemTotal = {
+  itemKey: string;
+  itemId: string;
+  quantity: number;
+  rewardKind: LootConsoleRewardKind;
+  species: string | null;
+};
+
 type MutableLootLineGroup = {
   groupKey: string;
   battleId: string;
@@ -25,7 +38,7 @@ type MutableLootLineGroup = {
   sourceType: DropEvent["sourceType"];
   sourceId: string;
   awardedAtMs: number | null;
-  itemTotals: Record<string, number>;
+  itemTotals: Record<string, MutableLootItemTotal>;
 };
 
 export function groupDropEventsToLootConsoleLines(
@@ -38,9 +51,12 @@ export function groupDropEventsToLootConsoleLines(
 
   const byKey = new Map<string, MutableLootLineGroup>();
   for (const event of events) {
+    const rewardKind = normalizeRewardKind(event.rewardKind);
+    const species = normalizeSpecies(event.species);
+    const itemKey = buildLineItemKey(rewardKind, event.itemId, species);
     const groupKey = buildLootConsoleGroupKey(event);
-    const existing = byKey.get(groupKey);
-    if (!existing) {
+    const existingGroup = byKey.get(groupKey);
+    if (!existingGroup) {
       byKey.set(groupKey, {
         groupKey,
         battleId: event.battleId,
@@ -49,16 +65,35 @@ export function groupDropEventsToLootConsoleLines(
         sourceId: event.sourceId,
         awardedAtMs: toEpochMs(event.awardedAtUtc),
         itemTotals: {
-          [event.itemId]: Math.max(1, event.quantity)
+          [itemKey]: {
+            itemKey,
+            itemId: event.itemId,
+            quantity: Math.max(1, event.quantity),
+            rewardKind,
+            species
+          }
         }
       });
       continue;
     }
 
-    existing.itemTotals[event.itemId] = (existing.itemTotals[event.itemId] ?? 0) + Math.max(1, event.quantity);
+    const existingItem = existingGroup.itemTotals[itemKey];
+    if (!existingItem) {
+      existingGroup.itemTotals[itemKey] = {
+        itemKey,
+        itemId: event.itemId,
+        quantity: Math.max(1, event.quantity),
+        rewardKind,
+        species
+      };
+    } else {
+      existingItem.quantity += Math.max(1, event.quantity);
+    }
+
     const nextEventMs = toEpochMs(event.awardedAtUtc);
     if (nextEventMs !== null) {
-      existing.awardedAtMs = existing.awardedAtMs === null ? nextEventMs : Math.max(existing.awardedAtMs, nextEventMs);
+      existingGroup.awardedAtMs =
+        existingGroup.awardedAtMs === null ? nextEventMs : Math.max(existingGroup.awardedAtMs, nextEventMs);
     }
   }
 
@@ -69,14 +104,7 @@ export function groupDropEventsToLootConsoleLines(
     tick: group.tick,
     sourceType: group.sourceType,
     sourceId: group.sourceId,
-    items: Object.entries(group.itemTotals)
-      .map(([itemId, quantity]) => ({
-        itemId,
-        quantity,
-        displayName: itemCatalogById[itemId]?.displayName ?? itemId,
-        rarity: normalizeLootRarity(itemCatalogById[itemId]?.rarity)
-      }))
-      .sort(compareLineItems)
+    items: Object.values(group.itemTotals).map((item) => toLineItem(item, itemCatalogById)).sort(compareLineItems)
   }));
 }
 
@@ -85,11 +113,27 @@ export function buildLootConsoleGroupKey(event: Pick<DropEvent, "battleId" | "ti
 }
 
 export function formatLootConsoleLineText(line: LootConsoleLine): string {
-  const itemsText = line.items.map((item) => `${item.quantity}x ${item.displayName}`).join(", ");
+  const itemsText = line.items.map((item) => formatLootConsoleItemText(item)).join(", ");
   return `Loot (${line.sourceType}@${line.tick}): ${itemsText}`;
 }
 
+export function formatLootConsoleItemText(item: LootConsoleLineItem): string {
+  if (item.rewardKind === "item") {
+    return `${item.quantity}x ${item.displayName}`;
+  }
+
+  return `+${item.quantity} ${item.displayName}`;
+}
+
 export function lootItemRarityClass(item: Pick<LootConsoleLineItem, "rarity">): string {
+  if (item.rarity === "ascendant") {
+    return "loot-console__item-link--ascendant";
+  }
+
+  if (item.rarity === "legendary") {
+    return "loot-console__item-link--legendary";
+  }
+
   if (item.rarity === "rare") {
     return "loot-console__item-link--rare";
   }
@@ -151,10 +195,18 @@ function compareLineItems(left: LootConsoleLineItem, right: LootConsoleLineItem)
     return byName;
   }
 
-  return left.itemId.localeCompare(right.itemId, undefined, { sensitivity: "base" });
+  return left.itemKey.localeCompare(right.itemKey, undefined, { sensitivity: "base" });
 }
 
 function normalizeLootRarity(value: ItemDefinition["rarity"] | undefined): LootConsoleRarity {
+  if (value === "ascendant") {
+    return "ascendant";
+  }
+
+  if (value === "legendary") {
+    return "legendary";
+  }
+
   if (value === "rare") {
     return "rare";
   }
@@ -173,4 +225,78 @@ function normalizeLootRarity(value: ItemDefinition["rarity"] | undefined): LootC
 function toEpochMs(value: string): number | null {
   const parsed = Date.parse(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizeRewardKind(value: DropEvent["rewardKind"] | undefined): LootConsoleRewardKind {
+  if (value === "echo_fragments" || value === "primal_core") {
+    return value;
+  }
+
+  return "item";
+}
+
+function normalizeSpecies(value: string | null | undefined): string | null {
+  if (!value) {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function buildLineItemKey(rewardKind: LootConsoleRewardKind, itemId: string, species: string | null): string {
+  return `${rewardKind}|${itemId}|${species ?? ""}`;
+}
+
+function toLineItem(
+  item: MutableLootItemTotal,
+  itemCatalogById: Readonly<Record<string, ItemDefinition>>
+): LootConsoleLineItem {
+  if (item.rewardKind === "echo_fragments") {
+    return {
+      itemKey: item.itemKey,
+      itemId: item.itemId,
+      displayName: "Echo Fragments",
+      quantity: item.quantity,
+      rarity: "other",
+      rewardKind: item.rewardKind,
+      species: item.species,
+      isInventoryItem: false
+    };
+  }
+
+  if (item.rewardKind === "primal_core") {
+    const species = item.species ?? "unknown_species";
+    return {
+      itemKey: item.itemKey,
+      itemId: item.itemId,
+      displayName: `Primal Core (${formatSpeciesLabel(species)})`,
+      quantity: item.quantity,
+      rarity: "other",
+      rewardKind: item.rewardKind,
+      species: item.species,
+      isInventoryItem: false
+    };
+  }
+
+  const definition = itemCatalogById[item.itemId];
+  return {
+    itemKey: item.itemKey,
+    itemId: item.itemId,
+    displayName: definition?.displayName ?? item.itemId,
+    quantity: item.quantity,
+    rarity: normalizeLootRarity(definition?.rarity),
+    rewardKind: item.rewardKind,
+    species: item.species,
+    isInventoryItem: true
+  };
+}
+
+function formatSpeciesLabel(species: string): string {
+  return species
+    .replace(/[_-]+/g, " ")
+    .split(/\s+/)
+    .filter((part) => part.length > 0)
+    .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
+    .join(" ");
 }

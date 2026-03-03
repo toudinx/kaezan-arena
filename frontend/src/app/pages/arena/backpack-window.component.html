@@ -8,7 +8,15 @@
         [disabled]="weaponFilterMode"
         (click)="setFilter(filter)"
       >
-        {{ filter === "all" ? "All" : filter === "materials" ? "Materials" : "Weapons" }}
+        {{
+          filter === "all"
+            ? "All"
+            : filter === "weapons"
+              ? "Weapons"
+              : filter === "armor"
+                ? "Armor"
+                : "Relics"
+        }}
       </button>
     }
   </nav>
@@ -27,8 +35,12 @@
           [class.backpack__slot--selected]="selectedSlotId === slot.slotId"
           [class.backpack__slot--equipped]="slot.isEquipped"
           [class.backpack__slot--pulse]="isSlotPulsing(slot.slotId)"
-          [class.backpack__slot--weapon]="slot.kind === 'equipment' && slot.isWeapon"
-          [class.backpack__slot--material]="slot.kind === 'material'"
+          [class.backpack__slot--weapon]="slot.isWeapon"
+          [class.backpack__slot--common]="slot.rarity.toLowerCase() === 'common'"
+          [class.backpack__slot--rare]="slot.rarity.toLowerCase() === 'rare'"
+          [class.backpack__slot--epic]="slot.rarity.toLowerCase() === 'epic'"
+          [class.backpack__slot--legendary]="slot.rarity.toLowerCase() === 'legendary'"
+          [class.backpack__slot--ascendant]="slot.rarity.toLowerCase() === 'ascendant'"
           (click)="selectSlot(slot.slotId)"
           (contextmenu)="onSlotContextMenu(slot, $event)"
           [title]="slot.displayName"
@@ -48,10 +60,31 @@
   @if (selectedSlot) {
     <div class="backpack__tooltip">
       <strong>{{ selectedSlot.displayName }}</strong>
-      <span>{{ selectedSlot.kind === "equipment" ? (selectedSlot.isWeapon ? "Weapon" : "Equipment") : "Material" }}</span>
+      <span>
+        {{
+          selectedSlot.slot === "weapon"
+            ? "Weapon"
+            : selectedSlot.slot === "armor"
+              ? "Armor"
+              : selectedSlot.slot === "relic"
+                ? "Relic"
+                : "Equipment"
+        }}
+      </span>
       <span>Rarity: {{ selectedSlot.rarity }}</span>
-      @if (selectedSlot.kind === "equipment" && selectedSlot.weaponClass) {
+      @if (selectedSlot.weaponClass) {
         <span>Class: {{ selectedSlot.weaponClass }}</span>
+      }
+      @if (canSalvage(selectedSlot)) {
+        <span>Salvage return: {{ getSelectedSlotSalvagePrimalCoreReturn() }} Primal Core</span>
+        <div class="backpack__tooltip-actions">
+          <button
+            type="button"
+            [disabled]="salvageInFlight"
+            (click)="onSalvageSelectedSlot()">
+            Salvage
+          </button>
+        </div>
       }
     </div>
   }

@@ -406,6 +406,18 @@ public sealed class InMemoryBattleStore : IBattleStore
         }
     }
 
+    public bool TryGetBattleSeed(string battleId, out int seed)
+    {
+        seed = 0;
+        if (string.IsNullOrWhiteSpace(battleId) || !_battles.TryGetValue(battleId.Trim(), out var state))
+        {
+            return false;
+        }
+
+        seed = state.Seed;
+        return true;
+    }
+
     private static BattleSnapshot ToSnapshot(
         StoredBattle state,
         IReadOnlyList<BattleEventDto> events,

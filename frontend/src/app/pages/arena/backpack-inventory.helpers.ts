@@ -5,28 +5,25 @@ import type {
   OwnedEquipmentInstance
 } from "../../api/account-api.service";
 
-export type BackpackFilter = "all" | "materials" | "weapons";
+export type BackpackFilter = "all" | "weapons" | "armor" | "relics";
+
+type BackpackEquipmentSlot = "weapon" | "armor" | "relic" | "unknown";
 
 export type BackpackSlot = Readonly<{
   slotId: string;
-  kind: "material" | "equipment";
+  kind: "equipment";
+  slot: BackpackEquipmentSlot;
   itemId: string;
   definitionId: string;
   displayName: string;
   rarity: string;
   quantity: number;
-  instanceId: string | null;
+  instanceId: string;
+  originSpeciesId: string | null;
   weaponClass: string | null;
   isWeapon: boolean;
   isEquipped: boolean;
   inspectLabel: string;
-}>;
-
-type NamedMaterialStack = Readonly<{
-  itemId: string;
-  displayName: string;
-  rarity: string;
-  quantity: number;
 }>;
 
 type NamedEquipmentInstance = Readonly<{
@@ -34,6 +31,8 @@ type NamedEquipmentInstance = Readonly<{
   definitionId: string;
   displayName: string;
   rarity: string;
+  originSpeciesId: string | null;
+  slot: BackpackEquipmentSlot;
   weaponClass: string | null;
   isWeapon: boolean;
   isEquipped: boolean;
@@ -48,36 +47,25 @@ export function mapInventoryToBackpackSlots(
     return [];
   }
 
-  const materials = Object.entries(character.inventory.materialStacks)
-    .filter(([, quantity]) => Number.isFinite(quantity) && quantity > 0)
-    .map(([itemId, quantity]) => toNamedMaterialStack(itemId, quantity, itemCatalogById))
-    .sort(compareNamedMaterials);
+  const equippedInstanceIds = new Set<string>(
+    [
+      character.equipment.weaponInstanceId,
+      character.equipment.armorInstanceId,
+      character.equipment.relicInstanceId
+    ].filter((value): value is string => !!value)
+  );
 
-  const equipments = Object.values(character.inventory.equipmentInstances)
+  return Object.values(character.inventory.equipmentInstances)
     .map((instance) =>
       toNamedEquipmentInstance(
         instance,
-        new Set<string>(
-          [
-            character.equipment.weaponInstanceId,
-            character.equipment.armorInstanceId,
-            character.equipment.relicInstanceId
-          ].filter((value): value is string => !!value)
-        ),
+        equippedInstanceIds,
         itemCatalogById,
         equipmentCatalogByItemId
       )
     )
-    .sort(compareNamedEquipments);
-
-  const materialSlots = materials.map((stack) =>
-    createMaterialSlot(stack)
-  );
-  const equipmentSlots = equipments.map((entry) =>
-    createEquipmentSlot(entry)
-  );
-
-  return [...materialSlots, ...equipmentSlots];
+    .sort(compareNamedEquipments)
+    .map((entry) => createEquipmentSlot(entry));
 }
 
 export function filterBackpackSlots(slots: ReadonlyArray<BackpackSlot>, filter: BackpackFilter): BackpackSlot[] {
@@ -85,25 +73,15 @@ export function filterBackpackSlots(slots: ReadonlyArray<BackpackSlot>, filter: 
     return [...slots];
   }
 
-  if (filter === "materials") {
-    return slots.filter((slot) => slot.kind === "material");
+  if (filter === "weapons") {
+    return slots.filter((slot) => slot.slot === "weapon");
   }
 
-  return slots.filter((slot) => slot.kind === "equipment" && slot.isWeapon);
-}
+  if (filter === "armor") {
+    return slots.filter((slot) => slot.slot === "armor");
+  }
 
-function toNamedMaterialStack(
-  itemId: string,
-  quantity: number,
-  itemCatalogById: Readonly<Record<string, ItemDefinition>>
-): NamedMaterialStack {
-  const definition = itemCatalogById[itemId];
-  return {
-    itemId,
-    displayName: definition?.displayName ?? itemId,
-    rarity: definition?.rarity ?? "common",
-    quantity
-  };
+  return slots.filter((slot) => slot.slot === "relic");
 }
 
 function toNamedEquipmentInstance(
@@ -114,34 +92,20 @@ function toNamedEquipmentInstance(
 ): NamedEquipmentInstance {
   const itemDefinition = itemCatalogById[instance.definitionId];
   const equipmentDefinition = equipmentCatalogByItemId[instance.definitionId];
+  const slot = normalizeSlot(instance.slot ?? equipmentDefinition?.slot ?? null);
   const weaponClass = equipmentDefinition?.weaponClass ?? null;
-  const isWeapon = (equipmentDefinition?.slot ?? "").toLowerCase() === "weapon" || !!weaponClass;
+  const isWeapon = slot === "weapon";
 
   return {
     instanceId: instance.instanceId,
     definitionId: instance.definitionId,
     displayName: itemDefinition?.displayName ?? instance.definitionId,
-    rarity: itemDefinition?.rarity ?? "common",
+    rarity: resolveRarity(instance.rarity, itemDefinition?.rarity),
+    originSpeciesId: instance.originSpeciesId ?? null,
+    slot,
     weaponClass,
     isWeapon,
     isEquipped: equippedInstanceIds.has(instance.instanceId)
-  };
-}
-
-function createMaterialSlot(stack: NamedMaterialStack): BackpackSlot {
-  return {
-    slotId: `material:${stack.itemId}`,
-    kind: "material",
-    itemId: stack.itemId,
-    definitionId: stack.itemId,
-    displayName: stack.displayName,
-    rarity: stack.rarity,
-    quantity: stack.quantity,
-    instanceId: null,
-    weaponClass: null,
-    isWeapon: false,
-    isEquipped: false,
-    inspectLabel: `id=${stack.itemId}; rarity=${stack.rarity}`
   };
 }
 
@@ -149,33 +113,62 @@ function createEquipmentSlot(entry: NamedEquipmentInstance): BackpackSlot {
   return {
     slotId: `equipment:${entry.instanceId}`,
     kind: "equipment",
+    slot: entry.slot,
     itemId: entry.definitionId,
     definitionId: entry.definitionId,
     displayName: entry.displayName,
     rarity: entry.rarity,
     quantity: 1,
     instanceId: entry.instanceId,
+    originSpeciesId: entry.originSpeciesId,
     weaponClass: entry.weaponClass,
     isWeapon: entry.isWeapon,
     isEquipped: entry.isEquipped,
-    inspectLabel: `definitionId=${entry.definitionId}; rarity=${entry.rarity}; weaponClass=${entry.weaponClass ?? "unknown"}`
+    inspectLabel: `definitionId=${entry.definitionId}; slot=${entry.slot}; rarity=${entry.rarity}; weaponClass=${entry.weaponClass ?? "unknown"}`
   };
 }
 
-function compareNamedMaterials(left: NamedMaterialStack, right: NamedMaterialStack): number {
-  const byName = left.displayName.localeCompare(right.displayName, undefined, { sensitivity: "base" });
-  if (byName !== 0) {
-    return byName;
+function normalizeSlot(value: string | null): BackpackEquipmentSlot {
+  const normalized = (value ?? "").trim().toLowerCase();
+  if (normalized === "weapon") {
+    return "weapon";
   }
 
-  return left.itemId.localeCompare(right.itemId, undefined, { sensitivity: "base" });
+  if (normalized === "armor") {
+    return "armor";
+  }
+
+  if (normalized === "relic") {
+    return "relic";
+  }
+
+  return "unknown";
 }
 
 function compareNamedEquipments(left: NamedEquipmentInstance, right: NamedEquipmentInstance): number {
+  const bySlot = left.slot.localeCompare(right.slot, undefined, { sensitivity: "base" });
+  if (bySlot !== 0) {
+    return bySlot;
+  }
+
   const byName = left.displayName.localeCompare(right.displayName, undefined, { sensitivity: "base" });
   if (byName !== 0) {
     return byName;
   }
 
   return left.instanceId.localeCompare(right.instanceId, undefined, { sensitivity: "base" });
+}
+
+function resolveRarity(instanceRarity: string | null | undefined, itemRarity: string | null | undefined): string {
+  const normalizedInstanceRarity = (instanceRarity ?? "").trim().toLowerCase();
+  if (normalizedInstanceRarity.length > 0) {
+    return normalizedInstanceRarity;
+  }
+
+  const normalizedItemRarity = (itemRarity ?? "").trim().toLowerCase();
+  if (normalizedItemRarity.length > 0) {
+    return normalizedItemRarity;
+  }
+
+  return "common";
 }

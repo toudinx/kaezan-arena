@@ -36,6 +36,8 @@ export class EquipmentPaperdollWindowComponent {
         return "paperdoll__slot--rarity-epic";
       case "legendary":
         return "paperdoll__slot--rarity-legendary";
+      case "ascendant":
+        return "paperdoll__slot--rarity-ascendant";
       default:
         return "";
     }

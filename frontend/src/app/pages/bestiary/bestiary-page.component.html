@@ -1,0 +1,136 @@
+<section class="bestiary-shell">
+  <header class="bestiary-shell__header">
+    <div>
+      <h1>Bestiary v1</h1>
+      @if (characterName) {
+        <p>Current character: {{ characterName }} ({{ characterId }})</p>
+      } @else {
+        <p>Current character bestiary progression.</p>
+      }
+    </div>
+  </header>
+
+  @if (isLoading) {
+    <p class="bestiary-state">Loading bestiary...</p>
+  } @else if (loadError) {
+    <p class="bestiary-state bestiary-state--error">{{ loadError }}</p>
+  } @else {
+    <div class="bestiary-layout">
+      <aside class="bestiary-panel bestiary-panel--left">
+        <h2>Species</h2>
+        @if (speciesRows.length === 0) {
+          <p class="bestiary-empty">No species registered yet.</p>
+        } @else {
+          <ul class="species-list">
+            @for (row of speciesRows; track row.speciesId) {
+              <li>
+                <button
+                  type="button"
+                  class="species-row"
+                  [class.species-row--selected]="row.speciesId === selectedSpeciesId"
+                  (click)="selectSpecies(row.speciesId)">
+                  <span class="species-row__name">{{ row.displayName }}</span>
+                  <span class="species-row__metric">Kills: <strong>{{ row.killsTotal }}</strong></span>
+                  <span class="species-row__metric">Primal Core: <strong>{{ row.primalCoreBalance }}</strong></span>
+                </button>
+              </li>
+            }
+          </ul>
+        }
+      </aside>
+
+      <section class="bestiary-panel bestiary-panel--right">
+        @if (selectedSpecies) {
+          <h2>{{ selectedSpecies.displayName }}</h2>
+          <div class="species-detail">
+            <p><span>Total kills</span><strong>{{ selectedSpecies.killsTotal }}</strong></p>
+            <p><span>Primal Core balance</span><strong>{{ selectedSpecies.primalCoreBalance }}</strong></p>
+            <p><span>Echo Fragments balance</span><strong>{{ echoFragmentsBalance }}</strong></p>
+          </div>
+
+          <div class="drop-doc">
+            <h3>Bestiary Documentation</h3>
+            <p><span>Always drops:</span> Echo Fragments (1-1 per kill)</p>
+            <p><span>Generates:</span> Primal Core (+1 per kill)</p>
+            <p><span>Craftable:</span> Weapon, Armor, Relic</p>
+            <p><span>Refinement path:</span> Common -> Rare -> Epic -> Legendary</p>
+            <p><span>Ascendant:</span> Locked (for now)</p>
+          </div>
+
+          <div class="crafting-doc">
+            <h3>Craft Common Item</h3>
+            <p><span>Cost:</span> {{ primalCoreCost }} Primal Core + {{ echoFragmentsCost }} Echo Fragments</p>
+            <div class="crafting-actions">
+              <button type="button" [disabled]="!canCraftSelectedSpecies || isCrafting" (click)="craftWeapon()">
+                Craft Weapon
+              </button>
+              <button type="button" [disabled]="!canCraftSelectedSpecies || isCrafting" (click)="craftArmor()">
+                Craft Armor
+              </button>
+              <button type="button" [disabled]="!canCraftSelectedSpecies || isCrafting" (click)="craftRelic()">
+                Craft Relic
+              </button>
+            </div>
+            @if (actionFeedback) {
+              <p class="crafting-feedback">{{ actionFeedback }}</p>
+            }
+          </div>
+
+          <div class="inventory-doc">
+            <h3>Inventory (Equipment)</h3>
+            @if (inventoryRows.length === 0) {
+              <p class="bestiary-empty">No equipment items in inventory.</p>
+            } @else {
+              <ul>
+                @for (item of inventoryRows; track item.instanceId) {
+                  <li
+                    [class.inventory-item--highlight]="item.instanceId === lastUpdatedItemInstanceId"
+                    [class.inventory-item--common]="item.rarityKey === 'common'"
+                    [class.inventory-item--rare]="item.rarityKey === 'rare'"
+                    [class.inventory-item--epic]="item.rarityKey === 'epic'"
+                    [class.inventory-item--legendary]="item.rarityKey === 'legendary'"
+                    [class.inventory-item--ascendant]="item.rarityKey === 'ascendant'">
+                    <strong>{{ item.displayName }}</strong>
+                    <span>{{ item.slotLabel }} | {{ item.rarityLabel }}</span>
+                    @if (item.originSpeciesLabel) {
+                      <span>Origin: {{ item.originSpeciesLabel }}</span>
+                    }
+                    @if (item.canRefine) {
+                      <span>
+                        Refine cost:
+                        {{ item.refinePrimalCoreCost }} Primal Core +
+                        {{ item.refineEchoFragmentsCost }} Echo Fragments
+                        ({{ item.nextRarityLabel }})
+                      </span>
+                      <div class="inventory-refine-actions">
+                        <button
+                          type="button"
+                          [disabled]="!item.canAffordRefine || isCrafting || refiningItemInstanceId === item.instanceId || salvagingItemInstanceId === item.instanceId"
+                          (click)="refineItem(item)">
+                          Refine
+                        </button>
+                      </div>
+                    }
+                    @if (item.canSalvage) {
+                      <span>Salvage return: {{ item.salvagePrimalCoreReturn }} Primal Core</span>
+                      <div class="inventory-salvage-actions">
+                        <button
+                          type="button"
+                          [disabled]="isCrafting || refiningItemInstanceId === item.instanceId || salvagingItemInstanceId === item.instanceId"
+                          (click)="salvageItem(item)">
+                          Salvage
+                        </button>
+                      </div>
+                    }
+                  </li>
+                }
+              </ul>
+            }
+          </div>
+        } @else {
+          <p class="bestiary-empty">Select a species to view details.</p>
+        }
+      </section>
+    </div>
+  }
+</section>

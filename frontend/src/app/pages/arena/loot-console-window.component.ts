@@ -12,6 +12,7 @@ import {
 } from "@angular/core";
 import type { DropEvent, ItemDefinition } from "../../api/account-api.service";
 import {
+  formatLootConsoleItemText,
   type LootConsoleLine,
   type LootConsoleLineItem,
   formatLootConsoleLineText,
@@ -78,7 +79,12 @@ export class LootConsoleWindowComponent implements OnChanges, AfterViewChecked {
     await copyTextBestEffort(text);
   }
 
-  onItemClick(itemId: string): void {
+  onItemClick(item: LootConsoleLineItem): void {
+    if (!item.isInventoryItem) {
+      return;
+    }
+
+    const itemId = item.itemId;
     this.itemClicked.emit(itemId);
   }
 
@@ -90,6 +96,10 @@ export class LootConsoleWindowComponent implements OnChanges, AfterViewChecked {
     return formatLootConsoleLineText(line);
   }
 
+  formatItemText(item: LootConsoleLineItem): string {
+    return formatLootConsoleItemText(item);
+  }
+
   itemClass(item: LootConsoleLineItem): string {
     return lootItemRarityClass(item);
   }
@@ -98,8 +108,8 @@ export class LootConsoleWindowComponent implements OnChanges, AfterViewChecked {
     return line.groupKey;
   }
 
-  trackItemById(_index: number, item: { itemId: string }): string {
-    return item.itemId;
+  trackItemById(_index: number, item: Pick<LootConsoleLineItem, "itemKey">): string {
+    return item.itemKey;
   }
 
   private rebuildLines(): void {

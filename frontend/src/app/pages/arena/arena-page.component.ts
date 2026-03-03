@@ -33,6 +33,7 @@ import {
   type DropEvent,
   type DropSource,
   type EquipmentDefinition,
+  type ItemSalvageResponse,
   type ItemDefinition,
   type OwnedEquipmentInstance
 } from "../../api/account-api.service";
@@ -803,6 +804,10 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     }
   }
 
+  async onBackpackSalvageRequested(itemInstanceId: string): Promise<void> {
+    await this.salvageItemFromInventory(itemInstanceId);
+  }
+
   onLootConsoleItemClicked(itemId: string): void {
     this.clearBackpackWeaponFilterMode();
     this.focusBackpackPanel();
@@ -1100,6 +1105,28 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       .sort((left, right) => left.itemId.localeCompare(right.itemId));
   }
 
+  get selectedCharacterBestiaryRows(): Array<{ species: string; kills: number; primalCore: number }> {
+    const character = this.selectedCharacter;
+    if (!character) {
+      return [];
+    }
+
+    const killsBySpecies = character.bestiaryKillsBySpecies ?? {};
+    const primalCoreBySpecies = character.primalCoreBySpecies ?? {};
+    const speciesIds = new Set<string>([
+      ...Object.keys(killsBySpecies),
+      ...Object.keys(primalCoreBySpecies)
+    ]);
+
+    return Array.from(speciesIds)
+      .sort((left, right) => left.localeCompare(right))
+      .map((species) => ({
+        species,
+        kills: Math.max(0, killsBySpecies[species] ?? 0),
+        primalCore: Math.max(0, primalCoreBySpecies[species] ?? 0)
+      }));
+  }
+
   get selectedCharacterWeapons(): Array<OwnedEquipmentInstance & { equipped: boolean; itemName: string; weaponClass: string }> {
     const character = this.selectedCharacter;
     if (!character) {
@@ -1207,6 +1234,26 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       return true;
     } catch (error) {
       this.battleLog = `equipWeapon failed: ${String(error)}`;
+      return false;
+    } finally {
+      this.accountRequestInFlight = false;
+    }
+  }
+
+  async salvageItemFromInventory(itemInstanceId: string): Promise<boolean> {
+    const character = this.selectedCharacter;
+    if (!character) {
+      return false;
+    }
+
+    this.accountRequestInFlight = true;
+    try {
+      const salvaged = await this.accountApi.salvageItem(this.accountId, itemInstanceId);
+      this.applySalvageResult(salvaged);
+      this.battleLog = `salvageItem success: item=${salvaged.salvagedItemInstanceId}; species=${salvaged.speciesId}; primalCoreAwarded=${salvaged.primalCoreAwarded}`;
+      return true;
+    } catch (error) {
+      this.battleLog = `salvageItem failed: ${String(error)}`;
       return false;
     } finally {
       this.accountRequestInFlight = false;
@@ -1731,6 +1778,23 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     };
   }
 
+  private applySalvageResult(salvaged: ItemSalvageResponse): void {
+    if (!this.accountState) {
+      return;
+    }
+
+    const nextCharacters = {
+      ...this.accountState.characters,
+      [salvaged.character.characterId]: salvaged.character
+    };
+
+    this.accountState = {
+      ...this.accountState,
+      echoFragmentsBalance: salvaged.echoFragmentsBalance,
+      characters: nextCharacters
+    };
+  }
+
   private resolveItemDisplayName(itemId: string): string {
     return this.itemCatalogById[itemId]?.displayName ?? itemId;
   }
@@ -1793,13 +1857,29 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   }
 
   private resolveSelectedEquipmentRarity(slot: "weapon" | "armor" | "relic"): string | null {
-    const definition = this.resolveSelectedEquipmentDefinition(slot);
-    if (!definition) {
+    const character = this.selectedCharacter;
+    if (!character) {
       return null;
     }
 
-    const item = this.itemCatalogById[definition.itemId];
-    return item?.rarity ?? null;
+    const instanceId = this.resolveEquippedInstanceId(character, slot);
+    if (!instanceId) {
+      return null;
+    }
+
+    const equippedInstance = character.inventory.equipmentInstances[instanceId];
+    if (!equippedInstance) {
+      return null;
+    }
+
+    const normalizedInstanceRarity = equippedInstance?.rarity?.trim().toLowerCase();
+    if (normalizedInstanceRarity && normalizedInstanceRarity.length > 0) {
+      return normalizedInstanceRarity;
+    }
+
+    const itemRarity = this.itemCatalogById[equippedInstance.definitionId]?.rarity ?? "";
+    const normalizedItemRarity = itemRarity.trim().toLowerCase();
+    return normalizedItemRarity.length > 0 ? normalizedItemRarity : null;
   }
 
   private resolveSelectedEquipmentDefinition(slot: "weapon" | "armor" | "relic"): EquipmentDefinition | null {

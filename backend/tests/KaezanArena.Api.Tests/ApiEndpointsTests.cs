@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using KaezanArena.Api.Battle;
 using KaezanArena.Api.Contracts.Account;
 using KaezanArena.Api.Contracts.Battle;
+using KaezanArena.Api.Contracts.Common;
 using KaezanArena.Api.Contracts.Effects;
 using KaezanArena.Api.Contracts.Health;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -78,6 +79,223 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
         Assert.True(payload.ItemCatalog.Count >= 1);
         Assert.True(payload.EquipmentCatalog.Count >= 1);
         Assert.True(payload.Account.Characters.ContainsKey(payload.Account.ActiveCharacterId));
+        Assert.True(payload.Account.EchoFragmentsBalance >= 0);
+        Assert.All(payload.Account.Characters.Values, character =>
+        {
+            Assert.NotNull(character.BestiaryKillsBySpecies);
+            Assert.NotNull(character.PrimalCoreBySpecies);
+        });
+    }
+
+    [Fact]
+    public async Task GetAccountBestiary_ReturnsDeterministicSpeciesCatalogAndActiveCharacterProgress()
+    {
+        var state = await GetAccountStateAsync("dev_account_bestiary_overview");
+        var activeCharacter = state.Account.Characters[state.Account.ActiveCharacterId];
+
+        var response = await _client.GetAsync($"/api/v1/account/bestiary?accountId={state.Account.AccountId}");
+        var payload = await response.Content.ReadFromJsonAsync<BestiaryOverviewResponseDto>();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(payload);
+        Assert.NotNull(payload.SpeciesCatalog);
+        Assert.Equal(
+            ["melee_brute", "ranged_archer", "melee_demon", "ranged_dragon"],
+            payload.SpeciesCatalog.Select(species => species.SpeciesId).ToArray());
+        Assert.All(payload.SpeciesCatalog, species =>
+        {
+            Assert.False(string.IsNullOrWhiteSpace(species.SpeciesId));
+            Assert.False(string.IsNullOrWhiteSpace(species.DisplayName));
+        });
+        Assert.NotNull(payload.Character);
+        Assert.Equal(activeCharacter.CharacterId, payload.Character.CharacterId);
+        Assert.Equal(activeCharacter.Name, payload.Character.Name);
+        Assert.Equal(activeCharacter.BestiaryKillsBySpecies, payload.Character.BestiaryKillsBySpecies);
+        Assert.Equal(activeCharacter.PrimalCoreBySpecies, payload.Character.PrimalCoreBySpecies);
+    }
+
+    [Fact]
+    public async Task PostBestiaryCraft_DeductsBalancesAndCreatesCommonItem()
+    {
+        const string accountId = "dev_account_craft_ready_deducts";
+        var state = await GetAccountStateAsync(accountId);
+        var activeCharacter = state.Account.Characters[state.Account.ActiveCharacterId];
+        var initialEchoFragments = state.Account.EchoFragmentsBalance;
+        var initialPrimalCore = activeCharacter.PrimalCoreBySpecies.GetValueOrDefault("melee_brute", 0);
+
+        var response = await _client.PostAsJsonAsync(
+            $"/api/v1/bestiary/craft?accountId={accountId}",
+            new BestiaryCraftRequestDto(
+                SpeciesId: "melee_brute",
+                Slot: "Weapon"));
+        var payload = await response.Content.ReadFromJsonAsync<BestiaryCraftResponseDto>();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(payload);
+        Assert.Equal(initialEchoFragments - 100, payload.EchoFragmentsBalance);
+        Assert.Equal(activeCharacter.CharacterId, payload.Character.CharacterId);
+        Assert.Equal(initialPrimalCore - 20, payload.Character.PrimalCoreBySpecies.GetValueOrDefault("melee_brute", 0));
+        Assert.Equal("wpn.primal_forged_blade", payload.CraftedItem.DefinitionId);
+        Assert.Equal("melee_brute", payload.CraftedItem.OriginSpeciesId);
+        Assert.Equal("weapon", payload.CraftedItem.Slot);
+        Assert.Equal("common", payload.CraftedItem.Rarity);
+        Assert.True(payload.Character.Inventory.EquipmentInstances.ContainsKey(payload.CraftedItem.InstanceId));
+
+        var finalState = await GetAccountStateAsync(accountId);
+        var finalCharacter = finalState.Account.Characters[activeCharacter.CharacterId];
+        Assert.Equal(payload.EchoFragmentsBalance, finalState.Account.EchoFragmentsBalance);
+        Assert.Equal(payload.Character.PrimalCoreBySpecies, finalCharacter.PrimalCoreBySpecies);
+        Assert.True(finalCharacter.Inventory.EquipmentInstances.ContainsKey(payload.CraftedItem.InstanceId));
+    }
+
+    [Fact]
+    public async Task PostBestiaryCraft_FailsWhenInsufficientFunds()
+    {
+        const string accountId = "dev_account_craft_insufficient";
+        var response = await _client.PostAsJsonAsync(
+            $"/api/v1/bestiary/craft?accountId={accountId}",
+            new BestiaryCraftRequestDto(
+                SpeciesId: "melee_brute",
+                Slot: "Weapon"));
+        var payload = await response.Content.ReadFromJsonAsync<ApiErrorDto>();
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.NotNull(payload);
+        Assert.Equal("validation_error", payload.Code);
+        Assert.Contains("Not enough Primal Core", payload.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task PostItemRefine_CommonToRare_DeductsCorrectBalances_AndPersistsTransition()
+    {
+        const string accountId = "dev_account_refine_ready_common";
+        var state = await GetAccountStateAsync(accountId);
+        var activeCharacter = state.Account.Characters[state.Account.ActiveCharacterId];
+        var initialEchoFragments = state.Account.EchoFragmentsBalance;
+        var initialPrimalCore = activeCharacter.PrimalCoreBySpecies.GetValueOrDefault("melee_brute", 0);
+        var commonItem = activeCharacter.Inventory.EquipmentInstances.Values
+            .First(item =>
+                string.Equals(item.OriginSpeciesId, "melee_brute", StringComparison.Ordinal) &&
+                string.Equals(item.Rarity, "common", StringComparison.Ordinal));
+
+        var response = await _client.PostAsJsonAsync(
+            $"/api/v1/items/refine?accountId={accountId}",
+            new ItemRefineRequestDto(ItemInstanceId: commonItem.InstanceId));
+        var payload = await response.Content.ReadFromJsonAsync<ItemRefineResponseDto>();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(payload);
+        Assert.Equal(initialEchoFragments - 200, payload.EchoFragmentsBalance);
+        Assert.Equal(initialPrimalCore - 40, payload.Character.PrimalCoreBySpecies.GetValueOrDefault("melee_brute", 0));
+        Assert.Equal(commonItem.InstanceId, payload.RefinedItem.InstanceId);
+        Assert.Equal("rare", payload.RefinedItem.Rarity);
+
+        var finalState = await GetAccountStateAsync(accountId);
+        var finalCharacter = finalState.Account.Characters[activeCharacter.CharacterId];
+        var persistedItem = finalCharacter.Inventory.EquipmentInstances[commonItem.InstanceId];
+        Assert.Equal("rare", persistedItem.Rarity);
+        Assert.Equal(payload.EchoFragmentsBalance, finalState.Account.EchoFragmentsBalance);
+        Assert.Equal(payload.Character.PrimalCoreBySpecies, finalCharacter.PrimalCoreBySpecies);
+    }
+
+    [Fact]
+    public async Task PostItemRefine_RareToEpic_UsesSecondTierCosts()
+    {
+        const string accountId = "dev_account_refine_ready_rare_to_epic";
+        var state = await GetAccountStateAsync(accountId);
+        var activeCharacter = state.Account.Characters[state.Account.ActiveCharacterId];
+        var commonItem = activeCharacter.Inventory.EquipmentInstances.Values
+            .First(item =>
+                string.Equals(item.OriginSpeciesId, "melee_brute", StringComparison.Ordinal) &&
+                string.Equals(item.Rarity, "common", StringComparison.Ordinal));
+
+        var firstResponse = await _client.PostAsJsonAsync(
+            $"/api/v1/items/refine?accountId={accountId}",
+            new ItemRefineRequestDto(ItemInstanceId: commonItem.InstanceId));
+        var firstPayload = await firstResponse.Content.ReadFromJsonAsync<ItemRefineResponseDto>();
+        Assert.Equal(HttpStatusCode.OK, firstResponse.StatusCode);
+        Assert.NotNull(firstPayload);
+        Assert.Equal("rare", firstPayload.RefinedItem.Rarity);
+
+        var secondResponse = await _client.PostAsJsonAsync(
+            $"/api/v1/items/refine?accountId={accountId}",
+            new ItemRefineRequestDto(ItemInstanceId: commonItem.InstanceId));
+        var secondPayload = await secondResponse.Content.ReadFromJsonAsync<ItemRefineResponseDto>();
+        Assert.Equal(HttpStatusCode.OK, secondResponse.StatusCode);
+        Assert.NotNull(secondPayload);
+        Assert.Equal("epic", secondPayload.RefinedItem.Rarity);
+        Assert.Equal(
+            activeCharacter.PrimalCoreBySpecies.GetValueOrDefault("melee_brute", 0) - 40 - 120,
+            secondPayload.Character.PrimalCoreBySpecies.GetValueOrDefault("melee_brute", 0));
+        Assert.Equal(state.Account.EchoFragmentsBalance - 200 - 500, secondPayload.EchoFragmentsBalance);
+    }
+
+    [Fact]
+    public async Task PostItemRefine_FailsWhenTryingToRefineBeyondLegendary()
+    {
+        const string accountId = "dev_account_refine_legendary_cap";
+        var state = await GetAccountStateAsync(accountId);
+        var activeCharacter = state.Account.Characters[state.Account.ActiveCharacterId];
+        var legendaryItem = activeCharacter.Inventory.EquipmentInstances.Values
+            .First(item =>
+                string.Equals(item.OriginSpeciesId, "melee_brute", StringComparison.Ordinal) &&
+                string.Equals(item.Rarity, "legendary", StringComparison.Ordinal));
+
+        var response = await _client.PostAsJsonAsync(
+            $"/api/v1/items/refine?accountId={accountId}",
+            new ItemRefineRequestDto(ItemInstanceId: legendaryItem.InstanceId));
+        var payload = await response.Content.ReadFromJsonAsync<ApiErrorDto>();
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.NotNull(payload);
+        Assert.Equal("validation_error", payload.Code);
+        Assert.Contains("cannot be refined beyond Legendary", payload.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task PostItemSalvage_RemovesItemAndReturnsCorrectPrimalCore()
+    {
+        const string accountId = "dev_account_refine_ready_salvage";
+        var state = await GetAccountStateAsync(accountId);
+        var activeCharacter = state.Account.Characters[state.Account.ActiveCharacterId];
+        var commonItem = activeCharacter.Inventory.EquipmentInstances.Values
+            .First(item =>
+                string.Equals(item.OriginSpeciesId, "melee_brute", StringComparison.Ordinal) &&
+                string.Equals(item.Rarity, "common", StringComparison.Ordinal));
+        var initialPrimalCore = activeCharacter.PrimalCoreBySpecies.GetValueOrDefault("melee_brute", 0);
+
+        var response = await _client.PostAsJsonAsync(
+            $"/api/v1/items/salvage?accountId={accountId}",
+            new ItemSalvageRequestDto(ItemInstanceId: commonItem.InstanceId));
+        var payload = await response.Content.ReadFromJsonAsync<ItemSalvageResponseDto>();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(payload);
+        Assert.Equal(commonItem.InstanceId, payload.SalvagedItemInstanceId);
+        Assert.Equal("melee_brute", payload.SpeciesId);
+        Assert.Equal(12, payload.PrimalCoreAwarded);
+        Assert.False(payload.Character.Inventory.EquipmentInstances.ContainsKey(commonItem.InstanceId));
+        Assert.Equal(initialPrimalCore + 12, payload.Character.PrimalCoreBySpecies.GetValueOrDefault("melee_brute", 0));
+
+        var finalState = await GetAccountStateAsync(accountId);
+        var finalCharacter = finalState.Account.Characters[activeCharacter.CharacterId];
+        Assert.False(finalCharacter.Inventory.EquipmentInstances.ContainsKey(commonItem.InstanceId));
+        Assert.Equal(initialPrimalCore + 12, finalCharacter.PrimalCoreBySpecies.GetValueOrDefault("melee_brute", 0));
+    }
+
+    [Fact]
+    public async Task PostItemSalvage_FailsWhenItemIsNotOwned()
+    {
+        const string accountId = "dev_account_refine_ready_salvage_non_owned";
+        var response = await _client.PostAsJsonAsync(
+            $"/api/v1/items/salvage?accountId={accountId}",
+            new ItemSalvageRequestDto(ItemInstanceId: "missing.item.instance"));
+        var payload = await response.Content.ReadFromJsonAsync<ApiErrorDto>();
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.NotNull(payload);
+        Assert.Equal("validation_error", payload.Code);
+        Assert.Contains("does not own", payload.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -164,11 +382,13 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
     }
 
     [Fact]
-    public async Task PostAwardDrops_StacksMaterialsAndCanCreateEquipmentInstance()
+    public async Task PostAwardDrops_ChestCanCreateEquipmentInstance_AndDoesNotCreateMaterials()
     {
-        var state = await GetAccountStateAsync();
+        var state = await GetAccountStateAsync("dev_account_awards_chest");
         var character = state.Account.Characters[state.Account.ActiveCharacterId];
-        var beforeMaterial = character.Inventory.MaterialStacks.GetValueOrDefault("mat.arcane_dust", 0L);
+        var beforeMaterialStacks = character.Inventory.MaterialStacks
+            .OrderBy(entry => entry.Key, StringComparer.Ordinal)
+            .ToList();
         var beforeEquipmentCount = character.Inventory.EquipmentInstances.Count;
 
         var battleId = "battle-award-chest-01";
@@ -190,8 +410,10 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.NotNull(payload);
-        Assert.NotEmpty(payload.Awarded);
-        Assert.True(payload.Character.Inventory.MaterialStacks.GetValueOrDefault("mat.arcane_dust", 0L) >= beforeMaterial + 1);
+        Assert.Equal(
+            beforeMaterialStacks,
+            payload.Character.Inventory.MaterialStacks.OrderBy(entry => entry.Key, StringComparer.Ordinal).ToList());
+        Assert.DoesNotContain(payload.Awarded, drop => drop.ItemId.StartsWith("mat.", StringComparison.Ordinal));
 
         var awardedEquipment = payload.Awarded.FirstOrDefault(drop => !string.IsNullOrWhiteSpace(drop.EquipmentInstanceId));
         if (awardedEquipment is not null)
@@ -199,14 +421,71 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
             Assert.True(payload.Character.Inventory.EquipmentInstances.Count > beforeEquipmentCount);
             Assert.True(payload.Character.Inventory.EquipmentInstances.ContainsKey(awardedEquipment.EquipmentInstanceId!));
         }
+        else
+        {
+            Assert.Equal(beforeEquipmentCount, payload.Character.Inventory.EquipmentInstances.Count);
+        }
+    }
+
+    [Fact]
+    public async Task PostAwardDrops_MobKillAwardsEchoFragmentsPrimalCoreAndBestiaryKill()
+    {
+        var state = await GetAccountStateAsync("dev_account_awards_mob_once");
+        var character = state.Account.Characters[state.Account.ActiveCharacterId];
+        var initialEchoFragments = state.Account.EchoFragmentsBalance;
+        var initialMaterialStacks = character.Inventory.MaterialStacks
+            .OrderBy(entry => entry.Key, StringComparer.Ordinal)
+            .ToList();
+        var initialKills = character.BestiaryKillsBySpecies.GetValueOrDefault("melee_brute", 0);
+        var initialPrimalCore = character.PrimalCoreBySpecies.GetValueOrDefault("melee_brute", 0);
+
+        var request = new AwardDropsRequestDto(
+            AccountId: state.Account.AccountId,
+            CharacterId: character.CharacterId,
+            BattleId: "battle-award-mob-01",
+            Sources:
+            [
+                new DropSourceDto(
+                    Tick: 9,
+                    SourceType: "mob",
+                    SourceId: "mob.0009",
+                    Species: "melee_brute")
+            ]);
+
+        var response = await _client.PostAsJsonAsync("/api/v1/account/award-drops", request);
+        var payload = await response.Content.ReadFromJsonAsync<AwardDropsResponseDto>();
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(payload);
+        Assert.Equal(
+            initialMaterialStacks,
+            payload.Character.Inventory.MaterialStacks.OrderBy(entry => entry.Key, StringComparer.Ordinal).ToList());
+        Assert.Equal(initialKills + 1, payload.Character.BestiaryKillsBySpecies.GetValueOrDefault("melee_brute", 0));
+        Assert.Equal(initialPrimalCore + 1, payload.Character.PrimalCoreBySpecies.GetValueOrDefault("melee_brute", 0));
+        Assert.Contains(payload.Awarded, drop => drop.RewardKind == "echo_fragments" && drop.Quantity == 1);
+        Assert.Contains(payload.Awarded, drop => drop.RewardKind == "primal_core" && drop.Species == "melee_brute" && drop.Quantity == 1);
+        Assert.DoesNotContain(payload.Awarded, drop => drop.ItemId.StartsWith("mat.", StringComparison.Ordinal));
+
+        var finalState = await GetAccountStateAsync(state.Account.AccountId);
+        var finalCharacter = finalState.Account.Characters[character.CharacterId];
+        Assert.Equal(initialEchoFragments + 1, finalState.Account.EchoFragmentsBalance);
+        Assert.Equal(initialKills + 1, finalCharacter.BestiaryKillsBySpecies.GetValueOrDefault("melee_brute", 0));
+        Assert.Equal(initialPrimalCore + 1, finalCharacter.PrimalCoreBySpecies.GetValueOrDefault("melee_brute", 0));
+        Assert.Equal(
+            initialMaterialStacks,
+            finalCharacter.Inventory.MaterialStacks.OrderBy(entry => entry.Key, StringComparer.Ordinal).ToList());
     }
 
     [Fact]
     public async Task PostAwardDrops_IsIdempotentForSameSourceAndNoDoubleCounting()
     {
-        var state = await GetAccountStateAsync();
+        var state = await GetAccountStateAsync("dev_account_award_idempotent");
         var character = state.Account.Characters[state.Account.ActiveCharacterId];
-        var initialMaterial = character.Inventory.MaterialStacks.GetValueOrDefault("mat.scrap_iron", 0L);
+        var initialEchoFragments = state.Account.EchoFragmentsBalance;
+        var initialMaterialStacks = character.Inventory.MaterialStacks
+            .OrderBy(entry => entry.Key, StringComparer.Ordinal)
+            .ToList();
+        var initialKills = character.BestiaryKillsBySpecies.GetValueOrDefault("melee_brute", 0);
+        var initialPrimalCore = character.PrimalCoreBySpecies.GetValueOrDefault("melee_brute", 0);
 
         var request = new AwardDropsRequestDto(
             AccountId: state.Account.AccountId,
@@ -241,12 +520,120 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
             .ToList();
         Assert.Equal(firstSignatures, secondSignatures);
 
-        var finalState = await GetAccountStateAsync();
+        var finalState = await GetAccountStateAsync(state.Account.AccountId);
         var finalCharacter = finalState.Account.Characters[character.CharacterId];
-        Assert.True(finalCharacter.Inventory.MaterialStacks.GetValueOrDefault("mat.scrap_iron", 0L) >= initialMaterial + 1);
         Assert.Equal(
-            finalCharacter.Inventory.MaterialStacks.GetValueOrDefault("mat.scrap_iron", 0L),
-            secondPayload.Character.Inventory.MaterialStacks.GetValueOrDefault("mat.scrap_iron", 0L));
+            initialMaterialStacks,
+            finalCharacter.Inventory.MaterialStacks.OrderBy(entry => entry.Key, StringComparer.Ordinal).ToList());
+        Assert.Equal(initialEchoFragments + 1, finalState.Account.EchoFragmentsBalance);
+        Assert.Equal(initialKills + 1, finalCharacter.BestiaryKillsBySpecies.GetValueOrDefault("melee_brute", 0));
+        Assert.Equal(initialPrimalCore + 1, finalCharacter.PrimalCoreBySpecies.GetValueOrDefault("melee_brute", 0));
+        Assert.Equal(
+            finalCharacter.Inventory.MaterialStacks.OrderBy(entry => entry.Key, StringComparer.Ordinal).ToList(),
+            secondPayload.Character.Inventory.MaterialStacks.OrderBy(entry => entry.Key, StringComparer.Ordinal).ToList());
+        Assert.Equal(
+            finalCharacter.BestiaryKillsBySpecies.GetValueOrDefault("melee_brute", 0),
+            secondPayload.Character.BestiaryKillsBySpecies.GetValueOrDefault("melee_brute", 0));
+        Assert.Equal(
+            finalCharacter.PrimalCoreBySpecies.GetValueOrDefault("melee_brute", 0),
+            secondPayload.Character.PrimalCoreBySpecies.GetValueOrDefault("melee_brute", 0));
+        Assert.DoesNotContain(firstPayload.Awarded, drop => drop.ItemId.StartsWith("mat.", StringComparison.Ordinal));
+        Assert.DoesNotContain(secondPayload.Awarded, drop => drop.ItemId.StartsWith("mat.", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task PostAwardDrops_MobKillAscendantDrop_WithControlledSeed_IsDeterministic()
+    {
+        const string accountId = "dev_account_ascendant_cap_deterministic";
+        var state = await GetAccountStateAsync(accountId);
+        var characterId = state.Account.ActiveCharacterId;
+        const string speciesId = "melee_brute";
+        var sources = BuildMobDropSources(prefix: "mob.ascendant.force", speciesId: speciesId, count: 50);
+
+        int? matchedSeed = null;
+        AwardDropsResponseDto? firstPayload = null;
+        for (var seed = 1; seed <= 300; seed += 1)
+        {
+            var start = await StartBattleAsync($"arena-ascendant-force-a-{seed}", $"player-ascendant-force-a-{seed}", seed);
+            var response = await _client.PostAsJsonAsync(
+                "/api/v1/account/award-drops",
+                new AwardDropsRequestDto(
+                    AccountId: accountId,
+                    CharacterId: characterId,
+                    BattleId: start.BattleId,
+                    Sources: sources));
+            var payload = await response.Content.ReadFromJsonAsync<AwardDropsResponseDto>();
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.NotNull(payload);
+
+            if (payload.Awarded.Any(drop => IsAscendantItemId(drop.ItemId)))
+            {
+                matchedSeed = seed;
+                firstPayload = payload;
+                break;
+            }
+        }
+
+        if (!matchedSeed.HasValue || firstPayload is null)
+        {
+            throw new Xunit.Sdk.XunitException("No seed in range 1..300 produced an ascendant drop.");
+        }
+
+        var firstAscendantDrops = firstPayload.Awarded
+            .Where(drop => IsAscendantItemId(drop.ItemId))
+            .OrderBy(drop => drop.SourceId, StringComparer.Ordinal)
+            .ThenBy(drop => drop.Tick)
+            .ToList();
+        Assert.NotEmpty(firstAscendantDrops);
+
+        var expectedSlotByItemId = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["wpn.ascendant_forged_blade"] = "weapon",
+            ["arm.ascendant_forged_mail"] = "armor",
+            ["rel.ascendant_forged_emblem"] = "relic"
+        };
+
+        foreach (var drop in firstAscendantDrops)
+        {
+            Assert.Equal("item", drop.RewardKind);
+            Assert.Equal(speciesId, drop.Species);
+            Assert.False(string.IsNullOrWhiteSpace(drop.EquipmentInstanceId));
+
+            var equipmentInstance = firstPayload.Character.Inventory.EquipmentInstances[drop.EquipmentInstanceId!];
+            Assert.Equal("ascendant", equipmentInstance.Rarity);
+            Assert.Equal(speciesId, equipmentInstance.OriginSpeciesId);
+            Assert.True(expectedSlotByItemId.TryGetValue(drop.ItemId, out var expectedSlot));
+            Assert.Equal(expectedSlot, equipmentInstance.Slot);
+        }
+
+        var secondStart = await StartBattleAsync(
+            $"arena-ascendant-force-b-{matchedSeed.Value}",
+            $"player-ascendant-force-b-{matchedSeed.Value}",
+            matchedSeed.Value);
+        var secondResponse = await _client.PostAsJsonAsync(
+            "/api/v1/account/award-drops",
+            new AwardDropsRequestDto(
+                AccountId: accountId,
+                CharacterId: characterId,
+                BattleId: secondStart.BattleId,
+                Sources: sources));
+        var secondPayload = await secondResponse.Content.ReadFromJsonAsync<AwardDropsResponseDto>();
+
+        Assert.Equal(HttpStatusCode.OK, secondResponse.StatusCode);
+        Assert.NotNull(secondPayload);
+
+        var firstSignatures = firstAscendantDrops
+            .Select(drop => $"{drop.SourceId}|{drop.Tick}|{drop.ItemId}")
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToList();
+        var secondSignatures = secondPayload.Awarded
+            .Where(drop => IsAscendantItemId(drop.ItemId))
+            .Select(drop => $"{drop.SourceId}|{drop.Tick}|{drop.ItemId}")
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToList();
+
+        Assert.Equal(firstSignatures, secondSignatures);
     }
 
     [Fact]
@@ -4196,6 +4583,28 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
 
         Assert.False(string.IsNullOrWhiteSpace(ownedInstanceId), $"Expected an owned item for slot '{slot}'.");
         return ownedInstanceId!;
+    }
+
+    private static List<DropSourceDto> BuildMobDropSources(string prefix, string speciesId, int count)
+    {
+        var sources = new List<DropSourceDto>(capacity: count);
+        for (var index = 1; index <= count; index += 1)
+        {
+            sources.Add(new DropSourceDto(
+                Tick: index,
+                SourceType: "mob",
+                SourceId: $"{prefix}.{index:D2}",
+                Species: speciesId));
+        }
+
+        return sources;
+    }
+
+    private static bool IsAscendantItemId(string itemId)
+    {
+        return string.Equals(itemId, "wpn.ascendant_forged_blade", StringComparison.Ordinal) ||
+            string.Equals(itemId, "arm.ascendant_forged_mail", StringComparison.Ordinal) ||
+            string.Equals(itemId, "rel.ascendant_forged_emblem", StringComparison.Ordinal);
     }
 
     private async Task<BattleStartResponseDto> StartBattleAsync(string arenaId, string playerId, int? seed)
