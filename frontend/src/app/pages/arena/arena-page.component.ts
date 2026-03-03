@@ -107,7 +107,11 @@ type ApiBuffState = {
 };
 type StepCommand = NonNullable<StepBattleRequest["commands"]>[number];
 type FacingDirection = "up" | "up_right" | "right" | "down_right" | "down" | "down_left" | "left" | "up_left";
-type MovementKey = "w" | "a" | "s" | "d";
+type MovementInputKey = "w" | "a" | "s" | "d" | "q" | "e" | "z" | "c";
+type PressedMovementKeyState = Readonly<{
+  pressedAtMs: number;
+  sequence: number;
+}>;
 type AssistOffenseMode = "cooldown_spam" | "smart";
 type AssistSkillId = "exori" | "exori_min" | "exori_mas" | "avalanche";
 type RightInfoTabId = "helper" | "bestiary" | "status";
@@ -122,6 +126,7 @@ type PreRunCharacterViewModel = Readonly<{
 export const RIGHT_INFO_TAB_STORAGE_KEY = "kaezan_arena_right_tab_v1";
 const AVALANCHE_SKILL_ID = "avalanche";
 const ASSIST_CONFIG_DEBOUNCE_MS = 200;
+const MOVEMENT_BUFFER_TTL_MS = 250;
 const ASSIST_SKILL_IDS: readonly AssistSkillId[] = ["exori", "exori_min", "exori_mas", "avalanche"];
 type ArenaAssistConfig = Readonly<{
   enabled: boolean;
@@ -290,7 +295,11 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   private readonly maxCanvasMeasureAttempts = 20;
   private renderInProgress = false;
   private queuedCommands: StepCommand[] = [];
-  private readonly pressedMovementKeys = new Set<MovementKey>();
+  private readonly pressedMovementKeys = new Map<MovementInputKey, PressedMovementKeyState>();
+  private movementKeySequence = 0;
+  private bufferedMovementDirection: FacingDirection | null = null;
+  private bufferedMovementExpiresAtMs = 0;
+  private bufferedMovementAwaitingResult = false;
   private autoStepTimerId: ReturnType<typeof setTimeout> | null = null;
   private assistConfigDebounceTimerId: ReturnType<typeof setTimeout> | null = null;
   private autoStepWasEnabledBeforePause = false;
@@ -301,7 +310,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   private readonly sentLootSourceKeys = new Set<string>();
   assistConfig: ArenaAssistConfig = this.buildDefaultAssistConfig();
   readonly hotkeyGroups: ReadonlyArray<Readonly<{ title: string; entries: ReadonlyArray<string> }>> = [
-    { title: "Movement", entries: ["W/A/S/D move", "Q/E/Z diagonal move"] },
+    { title: "Movement", entries: ["W/A/S/D move", "Q/E/Z/C diagonal move", "Last input direction wins"] },
     { title: "Facing", entries: ["Arrow keys set facing"] },
     { title: "Targeting", entries: ["Left click ground target", "Right click lock target", "F interact POI"] },
     {
@@ -310,7 +319,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         "T toggle AUTO ON/OFF",
         "Esc toggle Pause modal",
         "I focus Backpack",
-        "C focus Equipment",
+        "C focus Equipment (outside run)",
         "H open Helper tab",
         "B open Bestiary tab",
         "K open Status tab",
@@ -541,7 +550,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
 
     this.clearAssistConfigDebounce();
     this.stopAutoStepLoop();
-    this.pressedMovementKeys.clear();
+    this.clearMovementInputState();
   }
 
   @HostListener("window:keydown", ["$event"])
@@ -620,14 +629,16 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     }
 
     if (normalizedKey === "c") {
-      event.preventDefault();
-      if (event.repeat) {
+      if (!this.isMovementInputContextActive()) {
+        event.preventDefault();
+        if (event.repeat) {
+          return;
+        }
+
+        this.focusEquipmentPanel();
+        this.focusRightInfoPane();
         return;
       }
-
-      this.focusEquipmentPanel();
-      this.focusRightInfoPane();
-      return;
     }
 
     if (normalizedKey === "h") {
@@ -673,30 +684,10 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       return;
     }
 
-    const dedicatedDiagonalDirection = this.toDedicatedDiagonalDirection(event.key);
-    if (dedicatedDiagonalDirection) {
-      event.preventDefault();
-      if (event.repeat) {
-        return;
-      }
-
-      this.movePlayer(dedicatedDiagonalDirection);
-      return;
-    }
-
     const movementKey = this.toMovementKey(event.key);
     if (movementKey) {
       event.preventDefault();
-      this.pressedMovementKeys.add(movementKey);
-      if (event.repeat) {
-        return;
-      }
-
-      const movementDirection = this.resolveMovementDirectionFromPressedKeys();
-      if (movementDirection) {
-        this.movePlayer(movementDirection);
-      }
-
+      this.onMovementKeyDown(movementKey, event.repeat);
       return;
     }
 
@@ -735,12 +726,12 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       return;
     }
 
-    this.pressedMovementKeys.delete(movementKey);
+    this.onMovementKeyUp(movementKey);
   }
 
   @HostListener("window:blur")
   onWindowBlur(): void {
-    this.pressedMovementKeys.clear();
+    this.clearMovementInputState();
   }
 
   @HostListener("window:resize")
@@ -946,7 +937,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.isPauseModalOpen = true;
     this.autoStepEnabled = false;
     this.stopAutoStepLoop();
-    this.pressedMovementKeys.clear();
+    this.clearMovementInputState();
     void this.syncBackendPauseState(true);
   }
 
@@ -995,7 +986,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   private async beginNewRun(): Promise<void> {
     this.stopAutoStepLoop();
     this.clearAssistConfigDebounce();
-    this.pressedMovementKeys.clear();
+    this.clearMovementInputState();
     this.autoStepEnabled = false;
     this.queuedCommands = [];
     this.queuedCommandCount = 0;
@@ -1536,6 +1527,26 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.enqueueMovePlayer(dir);
   }
 
+  private onMovementKeyDown(key: MovementInputKey, isRepeat: boolean): void {
+    if (isRepeat) {
+      return;
+    }
+
+    this.pressedMovementKeys.set(key, {
+      pressedAtMs: Date.now(),
+      sequence: ++this.movementKeySequence
+    });
+
+    this.syncBufferedMovementFromPressedKeys();
+    this.tryQueueBufferedMovementCommand();
+  }
+
+  private onMovementKeyUp(key: MovementInputKey): void {
+    this.pressedMovementKeys.delete(key);
+    this.syncBufferedMovementFromPressedKeys();
+    this.tryQueueBufferedMovementCommand();
+  }
+
   private interactBestPoiInRange(): void {
     if (!this.canIssueBattleCommand()) {
       return;
@@ -1554,6 +1565,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       return;
     }
 
+    this.pumpMovementBuffer();
     const commandsToSend = this.dequeuePendingCommands();
     this.runInAngularZone(() => {
       this.battleRequestInFlight = true;
@@ -1575,6 +1587,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         this.currentFacingDirection = this.toFacingDirection(response.facingDirection) ?? this.currentFacingDirection;
         this.applyGameOverStateFromSnapshot(response);
         this.applyBattlePayload(response);
+        this.updateMovementBufferFromCommandResults(response.commandResults, commandsToSend);
         this.appendCommandResultLogs(response.commandResults, commandsToSend);
         this.syncUiMetaState();
         this.battleLog = JSON.stringify(response, null, 2);
@@ -2909,6 +2922,139 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.queuedCommandCount = this.queuedCommands.length;
   }
 
+  private pumpMovementBuffer(): void {
+    if (!this.isMovementInputContextActive()) {
+      this.clearBufferedMovement();
+      return;
+    }
+
+    const desired = this.syncBufferedMovementFromPressedKeys();
+    if (!desired) {
+      return;
+    }
+
+    this.tryQueueBufferedMovementCommand();
+  }
+
+  private tryQueueBufferedMovementCommand(): void {
+    if (!this.bufferedMovementDirection) {
+      return;
+    }
+
+    if (!this.canIssueBattleCommand() || !this.isPlayerAliveForInput() || this.bufferedMovementAwaitingResult) {
+      return;
+    }
+
+    if (Date.now() > this.bufferedMovementExpiresAtMs || this.hasQueuedMoveCommand()) {
+      return;
+    }
+
+    this.enqueueMovePlayer(this.bufferedMovementDirection);
+    this.bufferedMovementAwaitingResult = true;
+  }
+
+  private isPlayerAliveForInput(): boolean {
+    return this.ui.player.hp > 0;
+  }
+
+  private updateMovementBufferFromCommandResults(
+    commandResults: StepBattleResponse["commandResults"],
+    sentCommands: ReadonlyArray<StepCommand>
+  ): void {
+    const moveCommandIndex = this.findLastMoveCommandIndex(sentCommands);
+    if (moveCommandIndex < 0) {
+      return;
+    }
+
+    const safeResults = commandResults ?? [];
+    const moveResult = safeResults
+      .map((entry) => entry as ApiCommandResult)
+      .find((result) => {
+        if (typeof result.index === "number") {
+          return result.index === moveCommandIndex;
+        }
+
+        return this.readString(result.type) === "move_player";
+      });
+
+    this.bufferedMovementAwaitingResult = false;
+
+    const desired = this.syncBufferedMovementFromPressedKeys();
+    if (!desired) {
+      return;
+    }
+
+    const wasSuccessful = moveResult?.ok === true;
+    const reason = this.readString(moveResult?.reason);
+    if (wasSuccessful || reason === "cooldown" || reason === "move_blocked") {
+      this.bufferedMovementExpiresAtMs = Date.now() + MOVEMENT_BUFFER_TTL_MS;
+      return;
+    }
+
+    this.clearBufferedMovement();
+  }
+
+  private syncBufferedMovementFromPressedKeys(nowMs: number = Date.now()): FacingDirection | null {
+    const desired = this.resolveMovementDirectionFromPressedKeys();
+    if (!desired) {
+      this.clearBufferedMovement();
+      this.removeQueuedMoveCommands();
+      return null;
+    }
+
+    if (this.bufferedMovementDirection !== desired) {
+      this.bufferedMovementAwaitingResult = false;
+      this.removeQueuedMoveCommands();
+    }
+
+    this.bufferedMovementDirection = desired;
+    this.bufferedMovementExpiresAtMs = nowMs + MOVEMENT_BUFFER_TTL_MS;
+    return desired;
+  }
+
+  private clearMovementInputState(): void {
+    this.pressedMovementKeys.clear();
+    this.clearBufferedMovement();
+    this.removeQueuedMoveCommands();
+  }
+
+  private clearBufferedMovement(): void {
+    this.bufferedMovementDirection = null;
+    this.bufferedMovementExpiresAtMs = 0;
+    this.bufferedMovementAwaitingResult = false;
+  }
+
+  private isMovementInputContextActive(): boolean {
+    return !!this.currentBattleId &&
+      this.battleStatus === "started" &&
+      !this.isPauseModalOpen &&
+      !this.isDeathModalOpen;
+  }
+
+  private hasQueuedMoveCommand(): boolean {
+    return this.queuedCommands.some((command) => command.type === "move_player");
+  }
+
+  private removeQueuedMoveCommands(): void {
+    const withoutMoves = this.queuedCommands.filter((command) => command.type !== "move_player");
+    if (withoutMoves.length === this.queuedCommands.length) {
+      return;
+    }
+
+    this.queuedCommands = withoutMoves;
+    this.queuedCommandCount = this.queuedCommands.length;
+  }
+
+  private findLastMoveCommandIndex(commands: ReadonlyArray<StepCommand>): number {
+    for (let index = commands.length - 1; index >= 0; index -= 1) {
+      if (commands[index].type === "move_player") {
+        return index;
+      }
+    }
+
+    return -1;
+  }
+
   private startOrRestartAutoStepLoop(): void {
     this.stopAutoStepLoop();
 
@@ -3020,7 +3166,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   private returnToPreRun(): void {
     this.stopAutoStepLoop();
     this.clearAssistConfigDebounce();
-    this.pressedMovementKeys.clear();
+    this.clearMovementInputState();
     this.autoStepEnabled = false;
     this.battleRequestInFlight = false;
     this.queuedCommands = [];
@@ -3317,27 +3463,12 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     return null;
   }
 
-  private toMovementKey(key: string): MovementKey | null {
+  private toMovementKey(key: string): MovementInputKey | null {
     const normalized = key.toLowerCase();
-    if (normalized === "w" || normalized === "a" || normalized === "s" || normalized === "d") {
-      return normalized as MovementKey;
-    }
-
-    return null;
-  }
-
-  private toDedicatedDiagonalDirection(key: string): FacingDirection | null {
-    const normalized = key.toLowerCase();
-    if (normalized === "q") {
-      return "up_left";
-    }
-
-    if (normalized === "e") {
-      return "up_right";
-    }
-
-    if (normalized === "z") {
-      return "down_left";
+    if (normalized === "w" || normalized === "a" || normalized === "s" || normalized === "d" ||
+      normalized === "q" || normalized === "e" || normalized === "z" || normalized === "c")
+    {
+      return normalized as MovementInputKey;
     }
 
     return null;
@@ -3518,47 +3649,56 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   }
 
   private resolveMovementDirectionFromPressedKeys(): FacingDirection | null {
-    const hasUp = this.pressedMovementKeys.has("w");
-    const hasLeft = this.pressedMovementKeys.has("a");
-    const hasDown = this.pressedMovementKeys.has("s");
-    const hasRight = this.pressedMovementKeys.has("d");
-
-    const vertical = hasUp === hasDown ? 0 : hasUp ? -1 : 1;
-    const horizontal = hasLeft === hasRight ? 0 : hasRight ? 1 : -1;
-
-    if (vertical === -1 && horizontal === 1) {
-      return "up_right";
+    let selectedKey: MovementInputKey | null = null;
+    let selectedSequence = -1;
+    let selectedPressedAtMs = -1;
+    for (const [key, state] of this.pressedMovementKeys.entries()) {
+      if (state.sequence > selectedSequence ||
+        (state.sequence === selectedSequence && state.pressedAtMs > selectedPressedAtMs))
+      {
+        selectedKey = key;
+        selectedSequence = state.sequence;
+        selectedPressedAtMs = state.pressedAtMs;
+      }
     }
 
-    if (vertical === -1 && horizontal === -1) {
-      return "up_left";
+    if (!selectedKey) {
+      return null;
     }
 
-    if (vertical === 1 && horizontal === 1) {
-      return "down_right";
-    }
+    return this.toFacingDirectionFromMovementKey(selectedKey);
+  }
 
-    if (vertical === 1 && horizontal === -1) {
-      return "down_left";
-    }
-
-    if (vertical === -1) {
+  private toFacingDirectionFromMovementKey(key: MovementInputKey): FacingDirection {
+    if (key === "w") {
       return "up";
     }
 
-    if (vertical === 1) {
-      return "down";
-    }
-
-    if (horizontal === 1) {
-      return "right";
-    }
-
-    if (horizontal === -1) {
+    if (key === "a") {
       return "left";
     }
 
-    return null;
+    if (key === "s") {
+      return "down";
+    }
+
+    if (key === "d") {
+      return "right";
+    }
+
+    if (key === "q") {
+      return "up_left";
+    }
+
+    if (key === "e") {
+      return "up_right";
+    }
+
+    if (key === "z") {
+      return "down_left";
+    }
+
+    return "down_right";
   }
 
   private updateBestiaryFocusSpecies(): void {

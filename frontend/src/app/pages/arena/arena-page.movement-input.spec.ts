@@ -16,6 +16,13 @@ describe("ArenaPageComponent movement input", () => {
     (component as any).currentBattleId = "battle-move";
     (component as any).battleStatus = "started";
     (component as any).battleRequestInFlight = false;
+    (component as any).ui = {
+      ...(component as any).ui,
+      player: {
+        ...(component as any).ui.player,
+        hp: 100
+      }
+    };
   }
 
   it("maps WASD keydown to move_player commands", () => {
@@ -32,7 +39,7 @@ describe("ArenaPageComponent movement input", () => {
     component.onKeyUp(new KeyboardEvent("keyup", { key: "w" }));
   });
 
-  it("maps simultaneous WASD combos to diagonal move directions", () => {
+  it("uses LAST INPUT WINS when multiple movement keys are held", () => {
     const component = createComponent();
     enableCommandIssuing(component);
 
@@ -42,35 +49,52 @@ describe("ArenaPageComponent movement input", () => {
     const drained = (component as any).dequeuePendingCommands() as Array<Record<string, unknown>>;
     expect(drained.length).toBe(1);
     expect(drained[0]["type"]).toBe("move_player");
-    expect(drained[0]["dir"]).toBe("up_right");
+    expect(drained[0]["dir"]).toBe("right");
 
     component.onKeyUp(new KeyboardEvent("keyup", { key: "w" }));
     component.onKeyUp(new KeyboardEvent("keyup", { key: "d" }));
   });
 
-  it("maps dedicated diagonal keys Q/E/Z to move_player diagonals", () => {
+  it("treats Q/E/Z/C as independent diagonal directions", () => {
+    const cases = [
+      { key: "q", expected: "up_left" },
+      { key: "e", expected: "up_right" },
+      { key: "z", expected: "down_left" },
+      { key: "c", expected: "down_right" }
+    ] as const;
+
+    for (const testCase of cases) {
+      const component = createComponent();
+      enableCommandIssuing(component);
+
+      component.onKeyDown(new KeyboardEvent("keydown", { key: testCase.key }));
+
+      const queued = (component as any).queuedCommands as Array<Record<string, unknown>>;
+      expect(queued).toEqual([{ type: "move_player", dir: testCase.expected }]);
+    }
+  });
+
+  it("lets cardinal input override diagonal immediately (LAST INPUT WINS)", () => {
     const component = createComponent();
     enableCommandIssuing(component);
 
     component.onKeyDown(new KeyboardEvent("keydown", { key: "q" }));
-    component.onKeyDown(new KeyboardEvent("keydown", { key: "e" }));
-    component.onKeyDown(new KeyboardEvent("keydown", { key: "z" }));
+    component.onKeyDown(new KeyboardEvent("keydown", { key: "w" }));
 
     const queued = (component as any).queuedCommands as Array<Record<string, unknown>>;
-    expect(queued).toEqual([
-      { type: "move_player", dir: "up_left" },
-      { type: "move_player", dir: "up_right" },
-      { type: "move_player", dir: "down_left" }
-    ]);
+    expect(queued).toEqual([{ type: "move_player", dir: "up" }]);
   });
 
-  it("uses C hotkey to focus equipment panel", () => {
+  it("uses C as movement input while run is active", () => {
     const component = createComponent();
+    enableCommandIssuing(component);
     const focusSpy = vi.spyOn(component as any, "focusEquipmentPanel");
 
     component.onKeyDown(new KeyboardEvent("keydown", { key: "c" }));
 
-    expect(focusSpy).toHaveBeenCalledTimes(1);
+    const queued = (component as any).queuedCommands as Array<Record<string, unknown>>;
+    expect(queued).toEqual([{ type: "move_player", dir: "down_right" }]);
+    expect(focusSpy).toHaveBeenCalledTimes(0);
   });
 
   it("uses H hotkey to switch right info tab to helper", () => {
@@ -116,20 +140,25 @@ describe("ArenaPageComponent movement input", () => {
     expect(focusLootSpy).toHaveBeenCalledTimes(1);
   });
 
-  it("keeps WASD combo diagonal fallback working", () => {
+  it("buffers movement and retries after cooldown failure while key remains held", () => {
     const component = createComponent();
     enableCommandIssuing(component);
 
-    component.onKeyDown(new KeyboardEvent("keydown", { key: "s" }));
-    component.onKeyDown(new KeyboardEvent("keydown", { key: "a" }));
+    component.onKeyDown(new KeyboardEvent("keydown", { key: "w" }));
 
-    const drained = (component as any).dequeuePendingCommands() as Array<Record<string, unknown>>;
-    expect(drained.length).toBe(1);
-    expect(drained[0]["type"]).toBe("move_player");
-    expect(drained[0]["dir"]).toBe("down_left");
+    const firstSend = (component as any).dequeuePendingCommands() as Array<Record<string, unknown>>;
+    expect(firstSend).toEqual([{ type: "move_player", dir: "up" }]);
 
-    component.onKeyUp(new KeyboardEvent("keyup", { key: "s" }));
-    component.onKeyUp(new KeyboardEvent("keyup", { key: "a" }));
+    (component as any).updateMovementBufferFromCommandResults(
+      [{ index: 0, type: "move_player", ok: false, reason: "cooldown" }],
+      firstSend
+    );
+    (component as any).pumpMovementBuffer();
+
+    const secondSend = (component as any).dequeuePendingCommands() as Array<Record<string, unknown>>;
+    expect(secondSend).toEqual([{ type: "move_player", dir: "up" }]);
+
+    component.onKeyUp(new KeyboardEvent("keyup", { key: "w" }));
   });
 
   it("keeps arrow keys mapped to set_facing commands", () => {
