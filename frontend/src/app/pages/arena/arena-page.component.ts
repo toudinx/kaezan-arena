@@ -2385,6 +2385,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         const damageAmount = this.readNumber(value["damageAmount"]);
         const isKill = this.readBoolean(value["isKill"]);
         const isCrit = this.readBoolean(value["isCrit"]);
+        const hitKind = this.readHitKind(value["hitKind"]);
         const hitId = this.readNumber(value["hitId"]);
         const elementType = this.readElementValue(value["elementType"]);
         const sourceEntityId = this.readString(value["sourceEntityId"]);
@@ -2401,11 +2402,12 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
           targetTileY === null ||
           damageAmount === null ||
           isKill === null ||
-          isCrit === null ||
           hitId === null
         ) {
           continue;
         }
+
+        const resolvedIsCrit = isCrit ?? hitKind === "crit";
 
         mapped.push({
           type: "damage_number",
@@ -2420,11 +2422,33 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
           targetTileY,
           damageAmount,
           isKill,
-          isCrit,
+          isCrit: resolvedIsCrit,
+          hitKind: hitKind ?? undefined,
           hitId,
           shieldDamageAmount: shieldDamageAmount ?? undefined,
           hpDamageAmount: hpDamageAmount ?? undefined,
           elementType: elementType ?? undefined
+        });
+        continue;
+      }
+
+      if (eventType === "crit_text") {
+        const text = this.readString(value["text"]);
+        const tileX = this.readNumber(value["tileX"]);
+        const tileY = this.readNumber(value["tileY"]);
+        const startAtMs = this.readNumber(value["startAtMs"]);
+        const durationMs = this.readNumber(value["durationMs"]);
+        if (!text || tileX === null || tileY === null || startAtMs === null || durationMs === null) {
+          continue;
+        }
+
+        mapped.push({
+          type: "crit_text",
+          text,
+          tileX,
+          tileY,
+          startAtMs,
+          durationMs
         });
         continue;
       }
@@ -3286,6 +3310,10 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
 
   private readBoolean(value: unknown): boolean | null {
     return typeof value === "boolean" ? value : null;
+  }
+
+  private readHitKind(value: unknown): "normal" | "crit" | null {
+    return value === "normal" || value === "crit" ? value : null;
   }
 
   private readElementValue(value: unknown): 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | null {

@@ -33,7 +33,8 @@ builder.Services.AddSwaggerGen(options =>
                 typeof(BuffAppliedEventDto),
                 typeof(AltarActivatedEventDto),
                 typeof(SpeciesChestSpawnedEventDto),
-                typeof(SpeciesChestOpenedEventDto)
+                typeof(SpeciesChestOpenedEventDto),
+                typeof(CritTextEventDto)
             ];
         }
 
@@ -106,6 +107,11 @@ builder.Services.AddSwaggerGen(options =>
         if (subType == typeof(SpeciesChestOpenedEventDto))
         {
             return "species_chest_opened";
+        }
+
+        if (subType == typeof(CritTextEventDto))
+        {
+            return "crit_text";
         }
 
         return null;

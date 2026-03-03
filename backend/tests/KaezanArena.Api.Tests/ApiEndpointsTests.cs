@@ -3233,6 +3233,67 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
     }
 
     [Fact]
+    public async Task PostBattleStep_CriticalHit_EmitsHitKindAndCritTextDeterministically()
+    {
+        const int seed = 1337;
+        const int maxSteps = 120;
+        var playerId = "player-crit-hit-kind";
+        var firstStart = await StartBattleAsync("arena-crit-hit-kind-a", playerId, seed);
+        var secondStart = await StartBattleAsync("arena-crit-hit-kind-b", playerId, seed);
+
+        var firstTick = firstStart.Tick;
+        var secondTick = secondStart.Tick;
+
+        for (var stepIndex = 0; stepIndex < maxSteps; stepIndex += 1)
+        {
+            var firstStep = await StepBattleAsync(firstStart.BattleId, firstTick, []);
+            var secondStep = await StepBattleAsync(secondStart.BattleId, secondTick, []);
+            firstTick = firstStep.Tick;
+            secondTick = secondStep.Tick;
+
+            var firstCritSignatures = firstStep.Events
+                .Where(evt => evt is CritTextEventDto ||
+                              evt is DamageNumberEventDto damage &&
+                              string.Equals(damage.HitKind, BattleHitKinds.Crit, StringComparison.Ordinal))
+                .Select(ToEventSignature)
+                .ToList();
+            var secondCritSignatures = secondStep.Events
+                .Where(evt => evt is CritTextEventDto ||
+                              evt is DamageNumberEventDto damage &&
+                              string.Equals(damage.HitKind, BattleHitKinds.Crit, StringComparison.Ordinal))
+                .Select(ToEventSignature)
+                .ToList();
+            Assert.Equal(firstCritSignatures, secondCritSignatures);
+
+            var critDamage = firstStep.Events
+                .OfType<DamageNumberEventDto>()
+                .FirstOrDefault(evt => string.Equals(evt.HitKind, BattleHitKinds.Crit, StringComparison.Ordinal));
+            if (critDamage is null)
+            {
+                continue;
+            }
+
+            Assert.True(critDamage.IsCrit);
+            var matchingCritTexts = firstStep.Events
+                .OfType<CritTextEventDto>()
+                .Where(evt =>
+                    string.Equals(evt.Text, "CRIT!", StringComparison.Ordinal) &&
+                    evt.TileX == critDamage.TargetTileX &&
+                    evt.TileY == critDamage.TargetTileY)
+                .ToList();
+            Assert.NotEmpty(matchingCritTexts);
+            Assert.All(matchingCritTexts, critText =>
+            {
+                Assert.Equal(800, critText.DurationMs);
+                Assert.Equal(firstStep.Tick * StepDeltaMs, critText.StartAtMs);
+            });
+            return;
+        }
+
+        throw new Xunit.Sdk.XunitException("Expected at least one deterministic critical hit event within the test window.");
+    }
+
+    [Fact]
     public async Task PostBattleStep_RespawnRandomly_StaysInBoundsAndNoOverlap()
     {
         var playerId = "player-respawn-random";
@@ -4546,7 +4607,7 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
             AttackFxEventDto attackFx =>
                 $"attack:{(int)attackFx.FxKind}:{attackFx.FromTileX}:{attackFx.FromTileY}:{attackFx.ToTileX}:{attackFx.ToTileY}:{(int)attackFx.ElementType}:{attackFx.DurationMs}:{attackFx.CreatedAtTick}:{attackFx.EventId}",
             DamageNumberEventDto damage =>
-                $"damage:{damage.AttackerEntityId}:{damage.AttackerTileX}:{damage.AttackerTileY}:{damage.TargetEntityId}:{damage.TargetTileX}:{damage.TargetTileY}:{damage.DamageAmount}:{(int)damage.ElementType}:{damage.IsKill}:{damage.IsCrit}:{damage.HitId}",
+                $"damage:{damage.AttackerEntityId}:{damage.AttackerTileX}:{damage.AttackerTileY}:{damage.TargetEntityId}:{damage.TargetTileX}:{damage.TargetTileY}:{damage.DamageAmount}:{(int)damage.ElementType}:{damage.IsKill}:{damage.IsCrit}:{damage.HitId}:{damage.HitKind}",
             DeathEventDto death =>
                 $"death:{death.EntityId}:{death.EntityType}:{(int?)death.MobType}:{death.TileX}:{death.TileY}:{(int?)death.ElementType}:{death.KillerEntityId}:{death.TickIndex}",
             HealNumberEventDto heal =>
@@ -4567,6 +4628,8 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
                 $"species_chest_spawned:{speciesChestSpawned.Species}:{speciesChestSpawned.PoiId}:{speciesChestSpawned.TileX}:{speciesChestSpawned.TileY}",
             SpeciesChestOpenedEventDto speciesChestOpened =>
                 $"species_chest_opened:{speciesChestOpened.Species}:{speciesChestOpened.BuffId}:{speciesChestOpened.DurationMs}",
+            CritTextEventDto critText =>
+                $"crit_text:{critText.Text}:{critText.TileX}:{critText.TileY}:{critText.StartAtMs}:{critText.DurationMs}",
             _ => battleEvent.GetType().Name
         };
     }

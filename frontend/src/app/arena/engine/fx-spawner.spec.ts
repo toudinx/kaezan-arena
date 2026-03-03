@@ -21,7 +21,8 @@ describe("fx-spawner", () => {
       activePois: [],
       fxInstances: [],
       attackFxInstances: [],
-      damageNumbers: []
+      damageNumbers: [],
+      floatingTexts: []
     };
   }
 

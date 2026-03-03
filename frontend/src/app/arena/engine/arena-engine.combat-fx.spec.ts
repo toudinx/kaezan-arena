@@ -123,4 +123,35 @@ describe("ArenaEngine combat fx mapping", () => {
     expect(applied.scene.damageNumbers[1]?.stackIndex).toBe(1);
     expect(applied.scene.damageNumbers[1]?.spawnOrder).toBe(1);
   });
+
+  it("maps crit_text events and expires them by duration", () => {
+    const engine = new ArenaEngine();
+    const scene = engine.createTestScene(7, 7, 32);
+    const actors = createActors();
+    const skills: ArenaSkillState[] = [];
+    const events: ArenaBattleEvent[] = [
+      {
+        type: "crit_text",
+        text: "CRIT!",
+        tileX: 5,
+        tileY: 4,
+        startAtMs: 250,
+        durationMs: 800
+      }
+    ];
+
+    const applied = engine.applyBattleStep(scene, actors, skills, [], events);
+
+    expect(applied.scene.floatingTexts).toHaveLength(1);
+    expect(applied.scene.floatingTexts[0]?.text).toBe("CRIT!");
+    expect(applied.scene.floatingTexts[0]?.tilePos).toEqual({ x: 5, y: 4 });
+    expect(applied.scene.floatingTexts[0]?.durationMs).toBe(800);
+
+    const active = engine.update(applied.scene, 700);
+    expect(active.floatingTexts).toHaveLength(1);
+    expect(active.floatingTexts[0]?.elapsedMs).toBe(700);
+
+    const expired = engine.update(active, 120);
+    expect(expired.floatingTexts).toHaveLength(0);
+  });
 });

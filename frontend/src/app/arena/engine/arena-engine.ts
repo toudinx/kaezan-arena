@@ -14,6 +14,7 @@ import {
   ArenaSkillState,
   DecalInstance,
   DamageNumberInstance,
+  FloatingTextInstance,
   FxPlanSpawn,
   FxSpawnRequest,
   SpriteEntity,
@@ -75,7 +76,8 @@ export class ArenaEngine {
       activePois: [],
       fxInstances: [],
       attackFxInstances: [],
-      damageNumbers: []
+      damageNumbers: [],
+      floatingTexts: []
     };
   }
 
@@ -125,6 +127,7 @@ export class ArenaEngine {
     nextScene = this.applyDecals(nextScene, decals);
     const spawnedDamageNumbers: DamageNumberInstance[] = [];
     const spawnedAttackFx: AttackFxInstance[] = [];
+    const spawnedFloatingTexts: FloatingTextInstance[] = [];
     const stackIndexByTile = new Map<string, number>();
     let spawnOrder = 0;
     const playerActorId = this.resolvePlayerActorId(nextScene, scene);
@@ -156,6 +159,11 @@ export class ArenaEngine {
           });
           spawnOrder += 1;
         }
+        continue;
+      }
+
+      if (event.type === "crit_text") {
+        spawnedFloatingTexts.push(this.toFloatingTextInstance(event));
         continue;
       }
 
@@ -196,7 +204,8 @@ export class ArenaEngine {
     nextScene = {
       ...nextScene,
       attackFxInstances: [...nextScene.attackFxInstances, ...spawnedAttackFx],
-      damageNumbers: [...nextScene.damageNumbers, ...spawnedDamageNumbers]
+      damageNumbers: [...nextScene.damageNumbers, ...spawnedDamageNumbers],
+      floatingTexts: [...nextScene.floatingTexts, ...spawnedFloatingTexts]
     };
 
     return {
@@ -279,22 +288,9 @@ export class ArenaEngine {
     const safeDelta = Math.max(0, deltaMs);
     const sceneWithVisuals = this.tickActorVisuals(scene, safeDelta);
     const sceneWithFx = tickFx(sceneWithVisuals, safeDelta);
-    const nextScene = this.tickAttackFx(sceneWithFx, safeDelta);
-    if (nextScene.damageNumbers.length == 0) {
-      return nextScene;
-    }
-
-    const activeDamageNumbers = nextScene.damageNumbers
-      .map((entry) => ({
-        ...entry,
-        elapsedMs: entry.elapsedMs + safeDelta
-      }))
-      .filter((entry) => entry.elapsedMs < entry.durationMs);
-
-    return {
-      ...nextScene,
-      damageNumbers: activeDamageNumbers
-    };
+    const sceneWithAttackFx = this.tickAttackFx(sceneWithFx, safeDelta);
+    const sceneWithDamageNumbers = this.tickDamageNumbers(sceneWithAttackFx, safeDelta);
+    return this.tickFloatingTexts(sceneWithDamageNumbers, safeDelta);
   }
 
   tick(scene: ArenaScene, deltaMs: number): ArenaScene {
@@ -446,6 +442,7 @@ export class ArenaEngine {
     const targetTile = { x: event.targetTileX, y: event.targetTileY };
     const shieldDamageAmount = Math.max(0, event.shieldDamageAmount ?? 0);
     const hpDamageAmount = Math.max(0, event.hpDamageAmount ?? 0);
+    const isCrit = event.hitKind === "crit" || event.isCrit;
     const isDamageReceived = this.isDamageReceived(sourceEntityId, targetEntityId, playerActorId);
     const element = this.normalizeElement(event.elementType);
     const entries: DamageNumberInstance[] = [];
@@ -476,7 +473,7 @@ export class ArenaEngine {
       entries.push({
         actorId: targetEntityId,
         amount: hpAmount > 0 ? hpAmount : event.damageAmount,
-        isCrit: event.isCrit,
+        isCrit,
         kind: "damage",
         isHeal: false,
         isShieldChange: false,
@@ -592,6 +589,17 @@ export class ArenaEngine {
     };
   }
 
+  private toFloatingTextInstance(event: Extract<ArenaBattleEvent, { type: "crit_text" }>): FloatingTextInstance {
+    return {
+      kind: "crit_text",
+      text: event.text,
+      tilePos: { x: event.tileX, y: event.tileY },
+      startAtMs: event.startAtMs,
+      elapsedMs: 0,
+      durationMs: Math.max(1, event.durationMs)
+    };
+  }
+
   private tickAttackFx(scene: ArenaScene, deltaMs: number): ArenaScene {
     if (scene.attackFxInstances.length === 0) {
       return scene;
@@ -620,6 +628,42 @@ export class ArenaEngine {
     return {
       ...scene,
       attackFxInstances: activeAttackFx
+    };
+  }
+
+  private tickDamageNumbers(scene: ArenaScene, deltaMs: number): ArenaScene {
+    if (scene.damageNumbers.length == 0) {
+      return scene;
+    }
+
+    const activeDamageNumbers = scene.damageNumbers
+      .map((entry) => ({
+        ...entry,
+        elapsedMs: entry.elapsedMs + deltaMs
+      }))
+      .filter((entry) => entry.elapsedMs < entry.durationMs);
+
+    return {
+      ...scene,
+      damageNumbers: activeDamageNumbers
+    };
+  }
+
+  private tickFloatingTexts(scene: ArenaScene, deltaMs: number): ArenaScene {
+    if (scene.floatingTexts.length === 0) {
+      return scene;
+    }
+
+    const activeFloatingTexts = scene.floatingTexts
+      .map((entry) => ({
+        ...entry,
+        elapsedMs: entry.elapsedMs + deltaMs
+      }))
+      .filter((entry) => entry.elapsedMs < entry.durationMs);
+
+    return {
+      ...scene,
+      floatingTexts: activeFloatingTexts
     };
   }
 

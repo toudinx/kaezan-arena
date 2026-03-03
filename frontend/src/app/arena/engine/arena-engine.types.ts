@@ -2,6 +2,7 @@ export type RenderLayer = "ground" | "groundFx" | "actors" | "hitFx" | "ui";
 export type ElementTypeValue = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 export type CombatFxKindValue = 1 | 2 | 3 | 4 | 5;
 export type DecalKindValue = 1;
+export type HitKindValue = "normal" | "crit";
 
 export interface TilePos {
   x: number;
@@ -102,6 +103,15 @@ export interface DamageNumberInstance {
   durationMs: number;
 }
 
+export interface FloatingTextInstance {
+  kind: "crit_text";
+  text: string;
+  tilePos: TilePos;
+  startAtMs: number;
+  elapsedMs: number;
+  durationMs: number;
+}
+
 export interface AttackFxInstance {
   eventId: number;
   fxKind: CombatFxKindValue;
@@ -171,10 +181,20 @@ export interface ArenaDamageNumberEvent {
   damageAmount: number;
   isKill: boolean;
   isCrit: boolean;
+  hitKind?: HitKindValue;
   hitId: number;
   shieldDamageAmount?: number;
   hpDamageAmount?: number;
   elementType?: ElementTypeValue;
+}
+
+export interface ArenaCritTextEvent {
+  type: "crit_text";
+  text: string;
+  tileX: number;
+  tileY: number;
+  startAtMs: number;
+  durationMs: number;
 }
 
 export interface ArenaAttackFxEvent {
@@ -222,6 +242,7 @@ export interface ArenaReflectNumberEvent {
 export type ArenaBattleEvent =
   | ArenaFxSpawnEvent
   | ArenaDamageNumberEvent
+  | ArenaCritTextEvent
   | ArenaAttackFxEvent
   | ArenaDeathEvent
   | ArenaHealNumberEvent
@@ -251,4 +272,5 @@ export interface ArenaScene {
   fxInstances: FxInstance[];
   attackFxInstances: AttackFxInstance[];
   damageNumbers: DamageNumberInstance[];
+  floatingTexts: FloatingTextInstance[];
 }

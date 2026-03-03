@@ -24,6 +24,9 @@ public sealed class InMemoryBattleStore : IBattleStore
     private const int PlayerAutoAttackDamage = 3;
     private const int PlayerShieldGainPerAction = 5;
     private const int PlayerLifeLeechPercent = 30;
+    private const int CriticalHitChancePercent = 20;
+    private const int CritTextDurationMs = 800;
+    private const string CritTextLabel = "CRIT!";
     private const int MeleeSwingDurationMs = 120;
     private const int RangedProjectileDurationMs = 220;
     private const int DeathBurstDurationMs = 320;
@@ -243,6 +246,7 @@ public sealed class InMemoryBattleStore : IBattleStore
         var battleRng = new Random(resolvedSeed);
         var poiRng = new Random(GeneratePoiSeed(resolvedSeed));
         var bestiaryRng = new Random(GenerateBestiarySeed(resolvedSeed));
+        var critRng = new Random(GenerateCritSeed(resolvedSeed));
         var mobSlots = BuildMobSlots();
         var bestiary = BuildInitialBestiaryEntries(mobSlots, bestiaryRng);
 
@@ -255,6 +259,7 @@ public sealed class InMemoryBattleStore : IBattleStore
             rng: battleRng,
             poiRng: poiRng,
             bestiaryRng: bestiaryRng,
+            critRng: critRng,
             tick: 0,
             playerFacingDirection: FacingUp,
             battleStatus: StatusStarted,
@@ -589,6 +594,14 @@ public sealed class InMemoryBattleStore : IBattleStore
         unchecked
         {
             return (battleSeed * 92821) ^ 0x41D2A7C3;
+        }
+    }
+
+    private static int GenerateCritSeed(int battleSeed)
+    {
+        unchecked
+        {
+            return (battleSeed * 214013) ^ 0x1A2B3C4D;
         }
     }
 
@@ -2563,6 +2576,28 @@ public sealed class InMemoryBattleStore : IBattleStore
         return state.TickEventCounter;
     }
 
+    private static string ResolveHitKind(StoredBattle state, bool allowCriticalHits)
+    {
+        if (!allowCriticalHits)
+        {
+            return BattleHitKinds.Normal;
+        }
+
+        return state.CritRng.Next(100) < CriticalHitChancePercent
+            ? BattleHitKinds.Crit
+            : BattleHitKinds.Normal;
+    }
+
+    private static void EmitCritTextEvent(List<BattleEventDto> events, int tileX, int tileY, long startAtMs)
+    {
+        events.Add(new CritTextEventDto(
+            Text: CritTextLabel,
+            TileX: tileX,
+            TileY: tileY,
+            StartAtMs: startAtMs,
+            DurationMs: CritTextDurationMs));
+    }
+
     private static IEnumerable<string> ResolveMobIdsOnTiles(StoredBattle state, IReadOnlyList<(int TileX, int TileY)> tiles)
     {
         var tileSet = new HashSet<(int TileX, int TileY)>(tiles.Where(tile => IsInBounds(tile.TileX, tile.TileY)));
@@ -2611,7 +2646,8 @@ public sealed class InMemoryBattleStore : IBattleStore
         int damage,
         ElementType element,
         StoredActor? attacker,
-        bool isRangedAutoAttack = false)
+        bool isRangedAutoAttack = false,
+        bool allowCriticalHits = true)
     {
         if (damage <= 0)
         {
@@ -2637,6 +2673,9 @@ public sealed class InMemoryBattleStore : IBattleStore
         var hpDamageApplied = Math.Max(0, previousHp - player.Hp);
         var damageAppliedToPlayer = absorbed + hpDamageApplied;
         var isFinalBlow = player.Hp <= 0;
+        var hitKind = ResolveHitKind(state, allowCriticalHits);
+        var isCrit = string.Equals(hitKind, BattleHitKinds.Crit, StringComparison.Ordinal);
+        var nowMs = GetElapsedMsForTick(state.Tick);
 
         events.Add(new DamageNumberEventDto(
             SourceEntityId: attacker?.ActorId,
@@ -2651,10 +2690,16 @@ public sealed class InMemoryBattleStore : IBattleStore
             DamageAmount: damageAppliedToPlayer,
             ElementType: element,
             IsKill: isFinalBlow,
-            IsCrit: isFinalBlow,
+            IsCrit: isCrit,
             HitId: NextTickEventId(state),
             ShieldDamageAmount: absorbed,
-            HpDamageAmount: hpDamageApplied));
+            HpDamageAmount: hpDamageApplied,
+            HitKind: hitKind));
+
+        if (isCrit)
+        {
+            EmitCritTextEvent(events, player.TileX, player.TileY, nowMs);
+        }
 
         TryApplyKinaReflectPassive(state, events, player, attacker, damageAppliedToPlayer);
 
@@ -2734,7 +2779,8 @@ public sealed class InMemoryBattleStore : IBattleStore
             reflectedDamage,
             ElementType.Physical,
             attacker: player,
-            allowPlayerDamageBuffs: false);
+            allowPlayerDamageBuffs: false,
+            allowCriticalHits: false);
     }
 
     private static bool IsKinaReflectEnabled(StoredBattle state, StoredActor player)
@@ -2777,7 +2823,8 @@ public sealed class InMemoryBattleStore : IBattleStore
         int damage,
         ElementType element,
         StoredActor? attacker,
-        bool allowPlayerDamageBuffs = true)
+        bool allowPlayerDamageBuffs = true,
+        bool allowCriticalHits = true)
     {
         if (mob.Hp <= 0)
         {
@@ -2803,6 +2850,9 @@ public sealed class InMemoryBattleStore : IBattleStore
         mob.Hp = Math.Max(0, mob.Hp - remainingDamage);
         var hpDamageApplied = Math.Max(0, previousHp - mob.Hp);
         var isFinalBlow = mob.Hp <= 0;
+        var hitKind = ResolveHitKind(state, allowCriticalHits);
+        var isCrit = string.Equals(hitKind, BattleHitKinds.Crit, StringComparison.Ordinal);
+        var nowMs = GetElapsedMsForTick(state.Tick);
 
         events.Add(new DamageNumberEventDto(
             SourceEntityId: attacker?.ActorId,
@@ -2817,10 +2867,16 @@ public sealed class InMemoryBattleStore : IBattleStore
             DamageAmount: absorbed + hpDamageApplied,
             ElementType: element,
             IsKill: isFinalBlow,
-            IsCrit: isFinalBlow,
+            IsCrit: isCrit,
             HitId: NextTickEventId(state),
             ShieldDamageAmount: absorbed,
-            HpDamageAmount: hpDamageApplied));
+            HpDamageAmount: hpDamageApplied,
+            HitKind: hitKind));
+
+        if (isCrit)
+        {
+            EmitCritTextEvent(events, mob.TileX, mob.TileY, nowMs);
+        }
 
         if (!isFinalBlow)
         {
@@ -4074,6 +4130,7 @@ public sealed class InMemoryBattleStore : IBattleStore
             Random rng,
             Random poiRng,
             Random bestiaryRng,
+            Random critRng,
             int tick,
             string playerFacingDirection,
             string battleStatus,
@@ -4107,6 +4164,7 @@ public sealed class InMemoryBattleStore : IBattleStore
             Rng = rng;
             PoiRng = poiRng;
             BestiaryRng = bestiaryRng;
+            CritRng = critRng;
             Tick = tick;
             PlayerFacingDirection = playerFacingDirection;
             BattleStatus = battleStatus;
@@ -4151,6 +4209,8 @@ public sealed class InMemoryBattleStore : IBattleStore
         public Random PoiRng { get; }
 
         public Random BestiaryRng { get; }
+
+        public Random CritRng { get; }
 
         public int Tick { get; set; }
 

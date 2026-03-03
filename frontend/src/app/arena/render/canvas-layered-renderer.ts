@@ -28,6 +28,10 @@ const FLOATING_NUMBER_PALETTE = {
     9: "#4c1d95"
   } as Record<ElementTypeValue, string>
 } as const;
+const CRIT_TEXT_PALETTE = {
+  fill: "#fde047",
+  outline: "rgba(15, 23, 42, 0.95)"
+} as const;
 
 export class CanvasLayeredRenderer {
   private readonly pipeline: RenderLayer[] = ["ground", "groundFx", "actors", "hitFx", "ui"];
@@ -125,6 +129,7 @@ export class CanvasLayeredRenderer {
         this.drawGroundTargetReticle(scene, viewport);
         this.drawLockedTargetMarker(scene, viewport);
         this.drawDamageNumbers(scene, viewport);
+        this.drawFloatingTexts(scene, viewport);
       }
     }
   }
@@ -531,6 +536,34 @@ export class CanvasLayeredRenderer {
       this.context.lineJoin = "round";
       this.context.strokeText(text, x, y);
       this.context.fillText(text, x, y);
+      this.context.restore();
+    }
+  }
+
+  private drawFloatingTexts(scene: ArenaScene, viewport: RenderViewport): void {
+    for (const entry of scene.floatingTexts) {
+      if (entry.kind !== "crit_text") {
+        continue;
+      }
+
+      const life = Math.max(0, Math.min(1, entry.elapsedMs / entry.durationMs));
+      const riseOffset = life * scene.tileSize * 0.45;
+      const x = viewport.originX + (entry.tilePos.x + 0.5) * scene.tileSize;
+      const y = viewport.originY + entry.tilePos.y * scene.tileSize - scene.tileSize * 0.12 - riseOffset;
+      const baseFontPx = Math.max(16, Math.min(24, scene.tileSize * 0.42));
+      const fontSizePx = Math.round(baseFontPx * (1 + (1 - life) * 0.08));
+
+      this.context.save();
+      this.context.globalAlpha = Math.max(0.1, 1 - life);
+      this.context.textAlign = "center";
+      this.context.textBaseline = "middle";
+      this.context.font = `bold ${fontSizePx}px Arial`;
+      this.context.fillStyle = CRIT_TEXT_PALETTE.fill;
+      this.context.strokeStyle = CRIT_TEXT_PALETTE.outline;
+      this.context.lineWidth = Math.max(2, Math.round(fontSizePx * 0.18));
+      this.context.lineJoin = "round";
+      this.context.strokeText(entry.text, x, y);
+      this.context.fillText(entry.text, x, y);
       this.context.restore();
     }
   }

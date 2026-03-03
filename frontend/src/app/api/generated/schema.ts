@@ -621,7 +621,7 @@ export interface components {
             bestiary?: components["schemas"]["BestiaryEntryDto"][] | null;
             pendingSpeciesChest?: string | null;
             activePois?: components["schemas"]["BattlePoiDto"][] | null;
-            events?: (components["schemas"]["FxSpawnEventDto"] | components["schemas"]["DamageNumberEventDto"] | components["schemas"]["AttackFxEventDto"] | components["schemas"]["DeathEventDto"] | components["schemas"]["HealNumberEventDto"] | components["schemas"]["ReflectEventDto"] | components["schemas"]["AssistCastEventDto"] | components["schemas"]["PoiInteractedEventDto"] | components["schemas"]["InteractFailedEventDto"] | components["schemas"]["BuffAppliedEventDto"] | components["schemas"]["AltarActivatedEventDto"] | components["schemas"]["SpeciesChestSpawnedEventDto"] | components["schemas"]["SpeciesChestOpenedEventDto"])[] | null;
+            events?: (components["schemas"]["FxSpawnEventDto"] | components["schemas"]["DamageNumberEventDto"] | components["schemas"]["AttackFxEventDto"] | components["schemas"]["DeathEventDto"] | components["schemas"]["HealNumberEventDto"] | components["schemas"]["ReflectEventDto"] | components["schemas"]["AssistCastEventDto"] | components["schemas"]["PoiInteractedEventDto"] | components["schemas"]["InteractFailedEventDto"] | components["schemas"]["BuffAppliedEventDto"] | components["schemas"]["AltarActivatedEventDto"] | components["schemas"]["SpeciesChestSpawnedEventDto"] | components["schemas"]["SpeciesChestOpenedEventDto"] | components["schemas"]["CritTextEventDto"])[] | null;
             commandResults?: components["schemas"]["CommandResultDto"][] | null;
         };
         BattleTilePosDto: {
@@ -702,6 +702,7 @@ export interface components {
             elementType?: components["schemas"]["ElementType"];
             isKill?: boolean;
             isCrit?: boolean;
+            hitKind?: "normal" | "crit";
             /** Format: int32 */
             hitId?: number;
             /** Format: int32 */
@@ -714,6 +715,23 @@ export interface components {
              * @enum {string}
              */
             type: "damage_number";
+        };
+        CritTextEventDto: Omit<components["schemas"]["BattleEventDto"], "type"> & {
+            text?: string | null;
+            /** Format: int32 */
+            tileX?: number;
+            /** Format: int32 */
+            tileY?: number;
+            /** Format: int64 */
+            startAtMs?: number;
+            /** Format: int32 */
+            durationMs?: number;
+        } & {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "crit_text";
         };
         DeathEventDto: Omit<components["schemas"]["BattleEventDto"], "type"> & {
             entityId?: string | null;

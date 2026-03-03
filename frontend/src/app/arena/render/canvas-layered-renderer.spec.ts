@@ -1,4 +1,5 @@
 import { ArenaScene } from "../engine/arena-engine.types";
+import { ArenaEngine } from "../engine/arena-engine";
 import { CanvasLayeredRenderer } from "./canvas-layered-renderer";
 
 describe("CanvasLayeredRenderer effective target marker", () => {
@@ -58,6 +59,57 @@ describe("CanvasLayeredRenderer floating number palette", () => {
   });
 });
 
+describe("CanvasLayeredRenderer crit text", () => {
+  it("draws CRIT! floating text when crit_text instances are active", () => {
+    const context = createContextStub();
+    const renderer = new CanvasLayeredRenderer(context.context as unknown as CanvasRenderingContext2D);
+    const viewport = {
+      canvasWidth: 480,
+      canvasHeight: 420,
+      originX: 0,
+      originY: 0
+    };
+    const scene = createScene();
+    scene.floatingTexts = [
+      {
+        kind: "crit_text",
+        text: "CRIT!",
+        tilePos: { x: 4, y: 3 },
+        startAtMs: 250,
+        elapsedMs: 200,
+        durationMs: 800
+      }
+    ];
+
+    (renderer as any).drawFloatingTexts(scene, viewport);
+    expect(context.fillTextCallCount).toBeGreaterThan(0);
+    expect(context.fillTextValues).toContain("CRIT!");
+  });
+
+  it("does not draw CRIT! text after duration has elapsed", () => {
+    const engine = new ArenaEngine();
+    const initial = engine.applyBattleStep(
+      engine.createTestScene(7, 7, 48),
+      [],
+      [],
+      [],
+      [{ type: "crit_text", text: "CRIT!", tileX: 3, tileY: 3, startAtMs: 250, durationMs: 800 }]
+    );
+    const expiredScene = engine.update(initial.scene, 801);
+    const context = createContextStub();
+    const renderer = new CanvasLayeredRenderer(context.context as unknown as CanvasRenderingContext2D);
+    const viewport = {
+      canvasWidth: 480,
+      canvasHeight: 420,
+      originX: 0,
+      originY: 0
+    };
+
+    (renderer as any).drawFloatingTexts(expiredScene, viewport);
+    expect(context.fillTextCallCount).toBe(0);
+  });
+});
+
 function createContextStub(): ContextStub {
   const canvas = document.createElement("canvas");
   canvas.width = 480;
@@ -65,6 +117,8 @@ function createContextStub(): ContextStub {
 
   const stub: ContextStub = {
     arcCallCount: 0,
+    fillTextCallCount: 0,
+    fillTextValues: [],
     context: {
       canvas,
       getTransform: () => new DOMMatrix(),
@@ -81,10 +135,17 @@ function createContextStub(): ContextStub {
       stroke: () => undefined,
       fill: () => undefined,
       setLineDash: () => undefined,
-      drawImage: () => undefined
+      drawImage: () => undefined,
+      strokeText: () => undefined,
+      fillText: (value: unknown) => {
+        stub.fillTextCallCount += 1;
+        stub.fillTextValues.push(typeof value === "string" ? value : String(value));
+      }
     },
     reset: () => {
       stub.arcCallCount = 0;
+      stub.fillTextCallCount = 0;
+      stub.fillTextValues = [];
     }
   };
 
@@ -137,12 +198,15 @@ function createScene(): ArenaScene {
     activePois: [],
     fxInstances: [],
     attackFxInstances: [],
-    damageNumbers: []
+    damageNumbers: [],
+    floatingTexts: []
   };
 }
 
 interface ContextStub {
   arcCallCount: number;
+  fillTextCallCount: number;
+  fillTextValues: string[];
   context: {
     canvas: HTMLCanvasElement;
     getTransform: () => DOMMatrix;
@@ -158,6 +222,8 @@ interface ContextStub {
     fill: (...args: unknown[]) => void;
     setLineDash: (...args: unknown[]) => void;
     drawImage: (...args: unknown[]) => void;
+    strokeText: (...args: unknown[]) => void;
+    fillText: (...args: unknown[]) => void;
     [key: string]: unknown;
   };
   reset: () => void;
