@@ -1,0 +1,98 @@
+.paperdoll {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  color: #e2e8f0;
+}
+
+.paperdoll__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.72rem;
+}
+
+.paperdoll__header strong {
+  font-size: 0.78rem;
+}
+
+.paperdoll__header span {
+  color: #94a3b8;
+}
+
+.paperdoll__slots {
+  display: flex;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
+.paperdoll__slot-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  width: 80px;
+}
+
+.paperdoll__slot {
+  width: 80px;
+  height: 80px;
+  border: 2px solid #64748b;
+  border-radius: 0.45rem;
+  background: linear-gradient(180deg, rgba(51, 65, 85, 0.94), rgba(15, 23, 42, 0.96));
+  color: #f8fafc;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  cursor: default;
+}
+
+.paperdoll__hint {
+  margin: 0;
+  padding: 0.3rem 0.4rem;
+  border: 1px solid #0ea5e9;
+  border-radius: 0.24rem;
+  background: rgba(14, 165, 233, 0.12);
+  color: #bae6fd;
+  font-size: 0.67rem;
+}
+
+.paperdoll__slot-glyph {
+  font-size: 2rem;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.paperdoll__slot-name {
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #94a3b8;
+  text-align: center;
+}
+
+.paperdoll__slot--rarity-common {
+  border-color: #9ca3af;
+}
+
+.paperdoll__slot--rarity-rare {
+  border-color: #3b82f6;
+}
+
+.paperdoll__slot--rarity-epic {
+  border-color: #a855f7;
+}
+
+.paperdoll__slot--rarity-legendary {
+  border-color: #facc15;
+}
+
+button.paperdoll__slot {
+  cursor: pointer;
+}
+
+button.paperdoll__slot:hover {
+  filter: brightness(1.08);
+}

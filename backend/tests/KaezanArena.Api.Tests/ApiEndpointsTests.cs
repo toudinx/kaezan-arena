@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using KaezanArena.Api.Battle;
+using KaezanArena.Api.Contracts.Account;
 using KaezanArena.Api.Contracts.Battle;
 using KaezanArena.Api.Contracts.Effects;
 using KaezanArena.Api.Contracts.Health;
@@ -27,6 +28,12 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
     private const int HealAmplifierBonusPercent = 10;
     private const int HealAmplifierDurationMs = 8000;
     private const string HealAmplifierBuffId = "healing_amplifier";
+    private const string AntiRangedPressureBuffId = "anti_ranged_pressure";
+    private const string ThornsBoostBuffId = "thorns_boost";
+    private const string DamageBoostBuffId = "damage_boost";
+    private const int AntiRangedPressureDurationMs = 8000;
+    private const int ThornsBoostDurationMs = 8000;
+    private const int DamageBoostDurationMs = 6000;
     private readonly HttpClient _client;
 
     public ApiEndpointsTests(WebApplicationFactory<Program> factory)
@@ -55,6 +62,191 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
         Assert.NotNull(payload);
         Assert.True(payload.TryGetValue("pong", out var pong));
         Assert.True(pong);
+    }
+
+    [Fact]
+    public async Task GetAccountState_ReturnsSeededDevAccountAndCatalogs()
+    {
+        var response = await _client.GetAsync("/api/v1/account/state?accountId=dev_account");
+        var payload = await response.Content.ReadFromJsonAsync<AccountStateResponseDto>();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(payload);
+        Assert.NotNull(payload.Account);
+        Assert.Equal("dev_account", payload.Account.AccountId);
+        Assert.True(payload.Account.Characters.Count >= 2);
+        Assert.True(payload.ItemCatalog.Count >= 1);
+        Assert.True(payload.EquipmentCatalog.Count >= 1);
+        Assert.True(payload.Account.Characters.ContainsKey(payload.Account.ActiveCharacterId));
+    }
+
+    [Fact]
+    public async Task PostSetActiveCharacter_UpdatesActiveCharacter()
+    {
+        var state = await GetAccountStateAsync();
+        var nextCharacterId = state.Account.Characters.Keys.First(id =>
+            !string.Equals(id, state.Account.ActiveCharacterId, StringComparison.Ordinal));
+
+        var response = await _client.PostAsJsonAsync(
+            "/api/v1/account/active-character",
+            new SetActiveCharacterRequestDto(
+                AccountId: state.Account.AccountId,
+                CharacterId: nextCharacterId));
+        var payload = await response.Content.ReadFromJsonAsync<AccountStateDto>();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(payload);
+        Assert.Equal(nextCharacterId, payload.ActiveCharacterId);
+    }
+
+    [Fact]
+    public async Task PostEquipWeapon_FailsWhenNotOwnedAndSucceedsWhenOwned()
+    {
+        var state = await GetAccountStateAsync();
+        var character = state.Account.Characters[state.Account.ActiveCharacterId];
+        var notOwnedWeaponInstanceId = "not-owned.weapon.instance";
+
+        var failResponse = await _client.PostAsJsonAsync(
+            "/api/v1/account/equip-weapon",
+            new EquipWeaponRequestDto(
+                AccountId: state.Account.AccountId,
+                CharacterId: character.CharacterId,
+                WeaponInstanceId: notOwnedWeaponInstanceId));
+        Assert.Equal(HttpStatusCode.BadRequest, failResponse.StatusCode);
+
+        var ownedWeaponInstanceId = FindOwnedEquipmentInstanceForSlot(state, character, "weapon");
+        var successResponse = await _client.PostAsJsonAsync(
+            "/api/v1/account/equip-weapon",
+            new EquipWeaponRequestDto(
+                AccountId: state.Account.AccountId,
+                CharacterId: character.CharacterId,
+                WeaponInstanceId: ownedWeaponInstanceId));
+        var payload = await successResponse.Content.ReadFromJsonAsync<CharacterStateDto>();
+
+        Assert.Equal(HttpStatusCode.OK, successResponse.StatusCode);
+        Assert.NotNull(payload);
+        Assert.Equal(ownedWeaponInstanceId, payload.Equipment.WeaponInstanceId);
+    }
+
+    [Fact]
+    public async Task PostEquipItem_EquipsArmorAndRelicSlots()
+    {
+        var state = await GetAccountStateAsync();
+        var character = state.Account.Characters[state.Account.ActiveCharacterId];
+
+        var ownedArmorInstanceId = FindOwnedEquipmentInstanceForSlot(state, character, "armor");
+        var armorResponse = await _client.PostAsJsonAsync(
+            "/api/v1/account/equip-item",
+            new EquipItemRequestDto(
+                AccountId: state.Account.AccountId,
+                CharacterId: character.CharacterId,
+                Slot: "armor",
+                EquipmentInstanceId: ownedArmorInstanceId));
+        var armorPayload = await armorResponse.Content.ReadFromJsonAsync<CharacterStateDto>();
+
+        Assert.Equal(HttpStatusCode.OK, armorResponse.StatusCode);
+        Assert.NotNull(armorPayload);
+        Assert.Equal(ownedArmorInstanceId, armorPayload.Equipment.ArmorInstanceId);
+
+        var ownedRelicInstanceId = FindOwnedEquipmentInstanceForSlot(state, character, "relic");
+        var relicResponse = await _client.PostAsJsonAsync(
+            "/api/v1/account/equip-item",
+            new EquipItemRequestDto(
+                AccountId: state.Account.AccountId,
+                CharacterId: character.CharacterId,
+                Slot: "relic",
+                EquipmentInstanceId: ownedRelicInstanceId));
+        var relicPayload = await relicResponse.Content.ReadFromJsonAsync<CharacterStateDto>();
+
+        Assert.Equal(HttpStatusCode.OK, relicResponse.StatusCode);
+        Assert.NotNull(relicPayload);
+        Assert.Equal(ownedRelicInstanceId, relicPayload.Equipment.RelicInstanceId);
+    }
+
+    [Fact]
+    public async Task PostAwardDrops_StacksMaterialsAndCanCreateEquipmentInstance()
+    {
+        var state = await GetAccountStateAsync();
+        var character = state.Account.Characters[state.Account.ActiveCharacterId];
+        var beforeMaterial = character.Inventory.MaterialStacks.GetValueOrDefault("mat.arcane_dust", 0L);
+        var beforeEquipmentCount = character.Inventory.EquipmentInstances.Count;
+
+        var battleId = "battle-award-chest-01";
+        var request = new AwardDropsRequestDto(
+            AccountId: state.Account.AccountId,
+            CharacterId: character.CharacterId,
+            BattleId: battleId,
+            Sources:
+            [
+                new DropSourceDto(
+                    Tick: 12,
+                    SourceType: "chest",
+                    SourceId: "poi.chest.01",
+                    Species: null)
+            ]);
+
+        var response = await _client.PostAsJsonAsync("/api/v1/account/award-drops", request);
+        var payload = await response.Content.ReadFromJsonAsync<AwardDropsResponseDto>();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(payload);
+        Assert.NotEmpty(payload.Awarded);
+        Assert.True(payload.Character.Inventory.MaterialStacks.GetValueOrDefault("mat.arcane_dust", 0L) >= beforeMaterial + 1);
+
+        var awardedEquipment = payload.Awarded.FirstOrDefault(drop => !string.IsNullOrWhiteSpace(drop.EquipmentInstanceId));
+        if (awardedEquipment is not null)
+        {
+            Assert.True(payload.Character.Inventory.EquipmentInstances.Count > beforeEquipmentCount);
+            Assert.True(payload.Character.Inventory.EquipmentInstances.ContainsKey(awardedEquipment.EquipmentInstanceId!));
+        }
+    }
+
+    [Fact]
+    public async Task PostAwardDrops_IsIdempotentForSameSourceAndNoDoubleCounting()
+    {
+        var state = await GetAccountStateAsync();
+        var character = state.Account.Characters[state.Account.ActiveCharacterId];
+        var initialMaterial = character.Inventory.MaterialStacks.GetValueOrDefault("mat.scrap_iron", 0L);
+
+        var request = new AwardDropsRequestDto(
+            AccountId: state.Account.AccountId,
+            CharacterId: character.CharacterId,
+            BattleId: "battle-award-idempotent-01",
+            Sources:
+            [
+                new DropSourceDto(
+                    Tick: 7,
+                    SourceType: "mob",
+                    SourceId: "mob.0007",
+                    Species: "melee_brute")
+            ]);
+
+        var firstResponse = await _client.PostAsJsonAsync("/api/v1/account/award-drops", request);
+        var firstPayload = await firstResponse.Content.ReadFromJsonAsync<AwardDropsResponseDto>();
+        Assert.Equal(HttpStatusCode.OK, firstResponse.StatusCode);
+        Assert.NotNull(firstPayload);
+
+        var secondResponse = await _client.PostAsJsonAsync("/api/v1/account/award-drops", request);
+        var secondPayload = await secondResponse.Content.ReadFromJsonAsync<AwardDropsResponseDto>();
+        Assert.Equal(HttpStatusCode.OK, secondResponse.StatusCode);
+        Assert.NotNull(secondPayload);
+
+        var firstSignatures = firstPayload.Awarded
+            .Select(drop => $"{drop.DropEventId}|{drop.ItemId}|{drop.Quantity}|{drop.EquipmentInstanceId}")
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToList();
+        var secondSignatures = secondPayload.Awarded
+            .Select(drop => $"{drop.DropEventId}|{drop.ItemId}|{drop.Quantity}|{drop.EquipmentInstanceId}")
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToList();
+        Assert.Equal(firstSignatures, secondSignatures);
+
+        var finalState = await GetAccountStateAsync();
+        var finalCharacter = finalState.Account.Characters[character.CharacterId];
+        Assert.True(finalCharacter.Inventory.MaterialStacks.GetValueOrDefault("mat.scrap_iron", 0L) >= initialMaterial + 1);
+        Assert.Equal(
+            finalCharacter.Inventory.MaterialStacks.GetValueOrDefault("mat.scrap_iron", 0L),
+            secondPayload.Character.Inventory.MaterialStacks.GetValueOrDefault("mat.scrap_iron", 0L));
     }
 
     [Fact]
@@ -607,6 +799,8 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
         var playerId = "player-defeat-cast-reject";
         var start = await StartBattleAsync("arena-defeat-cast-reject", playerId, 1337);
         AssertArenaInvariants(start.Actors, playerId);
+        Assert.False(start.IsGameOver);
+        Assert.Null(start.EndReason);
 
         var currentTick = start.Tick;
         BattleStepResponseDto? defeatStep = null;
@@ -623,11 +817,15 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
         }
 
         Assert.NotNull(defeatStep);
+        Assert.True(defeatStep!.IsGameOver);
+        Assert.Equal("death", defeatStep.EndReason);
         var rejected = await StepBattleAsync(
             start.BattleId,
             defeatStep!.Tick,
             [new BattleCommandDto("cast_skill", "exori")]);
         AssertArenaInvariants(rejected.Actors, playerId);
+        Assert.True(rejected.IsGameOver);
+        Assert.Equal("death", rejected.EndReason);
 
         var result = Assert.Single(rejected.CommandResults);
         Assert.False(result.Ok);
@@ -835,117 +1033,151 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
     }
 
     [Fact]
-    public async Task PostBattleStep_MovePlayer_DiagonalCornerRule_BlocksWhenAdjacentCardinalOccupied()
+    public async Task PostBattleStep_MovePlayer_DiagonalMove_SucceedsWhenNorthAndWestOccupiedButTargetIsFree()
     {
         const int maxSeed = 500;
+        const int maxProbeStepsPerSeed = 24;
         for (var seed = 1; seed <= maxSeed; seed += 1)
         {
-            var playerId = $"player-move-corner-{seed}";
-            var start = await StartBattleAsync($"arena-move-corner-{seed}", playerId, seed);
-            var afterMobMove = await StepBattleAsync(start.BattleId, start.Tick, []);
+            var playerId = $"player-move-diagonal-adjacent-{seed}";
+            var start = await StartBattleAsync($"arena-move-diagonal-adjacent-{seed}", playerId, seed);
+            AssertArenaInvariants(start.Actors, playerId);
 
-            var hasHorizontalBlocker = afterMobMove.Actors.Any(actor =>
-                actor.Kind == "mob" &&
-                actor.TileX == PlayerTileX + 1 &&
-                actor.TileY == PlayerTileY);
-            var hasVerticalBlocker = afterMobMove.Actors.Any(actor =>
-                actor.Kind == "mob" &&
-                actor.TileX == PlayerTileX &&
-                actor.TileY == PlayerTileY - 1);
-            var diagonalDestinationOccupied = afterMobMove.Actors.Any(actor =>
-                actor.TileX == PlayerTileX + 1 &&
-                actor.TileY == PlayerTileY - 1);
-
-            if ((!hasHorizontalBlocker && !hasVerticalBlocker) || diagonalDestinationOccupied)
-            {
-                continue;
-            }
-
-            var blockedStep = await StepBattleAsync(
-                start.BattleId,
-                afterMobMove.Tick,
-                [BuildMoveCommand("ne")]);
-            AssertArenaInvariants(blockedStep.Actors, playerId);
-
-            var result = Assert.Single(blockedStep.CommandResults);
-            Assert.False(result.Ok);
-            Assert.Equal("move_blocked", result.Reason);
-            var player = GetActor(blockedStep.Actors, playerId);
-            Assert.Equal(PlayerTileX, player.TileX);
-            Assert.Equal(PlayerTileY, player.TileY);
-            return;
-        }
-
-        throw new Xunit.Sdk.XunitException($"No seed in range 1..{maxSeed} produced a corner-blocked diagonal scenario.");
-    }
-
-    [Fact]
-    public async Task PostBattleStep_MovePlayer_CannotMoveIntoOccupiedTile()
-    {
-        const int maxSeed = 500;
-        for (var seed = 1; seed <= maxSeed; seed += 1)
-        {
-            var playerId = $"player-move-occupied-{seed}";
-            var start = await StartBattleAsync($"arena-move-occupied-{seed}", playerId, seed);
-            var afterMobMove = await StepBattleAsync(start.BattleId, start.Tick, []);
-
-            var destinationOccupied = afterMobMove.Actors.Any(actor =>
-                actor.Kind == "mob" &&
-                actor.TileX == PlayerTileX + 1 &&
-                actor.TileY == PlayerTileY);
-            if (!destinationOccupied)
-            {
-                continue;
-            }
-
-            var blockedStep = await StepBattleAsync(
-                start.BattleId,
-                afterMobMove.Tick,
-                [BuildMoveCommand("right")]);
-            AssertArenaInvariants(blockedStep.Actors, playerId);
-
-            var result = Assert.Single(blockedStep.CommandResults);
-            Assert.False(result.Ok);
-            Assert.Equal("move_blocked", result.Reason);
-            var player = GetActor(blockedStep.Actors, playerId);
-            Assert.Equal(PlayerTileX, player.TileX);
-            Assert.Equal(PlayerTileY, player.TileY);
-            return;
-        }
-
-        throw new Xunit.Sdk.XunitException($"No seed in range 1..{maxSeed} produced an occupied-tile movement scenario.");
-    }
-
-    [Fact]
-    public async Task PostBattleStep_MovePlayer_CannotMoveOutOfBounds()
-    {
-        const int maxSeed = 500;
-        for (var seed = 1; seed <= maxSeed; seed += 1)
-        {
-            var playerId = $"player-move-bounds-{seed}";
-            var start = await StartBattleAsync($"arena-move-bounds-{seed}", playerId, seed);
             var currentTick = start.Tick;
-            var reachedTopEdge = true;
+            var currentActors = start.Actors;
+
+            for (var probe = 0; probe <= maxProbeStepsPerSeed; probe += 1)
+            {
+                var playerBeforeMove = GetActor(currentActors, playerId);
+                if (playerBeforeMove.Hp <= 0)
+                {
+                    break;
+                }
+
+                var hasNorthBlocker = currentActors.Any(actor =>
+                    actor.Kind == "mob" &&
+                    actor.TileX == playerBeforeMove.TileX &&
+                    actor.TileY == playerBeforeMove.TileY - 1);
+                var hasWestBlocker = currentActors.Any(actor =>
+                    actor.Kind == "mob" &&
+                    actor.TileX == playerBeforeMove.TileX - 1 &&
+                    actor.TileY == playerBeforeMove.TileY);
+                var diagonalTargetFree = currentActors.All(actor =>
+                    actor.TileX != playerBeforeMove.TileX - 1 ||
+                    actor.TileY != playerBeforeMove.TileY - 1);
+                if (hasNorthBlocker && hasWestBlocker && diagonalTargetFree)
+                {
+                    var movedStep = await StepBattleAsync(
+                        start.BattleId,
+                        currentTick,
+                        [BuildMoveCommand("nw")]);
+                    AssertArenaInvariants(movedStep.Actors, playerId);
+
+                    var result = Assert.Single(movedStep.CommandResults);
+                    Assert.True(result.Ok);
+                    var player = GetActor(movedStep.Actors, playerId);
+                    Assert.Equal(playerBeforeMove.TileX - 1, player.TileX);
+                    Assert.Equal(playerBeforeMove.TileY - 1, player.TileY);
+                    Assert.Equal("up_left", movedStep.FacingDirection);
+                    return;
+                }
+
+                var advanced = await StepBattleAsync(start.BattleId, currentTick, []);
+                AssertArenaInvariants(advanced.Actors, playerId);
+                currentTick = advanced.Tick;
+                currentActors = advanced.Actors;
+            }
+        }
+
+        throw new Xunit.Sdk.XunitException(
+            $"No seed in range 1..{maxSeed} produced a north+west occupied and diagonal-free movement scenario.");
+    }
+
+    [Fact]
+    public async Task PostBattleStep_MovePlayer_CannotMoveIntoOccupiedDiagonalTile()
+    {
+        const int maxSeed = 500;
+        const int maxProbeStepsPerSeed = 24;
+        for (var seed = 1; seed <= maxSeed; seed += 1)
+        {
+            var playerId = $"player-move-occupied-diagonal-{seed}";
+            var start = await StartBattleAsync($"arena-move-occupied-diagonal-{seed}", playerId, seed);
+            AssertArenaInvariants(start.Actors, playerId);
+
+            var currentTick = start.Tick;
+            var currentActors = start.Actors;
+
+            for (var probe = 0; probe <= maxProbeStepsPerSeed; probe += 1)
+            {
+                var playerBeforeMove = GetActor(currentActors, playerId);
+                if (playerBeforeMove.Hp <= 0)
+                {
+                    break;
+                }
+
+                var diagonalOccupied = currentActors.Any(actor =>
+                    actor.Kind == "mob" &&
+                    actor.TileX == playerBeforeMove.TileX - 1 &&
+                    actor.TileY == playerBeforeMove.TileY - 1);
+                if (diagonalOccupied)
+                {
+                    var blockedStep = await StepBattleAsync(
+                        start.BattleId,
+                        currentTick,
+                        [BuildMoveCommand("nw")]);
+                    AssertArenaInvariants(blockedStep.Actors, playerId);
+
+                    var result = Assert.Single(blockedStep.CommandResults);
+                    Assert.False(result.Ok);
+                    Assert.Equal("move_blocked", result.Reason);
+                    var player = GetActor(blockedStep.Actors, playerId);
+                    Assert.Equal(playerBeforeMove.TileX, player.TileX);
+                    Assert.Equal(playerBeforeMove.TileY, player.TileY);
+                    return;
+                }
+
+                var advanced = await StepBattleAsync(start.BattleId, currentTick, []);
+                AssertArenaInvariants(advanced.Actors, playerId);
+                currentTick = advanced.Tick;
+                currentActors = advanced.Actors;
+            }
+        }
+
+        throw new Xunit.Sdk.XunitException(
+            $"No seed in range 1..{maxSeed} produced an occupied diagonal destination scenario.");
+    }
+
+    [Fact]
+    public async Task PostBattleStep_MovePlayer_CannotMoveOutOfBoundsDiagonally()
+    {
+        const int maxSeed = 500;
+        for (var seed = 1; seed <= maxSeed; seed += 1)
+        {
+            var playerId = $"player-move-bounds-diagonal-{seed}";
+            var start = await StartBattleAsync($"arena-move-bounds-diagonal-{seed}", playerId, seed);
+            var currentTick = start.Tick;
+            var reachedCorner = true;
 
             for (var moveCount = 0; moveCount < 3; moveCount += 1)
             {
                 var moveStep = await StepBattleAsync(
                     start.BattleId,
                     currentTick,
-                    [BuildMoveCommand("up")]);
+                    [BuildMoveCommand("nw")]);
                 currentTick = moveStep.Tick;
 
                 if (moveStep.CommandResults.Count != 1 || !moveStep.CommandResults[0].Ok)
                 {
-                    reachedTopEdge = false;
+                    reachedCorner = false;
                     break;
                 }
 
                 var playerAfterMove = GetActor(moveStep.Actors, playerId);
+                var expectedX = PlayerTileX - (moveCount + 1);
                 var expectedY = PlayerTileY - (moveCount + 1);
-                if (playerAfterMove.TileX != PlayerTileX || playerAfterMove.TileY != expectedY)
+                if (playerAfterMove.TileX != expectedX || playerAfterMove.TileY != expectedY)
                 {
-                    reachedTopEdge = false;
+                    reachedCorner = false;
                     break;
                 }
 
@@ -956,7 +1188,7 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
                 }
             }
 
-            if (!reachedTopEdge)
+            if (!reachedCorner)
             {
                 continue;
             }
@@ -966,7 +1198,7 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
             var blockedStep = await StepBattleAsync(
                 start.BattleId,
                 waitTwo.Tick,
-                [BuildMoveCommand("up")]);
+                [BuildMoveCommand("nw")]);
 
             if (blockedStep.CommandResults.Count != 1)
             {
@@ -977,7 +1209,7 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
             var player = GetActor(blockedStep.Actors, playerId);
             if (!result.Ok &&
                 result.Reason == "move_blocked" &&
-                player.TileX == PlayerTileX &&
+                player.TileX == 0 &&
                 player.TileY == 0)
             {
                 AssertArenaInvariants(blockedStep.Actors, playerId);
@@ -985,7 +1217,7 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
             }
         }
 
-        throw new Xunit.Sdk.XunitException($"No seed in range 1..{maxSeed} produced an out-of-bounds movement scenario.");
+        throw new Xunit.Sdk.XunitException($"No seed in range 1..{maxSeed} produced a diagonal out-of-bounds movement scenario.");
     }
 
     [Fact]
@@ -1517,6 +1749,332 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
             baseHeal);
         Assert.Equal(expectedBaseHeal, baseHealEvent.Amount);
         Assert.True(baseHealEvent.Amount <= baseHeal);
+    }
+
+    [Fact]
+    public async Task PostBattleStep_BestiaryKillCounters_IncrementPerSpeciesDeath()
+    {
+        var playerId = "player-bestiary-kills";
+        var start = await StartBattleAsync("arena-bestiary-kills", playerId, 1337);
+        AssertArenaInvariants(start.Actors, playerId);
+        Assert.NotEmpty(start.Bestiary);
+
+        var currentTick = start.Tick;
+        IReadOnlyList<SkillStateDto> currentSkills = start.Skills;
+        IReadOnlyList<BestiaryEntryDto> currentBestiary = start.Bestiary;
+        var sawMobDeath = false;
+        for (var stepIndex = 0; stepIndex < 2400; stepIndex += 1)
+        {
+            var step = await StepBattleAsync(start.BattleId, currentTick, BuildSustainCommands(currentSkills));
+            AssertArenaInvariants(step.Actors, playerId);
+
+            var beforeBySpecies = ToBestiaryMap(currentBestiary);
+            var afterBySpecies = ToBestiaryMap(step.Bestiary);
+            var deathsBySpecies = step.Events
+                .OfType<DeathEventDto>()
+                .Where(evt => evt.EntityType == "mob" && evt.MobType is not null)
+                .GroupBy(evt => MapMobArchetypeToSpeciesId(evt.MobType!.Value), StringComparer.Ordinal)
+                .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
+            if (deathsBySpecies.Count == 0)
+            {
+                currentTick = step.Tick;
+                currentSkills = step.Skills;
+                currentBestiary = step.Bestiary;
+                continue;
+            }
+
+            sawMobDeath = true;
+            foreach (var species in beforeBySpecies.Keys.OrderBy(value => value, StringComparer.Ordinal))
+            {
+                var expectedDelta = deathsBySpecies.TryGetValue(species, out var count) ? count : 0;
+                Assert.Equal(beforeBySpecies[species].KillsTotal + expectedDelta, afterBySpecies[species].KillsTotal);
+            }
+
+            break;
+        }
+
+        Assert.True(sawMobDeath, "Expected at least one mob death to validate bestiary kill counters.");
+    }
+
+    [Fact]
+    public async Task PostBattleStep_SpeciesChestThresholds_AndSpawns_AreDeterministicBySeed()
+    {
+        const int seed = 1337;
+        var playerId = "player-species-chest-determinism";
+        var firstStart = await StartBattleAsync("arena-species-chest-determinism-a", playerId, seed);
+        var secondStart = await StartBattleAsync("arena-species-chest-determinism-b", playerId, seed);
+        AssertArenaInvariants(firstStart.Actors, playerId);
+        AssertArenaInvariants(secondStart.Actors, playerId);
+        Assert.Equal(ToBestiarySignature(firstStart.Bestiary), ToBestiarySignature(secondStart.Bestiary));
+        Assert.Equal(firstStart.PendingSpeciesChest, secondStart.PendingSpeciesChest);
+
+        var firstInitialChest = Assert.Single(firstStart.ActivePois, poi => poi.Type == "chest");
+        var secondInitialChest = Assert.Single(secondStart.ActivePois, poi => poi.Type == "chest");
+        var firstCurrent = await StepBattleAsync(firstStart.BattleId, firstStart.Tick, [BuildInteractPoiCommand(firstInitialChest.PoiId)]);
+        var secondCurrent = await StepBattleAsync(secondStart.BattleId, secondStart.Tick, [BuildInteractPoiCommand(secondInitialChest.PoiId)]);
+        AssertArenaInvariants(firstCurrent.Actors, playerId);
+        AssertArenaInvariants(secondCurrent.Actors, playerId);
+        Assert.True(Assert.Single(firstCurrent.CommandResults).Ok);
+        Assert.True(Assert.Single(secondCurrent.CommandResults).Ok);
+
+        BattleStepResponseDto? firstSpawnStep = null;
+        BattleStepResponseDto? secondSpawnStep = null;
+        BattlePoiDto? firstSpeciesChest = null;
+        BattlePoiDto? secondSpeciesChest = null;
+        for (var stepIndex = 0; stepIndex < 2800; stepIndex += 1)
+        {
+            var commands = BuildSustainCommands(firstCurrent.Skills);
+            var firstStep = await StepBattleAsync(firstStart.BattleId, firstCurrent.Tick, commands);
+            var secondStep = await StepBattleAsync(secondStart.BattleId, secondCurrent.Tick, commands);
+            AssertArenaInvariants(firstStep.Actors, playerId);
+            AssertArenaInvariants(secondStep.Actors, playerId);
+
+            Assert.Equal(ToBestiarySignature(firstStep.Bestiary), ToBestiarySignature(secondStep.Bestiary));
+            Assert.Equal(firstStep.PendingSpeciesChest, secondStep.PendingSpeciesChest);
+
+            var firstChest = firstStep.ActivePois
+                .Where(poi => poi.Type == "species_chest")
+                .OrderBy(poi => poi.PoiId, StringComparer.Ordinal)
+                .FirstOrDefault();
+            var secondChest = secondStep.ActivePois
+                .Where(poi => poi.Type == "species_chest")
+                .OrderBy(poi => poi.PoiId, StringComparer.Ordinal)
+                .FirstOrDefault();
+            Assert.Equal(firstChest is null, secondChest is null);
+            if (firstChest is not null && secondChest is not null)
+            {
+                firstSpawnStep = firstStep;
+                secondSpawnStep = secondStep;
+                firstSpeciesChest = firstChest;
+                secondSpeciesChest = secondChest;
+                break;
+            }
+
+            firstCurrent = firstStep;
+            secondCurrent = secondStep;
+        }
+
+        Assert.NotNull(firstSpawnStep);
+        Assert.NotNull(secondSpawnStep);
+        Assert.NotNull(firstSpeciesChest);
+        Assert.NotNull(secondSpeciesChest);
+        Assert.Equal(firstSpawnStep!.Tick, secondSpawnStep!.Tick);
+        Assert.Equal(firstSpeciesChest!.PoiId, secondSpeciesChest!.PoiId);
+        Assert.Equal(firstSpeciesChest.Type, secondSpeciesChest.Type);
+        Assert.Equal(firstSpeciesChest.Species, secondSpeciesChest.Species);
+        Assert.Equal(firstSpeciesChest.Pos.X, secondSpeciesChest.Pos.X);
+        Assert.Equal(firstSpeciesChest.Pos.Y, secondSpeciesChest.Pos.Y);
+    }
+
+    [Fact]
+    public async Task PostBattleStep_SpeciesChestSpawn_DefersWhenChestActive_ThenSpawnsWhenSlotFrees()
+    {
+        var playerId = "player-species-chest-deferral";
+        var start = await StartBattleAsync("arena-species-chest-deferral", playerId, 1337);
+        AssertArenaInvariants(start.Actors, playerId);
+        Assert.NotNull(Assert.Single(start.ActivePois, poi => poi.Type == "chest"));
+
+        var currentTick = start.Tick;
+        IReadOnlyList<SkillStateDto> currentSkills = start.Skills;
+        string? pendingSpecies = null;
+        var pendingObservedTick = 0;
+        for (var stepIndex = 0; stepIndex < 2600; stepIndex += 1)
+        {
+            var step = await StepBattleAsync(start.BattleId, currentTick, BuildSustainCommands(currentSkills));
+            AssertArenaInvariants(step.Actors, playerId);
+            var hasActiveChest = step.ActivePois.Any(IsChestPoi);
+            if (hasActiveChest && !string.IsNullOrWhiteSpace(step.PendingSpeciesChest))
+            {
+                pendingSpecies = step.PendingSpeciesChest;
+                pendingObservedTick = step.Tick;
+                currentTick = step.Tick;
+                currentSkills = step.Skills;
+                break;
+            }
+
+            currentTick = step.Tick;
+            currentSkills = step.Skills;
+        }
+
+        Assert.False(string.IsNullOrWhiteSpace(pendingSpecies));
+
+        BattleStepResponseDto? deferredSpawnStep = null;
+        for (var stepIndex = 0; stepIndex < 480; stepIndex += 1)
+        {
+            var step = await StepBattleAsync(start.BattleId, currentTick, BuildSustainCommands(currentSkills));
+            AssertArenaInvariants(step.Actors, playerId);
+            var speciesChest = step.ActivePois
+                .Where(poi => poi.Type == "species_chest")
+                .OrderBy(poi => poi.PoiId, StringComparer.Ordinal)
+                .FirstOrDefault();
+            if (speciesChest is not null && string.Equals(speciesChest.Species, pendingSpecies, StringComparison.Ordinal))
+            {
+                deferredSpawnStep = step;
+                break;
+            }
+
+            currentTick = step.Tick;
+            currentSkills = step.Skills;
+        }
+
+        Assert.NotNull(deferredSpawnStep);
+        Assert.True(deferredSpawnStep!.Tick > pendingObservedTick);
+        Assert.Equal(pendingSpecies, Assert.Single(deferredSpawnStep.ActivePois, poi => poi.Type == "species_chest").Species);
+    }
+
+    [Fact]
+    public async Task PostBattleStep_InteractSpeciesChest_RequiresRange_AppliesSpeciesBuff_AndConsumesPoi()
+    {
+        var playerId = "player-species-chest-interact";
+        var start = await StartBattleAsync("arena-species-chest-interact", playerId, 1337);
+        AssertArenaInvariants(start.Actors, playerId);
+
+        var initialChest = Assert.Single(start.ActivePois, poi => poi.Type == "chest");
+        var afterInitialChest = await StepBattleAsync(
+            start.BattleId,
+            start.Tick,
+            [BuildInteractPoiCommand(initialChest.PoiId)]);
+        AssertArenaInvariants(afterInitialChest.Actors, playerId);
+        Assert.True(Assert.Single(afterInitialChest.CommandResults).Ok);
+
+        var current = afterInitialChest;
+        BattleStepResponseDto? spawnStep = null;
+        BattlePoiDto? speciesChest = null;
+        for (var stepIndex = 0; stepIndex < 2600; stepIndex += 1)
+        {
+            var step = await StepBattleAsync(start.BattleId, current.Tick, BuildSustainCommands(current.Skills));
+            AssertArenaInvariants(step.Actors, playerId);
+            var activeSpeciesChest = step.ActivePois
+                .Where(poi => poi.Type == "species_chest")
+                .OrderBy(poi => poi.PoiId, StringComparer.Ordinal)
+                .FirstOrDefault();
+            if (activeSpeciesChest is not null)
+            {
+                spawnStep = step;
+                speciesChest = activeSpeciesChest;
+                break;
+            }
+
+            current = step;
+        }
+
+        Assert.NotNull(spawnStep);
+        Assert.NotNull(speciesChest);
+        Assert.False(string.IsNullOrWhiteSpace(speciesChest!.Species));
+
+        current = spawnStep!;
+        for (var stepIndex = 0; stepIndex < 12; stepIndex += 1)
+        {
+            var player = GetActor(current.Actors, playerId);
+            var distance = ComputeChebyshevDistance(player.TileX, player.TileY, speciesChest!.Pos.X, speciesChest.Pos.Y);
+            if (distance > 1)
+            {
+                break;
+            }
+
+            var awayDirection = ResolveMoveDirectionAway(player.TileX, player.TileY, speciesChest.Pos.X, speciesChest.Pos.Y);
+            var moved = await StepBattleAsync(current.BattleId, current.Tick, [BuildMoveCommand(awayDirection)]);
+            AssertArenaInvariants(moved.Actors, playerId);
+            current = moved;
+        }
+
+        var outOfRangeStep = await StepBattleAsync(
+            current.BattleId,
+            current.Tick,
+            [BuildInteractPoiCommand(speciesChest.PoiId)]);
+        AssertArenaInvariants(outOfRangeStep.Actors, playerId);
+        var outOfRangeResult = Assert.Single(outOfRangeStep.CommandResults);
+        Assert.False(outOfRangeResult.Ok);
+        Assert.Equal("out_of_range", outOfRangeResult.Reason);
+        Assert.Contains(
+            outOfRangeStep.Events.OfType<InteractFailedEventDto>(),
+            evt => evt.PoiId == speciesChest.PoiId && evt.Reason == "out_of_range");
+        Assert.Contains(outOfRangeStep.ActivePois, poi => poi.PoiId == speciesChest.PoiId);
+
+        current = outOfRangeStep;
+        for (var stepIndex = 0; stepIndex < 24; stepIndex += 1)
+        {
+            var player = GetActor(current.Actors, playerId);
+            var distance = ComputeChebyshevDistance(player.TileX, player.TileY, speciesChest.Pos.X, speciesChest.Pos.Y);
+            if (distance <= 1)
+            {
+                break;
+            }
+
+            var towardDirection = ResolveMoveDirectionToward(player.TileX, player.TileY, speciesChest.Pos.X, speciesChest.Pos.Y);
+            var moved = await StepBattleAsync(current.BattleId, current.Tick, [BuildMoveCommand(towardDirection)]);
+            AssertArenaInvariants(moved.Actors, playerId);
+            current = moved;
+        }
+
+        var inRangePlayer = GetActor(current.Actors, playerId);
+        Assert.True(ComputeChebyshevDistance(inRangePlayer.TileX, inRangePlayer.TileY, speciesChest.Pos.X, speciesChest.Pos.Y) <= 1);
+        var opened = await StepBattleAsync(
+            current.BattleId,
+            current.Tick,
+            [BuildInteractPoiCommand(speciesChest.PoiId)]);
+        AssertArenaInvariants(opened.Actors, playerId);
+        Assert.True(Assert.Single(opened.CommandResults).Ok);
+        Assert.DoesNotContain(opened.ActivePois, poi => poi.PoiId == speciesChest.PoiId);
+
+        var (expectedBuffId, expectedDurationMs) = ResolveExpectedSpeciesChestBuff(speciesChest.Species!);
+        Assert.Contains(
+            opened.Events.OfType<SpeciesChestOpenedEventDto>(),
+            evt => evt.Species == speciesChest.Species && evt.BuffId == expectedBuffId && evt.DurationMs == expectedDurationMs);
+        Assert.Contains(
+            opened.Events.OfType<BuffAppliedEventDto>(),
+            evt => evt.BuffId == expectedBuffId && evt.DurationMs == expectedDurationMs);
+        Assert.Contains(
+            opened.ActiveBuffs,
+            buff => buff.BuffId == expectedBuffId && buff.RemainingMs > 0 && buff.RemainingMs <= expectedDurationMs);
+    }
+
+    [Fact]
+    public async Task PostBattleStep_BestiaryThreshold_AdvancesDeterministicallyAfterTrigger()
+    {
+        var playerId = "player-bestiary-threshold";
+        var start = await StartBattleAsync("arena-bestiary-threshold", playerId, 1337);
+        AssertArenaInvariants(start.Actors, playerId);
+        Assert.NotEmpty(start.Bestiary);
+
+        var currentTick = start.Tick;
+        IReadOnlyList<SkillStateDto> currentSkills = start.Skills;
+        IReadOnlyList<BestiaryEntryDto> currentBestiary = start.Bestiary;
+        var sawThresholdAdvance = false;
+        for (var stepIndex = 0; stepIndex < 2600; stepIndex += 1)
+        {
+            var step = await StepBattleAsync(start.BattleId, currentTick, BuildSustainCommands(currentSkills));
+            AssertArenaInvariants(step.Actors, playerId);
+
+            var beforeBySpecies = ToBestiaryMap(currentBestiary);
+            var afterBySpecies = ToBestiaryMap(step.Bestiary);
+            foreach (var species in beforeBySpecies.Keys.OrderBy(value => value, StringComparer.Ordinal))
+            {
+                var previous = beforeBySpecies[species];
+                var next = afterBySpecies[species];
+                if (next.NextChestAtKills <= previous.NextChestAtKills)
+                {
+                    continue;
+                }
+
+                var delta = next.NextChestAtKills - previous.NextChestAtKills;
+                Assert.InRange(delta, 12, 18);
+                Assert.True(next.KillsTotal >= previous.NextChestAtKills);
+                sawThresholdAdvance = true;
+                break;
+            }
+
+            if (sawThresholdAdvance)
+            {
+                break;
+            }
+
+            currentTick = step.Tick;
+            currentSkills = step.Skills;
+            currentBestiary = step.Bestiary;
+        }
+
+        Assert.True(sawThresholdAdvance, "Expected a bestiary threshold increase after reaching a species chest trigger.");
     }
 
     [Fact]
@@ -3316,6 +3874,100 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
     }
 
     [Fact]
+    public async Task PostBattleStep_AssistEnabledToggle_FlipsAndPersistsDeterministically()
+    {
+        var firstStart = await StartBattleAsync("arena-assist-toggle-a", "player-assist-toggle", 1337);
+        var secondStart = await StartBattleAsync("arena-assist-toggle-b", "player-assist-toggle", 1337);
+        AssertArenaInvariants(firstStart.Actors, "player-assist-toggle");
+        AssertArenaInvariants(secondStart.Actors, "player-assist-toggle");
+        Assert.Equal(false, firstStart.AssistConfig.Enabled);
+        Assert.Equal(false, secondStart.AssistConfig.Enabled);
+
+        var firstTick = firstStart.Tick;
+        var secondTick = secondStart.Tick;
+        var toggles = new[] { true, false, true, false };
+        foreach (var enabled in toggles)
+        {
+            var command = new BattleCommandDto(
+                "set_assist_config",
+                AssistConfig: BuildAssistConfig(
+                    enabled: enabled,
+                    autoHealEnabled: false,
+                    healAtHpPercent: 40,
+                    autoGuardEnabled: false,
+                    guardAtHpPercent: 60,
+                    autoOffenseEnabled: false,
+                    offenseMode: "cooldown_spam",
+                    maxAutoCastsPerTick: 1));
+
+            var firstStep = await StepBattleAsync(firstStart.BattleId, firstTick, [command]);
+            var secondStep = await StepBattleAsync(secondStart.BattleId, secondTick, [command]);
+            AssertArenaInvariants(firstStep.Actors, "player-assist-toggle");
+            AssertArenaInvariants(secondStep.Actors, "player-assist-toggle");
+            Assert.True(Assert.Single(firstStep.CommandResults).Ok);
+            Assert.True(Assert.Single(secondStep.CommandResults).Ok);
+            Assert.Equal(enabled, firstStep.AssistConfig.Enabled);
+            Assert.Equal(enabled, secondStep.AssistConfig.Enabled);
+            Assert.Equal(
+                firstStep.Actors
+                    .OrderBy(actor => actor.ActorId, StringComparer.Ordinal)
+                    .Select(actor => $"{actor.ActorId}:{actor.TileX}:{actor.TileY}:{actor.Hp}:{actor.Shield}")
+                    .ToList(),
+                secondStep.Actors
+                    .OrderBy(actor => actor.ActorId, StringComparer.Ordinal)
+                    .Select(actor => $"{actor.ActorId}:{actor.TileX}:{actor.TileY}:{actor.Hp}:{actor.Shield}")
+                    .ToList());
+
+            firstTick = firstStep.Tick;
+            secondTick = secondStep.Tick;
+
+            var firstPersisted = await StepBattleAsync(firstStart.BattleId, firstTick, []);
+            var secondPersisted = await StepBattleAsync(secondStart.BattleId, secondTick, []);
+            AssertArenaInvariants(firstPersisted.Actors, "player-assist-toggle");
+            AssertArenaInvariants(secondPersisted.Actors, "player-assist-toggle");
+            Assert.Equal(enabled, firstPersisted.AssistConfig.Enabled);
+            Assert.Equal(enabled, secondPersisted.AssistConfig.Enabled);
+
+            firstTick = firstPersisted.Tick;
+            secondTick = secondPersisted.Tick;
+        }
+    }
+
+    [Fact]
+    public async Task PostBattleStep_AssistDisabled_DoesNotAutoCastHealOrOffense()
+    {
+        var playerId = "player-assist-disabled";
+        var start = await StartBattleAsync("arena-assist-disabled", playerId, 1337);
+        AssertArenaInvariants(start.Actors, playerId);
+
+        var configured = await StepBattleAsync(
+            start.BattleId,
+            start.Tick,
+            [new BattleCommandDto("set_assist_config", AssistConfig: BuildAssistConfig(
+                enabled: false,
+                autoHealEnabled: true,
+                healAtHpPercent: 99,
+                autoGuardEnabled: true,
+                guardAtHpPercent: 99,
+                autoOffenseEnabled: true,
+                offenseMode: "cooldown_spam",
+                maxAutoCastsPerTick: 1))]);
+        AssertArenaInvariants(configured.Actors, playerId);
+        Assert.Equal(false, configured.AssistConfig.Enabled);
+        Assert.DoesNotContain(configured.Events.OfType<AssistCastEventDto>(), _ => true);
+
+        var currentTick = configured.Tick;
+        for (var i = 0; i < 24; i += 1)
+        {
+            var step = await StepBattleAsync(start.BattleId, currentTick, []);
+            currentTick = step.Tick;
+            AssertArenaInvariants(step.Actors, playerId);
+            Assert.Equal(false, step.AssistConfig.Enabled);
+            Assert.DoesNotContain(step.Events.OfType<AssistCastEventDto>(), _ => true);
+        }
+    }
+
+    [Fact]
     public async Task PostBattleStep_AssistManualCastCommand_OverridesAutoCasting()
     {
         var playerId = "player-assist-manual-override";
@@ -3412,6 +4064,77 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
                 firstStep.Events.Select(ToEventSignature).ToList(),
                 secondStep.Events.Select(ToEventSignature).ToList());
         }
+    }
+
+    [Fact]
+    public async Task PostBattleStep_WhenPaused_StepDoesNotAdvanceTimeOrChangePositions()
+    {
+        var playerId = "player-pause-freeze";
+        var start = await StartBattleAsync("arena-pause-freeze", playerId, 1337);
+        AssertArenaInvariants(start.Actors, playerId);
+
+        var paused = await StepBattleAsync(
+            start.BattleId,
+            start.Tick,
+            [new BattleCommandDto("set_paused", Paused: true)]);
+        AssertArenaInvariants(paused.Actors, playerId);
+        Assert.Equal(start.Tick, paused.Tick);
+        Assert.True(Assert.Single(paused.CommandResults).Ok);
+        var frozenActors = paused.Actors
+            .OrderBy(actor => actor.ActorId, StringComparer.Ordinal)
+            .Select(actor => $"{actor.ActorId}:{actor.TileX}:{actor.TileY}:{actor.Hp}:{actor.Shield}")
+            .ToList();
+
+        for (var i = 0; i < 4; i += 1)
+        {
+            var step = await StepBattleAsync(start.BattleId, paused.Tick, []);
+            AssertArenaInvariants(step.Actors, playerId);
+            Assert.Equal(paused.Tick, step.Tick);
+            Assert.Empty(step.CommandResults);
+            var actors = step.Actors
+                .OrderBy(actor => actor.ActorId, StringComparer.Ordinal)
+                .Select(actor => $"{actor.ActorId}:{actor.TileX}:{actor.TileY}:{actor.Hp}:{actor.Shield}")
+                .ToList();
+            Assert.Equal(frozenActors, actors);
+        }
+
+        var resumed = await StepBattleAsync(
+            start.BattleId,
+            paused.Tick,
+            [new BattleCommandDto("set_paused", Paused: false)]);
+        AssertArenaInvariants(resumed.Actors, playerId);
+        Assert.True(Assert.Single(resumed.CommandResults).Ok);
+        Assert.True(resumed.Tick > paused.Tick);
+    }
+
+    private async Task<AccountStateResponseDto> GetAccountStateAsync(string accountId = "dev_account")
+    {
+        var response = await _client.GetAsync($"/api/v1/account/state?accountId={accountId}");
+        var payload = await response.Content.ReadFromJsonAsync<AccountStateResponseDto>();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(payload);
+        return payload;
+    }
+
+    private static string FindOwnedEquipmentInstanceForSlot(
+        AccountStateResponseDto state,
+        CharacterStateDto character,
+        string slot)
+    {
+        var definitionIdsForSlot = state.EquipmentCatalog
+            .Where(entry => string.Equals(entry.Slot, slot, StringComparison.OrdinalIgnoreCase))
+            .Select(entry => entry.ItemId)
+            .ToHashSet(StringComparer.Ordinal);
+
+        var ownedInstanceId = character.Inventory.EquipmentInstances
+            .Where(entry => definitionIdsForSlot.Contains(entry.Value.DefinitionId))
+            .Select(entry => entry.Key)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .FirstOrDefault();
+
+        Assert.False(string.IsNullOrWhiteSpace(ownedInstanceId), $"Expected an owned item for slot '{slot}'.");
+        return ownedInstanceId!;
     }
 
     private async Task<BattleStartResponseDto> StartBattleAsync(string arenaId, string playerId, int? seed)
@@ -3690,6 +4413,53 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
         return "up";
     }
 
+    private static string ResolveMoveDirectionAway(int sourceTileX, int sourceTileY, int avoidTileX, int avoidTileY)
+    {
+        var stepX = Math.Sign(sourceTileX - avoidTileX);
+        var stepY = Math.Sign(sourceTileY - avoidTileY);
+        if (stepX == 0 && stepY < 0)
+        {
+            return "up";
+        }
+
+        if (stepX == 0 && stepY > 0)
+        {
+            return "down";
+        }
+
+        if (stepX < 0 && stepY == 0)
+        {
+            return "left";
+        }
+
+        if (stepX > 0 && stepY == 0)
+        {
+            return "right";
+        }
+
+        if (stepX > 0 && stepY < 0)
+        {
+            return "ne";
+        }
+
+        if (stepX > 0 && stepY > 0)
+        {
+            return "se";
+        }
+
+        if (stepX < 0 && stepY < 0)
+        {
+            return "nw";
+        }
+
+        if (stepX < 0 && stepY > 0)
+        {
+            return "sw";
+        }
+
+        return "up";
+    }
+
     private static int GetExpectedMobCapForTick(int tick)
     {
         var elapsedMs = tick * StepDeltaMs;
@@ -3706,6 +4476,48 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
     private static bool IsMeleeMob(ActorStateDto actor)
     {
         return actor.MobType is MobArchetype.MeleeBrute or MobArchetype.MeleeDemon;
+    }
+
+    private static bool IsChestPoi(BattlePoiDto poi)
+    {
+        return poi.Type is "chest" or "species_chest";
+    }
+
+    private static IReadOnlyDictionary<string, BestiaryEntryDto> ToBestiaryMap(IReadOnlyList<BestiaryEntryDto> entries)
+    {
+        return entries.ToDictionary(entry => entry.Species, entry => entry, StringComparer.Ordinal);
+    }
+
+    private static string ToBestiarySignature(IReadOnlyList<BestiaryEntryDto> entries)
+    {
+        return string.Join(
+            "|",
+            entries
+                .OrderBy(entry => entry.Species, StringComparer.Ordinal)
+                .Select(entry => $"{entry.Species}:{entry.KillsTotal}:{entry.NextChestAtKills}"));
+    }
+
+    private static string MapMobArchetypeToSpeciesId(MobArchetype archetype)
+    {
+        return archetype switch
+        {
+            MobArchetype.MeleeBrute => "melee_brute",
+            MobArchetype.RangedArcher => "ranged_archer",
+            MobArchetype.MeleeDemon => "melee_demon",
+            MobArchetype.RangedDragon => "ranged_dragon",
+            _ => archetype.ToString()
+        };
+    }
+
+    private static (string BuffId, int DurationMs) ResolveExpectedSpeciesChestBuff(string species)
+    {
+        return species switch
+        {
+            "melee_demon" => (DamageBoostBuffId, DamageBoostDurationMs),
+            "ranged_dragon" => (DamageBoostBuffId, DamageBoostDurationMs),
+            "ranged_archer" => (AntiRangedPressureBuffId, AntiRangedPressureDurationMs),
+            _ => (ThornsBoostBuffId, ThornsBoostDurationMs)
+        };
     }
 
     private static IEnumerable<int> GetOrderedCausalityIds(IReadOnlyList<BattleEventDto> events)
@@ -3751,6 +4563,10 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
                 $"buff_applied:{buffApplied.BuffId}:{buffApplied.DurationMs}",
             AltarActivatedEventDto altarActivated =>
                 $"altar_activated:{altarActivated.RequestedCount}:{altarActivated.SpawnedCount}",
+            SpeciesChestSpawnedEventDto speciesChestSpawned =>
+                $"species_chest_spawned:{speciesChestSpawned.Species}:{speciesChestSpawned.PoiId}:{speciesChestSpawned.TileX}:{speciesChestSpawned.TileY}",
+            SpeciesChestOpenedEventDto speciesChestOpened =>
+                $"species_chest_opened:{speciesChestOpened.Species}:{speciesChestOpened.BuffId}:{speciesChestOpened.DurationMs}",
             _ => battleEvent.GetType().Name
         };
     }

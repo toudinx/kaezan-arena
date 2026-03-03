@@ -1,0 +1,66 @@
+.dock-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.dock-module {
+  border: 1px solid #475569;
+  border-radius: 0.45rem;
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.96));
+  box-shadow: 0 5px 16px rgba(2, 6, 23, 0.32);
+  overflow: hidden;
+}
+
+.dock-module__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.45rem;
+  padding: 0.42rem 0.55rem;
+  border-bottom: 1px solid rgba(100, 116, 139, 0.45);
+  background: linear-gradient(180deg, rgba(51, 65, 85, 0.95), rgba(30, 41, 59, 0.95));
+}
+
+.dock-module--collapsed .dock-module__header {
+  border-bottom: 0;
+}
+
+.dock-module__header strong {
+  color: #e2e8f0;
+  font-size: 0.74rem;
+  line-height: 1;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.dock-module__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.dock-module__action {
+  border: 1px solid #64748b;
+  border-radius: 0.22rem;
+  width: 20px;
+  height: 20px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+  color: #f8fafc;
+  background: linear-gradient(180deg, #334155, #1e293b);
+}
+
+.dock-module__body {
+  padding: 0.5rem;
+}
+
+.dock-module__empty {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 0.75rem;
+}

@@ -5,6 +5,7 @@ public sealed record BattleCommandDto(
     string? SkillId = null,
     string? Dir = null,
     string? TargetEntityId = null,
+    bool? Paused = null,
     int? GroundTileX = null,
     int? GroundTileY = null,
     string? PoiId = null,

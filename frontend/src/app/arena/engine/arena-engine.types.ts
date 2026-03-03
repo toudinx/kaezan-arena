@@ -126,7 +126,7 @@ export interface DecalInstance {
   createdTick: number;
 }
 
-export type ArenaPoiType = "altar" | "chest";
+export type ArenaPoiType = "altar" | "chest" | "species_chest";
 
 export interface ArenaPoiState {
   poiId: string;
@@ -134,6 +134,12 @@ export interface ArenaPoiState {
   pos: TilePos;
   remainingMs: number;
   species?: string;
+}
+
+export interface ArenaBestiaryEntry {
+  species: string;
+  killsTotal: number;
+  nextChestAtKills: number;
 }
 
 export interface ArenaBuffState {

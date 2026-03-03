@@ -31,6 +31,8 @@ public sealed class BattleV1Controller : ControllerBase
             Seed: snapshot.Seed,
             FacingDirection: snapshot.FacingDirection,
             BattleStatus: snapshot.BattleStatus,
+            IsGameOver: snapshot.IsGameOver,
+            EndReason: snapshot.EndReason,
             EffectiveTargetEntityId: snapshot.EffectiveTargetEntityId,
             LockedTargetEntityId: snapshot.LockedTargetEntityId,
             GroundTargetPos: snapshot.GroundTargetPos,
@@ -39,6 +41,8 @@ public sealed class BattleV1Controller : ControllerBase
             WeaponElement: snapshot.WeaponElement,
             Decals: snapshot.Decals,
             ActiveBuffs: snapshot.ActiveBuffs,
+            Bestiary: snapshot.Bestiary,
+            PendingSpeciesChest: snapshot.PendingSpeciesChest,
             ActivePois: snapshot.ActivePois));
     }
 
@@ -58,6 +62,8 @@ public sealed class BattleV1Controller : ControllerBase
             Seed: snapshot.Seed,
             FacingDirection: snapshot.FacingDirection,
             BattleStatus: snapshot.BattleStatus,
+            IsGameOver: snapshot.IsGameOver,
+            EndReason: snapshot.EndReason,
             EffectiveTargetEntityId: snapshot.EffectiveTargetEntityId,
             LockedTargetEntityId: snapshot.LockedTargetEntityId,
             GroundTargetPos: snapshot.GroundTargetPos,
@@ -66,6 +72,8 @@ public sealed class BattleV1Controller : ControllerBase
             WeaponElement: snapshot.WeaponElement,
             Decals: snapshot.Decals,
             ActiveBuffs: snapshot.ActiveBuffs,
+            Bestiary: snapshot.Bestiary,
+            PendingSpeciesChest: snapshot.PendingSpeciesChest,
             ActivePois: snapshot.ActivePois,
             Events: snapshot.Events,
             CommandResults: snapshot.CommandResults));

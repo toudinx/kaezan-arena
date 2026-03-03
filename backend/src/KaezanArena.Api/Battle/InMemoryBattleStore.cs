@@ -59,7 +59,7 @@ public sealed class InMemoryBattleStore : IBattleStore
     private const int HealCooldownTotalMs = 7000;
     private const int GuardCooldownTotalMs = 10000;
     private const int AvalancheCooldownTotalMs = 2500;
-    private const int AvalancheDamage = 3;
+    private const int AvalancheDamage = 3;       
     private const int AvalancheRangeTilesManhattan = 3;
     private const int HealPercentOfMaxHp = 22;
     private const int GuardPercentOfMaxHp = 15;
@@ -86,6 +86,7 @@ public sealed class InMemoryBattleStore : IBattleStore
     private const string SetTargetCommandType = "set_target";
     private const string SetGroundTargetCommandType = "set_ground_target";
     private const string SetAssistConfigCommandType = "set_assist_config";
+    private const string SetPausedCommandType = "set_paused";
 
     private const string AssistReasonAutoHeal = "auto_heal";
     private const string AssistReasonAutoGuard = "auto_guard";
@@ -109,9 +110,15 @@ public sealed class InMemoryBattleStore : IBattleStore
     private const string PlayerDeadReason = "player_dead";
     private const string NotStartedReason = "not_started";
     private const string DefeatReason = "defeat";
+    private const string PausedReason = "paused";
+    private const string EndReasonDeath = "death";
     private const string PoiTypeChest = "chest";
+    private const string PoiTypeSpeciesChest = "species_chest";
     private const string PoiTypeAltar = "altar";
     private const string HealingAmplifierBuffId = "healing_amplifier";
+    private const string AntiRangedPressureBuffId = "anti_ranged_pressure";
+    private const string ThornsBoostBuffId = "thorns_boost";
+    private const string DamageBoostBuffId = "damage_boost";
     private const int AltarSpawnCheckMs = 9000;
     private const int AltarSpawnChancePercent = 35;
     private const int AltarLifetimeMs = 10000;
@@ -120,8 +127,19 @@ public sealed class InMemoryBattleStore : IBattleStore
     private const int ChestSpawnCheckMs = 7000;
     private const int ChestSpawnChancePercent = 40;
     private const int ChestLifetimeMs = 10000;
+    private const int SpeciesChestLifetimeMs = 10000;
     private const int HealAmplifierDurationMs = 8000;
+    private const int AntiRangedPressureDurationMs = 8000;
+    private const int ThornsBoostDurationMs = 8000;
+    private const int DamageBoostDurationMs = 6000;
     private const int HealAmplifierBonusPercent = 10;
+    private const int AntiRangedPressureReductionPercent = 20;
+    private const int ThornsBoostBonusPercent = 30;
+    private const int DamageBoostBonusPercent = 25;
+    private const int BestiaryFirstChestBaseKills = 10;
+    private const int BestiaryFirstChestRandomInclusiveMax = 4;
+    private const int BestiaryChestIncrementBaseKills = 12;
+    private const int BestiaryChestIncrementRandomInclusiveMax = 6;
     private const string InitialChestPoiId = "poi.chest.0000";
 
     private static readonly MobArchetype[] SpawnArchetypeCycle =
@@ -146,6 +164,19 @@ public sealed class InMemoryBattleStore : IBattleStore
             [ExoriMasSkillId] = true,
             [AvalancheSkillId] = true
         };
+    private static readonly IReadOnlyDictionary<MobArchetype, string> SpeciesByArchetype =
+        new Dictionary<MobArchetype, string>
+        {
+            [MobArchetype.MeleeBrute] = "melee_brute",
+            [MobArchetype.RangedArcher] = "ranged_archer",
+            [MobArchetype.MeleeDemon] = "melee_demon",
+            [MobArchetype.RangedDragon] = "ranged_dragon"
+        };
+    private static readonly IReadOnlyDictionary<string, MobArchetype> ArchetypeBySpecies =
+        SpeciesByArchetype.ToDictionary(
+            pair => pair.Value,
+            pair => pair.Key,
+            StringComparer.Ordinal);
 
     private readonly ConcurrentDictionary<string, StoredBattle> _battles = new();
     private int _sequence;
@@ -209,6 +240,11 @@ public sealed class InMemoryBattleStore : IBattleStore
         var battleIndex = Interlocked.Increment(ref _sequence);
         var battleId = $"battle-v1-{battleIndex:D4}";
         var resolvedSeed = seed ?? GenerateSeed(battleIndex);
+        var battleRng = new Random(resolvedSeed);
+        var poiRng = new Random(GeneratePoiSeed(resolvedSeed));
+        var bestiaryRng = new Random(GenerateBestiarySeed(resolvedSeed));
+        var mobSlots = BuildMobSlots();
+        var bestiary = BuildInitialBestiaryEntries(mobSlots, bestiaryRng);
 
         var state = new StoredBattle(
             battleId: battleId,
@@ -216,11 +252,13 @@ public sealed class InMemoryBattleStore : IBattleStore
             playerActorId: normalizedPlayer,
             playerClassId: ResolvePlayerClassId(normalizedPlayer),
             seed: resolvedSeed,
-            rng: new Random(resolvedSeed),
-            poiRng: new Random(GeneratePoiSeed(resolvedSeed)),
+            rng: battleRng,
+            poiRng: poiRng,
+            bestiaryRng: bestiaryRng,
             tick: 0,
             playerFacingDirection: FacingUp,
             battleStatus: StatusStarted,
+            isPaused: false,
             playerMoveCooldownRemainingMs: 0,
             playerAttackCooldownRemainingMs: 0,
             playerGlobalCooldownRemainingMs: 0,
@@ -260,7 +298,9 @@ public sealed class InMemoryBattleStore : IBattleStore
             decals: [],
             activeBuffs: new Dictionary<string, StoredBuff>(StringComparer.Ordinal),
             pois: BuildInitialPois(),
-            mobSlots: BuildMobSlots());
+            mobSlots: mobSlots,
+            bestiary: bestiary,
+            pendingSpeciesChestArchetype: null);
 
         var initialMobCap = GetMaxAliveMobsForTick(state.Tick);
         foreach (var slot in state.MobSlots.Values.OrderBy(value => value.SlotIndex))
@@ -286,23 +326,32 @@ public sealed class InMemoryBattleStore : IBattleStore
 
         lock (state.Sync)
         {
-            state.Tick += 1;
-            state.TickEventCounter = 0;
             if (!IsStarted(state))
             {
+                state.Tick += 1;
+                state.TickEventCounter = 0;
                 var rejectedCommandResults = BuildStatusRejectedCommandResults(state, commands);
                 return ToSnapshot(state, [], rejectedCommandResults);
             }
 
+            var preAppliedPauseResults = ApplyPauseCommands(state, commands);
+            if (state.IsPaused)
+            {
+                var pausedCommandResults = BuildPausedCommandResults(commands, preAppliedPauseResults);
+                return ToSnapshot(state, [], pausedCommandResults);
+            }
+
+            state.Tick += 1;
+            state.TickEventCounter = 0;
             TickSkillCooldowns(state);
             TickPlayerGlobalCooldown(state);
             TickPlayerMoveCooldown(state);
             TickPlayerAutoAttackCooldown(state);
             TickMobCombatCooldowns(state);
-            TickPois(state);
+            var events = new List<BattleEventDto>();
+            TickPois(state, events);
             TickBuffs(state);
 
-            var events = new List<BattleEventDto>();
             var pendingLifeLeechHeal = 0;
             var hasExplicitFacingCommand = false;
             var hasManualCastSkillCommand = false;
@@ -310,6 +359,7 @@ public sealed class InMemoryBattleStore : IBattleStore
                 state,
                 commands,
                 ref hasExplicitFacingCommand);
+            var preAppliedCommandResults = MergePreAppliedCommandResults(preAppliedPauseResults, preAppliedMovementResults);
             TickMobMovement(state);
             TickMobCommitWindows(state);
             TickDecals(state);
@@ -320,7 +370,7 @@ public sealed class InMemoryBattleStore : IBattleStore
                 ref pendingLifeLeechHeal,
                 ref hasExplicitFacingCommand,
                 ref hasManualCastSkillCommand,
-                preAppliedMovementResults);
+                preAppliedCommandResults);
             EvaluateCombatAssist(state, events, ref pendingLifeLeechHeal, hasManualCastSkillCommand);
             // Deterministic facing priority per tick:
             // 1) explicit facing updates from command processing (move_player / set_facing / set_ground_target)
@@ -401,6 +451,8 @@ public sealed class InMemoryBattleStore : IBattleStore
             ? new BattleTilePosDto(groundX, groundY)
             : null;
         var effectiveTargetEntityId = ResolveEffectivePlayerAutoAttackTargetEntityId(state);
+        var isGameOver = IsDefeat(state);
+        var endReason = isGameOver ? EndReasonDeath : null;
         var nowMs = GetElapsedMsForTick(state.Tick);
         var activeBuffs = state.ActiveBuffs.Values
             .Where(buff => buff.ExpiresAtMs > nowMs)
@@ -408,6 +460,13 @@ public sealed class InMemoryBattleStore : IBattleStore
             .Select(buff => new BattleBuffDto(
                 BuffId: buff.BuffId,
                 RemainingMs: (int)Math.Max(0, buff.ExpiresAtMs - nowMs)))
+            .ToList();
+        var bestiary = state.Bestiary
+            .OrderBy(entry => (int)entry.Key)
+            .Select(entry => new BestiaryEntryDto(
+                Species: GetSpeciesId(entry.Key),
+                KillsTotal: entry.Value.KillsTotal,
+                NextChestAtKills: entry.Value.NextChestAtKills))
             .ToList();
         var activePois = state.Pois.Values
             .Where(poi => poi.ExpiresAtMs > nowMs)
@@ -434,6 +493,8 @@ public sealed class InMemoryBattleStore : IBattleStore
             Seed: state.Seed,
             FacingDirection: state.PlayerFacingDirection,
             BattleStatus: state.BattleStatus,
+            IsGameOver: isGameOver,
+            EndReason: endReason,
             EffectiveTargetEntityId: effectiveTargetEntityId,
             LockedTargetEntityId: state.LockedTargetEntityId,
             GroundTargetPos: groundTargetPos,
@@ -442,6 +503,10 @@ public sealed class InMemoryBattleStore : IBattleStore
             WeaponElement: state.EquippedWeaponElement,
             Decals: decals,
             ActiveBuffs: activeBuffs,
+            Bestiary: bestiary,
+            PendingSpeciesChest: state.PendingSpeciesChestArchetype is null
+                ? null
+                : GetSpeciesId(state.PendingSpeciesChestArchetype.Value),
             ActivePois: activePois,
             Events: events,
             CommandResults: commandResults);
@@ -483,6 +548,26 @@ public sealed class InMemoryBattleStore : IBattleStore
         };
     }
 
+    private static Dictionary<MobArchetype, StoredBestiaryEntry> BuildInitialBestiaryEntries(
+        IReadOnlyDictionary<int, MobSlotState> mobSlots,
+        Random bestiaryRng)
+    {
+        var entries = new Dictionary<MobArchetype, StoredBestiaryEntry>();
+        var archetypes = mobSlots.Values
+            .Select(slot => slot.Archetype)
+            .Distinct()
+            .OrderBy(archetype => (int)archetype)
+            .ToList();
+        foreach (var archetype in archetypes)
+        {
+            entries[archetype] = new StoredBestiaryEntry(
+                killsTotal: 0,
+                nextChestAtKills: ComputeInitialBestiaryThreshold(bestiaryRng));
+        }
+
+        return entries;
+    }
+
     private static int GenerateSeed(int battleIndex)
     {
         unchecked
@@ -497,6 +582,24 @@ public sealed class InMemoryBattleStore : IBattleStore
         {
             return (battleSeed * 486187739) ^ 0x2C1B3C6D;
         }
+    }
+
+    private static int GenerateBestiarySeed(int battleSeed)
+    {
+        unchecked
+        {
+            return (battleSeed * 92821) ^ 0x41D2A7C3;
+        }
+    }
+
+    private static int ComputeInitialBestiaryThreshold(Random bestiaryRng)
+    {
+        return BestiaryFirstChestBaseKills + bestiaryRng.Next(BestiaryFirstChestRandomInclusiveMax + 1);
+    }
+
+    private static int ComputeBestiaryThresholdIncrement(Random bestiaryRng)
+    {
+        return BestiaryChestIncrementBaseKills + bestiaryRng.Next(BestiaryChestIncrementRandomInclusiveMax + 1);
     }
 
     private static string ResolvePlayerClassId(string playerActorId)
@@ -666,6 +769,91 @@ public sealed class InMemoryBattleStore : IBattleStore
         return commandResults;
     }
 
+    private static IReadOnlyDictionary<int, CommandResultDto> ApplyPauseCommands(
+        StoredBattle state,
+        IReadOnlyList<BattleCommandDto>? commands)
+    {
+        if (commands is null || commands.Count == 0)
+        {
+            return new Dictionary<int, CommandResultDto>();
+        }
+
+        var commandResults = new Dictionary<int, CommandResultDto>();
+        for (var index = 0; index < commands.Count; index += 1)
+        {
+            var command = commands[index];
+            var commandType = NormalizeCommandType(command.Type);
+            if (!string.Equals(commandType, SetPausedCommandType, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (!command.Paused.HasValue)
+            {
+                commandResults[index] = new CommandResultDto(index, commandType, false, UnknownCommandReason);
+                continue;
+            }
+
+            state.IsPaused = command.Paused.Value;
+            commandResults[index] = new CommandResultDto(index, commandType, true, null);
+        }
+
+        return commandResults;
+    }
+
+    private static IReadOnlyList<CommandResultDto> BuildPausedCommandResults(
+        IReadOnlyList<BattleCommandDto>? commands,
+        IReadOnlyDictionary<int, CommandResultDto> preAppliedPauseResults)
+    {
+        var commandResults = new List<CommandResultDto>();
+        if (commands is null || commands.Count == 0)
+        {
+            return commandResults;
+        }
+
+        for (var index = 0; index < commands.Count; index += 1)
+        {
+            if (preAppliedPauseResults.TryGetValue(index, out var preAppliedResult))
+            {
+                commandResults.Add(preAppliedResult);
+                continue;
+            }
+
+            var commandType = NormalizeCommandType(commands[index].Type);
+            commandResults.Add(new CommandResultDto(index, commandType, false, PausedReason));
+        }
+
+        return commandResults;
+    }
+
+    private static IReadOnlyDictionary<int, CommandResultDto> MergePreAppliedCommandResults(
+        IReadOnlyDictionary<int, CommandResultDto> left,
+        IReadOnlyDictionary<int, CommandResultDto> right)
+    {
+        if (left.Count == 0)
+        {
+            return right;
+        }
+
+        if (right.Count == 0)
+        {
+            return left;
+        }
+
+        var merged = new Dictionary<int, CommandResultDto>(left.Count + right.Count);
+        foreach (var entry in left)
+        {
+            merged[entry.Key] = entry.Value;
+        }
+
+        foreach (var entry in right)
+        {
+            merged[entry.Key] = entry.Value;
+        }
+
+        return merged;
+    }
+
     private static IReadOnlyDictionary<int, CommandResultDto> ApplyMoveCommandsBeforeMobMovement(
         StoredBattle state,
         IReadOnlyList<BattleCommandDto>? commands,
@@ -758,25 +946,6 @@ public sealed class InMemoryBattleStore : IBattleStore
         {
             failReason = MoveBlockedReason;
             return false;
-        }
-
-        if (deltaX != 0 && deltaY != 0)
-        {
-            var adjacentCardinalX = player.TileX + deltaX;
-            var adjacentCardinalY = player.TileY;
-            if (!IsTileOpenForPlayerMovement(state, player.ActorId, adjacentCardinalX, adjacentCardinalY))
-            {
-                failReason = MoveBlockedReason;
-                return false;
-            }
-
-            var adjacentVerticalX = player.TileX;
-            var adjacentVerticalY = player.TileY + deltaY;
-            if (!IsTileOpenForPlayerMovement(state, player.ActorId, adjacentVerticalX, adjacentVerticalY))
-            {
-                failReason = MoveBlockedReason;
-                return false;
-            }
         }
 
         player.TileX = destinationX;
@@ -1065,6 +1234,19 @@ public sealed class InMemoryBattleStore : IBattleStore
                 BuffId: HealingAmplifierBuffId,
                 DurationMs: HealAmplifierDurationMs));
         }
+        else if (string.Equals(poi.Type, PoiTypeSpeciesChest, StringComparison.Ordinal))
+        {
+            var speciesArchetype = TryResolveArchetypeBySpecies(poi.Species);
+            var (buffId, durationMs) = ResolveSpeciesChestBuff(speciesArchetype);
+            ApplyOrRefreshBuff(state, buffId, durationMs);
+            events.Add(new BuffAppliedEventDto(
+                BuffId: buffId,
+                DurationMs: durationMs));
+            events.Add(new SpeciesChestOpenedEventDto(
+                Species: poi.Species ?? "unknown",
+                BuffId: buffId,
+                DurationMs: durationMs));
+        }
         else if (string.Equals(poi.Type, PoiTypeAltar, StringComparison.Ordinal))
         {
             state.NextAltarInteractAllowedAtMs = nowMs + AltarCooldownMs;
@@ -1073,6 +1255,8 @@ public sealed class InMemoryBattleStore : IBattleStore
                 RequestedCount: AltarSummonSpawnCount,
                 SpawnedCount: spawnedCount));
         }
+
+        TrySpawnPendingSpeciesChest(state, events, nowMs);
 
         return true;
     }
@@ -1121,6 +1305,33 @@ public sealed class InMemoryBattleStore : IBattleStore
         state.ActiveBuffs[buffId] = new StoredBuff(
             buffId: buffId,
             expiresAtMs: nowMs + durationMs);
+    }
+
+    private static (string BuffId, int DurationMs) ResolveSpeciesChestBuff(MobArchetype? speciesArchetype)
+    {
+        if (speciesArchetype is MobArchetype.MeleeDemon or MobArchetype.RangedDragon)
+        {
+            return (DamageBoostBuffId, DamageBoostDurationMs);
+        }
+
+        if (speciesArchetype is MobArchetype.RangedArcher)
+        {
+            return (AntiRangedPressureBuffId, AntiRangedPressureDurationMs);
+        }
+
+        return (ThornsBoostBuffId, ThornsBoostDurationMs);
+    }
+
+    private static MobArchetype? TryResolveArchetypeBySpecies(string? species)
+    {
+        if (string.IsNullOrWhiteSpace(species))
+        {
+            return null;
+        }
+
+        return ArchetypeBySpecies.TryGetValue(species.Trim(), out var archetype)
+            ? archetype
+            : null;
     }
 
     private static SkillCastResult TryExecutePlayerSkillCast(
@@ -1501,7 +1712,7 @@ public sealed class InMemoryBattleStore : IBattleStore
         }
     }
 
-    private static void TickPois(StoredBattle state)
+    private static void TickPois(StoredBattle state, List<BattleEventDto> events)
     {
         var nowMs = GetElapsedMsForTick(state.Tick);
         if (state.Pois.Count > 0)
@@ -1515,6 +1726,8 @@ public sealed class InMemoryBattleStore : IBattleStore
                 state.Pois.Remove(poiId);
             }
         }
+
+        TrySpawnPendingSpeciesChest(state, events, nowMs);
 
         // Chest spawn checks run on a fixed simulation cadence to keep outcomes deterministic.
         while (nowMs >= state.NextChestSpawnCheckAtMs)
@@ -1551,7 +1764,12 @@ public sealed class InMemoryBattleStore : IBattleStore
 
     private static void TrySpawnChestPoi(StoredBattle state, long checkAtMs)
     {
-        if (HasActiveChestPoi(state, checkAtMs))
+        if (state.PendingSpeciesChestArchetype is not null)
+        {
+            return;
+        }
+
+        if (HasAnyActiveChestPoi(state, checkAtMs))
         {
             return;
         }
@@ -1613,11 +1831,70 @@ public sealed class InMemoryBattleStore : IBattleStore
             metadata: null);
     }
 
+    private static void TrySpawnPendingSpeciesChest(
+        StoredBattle state,
+        List<BattleEventDto> events,
+        long nowMs)
+    {
+        if (state.PendingSpeciesChestArchetype is not MobArchetype archetype)
+        {
+            return;
+        }
+
+        if (HasAnyActiveChestPoi(state, nowMs))
+        {
+            return;
+        }
+
+        if (TrySpawnSpeciesChestPoi(state, events, archetype, nowMs))
+        {
+            state.PendingSpeciesChestArchetype = null;
+        }
+    }
+
+    private static bool TrySpawnSpeciesChestPoi(
+        StoredBattle state,
+        List<BattleEventDto> events,
+        MobArchetype speciesArchetype,
+        long spawnAtMs)
+    {
+        var freeTiles = BuildPoiSpawnTiles(state, spawnAtMs);
+        if (freeTiles.Count == 0)
+        {
+            return false;
+        }
+
+        var tileIndex = state.PoiRng.Next(freeTiles.Count);
+        var tile = freeTiles[tileIndex];
+        var poiId = BuildSpeciesChestPoiId(state.NextPoiSequence);
+        state.NextPoiSequence += 1;
+        var species = GetSpeciesId(speciesArchetype);
+        state.Pois[poiId] = new StoredPoi(
+            poiId: poiId,
+            type: PoiTypeSpeciesChest,
+            tileX: tile.TileX,
+            tileY: tile.TileY,
+            expiresAtMs: spawnAtMs + SpeciesChestLifetimeMs,
+            species: species,
+            metadata: null);
+        events.Add(new SpeciesChestSpawnedEventDto(
+            Species: species,
+            PoiId: poiId,
+            TileX: tile.TileX,
+            TileY: tile.TileY));
+        return true;
+    }
+
     private static bool HasActiveChestPoi(StoredBattle state, long nowMs)
     {
         return state.Pois.Values.Any(poi =>
-            string.Equals(poi.Type, PoiTypeChest, StringComparison.Ordinal) &&
+            IsChestPoiType(poi.Type) &&
             poi.ExpiresAtMs > nowMs);
+    }
+
+    private static bool HasAnyActiveChestPoi(StoredBattle state, long nowMs)
+    {
+        return HasActiveChestPoi(state, nowMs);
     }
 
     private static bool HasActiveAltarPoi(StoredBattle state, long nowMs)
@@ -1658,9 +1935,20 @@ public sealed class InMemoryBattleStore : IBattleStore
         return $"poi.chest.{sequence:D4}";
     }
 
+    private static string BuildSpeciesChestPoiId(int sequence)
+    {
+        return $"poi.species_chest.{sequence:D4}";
+    }
+
     private static string BuildAltarPoiId(int sequence)
     {
         return $"poi.altar.{sequence:D4}";
+    }
+
+    private static bool IsChestPoiType(string poiType)
+    {
+        return string.Equals(poiType, PoiTypeChest, StringComparison.Ordinal) ||
+               string.Equals(poiType, PoiTypeSpeciesChest, StringComparison.Ordinal);
     }
 
     private static bool TrySpawnMobInSlot(StoredBattle state, MobSlotState slot)
@@ -1917,7 +2205,8 @@ public sealed class InMemoryBattleStore : IBattleStore
                 player,
                 config.AutoAttackDamage,
                 DefaultMobElement,
-                attacker: liveMob);
+                attacker: liveMob,
+                isRangedAutoAttack: config.AutoAttackRangeTiles > 1);
             slot.AttackCooldownRemainingMs = config.AutoAttackCooldownMs;
             SetRangedCommitWindowIfNeeded(slot);
             if (IsDefeat(state))
@@ -2321,7 +2610,8 @@ public sealed class InMemoryBattleStore : IBattleStore
         StoredActor player,
         int damage,
         ElementType element,
-        StoredActor? attacker)
+        StoredActor? attacker,
+        bool isRangedAutoAttack = false)
     {
         if (damage <= 0)
         {
@@ -2334,7 +2624,7 @@ public sealed class InMemoryBattleStore : IBattleStore
         }
 
         var previousHp = player.Hp;
-        var remainingDamage = damage;
+        var remainingDamage = ApplyIncomingDamageModifiers(state, damage, isRangedAutoAttack);
         var absorbed = Math.Min(player.Shield, remainingDamage);
         player.Shield -= absorbed;
         remainingDamage -= absorbed;
@@ -2421,6 +2711,11 @@ public sealed class InMemoryBattleStore : IBattleStore
             reflectedDamage *= KinaRangedReflectMultiplier;
         }
 
+        if (IsBuffActive(state, ThornsBoostBuffId))
+        {
+            reflectedDamage = ApplyPercentIncrease(reflectedDamage, ThornsBoostBonusPercent);
+        }
+
         events.Add(new ReflectEventDto(
             SourceEntityId: player.ActorId,
             SourceTileX: player.TileX,
@@ -2438,7 +2733,8 @@ public sealed class InMemoryBattleStore : IBattleStore
             attacker,
             reflectedDamage,
             ElementType.Physical,
-            attacker: player);
+            attacker: player,
+            allowPlayerDamageBuffs: false);
     }
 
     private static bool IsKinaReflectEnabled(StoredBattle state, StoredActor player)
@@ -2480,7 +2776,8 @@ public sealed class InMemoryBattleStore : IBattleStore
         StoredActor mob,
         int damage,
         ElementType element,
-        StoredActor? attacker)
+        StoredActor? attacker,
+        bool allowPlayerDamageBuffs = true)
     {
         if (mob.Hp <= 0)
         {
@@ -2488,6 +2785,12 @@ public sealed class InMemoryBattleStore : IBattleStore
         }
 
         var remainingDamage = Math.Max(0, damage);
+        if (allowPlayerDamageBuffs &&
+            attacker is not null &&
+            string.Equals(attacker.Kind, "player", StringComparison.Ordinal))
+        {
+            remainingDamage = ApplyOutgoingDamageModifiers(state, remainingDamage);
+        }
         var absorbed = 0;
         if (mob.Shield > 0 && remainingDamage > 0)
         {
@@ -2554,6 +2857,8 @@ public sealed class InMemoryBattleStore : IBattleStore
             slot.CommitTicksRemaining = 0;
         }
 
+        RegisterBestiaryKill(state, events, mob);
+
         if (string.Equals(state.LockedTargetEntityId, mob.ActorId, StringComparison.Ordinal))
         {
             state.LockedTargetEntityId = null;
@@ -2579,6 +2884,40 @@ public sealed class InMemoryBattleStore : IBattleStore
             ElementType: elementType,
             KillerEntityId: killerEntityId,
             TickIndex: state.Tick));
+    }
+
+    private static void RegisterBestiaryKill(StoredBattle state, List<BattleEventDto> events, StoredActor mob)
+    {
+        if (mob.MobType is not MobArchetype mobArchetype)
+        {
+            return;
+        }
+
+        if (!state.Bestiary.TryGetValue(mobArchetype, out var entry))
+        {
+            return;
+        }
+
+        entry.KillsTotal += 1;
+        if (entry.KillsTotal < entry.NextChestAtKills)
+        {
+            return;
+        }
+
+        entry.NextChestAtKills += ComputeBestiaryThresholdIncrement(state.BestiaryRng);
+        if (state.PendingSpeciesChestArchetype is null)
+        {
+            state.PendingSpeciesChestArchetype = mobArchetype;
+        }
+        else
+        {
+            state.PendingSpeciesChestArchetype = (MobArchetype)Math.Min(
+                (int)state.PendingSpeciesChestArchetype.Value,
+                (int)mobArchetype);
+        }
+
+        var nowMs = GetElapsedMsForTick(state.Tick);
+        TrySpawnPendingSpeciesChest(state, events, nowMs);
     }
 
     private static void AddCorpseDecal(StoredBattle state, StoredActor entity)
@@ -2734,6 +3073,58 @@ public sealed class InMemoryBattleStore : IBattleStore
         }
 
         return (int)Math.Floor(maxValue * (percent / 100.0d));
+    }
+
+    private static int ApplyIncomingDamageModifiers(StoredBattle state, int baseDamage, bool isRangedAutoAttack)
+    {
+        if (baseDamage <= 0)
+        {
+            return 0;
+        }
+
+        var adjustedDamage = baseDamage;
+        if (isRangedAutoAttack && IsBuffActive(state, AntiRangedPressureBuffId))
+        {
+            adjustedDamage = ApplyPercentReduction(adjustedDamage, AntiRangedPressureReductionPercent);
+        }
+
+        return Math.Max(1, adjustedDamage);
+    }
+
+    private static int ApplyOutgoingDamageModifiers(StoredBattle state, int baseDamage)
+    {
+        if (baseDamage <= 0)
+        {
+            return 0;
+        }
+
+        var adjustedDamage = baseDamage;
+        if (IsBuffActive(state, DamageBoostBuffId))
+        {
+            adjustedDamage = ApplyPercentIncrease(adjustedDamage, DamageBoostBonusPercent);
+        }
+
+        return Math.Max(1, adjustedDamage);
+    }
+
+    private static int ApplyPercentIncrease(int value, int percent)
+    {
+        if (value <= 0 || percent <= 0)
+        {
+            return value;
+        }
+
+        return (int)Math.Floor(value * ((100 + percent) / 100.0d));
+    }
+
+    private static int ApplyPercentReduction(int value, int percent)
+    {
+        if (value <= 0 || percent <= 0)
+        {
+            return value;
+        }
+
+        return (int)Math.Floor(value * ((100 - percent) / 100.0d));
     }
 
     private static bool IsBuffActive(StoredBattle state, string buffId)
@@ -2971,6 +3362,16 @@ public sealed class InMemoryBattleStore : IBattleStore
     private static bool IsRangedArchetype(MobArchetype archetype)
     {
         return archetype is MobArchetype.RangedArcher or MobArchetype.RangedDragon;
+    }
+
+    private static string GetSpeciesId(MobArchetype archetype)
+    {
+        if (SpeciesByArchetype.TryGetValue(archetype, out var species))
+        {
+            return species;
+        }
+
+        return archetype.ToString();
     }
 
     private static bool TryChooseRangedBandMove(
@@ -3561,6 +3962,31 @@ public sealed class InMemoryBattleStore : IBattleStore
                 $"Next POI sequence is invalid: {state.NextPoiSequence}.");
         }
 
+        foreach (var (archetype, entry) in state.Bestiary.OrderBy(pair => (int)pair.Key))
+        {
+            if (!SpeciesByArchetype.ContainsKey(archetype))
+            {
+                throw new InvalidOperationException($"Bestiary contains unknown archetype '{archetype}'.");
+            }
+
+            if (entry.KillsTotal < 0)
+            {
+                throw new InvalidOperationException($"Bestiary kills are invalid for '{archetype}': {entry.KillsTotal}.");
+            }
+
+            if (entry.NextChestAtKills <= 0)
+            {
+                throw new InvalidOperationException(
+                    $"Bestiary threshold is invalid for '{archetype}': {entry.NextChestAtKills}.");
+            }
+        }
+
+        if (state.PendingSpeciesChestArchetype is MobArchetype pendingArchetype &&
+            !state.Bestiary.ContainsKey(pendingArchetype))
+        {
+            throw new InvalidOperationException($"Pending species chest archetype is invalid: {pendingArchetype}.");
+        }
+
         var nowMs = GetElapsedMsForTick(state.Tick);
         foreach (var buff in state.ActiveBuffs.Values)
         {
@@ -3592,7 +4018,7 @@ public sealed class InMemoryBattleStore : IBattleStore
         }
 
         var activeChestCount = state.Pois.Values.Count(poi =>
-            string.Equals(poi.Type, PoiTypeChest, StringComparison.Ordinal) &&
+            IsChestPoiType(poi.Type) &&
             poi.ExpiresAtMs > nowMs);
         if (activeChestCount > 1)
         {
@@ -3647,9 +4073,11 @@ public sealed class InMemoryBattleStore : IBattleStore
             int seed,
             Random rng,
             Random poiRng,
+            Random bestiaryRng,
             int tick,
             string playerFacingDirection,
             string battleStatus,
+            bool isPaused,
             int playerMoveCooldownRemainingMs,
             int playerAttackCooldownRemainingMs,
             int playerGlobalCooldownRemainingMs,
@@ -3667,7 +4095,9 @@ public sealed class InMemoryBattleStore : IBattleStore
             List<StoredDecal> decals,
             Dictionary<string, StoredBuff> activeBuffs,
             Dictionary<string, StoredPoi> pois,
-            Dictionary<int, MobSlotState> mobSlots)
+            Dictionary<int, MobSlotState> mobSlots,
+            Dictionary<MobArchetype, StoredBestiaryEntry> bestiary,
+            MobArchetype? pendingSpeciesChestArchetype)
         {
             BattleId = battleId;
             ArenaId = arenaId;
@@ -3676,9 +4106,11 @@ public sealed class InMemoryBattleStore : IBattleStore
             Seed = seed;
             Rng = rng;
             PoiRng = poiRng;
+            BestiaryRng = bestiaryRng;
             Tick = tick;
             PlayerFacingDirection = playerFacingDirection;
             BattleStatus = battleStatus;
+            IsPaused = isPaused;
             PlayerMoveCooldownRemainingMs = playerMoveCooldownRemainingMs;
             PlayerAttackCooldownRemainingMs = playerAttackCooldownRemainingMs;
             PlayerGlobalCooldownRemainingMs = playerGlobalCooldownRemainingMs;
@@ -3698,6 +4130,8 @@ public sealed class InMemoryBattleStore : IBattleStore
             ActiveBuffs = activeBuffs;
             Pois = pois;
             MobSlots = mobSlots;
+            Bestiary = bestiary;
+            PendingSpeciesChestArchetype = pendingSpeciesChestArchetype;
         }
 
         public object Sync { get; } = new();
@@ -3716,11 +4150,15 @@ public sealed class InMemoryBattleStore : IBattleStore
 
         public Random PoiRng { get; }
 
+        public Random BestiaryRng { get; }
+
         public int Tick { get; set; }
 
         public string PlayerFacingDirection { get; set; }
 
         public string BattleStatus { get; set; }
+
+        public bool IsPaused { get; set; }
 
         public int PlayerMoveCooldownRemainingMs { get; set; }
 
@@ -3759,6 +4197,10 @@ public sealed class InMemoryBattleStore : IBattleStore
         public Dictionary<string, StoredPoi> Pois { get; }
 
         public Dictionary<int, MobSlotState> MobSlots { get; }
+
+        public Dictionary<MobArchetype, StoredBestiaryEntry> Bestiary { get; }
+
+        public MobArchetype? PendingSpeciesChestArchetype { get; set; }
     }
 
     private sealed class StoredAssistConfig
@@ -3943,6 +4385,19 @@ public sealed class InMemoryBattleStore : IBattleStore
         public string BuffId { get; }
 
         public long ExpiresAtMs { get; }
+    }
+
+    private sealed class StoredBestiaryEntry
+    {
+        public StoredBestiaryEntry(int killsTotal, int nextChestAtKills)
+        {
+            KillsTotal = killsTotal;
+            NextChestAtKills = nextChestAtKills;
+        }
+
+        public int KillsTotal { get; set; }
+
+        public int NextChestAtKills { get; set; }
     }
 
     private sealed class StoredPoi

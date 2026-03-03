@@ -48,22 +48,72 @@ describe("ArenaPageComponent movement input", () => {
     component.onKeyUp(new KeyboardEvent("keyup", { key: "d" }));
   });
 
-  it("maps dedicated diagonal keys Q/E/Z/C to move_player diagonals", () => {
+  it("maps dedicated diagonal keys Q/E/Z to move_player diagonals", () => {
     const component = createComponent();
     enableCommandIssuing(component);
 
     component.onKeyDown(new KeyboardEvent("keydown", { key: "q" }));
     component.onKeyDown(new KeyboardEvent("keydown", { key: "e" }));
     component.onKeyDown(new KeyboardEvent("keydown", { key: "z" }));
-    component.onKeyDown(new KeyboardEvent("keydown", { key: "c" }));
 
     const queued = (component as any).queuedCommands as Array<Record<string, unknown>>;
     expect(queued).toEqual([
       { type: "move_player", dir: "up_left" },
       { type: "move_player", dir: "up_right" },
-      { type: "move_player", dir: "down_left" },
-      { type: "move_player", dir: "down_right" }
+      { type: "move_player", dir: "down_left" }
     ]);
+  });
+
+  it("uses C hotkey to focus equipment panel", () => {
+    const component = createComponent();
+    const focusSpy = vi.spyOn(component as any, "focusEquipmentPanel");
+
+    component.onKeyDown(new KeyboardEvent("keydown", { key: "c" }));
+
+    expect(focusSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses H hotkey to switch right info tab to helper", () => {
+    const component = createComponent();
+    (component as any).selectedRightInfoTab = "bestiary";
+
+    component.onKeyDown(new KeyboardEvent("keydown", { key: "h" }));
+    expect((component as any).selectedRightInfoTab).toBe("helper");
+  });
+
+  it("uses K hotkey to switch right info tab to status", () => {
+    const component = createComponent();
+    (component as any).selectedRightInfoTab = "helper";
+
+    component.onKeyDown(new KeyboardEvent("keydown", { key: "k" }));
+    expect((component as any).selectedRightInfoTab).toBe("status");
+  });
+
+  it("uses T hotkey to toggle AUTO flag and label", () => {
+    const component = createComponent();
+
+    expect((component as any).assistConfig.enabled).toBe(false);
+    expect(component.assistAutoToggleLabel).toBe("AUTO: OFF");
+
+    component.onKeyDown(new KeyboardEvent("keydown", { key: "t" }));
+    expect((component as any).assistConfig.enabled).toBe(true);
+    expect(component.assistAutoToggleLabel).toBe("AUTO: ON");
+
+    component.onKeyDown(new KeyboardEvent("keydown", { key: "t" }));
+    expect((component as any).assistConfig.enabled).toBe(false);
+    expect(component.assistAutoToggleLabel).toBe("AUTO: OFF");
+  });
+
+  it("uses D/L hotkeys to focus damage/loot console helpers", () => {
+    const component = createComponent();
+    const focusDamageSpy = vi.spyOn(component as any, "focusDamageConsole");
+    const focusLootSpy = vi.spyOn(component as any, "focusLootConsole");
+
+    component.onKeyDown(new KeyboardEvent("keydown", { key: "d" }));
+    component.onKeyDown(new KeyboardEvent("keydown", { key: "l" }));
+
+    expect(focusDamageSpy).toHaveBeenCalledTimes(1);
+    expect(focusLootSpy).toHaveBeenCalledTimes(1);
   });
 
   it("keeps WASD combo diagonal fallback working", () => {
@@ -129,6 +179,26 @@ describe("ArenaPageComponent movement input", () => {
     expect(queued).toEqual([{ type: "interact_poi", poiId: "poi.chest.1" }]);
   });
 
+  it("pressing F treats species_chest as chest priority over altar", () => {
+    const component = createComponent();
+    enableCommandIssuing(component);
+    const scene = (component as any).engine.createTestScene();
+    scene.actorsById = {
+      player_demo: { actorId: "player_demo", kind: "player", tileX: 3, tileY: 3, hp: 120, maxHp: 120 }
+    };
+    scene.playerTile = { x: 3, y: 3 };
+    scene.activePois = [
+      { poiId: "poi.altar.1", type: "altar", pos: { x: 3, y: 2 }, remainingMs: 5000 },
+      { poiId: "poi.species_chest.1", type: "species_chest", pos: { x: 4, y: 3 }, remainingMs: 5000, species: "ranged_archer" }
+    ];
+    (component as any).scene = scene;
+
+    component.onKeyDown(new KeyboardEvent("keydown", { key: "f" }));
+
+    const queued = (component as any).queuedCommands as Array<Record<string, unknown>>;
+    expect(queued).toEqual([{ type: "interact_poi", poiId: "poi.species_chest.1" }]);
+  });
+
   it("pressing F uses deterministic poiId tie-break when priority and distance match", () => {
     const component = createComponent();
     enableCommandIssuing(component);
@@ -147,5 +217,33 @@ describe("ArenaPageComponent movement input", () => {
 
     const queued = (component as any).queuedCommands as Array<Record<string, unknown>>;
     expect(queued).toEqual([{ type: "interact_poi", poiId: "poi.chest.a" }]);
+  });
+
+  it("bestiary focus follows effective target species and keeps last focus when target clears", () => {
+    const component = createComponent();
+    const scene = (component as any).engine.createTestScene();
+    scene.actorsById = {
+      player_demo: { actorId: "player_demo", kind: "player", tileX: 3, tileY: 3, hp: 120, maxHp: 120 },
+      "mob.dragon.001": { actorId: "mob.dragon.001", kind: "mob", mobType: 4, tileX: 4, tileY: 3, hp: 40, maxHp: 40 }
+    };
+    scene.effectiveTargetEntityId = "mob.dragon.001";
+    (component as any).scene = scene;
+    (component as any).bestiaryEntries = [
+      { species: "ranged_dragon", killsTotal: 7, nextChestAtKills: 13 },
+      { species: "melee_brute", killsTotal: 2, nextChestAtKills: 11 }
+    ];
+
+    expect((component as any).bestiaryFocusEntry).toEqual({
+      species: "ranged_dragon",
+      killsTotal: 7,
+      nextChestAtKills: 13
+    });
+
+    scene.effectiveTargetEntityId = null;
+    expect((component as any).bestiaryFocusEntry).toEqual({
+      species: "ranged_dragon",
+      killsTotal: 7,
+      nextChestAtKills: 13
+    });
   });
 });

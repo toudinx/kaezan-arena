@@ -1,0 +1,311 @@
+using KaezanArena.Api.Account;
+using KaezanArena.Api.Contracts.Account;
+using KaezanArena.Api.Contracts.Common;
+using Microsoft.AspNetCore.Mvc;
+
+namespace KaezanArena.Api.Controllers;
+
+[ApiController]
+[Route("api/v1/account")]
+public sealed class AccountV1Controller : ControllerBase
+{
+    private const int MaxAwardSourcesPerRequest = 50;
+    private readonly IAccountStateStore _accountStateStore;
+
+    public AccountV1Controller(IAccountStateStore accountStateStore)
+    {
+        _accountStateStore = accountStateStore;
+    }
+
+    [HttpGet("state")]
+    public ActionResult<AccountStateResponseDto> GetState([FromQuery] string? accountId)
+    {
+        var normalizedAccountId = string.IsNullOrWhiteSpace(accountId) ? "dev_account" : accountId.Trim();
+        var account = _accountStateStore.GetAccountState(normalizedAccountId);
+
+        return Ok(new AccountStateResponseDto(
+            Account: ToAccountDto(account),
+            ItemCatalog: AccountCatalog.ItemDefinitions
+                .OrderBy(definition => definition.ItemId, StringComparer.Ordinal)
+                .Select(ToItemDefinitionDto)
+                .ToList(),
+            EquipmentCatalog: AccountCatalog.EquipmentDefinitions
+                .OrderBy(definition => definition.ItemId, StringComparer.Ordinal)
+                .Select(ToEquipmentDefinitionDto)
+                .ToList()));
+    }
+
+    [HttpPost("active-character")]
+    public ActionResult<AccountStateDto> SetActiveCharacter([FromBody] SetActiveCharacterRequestDto request)
+    {
+        if (string.IsNullOrWhiteSpace(request.AccountId))
+        {
+            return BadRequest(BuildValidationError("accountId is required"));
+        }
+
+        if (string.IsNullOrWhiteSpace(request.CharacterId))
+        {
+            return BadRequest(BuildValidationError("characterId is required"));
+        }
+
+        try
+        {
+            var account = _accountStateStore.SetActiveCharacter(request.AccountId.Trim(), request.CharacterId.Trim());
+            return Ok(ToAccountDto(account));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(BuildValidationError(ex.Message));
+        }
+    }
+
+    [HttpPost("equip-weapon")]
+    public ActionResult<CharacterStateDto> EquipWeapon([FromBody] EquipWeaponRequestDto request)
+    {
+        if (string.IsNullOrWhiteSpace(request.AccountId))
+        {
+            return BadRequest(BuildValidationError("accountId is required"));
+        }
+
+        if (string.IsNullOrWhiteSpace(request.CharacterId))
+        {
+            return BadRequest(BuildValidationError("characterId is required"));
+        }
+
+        if (string.IsNullOrWhiteSpace(request.WeaponInstanceId))
+        {
+            return BadRequest(BuildValidationError("weaponInstanceId is required"));
+        }
+
+        try
+        {
+            var character = _accountStateStore.EquipWeapon(
+                accountId: request.AccountId.Trim(),
+                characterId: request.CharacterId.Trim(),
+                weaponInstanceId: request.WeaponInstanceId.Trim());
+            return Ok(ToCharacterDto(character));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(BuildValidationError(ex.Message));
+        }
+    }
+
+    [HttpPost("equip-item")]
+    public ActionResult<CharacterStateDto> EquipItem([FromBody] EquipItemRequestDto request)
+    {
+        if (string.IsNullOrWhiteSpace(request.AccountId))
+        {
+            return BadRequest(BuildValidationError("accountId is required"));
+        }
+
+        if (string.IsNullOrWhiteSpace(request.CharacterId))
+        {
+            return BadRequest(BuildValidationError("characterId is required"));
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Slot))
+        {
+            return BadRequest(BuildValidationError("slot is required"));
+        }
+
+        if (!EquipmentSlotMapper.TryFromCatalogSlot(request.Slot, out var slot))
+        {
+            return BadRequest(BuildValidationError("slot must be one of: weapon, armor, relic"));
+        }
+
+        if (string.IsNullOrWhiteSpace(request.EquipmentInstanceId))
+        {
+            return BadRequest(BuildValidationError("equipmentInstanceId is required"));
+        }
+
+        try
+        {
+            var character = _accountStateStore.EquipItem(
+                accountId: request.AccountId.Trim(),
+                characterId: request.CharacterId.Trim(),
+                slot: slot,
+                equipmentInstanceId: request.EquipmentInstanceId.Trim());
+            return Ok(ToCharacterDto(character));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(BuildValidationError(ex.Message));
+        }
+    }
+
+    [HttpPost("award-drops")]
+    public ActionResult<AwardDropsResponseDto> AwardDrops([FromBody] AwardDropsRequestDto request)
+    {
+        if (string.IsNullOrWhiteSpace(request.AccountId))
+        {
+            return BadRequest(BuildValidationError("accountId is required"));
+        }
+
+        if (string.IsNullOrWhiteSpace(request.CharacterId))
+        {
+            return BadRequest(BuildValidationError("characterId is required"));
+        }
+
+        if (string.IsNullOrWhiteSpace(request.BattleId))
+        {
+            return BadRequest(BuildValidationError("battleId is required"));
+        }
+
+        if (request.Sources is null)
+        {
+            return BadRequest(BuildValidationError("sources is required"));
+        }
+
+        if (request.Sources.Count > MaxAwardSourcesPerRequest)
+        {
+            return BadRequest(BuildValidationError($"sources count must be <= {MaxAwardSourcesPerRequest}"));
+        }
+
+        var parsedSources = new List<DropSource>(request.Sources.Count);
+        foreach (var source in request.Sources)
+        {
+            if (source.Tick < 0)
+            {
+                return BadRequest(BuildValidationError("source tick must be >= 0"));
+            }
+
+            if (string.IsNullOrWhiteSpace(source.SourceType))
+            {
+                return BadRequest(BuildValidationError("sourceType is required"));
+            }
+
+            if (!string.Equals(source.SourceType, "mob", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(source.SourceType, "chest", StringComparison.OrdinalIgnoreCase))
+            {
+                return BadRequest(BuildValidationError("sourceType must be 'mob' or 'chest'"));
+            }
+
+            if (string.IsNullOrWhiteSpace(source.SourceId))
+            {
+                return BadRequest(BuildValidationError("sourceId is required"));
+            }
+
+            parsedSources.Add(new DropSource(
+                Tick: source.Tick,
+                SourceType: source.SourceType.Trim(),
+                SourceId: source.SourceId.Trim(),
+                Species: string.IsNullOrWhiteSpace(source.Species) ? null : source.Species.Trim()));
+        }
+
+        try
+        {
+            var result = _accountStateStore.AwardDrops(
+                accountId: request.AccountId.Trim(),
+                characterId: request.CharacterId.Trim(),
+                battleId: request.BattleId.Trim(),
+                sources: parsedSources);
+
+            return Ok(new AwardDropsResponseDto(
+                Awarded: result.Awarded
+                    .Select(ToDropEventDto)
+                    .ToList(),
+                Character: ToCharacterDto(result.Character)));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(BuildValidationError(ex.Message));
+        }
+    }
+
+    private ApiErrorDto BuildValidationError(string message)
+    {
+        return new ApiErrorDto(
+            Code: "validation_error",
+            Message: message,
+            TraceId: HttpContext.TraceIdentifier);
+    }
+
+    private static AccountStateDto ToAccountDto(AccountState account)
+    {
+        var characters = new SortedDictionary<string, CharacterStateDto>(StringComparer.Ordinal);
+        foreach (var (characterId, character) in account.Characters.OrderBy(entry => entry.Key, StringComparer.Ordinal))
+        {
+            characters[characterId] = ToCharacterDto(character);
+        }
+
+        return new AccountStateDto(
+            AccountId: account.AccountId,
+            ActiveCharacterId: account.ActiveCharacterId,
+            Version: account.Version,
+            Characters: characters);
+    }
+
+    private static CharacterStateDto ToCharacterDto(CharacterState character)
+    {
+        var materialStacks = new SortedDictionary<string, long>(StringComparer.Ordinal);
+        foreach (var (itemId, quantity) in character.Inventory.MaterialStacks.OrderBy(entry => entry.Key, StringComparer.Ordinal))
+        {
+            materialStacks[itemId] = quantity;
+        }
+
+        var equipmentInstances = new SortedDictionary<string, OwnedEquipmentInstanceDto>(StringComparer.Ordinal);
+        foreach (var (instanceId, instance) in character.Inventory.EquipmentInstances.OrderBy(entry => entry.Key, StringComparer.Ordinal))
+        {
+            equipmentInstances[instanceId] = new OwnedEquipmentInstanceDto(
+                InstanceId: instance.InstanceId,
+                DefinitionId: instance.DefinitionId,
+                IsLocked: instance.IsLocked);
+        }
+
+        return new CharacterStateDto(
+            CharacterId: character.CharacterId,
+            Name: character.Name,
+            Level: character.Level,
+            Xp: character.Xp,
+            Inventory: new CharacterInventoryDto(
+                MaterialStacks: materialStacks,
+                EquipmentInstances: equipmentInstances),
+            Equipment: new CharacterEquipmentDto(
+                WeaponInstanceId: character.Equipment.WeaponInstanceId,
+                ArmorInstanceId: character.Equipment.ArmorInstanceId,
+                RelicInstanceId: character.Equipment.RelicInstanceId));
+    }
+
+    private static ItemDefinitionDto ToItemDefinitionDto(ItemDefinition definition)
+    {
+        return new ItemDefinitionDto(
+            ItemId: definition.ItemId,
+            DisplayName: definition.DisplayName,
+            Kind: definition.Kind,
+            Stackable: definition.Stackable,
+            Rarity: definition.Rarity);
+    }
+
+    private static EquipmentDefinitionDto ToEquipmentDefinitionDto(EquipmentDefinition definition)
+    {
+        var modifiers = new SortedDictionary<string, string>(StringComparer.Ordinal);
+        foreach (var (key, value) in definition.GameplayModifiers.OrderBy(entry => entry.Key, StringComparer.Ordinal))
+        {
+            modifiers[key] = value;
+        }
+
+        return new EquipmentDefinitionDto(
+            ItemId: definition.ItemId,
+            Slot: definition.Slot,
+            WeaponClass: definition.WeaponClass,
+            WeaponElement: definition.WeaponElement,
+            GameplayModifiers: modifiers);
+    }
+
+    private static DropEventDto ToDropEventDto(DropEvent dropEvent)
+    {
+        return new DropEventDto(
+            DropEventId: dropEvent.DropEventId,
+            AccountId: dropEvent.AccountId,
+            CharacterId: dropEvent.CharacterId,
+            BattleId: dropEvent.BattleId,
+            Tick: dropEvent.Tick,
+            SourceType: dropEvent.SourceType,
+            SourceId: dropEvent.SourceId,
+            ItemId: dropEvent.ItemId,
+            Quantity: dropEvent.Quantity,
+            EquipmentInstanceId: dropEvent.EquipmentInstanceId,
+            AwardedAtUtc: dropEvent.AwardedAtUtc);
+    }
+}

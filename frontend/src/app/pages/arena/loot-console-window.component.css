@@ -1,0 +1,94 @@
+.loot-console {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  color: #d1d5db;
+  font-family: "Consolas", "Courier New", monospace;
+}
+
+.loot-console__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem;
+  padding: 0 0 0.3rem;
+  border-bottom: 1px solid rgba(71, 85, 105, 0.6);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.loot-console__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.loot-console__header button {
+  border: 1px solid #475569;
+  border-radius: 0.25rem;
+  background: linear-gradient(180deg, #334155 0%, #1f2937 100%);
+  color: #f8fafc;
+  font-size: 0.63rem;
+  line-height: 1;
+  padding: 0.22rem 0.34rem;
+  cursor: pointer;
+}
+
+.loot-console__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 0.32rem 0.18rem 0.18rem 0;
+  font-size: 0.7rem;
+  line-height: 1.24;
+}
+
+.loot-console__line {
+  margin: 0 0 0.12rem;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.loot-console__prefix {
+  color: #facc15;
+}
+
+.loot-console__item-link {
+  border: 0;
+  background: transparent;
+  font: inherit;
+  line-height: inherit;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: rgba(148, 163, 184, 0.45);
+}
+
+.loot-console__item-link--common {
+  color: #cbd5e1;
+}
+
+.loot-console__item-link--rare {
+  color: #93c5fd;
+}
+
+.loot-console__item-link--epic {
+  color: #c4b5fd;
+}
+
+.loot-console__item-link--other {
+  color: #f5d0fe;
+}
+
+.loot-console__item-link:hover {
+  color: #ffffff;
+  text-decoration-color: rgba(255, 255, 255, 0.85);
+}
+
+.loot-console__empty {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.7rem;
+}

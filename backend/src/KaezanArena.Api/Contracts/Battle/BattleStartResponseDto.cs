@@ -11,6 +11,8 @@ public sealed record BattleStartResponseDto(
     int Seed,
     string FacingDirection,
     string BattleStatus,
+    bool IsGameOver,
+    string? EndReason,
     string? EffectiveTargetEntityId,
     string? LockedTargetEntityId,
     BattleTilePosDto? GroundTargetPos,
@@ -19,4 +21,6 @@ public sealed record BattleStartResponseDto(
     ElementType? WeaponElement,
     IReadOnlyList<BattleDecalDto> Decals,
     IReadOnlyList<BattleBuffDto> ActiveBuffs,
+    IReadOnlyList<BestiaryEntryDto> Bestiary,
+    string? PendingSpeciesChest,
     IReadOnlyList<BattlePoiDto> ActivePois);

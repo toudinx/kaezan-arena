@@ -1,0 +1,43 @@
+<section class="damage-console">
+  <header class="damage-console__header">
+    <span>Damage Console</span>
+    <div class="damage-console__actions">
+      <label class="damage-console__follow">
+        <input type="checkbox" [checked]="followEnabled" (change)="setFollowEnabled($event)" />
+        <span>Follow</span>
+      </label>
+      <button type="button" (click)="copyLines()">Copy</button>
+      <button type="button" (click)="clearConsole()">Clear</button>
+    </div>
+  </header>
+
+  <nav class="damage-console__filters" aria-label="Damage filters">
+    @for (filter of filters; track filter) {
+      <button
+        type="button"
+        class="damage-console__filter"
+        [class.damage-console__filter--active]="isFilterActive(filter)"
+        (click)="setFilter(filter)"
+      >
+        {{ filter === "all" ? "All" : filter === "incoming" ? "Incoming" : filter === "outgoing" ? "Outgoing" : "Heal" }}
+      </button>
+    }
+  </nav>
+
+  <div class="damage-console__body" #consoleBody>
+    @if (groupedEntries.length === 0) {
+      <p class="damage-console__empty">No damage messages.</p>
+    } @else {
+      @for (group of groupedEntries; track trackGroupByKey($index, group)) {
+        <div class="damage-console__tick-group">
+          <p class="damage-console__tick-separator">{{ formatTickLabel(group.tick) }}</p>
+          @for (entry of group.entries; track trackEntryById($index, entry)) {
+            <p class="damage-console__line" [ngClass]="lineClass(entry)">
+              <span>{{ entry.message }}</span>
+            </p>
+          }
+        </div>
+      }
+    }
+  </div>
+</section>

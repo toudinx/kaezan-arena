@@ -1,0 +1,35 @@
+<section class="dock-stack">
+  @for (module of modules; track trackModuleById($index, module)) {
+    @if (module.isVisible) {
+      <article class="dock-module" [class.dock-module--collapsed]="module.isCollapsed">
+        <header class="dock-module__header">
+          <strong>{{ module.title }}</strong>
+          <div class="dock-module__actions">
+            <button
+              type="button"
+              class="dock-module__action"
+              (click)="onCollapseToggle(module.id)"
+              [attr.aria-label]="module.isCollapsed ? 'Expand module' : 'Collapse module'"
+              [title]="module.isCollapsed ? 'Expand' : 'Collapse'"
+            >
+              {{ module.isCollapsed ? "+" : "-" }}
+            </button>
+            <button type="button" class="dock-module__action" (click)="onHide(module.id)" aria-label="Hide module" title="Hide">
+              x
+            </button>
+          </div>
+        </header>
+
+        @if (!module.isCollapsed) {
+          <div class="dock-module__body">
+            @if (resolveTemplate(module.id); as moduleTemplate) {
+              <ng-container [ngTemplateOutlet]="moduleTemplate"></ng-container>
+            } @else {
+              <p class="dock-module__empty">No module content.</p>
+            }
+          </div>
+        }
+      </article>
+    }
+  }
+</section>

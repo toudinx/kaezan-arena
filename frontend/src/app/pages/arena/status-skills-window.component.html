@@ -1,0 +1,53 @@
+<section class="status-window">
+  <header class="status-window__header">
+    <div class="status-window__identity">
+      <strong>{{ character?.name ?? "Unknown" }}</strong>
+      <span>Lv {{ character?.level ?? 0 }}</span>
+      <span>XP {{ character?.xp ?? 0 }}</span>
+    </div>
+    @if (healingAmplifierActive) {
+      <span class="status-window__healing-indicator" title="Healing amplifier active">+</span>
+    }
+  </header>
+
+  <div class="status-window__bar">
+    <span class="status-window__bar-label">HP {{ hp }}/{{ maxHp }}</span>
+    <div class="status-window__track">
+      <div class="status-window__fill status-window__fill--hp" [style.width.%]="hpPercent"></div>
+      <div class="status-window__fill status-window__fill--shield" [style.width.%]="shieldPercentOfMaxHp"></div>
+    </div>
+  </div>
+
+  <div class="status-window__hotbar">
+    @for (slot of skillSlots; track slot.skillId) {
+      <button
+        type="button"
+        class="status-window__skill"
+        [class.status-window__skill--disabled]="slot.disabled"
+        (click)="onSkillClick(slot.skillId)"
+        [disabled]="slot.disabled"
+      >
+        <span class="status-window__key">{{ slot.keyLabel }}</span>
+        <span class="status-window__icon" [style.background]="slot.accentColor"></span>
+        <span class="status-window__name">{{ slot.label }}</span>
+        @if (slot.cooldownText) {
+          <span class="status-window__cooldown-text">{{ slot.cooldownText }}</span>
+        }
+        <span class="status-window__cooldown-mask" [style.transform]="'scaleY(' + slot.cooldownFraction + ')'"></span>
+      </button>
+    }
+  </div>
+
+  <div class="status-window__buffs">
+    <p>Buffs</p>
+    @if (buffs.length === 0) {
+      <span class="status-window__buff-empty">none</span>
+    } @else {
+      <ul>
+        @for (buff of buffs; track buff.buffId) {
+          <li>{{ buff.label }} ({{ buff.remainingSeconds }}s)</li>
+        }
+      </ul>
+    }
+  </div>
+</section>

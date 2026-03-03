@@ -1,3 +1,4 @@
+using KaezanArena.Api.Account;
 using KaezanArena.Api.Battle;
 using KaezanArena.Api.Contracts.Battle;
 using KaezanArena.Api.Middleware;
@@ -30,7 +31,9 @@ builder.Services.AddSwaggerGen(options =>
                 typeof(PoiInteractedEventDto),
                 typeof(InteractFailedEventDto),
                 typeof(BuffAppliedEventDto),
-                typeof(AltarActivatedEventDto)
+                typeof(AltarActivatedEventDto),
+                typeof(SpeciesChestSpawnedEventDto),
+                typeof(SpeciesChestOpenedEventDto)
             ];
         }
 
@@ -95,10 +98,21 @@ builder.Services.AddSwaggerGen(options =>
             return "altar_activated";
         }
 
+        if (subType == typeof(SpeciesChestSpawnedEventDto))
+        {
+            return "species_chest_spawned";
+        }
+
+        if (subType == typeof(SpeciesChestOpenedEventDto))
+        {
+            return "species_chest_opened";
+        }
+
         return null;
     });
 });
 builder.Services.AddSingleton<IBattleStore, InMemoryBattleStore>();
+builder.Services.AddSingleton<IAccountStateStore, InMemoryAccountStateStore>();
 builder.Services.AddScoped<ITileAoeFxPlanner, TileAoeFxPlanner>();
 
 var app = builder.Build();

@@ -1,353 +1,342 @@
-<section class="arena-shell">
-  <div class="arena-column">
-    <div class="canvas-wrap" #canvasViewport>
-      <canvas #arenaCanvas (click)="onArenaCanvasClick($event)" (contextmenu)="onArenaCanvasContextMenu($event)"></canvas>
-      <div class="ui-stack">
-        <app-health-bar
-          [value]="ui.player.hp"
-          [max]="ui.player.maxHp"
-          [shield]="ui.player.shield"
-          [maxShield]="ui.player.maxShield"
-        ></app-health-bar>
-      </div>
-      @if (showBootOverlay) {
-        <div class="loading-overlay">
-          <p>{{ bootOverlayText }}</p>
+<section class="arena-client">
+  <div class="arena-client__frame">
+    <aside class="pane pane--left" #leftLogsPane tabindex="-1" aria-label="Logs pane">
+      <header class="pane__header">
+        <div class="pane__title-row">
+          <h2>Logs</h2>
         </div>
-      }
-    </div>
+      </header>
+
+      <div class="pane__body pane__body--logs">
+        <div class="left-logs-split">
+          <section class="left-logs__panel" #damageConsolePanel>
+            <header class="left-logs__panel-header" [class.left-logs__panel-header--active]="highlightedLogPanel === 'damage'">
+              Damage
+            </header>
+            <div class="left-logs__panel-body">
+              <app-damage-console class="pane-module" [entries]="damageConsoleEntries"></app-damage-console>
+            </div>
+          </section>
+
+          <section class="left-logs__panel" #lootConsolePanel>
+            <header class="left-logs__panel-header" [class.left-logs__panel-header--active]="highlightedLogPanel === 'loot'">
+              Loot
+            </header>
+            <div class="left-logs__panel-body">
+              <app-loot-console-window
+                class="pane-module"
+                [dropEvents]="lootFeed"
+                [itemCatalogById]="itemCatalogByIdForUi"
+                (itemClicked)="onLootConsoleItemClicked($event)"
+              ></app-loot-console-window>
+            </div>
+          </section>
+        </div>
+      </div>
+    </aside>
+
+    <section class="center-column" aria-label="Gameplay pane">
+      <header class="top-hud">
+        <div class="top-hud__identity">{{ selectedCharacterSummaryLabel }}</div>
+        <div class="top-hud__bars">
+          <div class="top-hud__vitals-track">
+            <div class="top-hud__vitals-fill top-hud__vitals-fill--hp" [style.width.%]="playerHpPercent"></div>
+            <div class="top-hud__vitals-fill top-hud__vitals-fill--shield" [style.width.%]="playerShieldPercentOfMaxHp"></div>
+          </div>
+          <div class="top-hud__meta-row">
+            <div class="top-hud__vitals-text">HP {{ playerHpPercentRounded }}% SH {{ playerShieldPercentRounded }}%</div>
+            <div class="top-hud__cooldowns" aria-label="Skill cooldowns">
+              @for (slot of bottomBarSkillSlots; track trackSkillSlotBySkillId($index, slot)) {
+                <span class="top-hud__cooldown" [class.top-hud__cooldown--ready]="!slot.cooldownText">
+                  <span class="top-hud__cooldown-key">{{ slot.keyLabel }}</span>
+                  <span>{{ slot.cooldownText || "Ready" }}</span>
+                </span>
+              }
+            </div>
+          </div>
+          <div class="top-hud__buffs" aria-label="Active buffs">
+            @if (topHudBuffs.length === 0) {
+              <span class="top-hud__buff-empty">No active buffs</span>
+            } @else {
+              @for (buff of topHudBuffs; track buff.buffId) {
+                <span class="top-hud__buff">{{ buff.label }} {{ buff.remainingSeconds }}s</span>
+              }
+            }
+          </div>
+        </div>
+      </header>
+
+      <div class="canvas-container">
+        <div class="canvas-wrap" #canvasViewport>
+          <canvas #arenaCanvas (click)="onArenaCanvasClick($event)" (contextmenu)="onArenaCanvasContextMenu($event)"></canvas>
+          @if (showBootOverlay) {
+            <div class="loading-overlay">
+              <p>{{ bootOverlayText }}</p>
+            </div>
+          }
+        </div>
+      </div>
+
+      <footer class="bottom-hotbar">
+        <div class="bottom-hotbar__exp-track" aria-label="Experience bar">
+          <div class="bottom-hotbar__exp-fill" [style.width.%]="playerExpPercent"></div>
+        </div>
+        <div class="bottom-hotbar__skills-grid">
+          @for (slot of bottomBarSkillSlots; track trackSkillSlotBySkillId($index, slot)) {
+            <button
+              type="button"
+              class="bottom-hotbar__skill"
+              [class.bottom-hotbar__skill--disabled]="slot.disabled"
+              [disabled]="slot.disabled"
+              (click)="onStatusSkillActivated(slot.skillId)"
+            >
+              <span class="bottom-hotbar__skill-key">{{ slot.keyLabel }}</span>
+              <span class="bottom-hotbar__skill-name">{{ slot.label }}</span>
+              <span class="bottom-hotbar__skill-mask" [style.transform]="'scaleY(' + slot.cooldownFraction + ')'" ></span>
+            </button>
+          }
+        </div>
+      </footer>
+    </section>
+
+    <aside class="pane pane--right" #rightInfoPane tabindex="-1" aria-label="Info pane">
+      <header class="pane__header pane__header--right">
+        <div class="info-actions">
+          <button type="button" class="info-actions__auto-toggle" (click)="toggleAutoAssist()">{{ assistAutoToggleLabel }}</button>
+          <button type="button" class="info-actions__hotkeys" (click)="openHotkeysModal()">Hotkeys</button>
+        </div>
+      </header>
+
+      <div class="pane__body pane__body--right-layout">
+        <section class="right-pane__pinned right-pane__pinned--equipment" #equipmentPanel tabindex="-1">
+          <header class="right-pane__pinned-header">Equipment</header>
+          <div class="right-pane__pinned-body">
+            <app-equipment-paperdoll-window
+              [character]="selectedCharacter"
+              [equippedWeaponLabel]="selectedCharacterWeaponLabel"
+              [equippedArmorLabel]="selectedCharacterArmorLabel"
+              [equippedRelicLabel]="selectedCharacterRelicLabel"
+              [weaponRarity]="selectedCharacterWeaponRarity"
+              [armorRarity]="selectedCharacterArmorRarity"
+              [relicRarity]="selectedCharacterRelicRarity"
+              [weaponFilterMode]="backpackWeaponFilterMode"
+              (weaponSlotActivated)="onEquipmentWeaponSlotActivated()"
+            ></app-equipment-paperdoll-window>
+          </div>
+        </section>
+
+        <section class="right-pane__pinned right-pane__pinned--backpack" #backpackPanel tabindex="-1">
+          <header class="right-pane__pinned-header">Backpack</header>
+          <div class="right-pane__pinned-body right-pane__pinned-body--backpack">
+            <app-backpack-window
+              [character]="selectedCharacter"
+              [itemCatalogById]="itemCatalogByIdForUi"
+              [equipmentCatalogByItemId]="equipmentCatalogByItemIdForUi"
+              [equipInFlight]="accountRequestInFlight"
+              [highlightItemId]="backpackHighlightItemId"
+              [highlightRequestId]="backpackHighlightRequestId"
+              [forcedFilter]="backpackForcedFilter"
+              [weaponFilterMode]="backpackWeaponFilterMode"
+              (equipRequested)="onBackpackEquipRequested($event)"
+            ></app-backpack-window>
+          </div>
+        </section>
+
+        <section class="right-pane__secondary">
+          <nav class="tab-row tab-row--secondary" aria-label="Secondary right tabs">
+            <button
+              type="button"
+              class="tab-row__tab"
+              [class.tab-row__tab--active]="selectedRightInfoTab === 'helper'"
+              (click)="setRightInfoTab('helper')"
+            >
+              Helper
+            </button>
+            <button
+              type="button"
+              class="tab-row__tab"
+              [class.tab-row__tab--active]="selectedRightInfoTab === 'bestiary'"
+              (click)="setRightInfoTab('bestiary')"
+            >
+              Bestiary
+            </button>
+            <button
+              type="button"
+              class="tab-row__tab"
+              [class.tab-row__tab--active]="selectedRightInfoTab === 'status'"
+              (click)="setRightInfoTab('status')"
+            >
+              Status
+            </button>
+          </nav>
+
+          <div class="right-pane__secondary-body">
+            @if (selectedRightInfoTab === "helper") {
+              <div class="pane-module pane-module--scroll">
+                <app-helper-assist-window
+                  [isRunStarted]="isRunStarted"
+                  [assistEnabled]="assistConfig.enabled"
+                  [autoHealEnabled]="assistConfig.autoHealEnabled"
+                  [healAtHpPercent]="assistConfig.healAtHpPercent"
+                  [autoGuardEnabled]="assistConfig.autoGuardEnabled"
+                  [guardAtHpPercent]="assistConfig.guardAtHpPercent"
+                  [autoOffenseEnabled]="assistConfig.autoOffenseEnabled"
+                  [autoSkills]="assistConfig.autoSkills"
+                  (assistEnabledChanged)="onAssistEnabledToggle($event)"
+                  (autoHealEnabledChanged)="onAssistAutoHealEnabledToggle($event)"
+                  (healThresholdChanged)="onAssistHealThresholdChange($event)"
+                  (autoGuardEnabledChanged)="onAssistAutoGuardEnabledToggle($event)"
+                  (guardThresholdChanged)="onAssistGuardThresholdChange($event)"
+                  (autoOffenseEnabledChanged)="onAssistAutoOffenseEnabledToggle($event)"
+                  (autoSkillEnabledChanged)="onAssistAutoSkillToggle($event)"
+                ></app-helper-assist-window>
+              </div>
+            } @else if (selectedRightInfoTab === "bestiary") {
+              <div class="pane-module pane-module--placeholder">
+                <h3>Bestiary</h3>
+                <p>Soon.</p>
+                @if (bestiaryFocusEntry) {
+                  <p>
+                    Focus: {{ formatSpeciesLabel(bestiaryFocusEntry.species) }}
+                    ({{ bestiaryFocusEntry.killsTotal }}/{{ bestiaryFocusEntry.nextChestAtKills }})
+                  </p>
+                }
+              </div>
+            } @else {
+              <div class="status-details">
+                <h3>{{ selectedCharacter?.name ?? "Unknown" }}</h3>
+                <p>Level {{ selectedCharacter?.level ?? 0 }} | XP {{ selectedCharacter?.xp ?? 0 }}</p>
+                <div class="status-details__grid">
+                  @for (row of statusTabRows; track row.label) {
+                    <div class="status-details__row">
+                      <span>{{ row.label }}</span>
+                      <strong>{{ row.value }}</strong>
+                    </div>
+                  }
+                </div>
+              </div>
+            }
+          </div>
+        </section>
+      </div>
+    </aside>
   </div>
 
-  <aside class="meta">
-    <h2>Arena</h2>
-    @if (bootPhase === "ready_to_start" && !isRunStarted) {
-      <div class="start-run-actions">
-        <button type="button" class="start-run-button" (click)="startRun()" [disabled]="battleRequestInFlight">
-          Start Run
-        </button>
-      </div>
-    }
-    <p>Press <strong>1</strong>/<strong>2</strong>/<strong>3</strong>/<strong>4</strong>/<strong>5</strong> to cast, <strong>WASD</strong> to move (combine keys for diagonals) or <strong>Q/E/Z/C</strong> for direct diagonal movement, <strong>Arrow keys</strong> to set facing, <strong>Right-click</strong> mob to lock target, <strong>Left-click</strong> tile to set ground target and cast Avalanche.</p>
-    @if (interactPoiHint) {
-      <p class="poi-interact-hint"><strong>{{ interactPoiHint }}</strong></p>
-    }
-    @if (healingAmplifierHint) {
-      <p class="buff-active-hint"><strong>{{ healingAmplifierHint }}</strong></p>
-    }
-    @if (altarCooldownHint) {
-      <p class="altar-cooldown-hint"><strong>{{ altarCooldownHint }}</strong></p>
-    }
-    @if (assistConfig.enabled) {
-      <p class="assist-auto-chip">AUTO</p>
-    }
-    <button
-      type="button"
-      class="skill-button"
-      [class.skill-button--gcd-blocked]="isSkillBlockedByGlobalCooldown('exori')"
-      [class.skill-button--pulse]="isSkillReadyPulseActive('exori')"
-      (animationend)="onSkillPulseAnimationEnd('exori')"
-      (click)="castExori()"
-      [disabled]="!canCastSkill('exori')"
-    >
-      <span class="skill-label">{{ getSkillButtonLabel("exori", "Cast Exori") }}</span>
-      @if (getCooldownRemainingMs("exori") > 0) {
-        <span class="skill-timer">{{ formatCooldownSeconds(getCooldownRemainingMs("exori")) }}</span>
-      }
-      <span class="skill-cooldown-mask" [style.transform]="'scaleX(' + getSkillCooldownFraction('exori') + ')'"></span>
-      @if (isSkillBlockedByGlobalCooldown("exori")) {
-        <span class="skill-gcd-mask"></span>
-        <span class="skill-gcd-chip">{{ getSkillGlobalCooldownLabel("exori") }}</span>
-      }
-    </button>
-    <button
-      type="button"
-      class="skill-button"
-      [class.skill-button--gcd-blocked]="isSkillBlockedByGlobalCooldown('exori_mas')"
-      [class.skill-button--pulse]="isSkillReadyPulseActive('exori_mas')"
-      (animationend)="onSkillPulseAnimationEnd('exori_mas')"
-      (click)="castExoriMas()"
-      [disabled]="!canCastSkill('exori_mas')"
-    >
-      <span class="skill-label">{{ getSkillButtonLabel("exori_mas", "Cast Exori Mas") }}</span>
-      @if (getCooldownRemainingMs("exori_mas") > 0) {
-        <span class="skill-timer">{{ formatCooldownSeconds(getCooldownRemainingMs("exori_mas")) }}</span>
-      }
-      <span
-        class="skill-cooldown-mask"
-        [style.transform]="'scaleX(' + getSkillCooldownFraction('exori_mas') + ')'"
-      ></span>
-      @if (isSkillBlockedByGlobalCooldown("exori_mas")) {
-        <span class="skill-gcd-mask"></span>
-        <span class="skill-gcd-chip">{{ getSkillGlobalCooldownLabel("exori_mas") }}</span>
-      }
-    </button>
-    <button
-      type="button"
-      class="skill-button"
-      [class.skill-button--gcd-blocked]="isSkillBlockedByGlobalCooldown('exori_min')"
-      [class.skill-button--pulse]="isSkillReadyPulseActive('exori_min')"
-      (animationend)="onSkillPulseAnimationEnd('exori_min')"
-      (click)="castExoriMin()"
-      [disabled]="!canCastSkill('exori_min')"
-    >
-      <span class="skill-label">{{ getSkillButtonLabel("exori_min", "Cast Exori Min") }}</span>
-      @if (getCooldownRemainingMs("exori_min") > 0) {
-        <span class="skill-timer">{{ formatCooldownSeconds(getCooldownRemainingMs("exori_min")) }}</span>
-      }
-      <span
-        class="skill-cooldown-mask"
-        [style.transform]="'scaleX(' + getSkillCooldownFraction('exori_min') + ')'"
-      ></span>
-      @if (isSkillBlockedByGlobalCooldown("exori_min")) {
-        <span class="skill-gcd-mask"></span>
-        <span class="skill-gcd-chip">{{ getSkillGlobalCooldownLabel("exori_min") }}</span>
-      }
-    </button>
-    <button
-      type="button"
-      class="skill-button"
-      [class.skill-button--gcd-blocked]="isSkillBlockedByGlobalCooldown('heal')"
-      [class.skill-button--pulse]="isSkillReadyPulseActive('heal')"
-      (animationend)="onSkillPulseAnimationEnd('heal')"
-      (click)="castHeal()"
-      [disabled]="!canCastSkill('heal')"
-    >
-      <span class="skill-label">{{ getSkillButtonLabel("heal", "Cast Heal") }}</span>
-      @if (getCooldownRemainingMs("heal") > 0) {
-        <span class="skill-timer">{{ formatCooldownSeconds(getCooldownRemainingMs("heal")) }}</span>
-      }
-      <span class="skill-cooldown-mask" [style.transform]="'scaleX(' + getSkillCooldownFraction('heal') + ')'"></span>
-      @if (isSkillBlockedByGlobalCooldown("heal")) {
-        <span class="skill-gcd-mask"></span>
-        <span class="skill-gcd-chip">{{ getSkillGlobalCooldownLabel("heal") }}</span>
-      }
-    </button>
-    <button
-      type="button"
-      class="skill-button"
-      [class.skill-button--gcd-blocked]="isSkillBlockedByGlobalCooldown('guard')"
-      [class.skill-button--pulse]="isSkillReadyPulseActive('guard')"
-      (animationend)="onSkillPulseAnimationEnd('guard')"
-      (click)="castGuard()"
-      [disabled]="!canCastSkill('guard')"
-    >
-      <span class="skill-label">{{ getSkillButtonLabel("guard", "Cast Guard") }}</span>
-      @if (getCooldownRemainingMs("guard") > 0) {
-        <span class="skill-timer">{{ formatCooldownSeconds(getCooldownRemainingMs("guard")) }}</span>
-      }
-      <span class="skill-cooldown-mask" [style.transform]="'scaleX(' + getSkillCooldownFraction('guard') + ')'"></span>
-      @if (isSkillBlockedByGlobalCooldown("guard")) {
-        <span class="skill-gcd-mask"></span>
-        <span class="skill-gcd-chip">{{ getSkillGlobalCooldownLabel("guard") }}</span>
-      }
-    </button>
-    <button
-      type="button"
-      class="skill-button"
-      [class.skill-button--gcd-blocked]="isSkillBlockedByGlobalCooldown('avalanche')"
-      [class.skill-button--pulse]="isSkillReadyPulseActive('avalanche')"
-      (animationend)="onSkillPulseAnimationEnd('avalanche')"
-      [disabled]="getCooldownRemainingMs('avalanche') > 0"
-      aria-label="Avalanche cooldown"
-    >
-      <span class="skill-label">{{ getSkillButtonLabel("avalanche", "Avalanche") }}</span>
-      @if (getCooldownRemainingMs("avalanche") > 0) {
-        <span class="skill-timer">{{ formatCooldownSeconds(getCooldownRemainingMs("avalanche")) }}</span>
-      }
-      <span class="skill-cooldown-mask" [style.transform]="'scaleX(' + getSkillCooldownFraction('avalanche') + ')'"></span>
-      @if (isSkillBlockedByGlobalCooldown("avalanche")) {
-        <span class="skill-gcd-mask"></span>
-        <span class="skill-gcd-chip">{{ getSkillGlobalCooldownLabel("avalanche") }}</span>
-      }
-    </button>
-    <button type="button" (click)="pingBackend()" [disabled]="pingInFlight">
-      Ping backend
-    </button>
-    <button
-      type="button"
-      class="step-button"
-      (click)="stepOnce()"
-      [disabled]="battleRequestInFlight || !currentBattleId || ui.status !== 'started'"
-    >
-      Step Once
-    </button>
-    <label class="control-row">
-      <input type="checkbox" [checked]="autoStepEnabled" (change)="onAutoStepChange($event)" [disabled]="!isRunStarted" />
-      <span>Auto-step</span>
-    </label>
-    <label class="control-row">
-      <span>Step interval (ms)</span>
-      <input
-        type="number"
-        min="50"
-        step="10"
-        class="interval-input"
-        [value]="stepIntervalMs"
-        [disabled]="!isRunStarted"
-        (input)="onStepIntervalInput($event)"
-      />
-    </label>
-    <section class="assist-panel">
-      <div class="assist-panel-header">
-        <strong>Assist</strong>
-        @if (assistConfig.enabled) {
-          <span class="assist-panel-auto-tag">AUTO</span>
+  @if (!isInRun) {
+    <section class="pre-run-screen" aria-label="Pre-run setup">
+      <div class="pre-run-card">
+        <header class="pre-run-card__header">
+          <h2>Arena Preparation</h2>
+          <p>Select your character and start the run.</p>
+        </header>
+
+        <p class="pre-run-card__debug">Account loaded: {{ accountLoaded ? "yes" : "no" }}, characters: {{ preRunCharacters.length }}</p>
+
+        @if (isPreRunLoading) {
+          <p class="pre-run-card__status">Loading account...</p>
+        } @else if (isPreRunEmptyState) {
+          <p class="pre-run-card__status">No characters found (dev seed missing).</p>
+          <button type="button" (click)="reloadAccountState()" [disabled]="accountStateRequestInFlight">Reload</button>
+        } @else {
+          <div class="pre-run-card__body">
+            <label class="pre-run-card__field">
+              <span>Character</span>
+              <select
+                [value]="selectedCharacterId"
+                (change)="onSelectedCharacterChange($event)"
+                [disabled]="accountStateRequestInFlight || accountRequestInFlight"
+              >
+                @for (character of preRunCharacters; track character.id) {
+                  <option [value]="character.id">{{ character.name }} (Lv {{ character.level }})</option>
+                }
+              </select>
+            </label>
+
+            <button
+              type="button"
+              (click)="applySelectedCharacter()"
+              [disabled]="accountStateRequestInFlight || accountRequestInFlight || isSelectedCharacterActive || !selectedCharacterId"
+            >
+              Set Active
+            </button>
+
+            <p class="pre-run-card__summary">{{ selectedCharacterSummaryLabel }}</p>
+            <p class="pre-run-card__weapon">Equipped Weapon: {{ selectedCharacterWeaponLabel }}</p>
+
+            <button
+              type="button"
+              class="pre-run-card__start"
+              (click)="startRun()"
+              [disabled]="bootPhase !== 'ready_to_start' || accountStateRequestInFlight || accountRequestInFlight || battleRequestInFlight || !selectedCharacterId"
+            >
+              Start Run
+            </button>
+          </div>
         }
-      </div>
-      <label class="control-row">
-        <input type="checkbox" [checked]="assistConfig.enabled" (change)="onAssistEnabledChange($event)" [disabled]="!isRunStarted" />
-        <span>Enabled</span>
-      </label>
-      <label class="control-row">
-        <input
-          type="checkbox"
-          [checked]="assistConfig.autoHealEnabled"
-          (change)="onAssistAutoHealEnabledChange($event)"
-          [disabled]="!isRunStarted || !assistConfig.enabled"
-        />
-        <span>Auto Heal</span>
-        <span class="assist-threshold">{{ assistConfig.healAtHpPercent }}%</span>
-      </label>
-      <input
-        type="range"
-        min="1"
-        max="99"
-        step="1"
-        class="assist-slider"
-        [value]="assistConfig.healAtHpPercent"
-        (input)="onAssistHealThresholdInput($event)"
-        [disabled]="!isRunStarted || !assistConfig.enabled || !assistConfig.autoHealEnabled"
-      />
-      <label class="control-row">
-        <input
-          type="checkbox"
-          [checked]="assistConfig.autoGuardEnabled"
-          (change)="onAssistAutoGuardEnabledChange($event)"
-          [disabled]="!isRunStarted || !assistConfig.enabled"
-        />
-        <span>Auto Guard</span>
-        <span class="assist-threshold">{{ assistConfig.guardAtHpPercent }}%</span>
-      </label>
-      <input
-        type="range"
-        min="1"
-        max="99"
-        step="1"
-        class="assist-slider"
-        [value]="assistConfig.guardAtHpPercent"
-        (input)="onAssistGuardThresholdInput($event)"
-        [disabled]="!isRunStarted || !assistConfig.enabled || !assistConfig.autoGuardEnabled"
-      />
-      <label class="control-row">
-        <input
-          type="checkbox"
-          [checked]="assistConfig.autoOffenseEnabled"
-          (change)="onAssistAutoOffenseEnabledChange($event)"
-          [disabled]="!isRunStarted || !assistConfig.enabled"
-        />
-        <span>Auto Offense</span>
-      </label>
-      <div class="assist-skill-grid">
-        <label>
-          <input
-            type="checkbox"
-            [checked]="assistConfig.autoSkills.exori"
-            (change)="onAssistSkillEnabledChange('exori', $event)"
-            [disabled]="!isRunStarted || !assistConfig.enabled || !assistConfig.autoOffenseEnabled"
-          />
-          <span>Exori</span>
-        </label>
-        <label>
-          <input
-            type="checkbox"
-            [checked]="assistConfig.autoSkills.exori_min"
-            (change)="onAssistSkillEnabledChange('exori_min', $event)"
-            [disabled]="!isRunStarted || !assistConfig.enabled || !assistConfig.autoOffenseEnabled"
-          />
-          <span>Exori Min</span>
-        </label>
-        <label>
-          <input
-            type="checkbox"
-            [checked]="assistConfig.autoSkills.exori_mas"
-            (change)="onAssistSkillEnabledChange('exori_mas', $event)"
-            [disabled]="!isRunStarted || !assistConfig.enabled || !assistConfig.autoOffenseEnabled"
-          />
-          <span>Exori Mas</span>
-        </label>
-        <label>
-          <input
-            type="checkbox"
-            [checked]="assistConfig.autoSkills.avalanche"
-            (change)="onAssistSkillEnabledChange('avalanche', $event)"
-            [disabled]="!isRunStarted || !assistConfig.enabled || !assistConfig.autoOffenseEnabled"
-          />
-          <span>Avalanche</span>
-        </label>
+
+        @if (accountLoadErrorMessage) {
+          <p class="pre-run-card__status pre-run-card__status--error">{{ accountLoadErrorMessage }}</p>
+        }
       </div>
     </section>
-    <p>Active groundFx instances: <strong>{{ activeFxCount }}</strong></p>
-    <p>Current tick: <strong>{{ ui.tick }}</strong></p>
-    <p>Seed: <strong>{{ currentSeed }}</strong></p>
-    <p>Auto-step status: <strong>{{ autoStepEnabled ? "on" : "off" }}</strong></p>
-    <p>Global cooldown: <strong>{{ getGlobalCooldownRemainingMs() }} / {{ getGlobalCooldownTotalMs() }} ms</strong></p>
-    <p>Queued commands: <strong>{{ queuedCommandCount }}</strong></p>
-    <p class="battle-status-row">
-      Battle status:
-      <strong
-        class="battle-status-pill"
-        [class.battle-status-pill--started]="ui.status === 'started'"
-        [class.battle-status-pill--defeat]="ui.status === 'defeat'"
-        [class.battle-status-pill--error]="ui.status === 'error'"
-      >
-        {{ ui.status }}
-      </strong>
-    </p>
-    @if (ui.status === "defeat") {
-      <div class="end-run-actions">
-        <button type="button" class="restart-button" (click)="restartBattle()" [disabled]="battleRequestInFlight">
-          Restart
-        </button>
-        <button type="button" class="exit-button" (click)="exitBattle()" [disabled]="battleRequestInFlight">
-          Exit
-        </button>
-      </div>
-    }
-    <p>Facing direction: <strong>{{ ui.facing }}</strong></p>
-    <p class="ping-result">Ping result: <strong>{{ lastPingResult }}</strong></p>
-    @if (ui.skills.length > 0) {
-      <p class="skill-panel-title">Skills:</p>
-      <ul class="skill-panel-list">
-        @for (skill of ui.skills; track skill.skillId) {
-          <li>
-            <strong>{{ skill.skillId }}</strong>
-            <span>{{ skill.cooldownRemainingMs }} / {{ skill.cooldownTotalMs }} ms</span>
-          </li>
-        }
-      </ul>
-    }
-    @if (recentCommandResults.length > 0) {
-      <p class="command-log-title">Command results (latest):</p>
-      <ul class="command-log">
-        @for (entry of recentCommandResults; track $index) {
-          <li>{{ entry }}</li>
-        }
-      </ul>
-    }
-    @if (recentDamageNumbers.length > 0) {
-      <p class="damage-log-title">Damage numbers (latest):</p>
-      <ul class="damage-log">
-        @for (entry of recentDamageNumbers; track $index) {
-          <li>{{ entry }}</li>
-        }
-      </ul>
-    }
-    <p>Exori variants are server-authoritative and remove mobs when HP reaches zero.</p>
-    @if (battleLog) {
-      <pre class="battle-log">{{ battleLog }}</pre>
-    }
-    @if (fxPreviewUrl) {
-      <img [src]="fxPreviewUrl" alt="FX preview" />
-    }
-  </aside>
+  }
+
+  @if (isDeathModalOpen) {
+    <div class="death-modal__backdrop">
+      <section class="death-modal" role="dialog" aria-modal="true" aria-label="Run ended">
+        <header class="death-modal__header">
+          <h2>Run Ended</h2>
+        </header>
+        <p class="death-modal__reason">
+          @if (deathEndReason === "death") {
+            You died.
+          } @else {
+            Run ended.
+          }
+        </p>
+        <div class="death-modal__actions">
+          <button type="button" (click)="onDeathModalRestartRun()" [disabled]="battleRequestInFlight">Restart Run</button>
+          <button type="button" (click)="onDeathModalReturnToPreRun()" [disabled]="battleRequestInFlight">Return to Pre-Run</button>
+        </div>
+      </section>
+    </div>
+  }
+
+  @if (isPauseModalOpen && !isDeathModalOpen) {
+    <div class="pause-modal__backdrop">
+      <section class="pause-modal" role="dialog" aria-modal="true" aria-label="Pause menu">
+        <header class="pause-modal__header">
+          <h2>Paused</h2>
+        </header>
+        <div class="pause-modal__actions">
+          <button type="button" (click)="onPauseModalResume()" [disabled]="battleRequestInFlight">Resume</button>
+          <button type="button" (click)="onPauseModalRestartRun()" [disabled]="battleRequestInFlight">Restart</button>
+          <button type="button" (click)="onPauseModalExit()" [disabled]="battleRequestInFlight">Exit</button>
+        </div>
+      </section>
+    </div>
+  }
+
+  @if (isHotkeysModalOpen) {
+    <div class="hotkeys-modal__backdrop" (click)="onHotkeysBackdropClick($event)">
+      <section class="hotkeys-modal" role="dialog" aria-modal="true" aria-label="Hotkeys">
+        <header class="hotkeys-modal__header">
+          <h2>Hotkeys</h2>
+          <button type="button" (click)="closeHotkeysModal()">Close</button>
+        </header>
+        <div class="hotkeys-modal__body">
+          @for (group of hotkeyGroups; track group.title) {
+            <section class="hotkeys-modal__group">
+              <h3>{{ group.title }}</h3>
+              <ul>
+                @for (entry of group.entries; track entry) {
+                  <li>{{ entry }}</li>
+                }
+              </ul>
+            </section>
+          }
+        </div>
+      </section>
+    </div>
+  }
 </section>

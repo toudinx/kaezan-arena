@@ -1,0 +1,42 @@
+@if (isOpen) {
+  <section
+    class="ui-window"
+    [class.ui-window--minimized]="isMinimized"
+    [class.ui-window--pinned]="isPinned"
+    [style.left.px]="x"
+    [style.top.px]="y"
+    [style.width.px]="width"
+    [style.height.px]="renderedHeight"
+    [style.z-index]="zIndex"
+    (mousedown)="onWindowMouseDown()"
+  >
+    <header class="ui-window__titlebar" (mousedown)="onTitleBarMouseDown($event)">
+      <span class="ui-window__title">{{ title }}</span>
+      <div class="ui-window__actions">
+        <button
+          type="button"
+          class="ui-window__action"
+          aria-label="Minimize window"
+          title="Minimize"
+          (click)="onMinimizeButtonClick($event)"
+        >
+          _
+        </button>
+        <button
+          type="button"
+          class="ui-window__action"
+          aria-label="Close window"
+          title="Close"
+          (click)="onCloseButtonClick($event)"
+        >
+          X
+        </button>
+      </div>
+    </header>
+    @if (!isMinimized) {
+      <div class="ui-window__content">
+        <ng-content></ng-content>
+      </div>
+    }
+  </section>
+}

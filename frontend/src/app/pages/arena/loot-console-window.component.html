@@ -1,0 +1,29 @@
+<section class="loot-console">
+  <header class="loot-console__header">
+    <span>Loot Console</span>
+    <div class="loot-console__actions">
+      <button type="button" (click)="copyLines()">Copy</button>
+      <button type="button" (click)="clearConsole()">Clear</button>
+    </div>
+  </header>
+
+  <div class="loot-console__body" #consoleBody>
+    @if (lines.length === 0) {
+      <p class="loot-console__empty">No loot messages.</p>
+    } @else {
+      @for (line of lines; track trackLineByKey($index, line)) {
+        <p class="loot-console__line">
+          <span class="loot-console__prefix">Loot ({{ formatPrefix(line) }}):</span>
+          @for (item of line.items; track trackItemById($index, item); let itemIndex = $index) {
+            <button type="button" class="loot-console__item-link" [ngClass]="itemClass(item)" (click)="onItemClick(item.itemId)">
+              {{ item.quantity }}x {{ item.displayName }}
+            </button>
+            @if (itemIndex < line.items.length - 1) {
+              <span>, </span>
+            }
+          }
+        </p>
+      }
+    }
+  </div>
+</section>

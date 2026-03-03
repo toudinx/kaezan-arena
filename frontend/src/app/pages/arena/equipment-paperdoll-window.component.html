@@ -1,0 +1,51 @@
+<section class="paperdoll">
+  <header class="paperdoll__header">
+    <strong>{{ character?.name ?? "Unknown" }}</strong>
+    <span>Equipment</span>
+  </header>
+
+  <div class="paperdoll__slots">
+    <div class="paperdoll__slot-wrap">
+      <button
+        type="button"
+        class="paperdoll__slot"
+        [ngClass]="getSlotRarityClass(weaponRarity)"
+        [title]="slotTooltip('Weapon', equippedWeaponLabel)"
+        (click)="onWeaponSlotClick()"
+      >
+        <span class="paperdoll__slot-glyph">W</span>
+      </button>
+      <span class="paperdoll__slot-name">Weapon</span>
+    </div>
+
+    <div class="paperdoll__slot-wrap">
+      <div
+        class="paperdoll__slot"
+        [ngClass]="getSlotRarityClass(armorRarity)"
+        [title]="slotTooltip('Armor', equippedArmorLabel)"
+        role="img"
+        aria-label="Armor slot"
+      >
+        <span class="paperdoll__slot-glyph">A</span>
+      </div>
+      <span class="paperdoll__slot-name">Armor</span>
+    </div>
+
+    <div class="paperdoll__slot-wrap">
+      <div
+        class="paperdoll__slot"
+        [ngClass]="getSlotRarityClass(relicRarity)"
+        [title]="slotTooltip('Relic', equippedRelicLabel)"
+        role="img"
+        aria-label="Relic slot"
+      >
+        <span class="paperdoll__slot-glyph">R</span>
+      </div>
+      <span class="paperdoll__slot-name">Relic</span>
+    </div>
+  </div>
+
+  @if (weaponFilterMode) {
+    <p class="paperdoll__hint">Select a weapon to equip.</p>
+  }
+</section>

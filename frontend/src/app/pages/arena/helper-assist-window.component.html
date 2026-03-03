@@ -1,0 +1,102 @@
+<section class="helper-window">
+  <header class="helper-window__header">
+    <span>Assist Controller</span>
+    @if (assistEnabled) {
+      <span class="helper-window__auto-chip">AUTO</span>
+    }
+  </header>
+
+  <label class="helper-window__row">
+    <input type="checkbox" [checked]="assistEnabled" (change)="onAssistEnabledChanged($event)" [disabled]="!isRunStarted" />
+    <span>Enabled</span>
+  </label>
+
+  <label class="helper-window__row">
+    <input
+      type="checkbox"
+      [checked]="autoHealEnabled"
+      (change)="onAutoHealEnabledChanged($event)"
+      [disabled]="!isRunStarted || !assistEnabled"
+    />
+    <span>Auto Heal</span>
+    <span class="helper-window__value">{{ healAtHpPercent }}%</span>
+  </label>
+  <input
+    type="range"
+    min="1"
+    max="99"
+    step="1"
+    [value]="healAtHpPercent"
+    (input)="onHealThresholdInput($event)"
+    [disabled]="!isRunStarted || !assistEnabled || !autoHealEnabled"
+  />
+
+  <label class="helper-window__row">
+    <input
+      type="checkbox"
+      [checked]="autoGuardEnabled"
+      (change)="onAutoGuardEnabledChanged($event)"
+      [disabled]="!isRunStarted || !assistEnabled"
+    />
+    <span>Auto Guard</span>
+    <span class="helper-window__value">{{ guardAtHpPercent }}%</span>
+  </label>
+  <input
+    type="range"
+    min="1"
+    max="99"
+    step="1"
+    [value]="guardAtHpPercent"
+    (input)="onGuardThresholdInput($event)"
+    [disabled]="!isRunStarted || !assistEnabled || !autoGuardEnabled"
+  />
+
+  <label class="helper-window__row">
+    <input
+      type="checkbox"
+      [checked]="autoOffenseEnabled"
+      (change)="onAutoOffenseEnabledChanged($event)"
+      [disabled]="!isRunStarted || !assistEnabled"
+    />
+    <span>Auto Offense</span>
+  </label>
+
+  <div class="helper-window__skills">
+    <label>
+      <input
+        type="checkbox"
+        [checked]="autoSkills.exori"
+        (change)="onAutoSkillChanged('exori', $event)"
+        [disabled]="!isRunStarted || !assistEnabled || !autoOffenseEnabled"
+      />
+      <span>Exori</span>
+    </label>
+    <label>
+      <input
+        type="checkbox"
+        [checked]="autoSkills.exori_min"
+        (change)="onAutoSkillChanged('exori_min', $event)"
+        [disabled]="!isRunStarted || !assistEnabled || !autoOffenseEnabled"
+      />
+      <span>Exori Min</span>
+    </label>
+    <label>
+      <input
+        type="checkbox"
+        [checked]="autoSkills.exori_mas"
+        (change)="onAutoSkillChanged('exori_mas', $event)"
+        [disabled]="!isRunStarted || !assistEnabled || !autoOffenseEnabled"
+      />
+      <span>Exori Mas</span>
+    </label>
+    <label>
+      <input
+        type="checkbox"
+        [checked]="autoSkills.avalanche"
+        (change)="onAutoSkillChanged('avalanche', $event)"
+        [disabled]="!isRunStarted || !assistEnabled || !autoOffenseEnabled"
+      />
+      <span>Avalanche</span>
+    </label>
+  </div>
+</section>

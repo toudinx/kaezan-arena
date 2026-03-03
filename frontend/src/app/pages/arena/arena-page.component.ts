@@ -15,6 +15,7 @@ import { ArenaEngine } from "../../arena/engine/arena-engine";
 import {
   ArenaActorState,
   ArenaBattleEvent,
+  ArenaBestiaryEntry,
   ArenaBuffState,
   ArenaPoiState,
   DecalInstance,
@@ -24,13 +25,24 @@ import {
 } from "../../arena/engine/arena-engine.types";
 import { normalizeDecalKind, resolveDecalSemanticId } from "../../arena/engine/decal.helpers";
 import { CanvasLayeredRenderer } from "../../arena/render/canvas-layered-renderer";
-import { HealthBarComponent } from "../../arena/ui/health-bar.component";
+import type { UiWindowPositionChangedEvent } from "../../arena/ui/ui-window.component";
+import {
+  AccountApiService,
+  type AccountState,
+  type CharacterState,
+  type DropEvent,
+  type DropSource,
+  type EquipmentDefinition,
+  type ItemDefinition,
+  type OwnedEquipmentInstance
+} from "../../api/account-api.service";
 import {
   BattleApiService,
   StartBattleResponse,
   StepBattleRequest,
   StepBattleResponse
 } from "../../api/battle-api.service";
+import { buildDropSourceKey, dedupeDropSources, mapMobTypeToSpecies } from "./loot-source.helpers";
 import {
   collectReadyPulseSkillIds,
   computeCooldownFraction,
@@ -42,6 +54,34 @@ import {
   screenToTile,
   type PointerActionKind
 } from "./arena-pointer.helpers";
+import {
+  ARENA_UI_WINDOW_IDS,
+  type ArenaUiWindowId,
+  type UiWindowLayout,
+  UiLayoutService
+} from "./ui-layout.service";
+import { BackpackWindowComponent } from "./backpack-window.component";
+import { LootConsoleWindowComponent } from "./loot-console-window.component";
+import {
+  type StatusBuffViewModel,
+  type StatusSkillSlotViewModel,
+  mapStatusBuffs,
+  mapStatusSkillSlots,
+  resolveSkillIdForHotkeyKey
+} from "./status-skills.helpers";
+import { EquipmentPaperdollWindowComponent } from "./equipment-paperdoll-window.component";
+import type { BackpackFilter } from "./backpack-inventory.helpers";
+import { DockLayoutService, type DockModuleId, type DockModuleState } from "./dock-layout.service";
+import { HelperAssistWindowComponent, type AssistSkillToggleChangedEvent } from "./helper-assist-window.component";
+import {
+  DamageConsoleComponent
+} from "./damage-console.component";
+import {
+  type DamageConsoleEntry,
+  mapDamageNumbersToConsoleEntries,
+  mergeDamageConsoleEntries
+} from "./damage-console.helpers";
+import { computeExpProgressPercent, computeUnifiedVitalsPercent } from "./arena-hud.helpers";
 
 type ApiActorState = NonNullable<StartBattleResponse["actors"]>[number];
 type ApiSkillState = NonNullable<StartBattleResponse["skills"]>[number];
@@ -56,6 +96,11 @@ type ApiPoiState = {
   remainingMs?: unknown;
   species?: unknown;
 };
+type ApiBestiaryEntry = {
+  species?: unknown;
+  killsTotal?: unknown;
+  nextChestAtKills?: unknown;
+};
 type ApiBuffState = {
   buffId?: unknown;
   remainingMs?: unknown;
@@ -65,6 +110,16 @@ type FacingDirection = "up" | "up_right" | "right" | "down_right" | "down" | "do
 type MovementKey = "w" | "a" | "s" | "d";
 type AssistOffenseMode = "cooldown_spam" | "smart";
 type AssistSkillId = "exori" | "exori_min" | "exori_mas" | "avalanche";
+type RightInfoTabId = "helper" | "bestiary" | "status";
+type PreRunCharacterViewModel = Readonly<{
+  id: string;
+  name: string;
+  level: number;
+  xp: number;
+  equippedWeaponName: string;
+  isActive: boolean;
+}>;
+export const RIGHT_INFO_TAB_STORAGE_KEY = "kaezan_arena_right_tab_v1";
 const AVALANCHE_SKILL_ID = "avalanche";
 const ASSIST_CONFIG_DEBOUNCE_MS = 200;
 const ASSIST_SKILL_IDS: readonly AssistSkillId[] = ["exori", "exori_min", "exori_mas", "avalanche"];
@@ -139,13 +194,25 @@ const DEV_LOG_ASSET_IDS = [
 @Component({
   selector: "app-arena-page",
   standalone: true,
-  imports: [HealthBarComponent],
+  imports: [
+    BackpackWindowComponent,
+    LootConsoleWindowComponent,
+    EquipmentPaperdollWindowComponent,
+    HelperAssistWindowComponent,
+    DamageConsoleComponent
+  ],
   templateUrl: "./arena-page.component.html",
   styleUrl: "./arena-page.component.css"
 })
 export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   @ViewChild("arenaCanvas", { static: true }) private readonly canvasRef?: ElementRef<HTMLCanvasElement>;
   @ViewChild("canvasViewport", { static: false }) private readonly canvasViewportRef?: ElementRef<HTMLDivElement>;
+  @ViewChild("leftLogsPane", { static: false }) private readonly leftLogsPaneRef?: ElementRef<HTMLElement>;
+  @ViewChild("rightInfoPane", { static: false }) private readonly rightInfoPaneRef?: ElementRef<HTMLElement>;
+  @ViewChild("damageConsolePanel", { static: false }) private readonly damageConsolePanelRef?: ElementRef<HTMLElement>;
+  @ViewChild("lootConsolePanel", { static: false }) private readonly lootConsolePanelRef?: ElementRef<HTMLElement>;
+  @ViewChild("equipmentPanel", { static: false }) private readonly equipmentPanelRef?: ElementRef<HTMLElement>;
+  @ViewChild("backpackPanel", { static: false }) private readonly backpackPanelRef?: ElementRef<HTMLElement>;
 
   fxPreviewUrl = "";
   activeFxCount = 0;
@@ -167,6 +234,31 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   currentFacingDirection: FacingDirection = "up";
   currentSeed = 0;
   altarCooldownRemainingMs = 0;
+  bestiaryEntries: ArenaBestiaryEntry[] = [];
+  pendingSpeciesChest: string | null = null;
+  lastFocusedSpecies: string | null = null;
+  readonly accountId = "dev_account";
+  accountState: AccountState | null = null;
+  selectedCharacterId = "";
+  lootFeed: DropEvent[] = [];
+  accountRequestInFlight = false;
+  accountStateRequestInFlight = false;
+  accountLoaded = false;
+  accountLoadErrorMessage = "";
+  isInRun = false;
+  private itemCatalogById: Record<string, ItemDefinition> = {};
+  private equipmentCatalogByItemId: Record<string, EquipmentDefinition> = {};
+  backpackHighlightItemId: string | null = null;
+  backpackHighlightRequestId = 0;
+  backpackForcedFilter: BackpackFilter | null = null;
+  backpackWeaponFilterMode = false;
+  selectedRightInfoTab: RightInfoTabId = this.loadRightInfoTab();
+  highlightedLogPanel: "damage" | "loot" | null = null;
+  isHotkeysModalOpen = false;
+  isPauseModalOpen = false;
+  isDeathModalOpen = false;
+  deathEndReason: string | null = null;
+  damageConsoleEntries: DamageConsoleEntry[] = [];
   ui: ArenaUiState = {
     player: {
       hp: 0,
@@ -201,11 +293,34 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   private readonly pressedMovementKeys = new Set<MovementKey>();
   private autoStepTimerId: ReturnType<typeof setTimeout> | null = null;
   private assistConfigDebounceTimerId: ReturnType<typeof setTimeout> | null = null;
+  private autoStepWasEnabledBeforePause = false;
   private autoStepLoopRunId = 0;
   private lastKnownViewportWidthCss = 0;
   private lastKnownViewportHeightCss = 0;
   private readyPulseSkillIds = new Set<string>();
+  private readonly sentLootSourceKeys = new Set<string>();
   assistConfig: ArenaAssistConfig = this.buildDefaultAssistConfig();
+  readonly hotkeyGroups: ReadonlyArray<Readonly<{ title: string; entries: ReadonlyArray<string> }>> = [
+    { title: "Movement", entries: ["W/A/S/D move", "Q/E/Z diagonal move"] },
+    { title: "Facing", entries: ["Arrow keys set facing"] },
+    { title: "Targeting", entries: ["Left click ground target", "Right click lock target", "F interact POI"] },
+    {
+      title: "UI",
+      entries: [
+        "T toggle AUTO ON/OFF",
+        "Esc toggle Pause modal",
+        "I focus Backpack",
+        "C focus Equipment",
+        "H open Helper tab",
+        "B open Bestiary tab",
+        "K open Status tab",
+        "D focus Damage log",
+        "L focus Loot log"
+      ]
+    },
+    { title: "Skills", entries: ["1-4 cast skills", "5 cast Guard"] }
+  ];
+  readonly arenaWindowIds = ARENA_UI_WINDOW_IDS;
 
   constructor(
     private readonly resolver: AssetResolverService,
@@ -213,12 +328,130 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     private readonly battleApi: BattleApiService,
     private readonly router: Router,
     private readonly ngZone: NgZone,
-    private readonly cdr: ChangeDetectorRef
+    private readonly cdr: ChangeDetectorRef,
+    private readonly accountApi: AccountApiService = new AccountApiService(),
+    private readonly uiLayoutService: UiLayoutService = new UiLayoutService(),
+    private readonly dockLayoutService: DockLayoutService = new DockLayoutService()
   ) {}
+
+  get uiWindows(): ReadonlyArray<UiWindowLayout> {
+    return this.uiLayoutService.windows();
+  }
+
+  get dockModules(): ReadonlyArray<DockModuleState> {
+    return this.dockLayoutService.modules();
+  }
+
+  get playerHpPercent(): number {
+    return computeUnifiedVitalsPercent(this.ui.player.hp, this.ui.player.maxHp);
+  }
+
+  get playerShieldPercentOfMaxHp(): number {
+    const shield = Math.max(0, Math.min(this.ui.player.shield, this.ui.player.maxShield));
+    return computeUnifiedVitalsPercent(shield, this.ui.player.maxHp);
+  }
+
+  get playerHpPercentRounded(): number {
+    return Math.round(this.playerHpPercent);
+  }
+
+  get playerShieldPercentRounded(): number {
+    return Math.round(this.playerShieldPercentOfMaxHp);
+  }
+
+  get playerExpPercent(): number {
+    return computeExpProgressPercent(this.selectedCharacter?.level ?? 1, this.selectedCharacter?.xp ?? 0);
+  }
+
+  get itemCatalogByIdForUi(): Readonly<Record<string, ItemDefinition>> {
+    return this.itemCatalogById;
+  }
+
+  get equipmentCatalogByItemIdForUi(): Readonly<Record<string, EquipmentDefinition>> {
+    return this.equipmentCatalogByItemId;
+  }
+
+  get activeBuffsForStatusWindow(): ReadonlyArray<ArenaBuffState> {
+    return this.scene?.activeBuffs ?? [];
+  }
+
+  get topHudBuffs(): ReadonlyArray<StatusBuffViewModel> {
+    return mapStatusBuffs(this.activeBuffsForStatusWindow);
+  }
+
+  get assistAutoToggleLabel(): string {
+    return this.assistConfig.enabled ? "AUTO: ON" : "AUTO: OFF";
+  }
+
+  get bottomBarSkillSlots(): ReadonlyArray<StatusSkillSlotViewModel> {
+    return mapStatusSkillSlots(
+      this.ui.skills,
+      this.ui.player.globalCooldownRemainingMs,
+      this.ui.player.globalCooldownTotalMs
+    );
+  }
+
+  get preRunCharacters(): ReadonlyArray<PreRunCharacterViewModel> {
+    const state = this.accountState;
+    if (!state) {
+      return [];
+    }
+
+    const characters = Object.values(state.characters).map((character) => ({
+      id: character.characterId,
+      name: character.name,
+      level: character.level,
+      xp: character.xp,
+      equippedWeaponName: this.resolveEquippedWeaponName(character),
+      isActive: character.characterId === state.activeCharacterId
+    }));
+
+    characters.sort((left, right) => {
+      if (left.isActive && !right.isActive) {
+        return -1;
+      }
+
+      if (!left.isActive && right.isActive) {
+        return 1;
+      }
+
+      const byName = left.name.localeCompare(right.name, undefined, { sensitivity: "base" });
+      return byName !== 0 ? byName : left.id.localeCompare(right.id);
+    });
+
+    return characters;
+  }
+
+  get selectedPreRunCharacter(): PreRunCharacterViewModel | null {
+    if (!this.selectedCharacterId) {
+      return this.preRunCharacters[0] ?? null;
+    }
+
+    return this.preRunCharacters.find((character) => character.id === this.selectedCharacterId) ?? null;
+  }
+
+  get isPreRunLoading(): boolean {
+    return this.accountStateRequestInFlight && !this.accountLoaded;
+  }
+
+  get isPreRunEmptyState(): boolean {
+    return this.accountLoaded && !this.accountStateRequestInFlight && this.preRunCharacters.length === 0;
+  }
+
+  get statusTabRows(): ReadonlyArray<Readonly<{ label: string; value: string }>> {
+    return [
+      { label: "Attack", value: this.resolveStatusModifier(["attack", "atk", "power"]) },
+      { label: "Crit rate", value: this.resolveStatusModifier(["crit_rate", "crit", "critical"]) },
+      { label: "Life leech", value: this.resolveStatusModifier(["life_leech", "leech"]) },
+      { label: "Reflect", value: this.resolveStatusModifier(["reflect", "thorns"]) },
+      { label: "Shield capacity", value: String(Math.max(0, this.ui.player.maxShield)) }
+    ];
+  }
 
   async ngAfterViewInit(): Promise<void> {
     this.scene = this.engine.createTestScene();
     this.activeFxCount = 0;
+    await this.loadAccountState();
 
     const canvas = this.canvasRef?.nativeElement;
     if (!canvas || !this.scene) {
@@ -313,7 +546,120 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
 
   @HostListener("window:keydown", ["$event"])
   onKeyDown(event: KeyboardEvent): void {
+    if (event.key === "Escape" && this.isDeathModalOpen) {
+      event.preventDefault();
+      return;
+    }
+
+    if (event.key === "Escape" && this.isPauseModalOpen) {
+      event.preventDefault();
+      if (event.repeat) {
+        return;
+      }
+
+      void this.onPauseModalResume();
+      return;
+    }
+
+    if (event.key === "Escape" && this.isHotkeysModalOpen) {
+      event.preventDefault();
+      this.closeHotkeysModal();
+      return;
+    }
+
     if (this.isTypingContext()) {
+      return;
+    }
+
+    if (event.key === "Escape") {
+      event.preventDefault();
+      if (event.repeat) {
+        return;
+      }
+
+      this.openPauseModal();
+      return;
+    }
+
+    const normalizedKey = event.key.toLowerCase();
+    if (normalizedKey === "l") {
+      event.preventDefault();
+      if (event.repeat) {
+        return;
+      }
+
+      this.focusLootConsole();
+      return;
+    }
+
+    if (normalizedKey === "t") {
+      event.preventDefault();
+      if (event.repeat) {
+        return;
+      }
+
+      this.toggleAutoAssist();
+      return;
+    }
+
+    if (normalizedKey === "d") {
+      if (!event.repeat) {
+        this.focusDamageConsole();
+      }
+    }
+
+    if (normalizedKey === "i") {
+      event.preventDefault();
+      if (event.repeat) {
+        return;
+      }
+
+      this.focusBackpackPanel();
+      this.focusRightInfoPane();
+      return;
+    }
+
+    if (normalizedKey === "c") {
+      event.preventDefault();
+      if (event.repeat) {
+        return;
+      }
+
+      this.focusEquipmentPanel();
+      this.focusRightInfoPane();
+      return;
+    }
+
+    if (normalizedKey === "h") {
+      event.preventDefault();
+      if (event.repeat) {
+        return;
+      }
+
+      this.setRightInfoTab("helper");
+      this.focusRightInfoPane();
+      return;
+    }
+
+    if (normalizedKey === "b") {
+      event.preventDefault();
+      if (event.repeat) {
+        return;
+      }
+
+      this.setRightInfoTab("bestiary");
+      this.focusRightInfoPane();
+      return;
+    }
+
+    if (normalizedKey === "k") {
+      event.preventDefault();
+      if (event.repeat) {
+        return;
+      }
+
+      this.setRightInfoTab("status");
+      this.focusRightInfoPane();
       return;
     }
 
@@ -365,43 +711,10 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       return;
     }
 
-    if (event.key === "1") {
-      if (!this.canCastSkill("exori_min")) {
-        return;
-      }
-
+    const mappedSkillId = resolveSkillIdForHotkeyKey(event.key);
+    if (mappedSkillId) {
       event.preventDefault();
-      this.castSkill("exori_min");
-      return;
-    }
-
-    if (event.key === "2") {
-      if (!this.canCastSkill("exori")) {
-        return;
-      }
-
-      event.preventDefault();
-      this.castSkill("exori");
-      return;
-    }
-
-    if (event.key === "3") {
-      if (!this.canCastSkill("exori_mas")) {
-        return;
-      }
-
-      event.preventDefault();
-      this.castSkill("exori_mas");
-      return;
-    }
-
-    if (event.key === "4") {
-      if (!this.canCastSkill("heal")) {
-        return;
-      }
-
-      event.preventDefault();
-      this.castSkill("heal");
+      this.onStatusSkillActivated(mappedSkillId);
       return;
     }
 
@@ -428,6 +741,159 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   @HostListener("window:blur")
   onWindowBlur(): void {
     this.pressedMovementKeys.clear();
+  }
+
+  @HostListener("window:resize")
+  onWindowResize(): void {
+    this.uiLayoutService.clampAllToViewport();
+  }
+
+  onUiWindowBringToFront(id: string): void {
+    if (!this.isArenaWindowId(id)) {
+      return;
+    }
+
+    this.uiLayoutService.bringToFront(id);
+  }
+
+  onUiWindowClose(id: string): void {
+    if (!this.isArenaWindowId(id)) {
+      return;
+    }
+
+    if (id === ARENA_UI_WINDOW_IDS.backpack) {
+      this.clearBackpackWeaponFilterMode();
+    }
+
+    this.uiLayoutService.close(id);
+  }
+
+  onUiWindowToggleMinimized(id: string): void {
+    if (!this.isArenaWindowId(id)) {
+      return;
+    }
+
+    this.uiLayoutService.toggleMinimized(id);
+  }
+
+  onUiWindowPositionChanged(event: UiWindowPositionChangedEvent): void {
+    if (!this.isArenaWindowId(event.id)) {
+      return;
+    }
+
+    this.uiLayoutService.setPosition(event.id, event.x, event.y);
+  }
+
+  onDockModuleCollapseToggleRequested(id: DockModuleId): void {
+    const module = this.dockLayoutService.getModule(id);
+    if (!module) {
+      return;
+    }
+
+    if (module.isCollapsed) {
+      this.dockLayoutService.expand(id);
+      return;
+    }
+
+    this.dockLayoutService.collapse(id);
+  }
+
+  onDockModuleHideRequested(id: DockModuleId): void {
+    this.dockLayoutService.hide(id);
+    if (id === "backpack") {
+      this.clearBackpackWeaponFilterMode();
+    }
+  }
+
+  async onBackpackEquipRequested(weaponInstanceId: string): Promise<void> {
+    const equipped = await this.equipWeaponFromInventory(weaponInstanceId);
+    if (equipped) {
+      this.clearBackpackWeaponFilterMode();
+    }
+  }
+
+  onLootConsoleItemClicked(itemId: string): void {
+    this.clearBackpackWeaponFilterMode();
+    this.focusBackpackPanel();
+    this.focusRightInfoPane();
+    this.backpackHighlightItemId = itemId;
+    this.backpackHighlightRequestId += 1;
+  }
+
+  onEquipmentWeaponSlotActivated(): void {
+    this.backpackForcedFilter = "weapons";
+    this.backpackWeaponFilterMode = true;
+    this.focusBackpackPanel();
+    this.focusRightInfoPane();
+  }
+
+  onStatusSkillActivated(skillId: string): void {
+    this.castSkill(skillId);
+  }
+
+  onAssistEnabledToggle(enabled: boolean): void {
+    this.updateAssistConfig({ enabled });
+  }
+
+  toggleAutoAssist(): void {
+    this.updateAssistConfig({ enabled: !this.assistConfig.enabled });
+  }
+
+  onAssistAutoHealEnabledToggle(enabled: boolean): void {
+    this.updateAssistConfig({ autoHealEnabled: enabled });
+  }
+
+  onAssistHealThresholdChange(value: number): void {
+    this.updateAssistConfig({ healAtHpPercent: this.clampAssistPercent(value) });
+  }
+
+  onAssistAutoGuardEnabledToggle(enabled: boolean): void {
+    this.updateAssistConfig({ autoGuardEnabled: enabled });
+  }
+
+  onAssistGuardThresholdChange(value: number): void {
+    this.updateAssistConfig({ guardAtHpPercent: this.clampAssistPercent(value) });
+  }
+
+  onAssistAutoOffenseEnabledToggle(enabled: boolean): void {
+    this.updateAssistConfig({ autoOffenseEnabled: enabled });
+  }
+
+  onAssistAutoSkillToggle(event: AssistSkillToggleChangedEvent): void {
+    const nextAutoSkills = {
+      ...this.assistConfig.autoSkills,
+      [event.skillId]: event.enabled
+    };
+    this.updateAssistConfig({ autoSkills: nextAutoSkills });
+  }
+
+  setRightInfoTab(tabId: RightInfoTabId): void {
+    if (this.selectedRightInfoTab === tabId) {
+      return;
+    }
+
+    this.selectedRightInfoTab = tabId;
+    this.persistRightInfoTab();
+  }
+
+  openHotkeysModal(): void {
+    this.isHotkeysModalOpen = true;
+  }
+
+  closeHotkeysModal(): void {
+    this.isHotkeysModalOpen = false;
+  }
+
+  onHotkeysBackdropClick(event: MouseEvent): void {
+    if (event.target !== event.currentTarget) {
+      return;
+    }
+
+    this.closeHotkeysModal();
+  }
+
+  trackSkillSlotBySkillId(_index: number, slot: StatusSkillSlotViewModel): string {
+    return slot.skillId;
   }
 
   onArenaCanvasClick(event: MouseEvent): void {
@@ -463,11 +929,67 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   }
 
   async startRun(): Promise<void> {
+    this.isInRun = true;
     await this.beginNewRun();
   }
 
   async restartBattle(): Promise<void> {
     await this.beginNewRun();
+  }
+
+  openPauseModal(): void {
+    if (!this.canTogglePauseModal()) {
+      return;
+    }
+
+    this.autoStepWasEnabledBeforePause = this.autoStepEnabled;
+    this.isPauseModalOpen = true;
+    this.autoStepEnabled = false;
+    this.stopAutoStepLoop();
+    this.pressedMovementKeys.clear();
+    void this.syncBackendPauseState(true);
+  }
+
+  async onPauseModalResume(): Promise<void> {
+    if (!this.isPauseModalOpen) {
+      return;
+    }
+
+    this.isPauseModalOpen = false;
+    await this.syncBackendPauseState(false);
+
+    if (this.autoStepWasEnabledBeforePause &&
+        this.currentBattleId &&
+        this.battleStatus === "started" &&
+        !this.isDeathModalOpen)
+    {
+      this.autoStepEnabled = true;
+      this.startOrRestartAutoStepLoop();
+    }
+
+    this.autoStepWasEnabledBeforePause = false;
+  }
+
+  async onPauseModalRestartRun(): Promise<void> {
+    this.isPauseModalOpen = false;
+    this.autoStepWasEnabledBeforePause = false;
+    await this.restartBattle();
+  }
+
+  onPauseModalExit(): void {
+    this.isPauseModalOpen = false;
+    this.autoStepWasEnabledBeforePause = false;
+    this.returnToPreRun();
+  }
+
+  async onDeathModalRestartRun(): Promise<void> {
+    this.isDeathModalOpen = false;
+    this.deathEndReason = null;
+    await this.restartBattle();
+  }
+
+  onDeathModalReturnToPreRun(): void {
+    this.returnToPreRun();
   }
 
   private async beginNewRun(): Promise<void> {
@@ -478,8 +1000,18 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.queuedCommands = [];
     this.queuedCommandCount = 0;
     this.recentDamageNumbers = [];
+    this.damageConsoleEntries = [];
     this.recentCommandResults = [];
     this.assistConfig = this.buildDefaultAssistConfig();
+    this.bestiaryEntries = [];
+    this.pendingSpeciesChest = null;
+    this.lastFocusedSpecies = null;
+    this.isPauseModalOpen = false;
+    this.isDeathModalOpen = false;
+    this.deathEndReason = null;
+    this.autoStepWasEnabledBeforePause = false;
+    this.sentLootSourceKeys.clear();
+    this.lootFeed = [];
     this.bootErrorMessage = "";
     this.readyPulseSkillIds = new Set<string>();
     this.ui = {
@@ -525,7 +1057,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   }
 
   exitBattle(): void {
-    void this.router.navigate(["/"]);
+    this.returnToPreRun();
   }
 
   castExoriMin(): void {
@@ -546,6 +1078,154 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
 
   castGuard(): void {
     this.castSkill("guard");
+  }
+
+  get characterOptions(): CharacterState[] {
+    const state = this.accountState;
+    if (!state) {
+      return [];
+    }
+
+    return Object.values(state.characters).sort((left, right) => left.characterId.localeCompare(right.characterId));
+  }
+
+  get selectedCharacter(): CharacterState | null {
+    const state = this.accountState;
+    if (!state || !this.selectedCharacterId) {
+      return null;
+    }
+
+    return state.characters[this.selectedCharacterId] ?? null;
+  }
+
+  get selectedCharacterMaterials(): Array<{ itemId: string; quantity: number }> {
+    const character = this.selectedCharacter;
+    if (!character) {
+      return [];
+    }
+
+    return Object.entries(character.inventory.materialStacks)
+      .map(([itemId, quantity]) => ({ itemId, quantity }))
+      .sort((left, right) => left.itemId.localeCompare(right.itemId));
+  }
+
+  get selectedCharacterWeapons(): Array<OwnedEquipmentInstance & { equipped: boolean; itemName: string; weaponClass: string }> {
+    const character = this.selectedCharacter;
+    if (!character) {
+      return [];
+    }
+
+    return Object.values(character.inventory.equipmentInstances)
+      .map((instance) => {
+        const definition = this.equipmentCatalogByItemId[instance.definitionId];
+        return {
+          ...instance,
+          equipped: character.equipment.weaponInstanceId === instance.instanceId,
+          itemName: this.resolveItemDisplayName(instance.definitionId),
+          weaponClass: definition?.weaponClass ?? "weapon"
+        };
+      })
+      .sort((left, right) => left.instanceId.localeCompare(right.instanceId));
+  }
+
+  get selectedCharacterWeaponLabel(): string {
+    return this.resolveSelectedEquipmentLabel("weapon");
+  }
+
+  get selectedCharacterArmorLabel(): string {
+    return this.resolveSelectedEquipmentLabel("armor");
+  }
+
+  get selectedCharacterRelicLabel(): string {
+    return this.resolveSelectedEquipmentLabel("relic");
+  }
+
+  get selectedCharacterWeaponRarity(): string | null {
+    return this.resolveSelectedEquipmentRarity("weapon");
+  }
+
+  get selectedCharacterArmorRarity(): string | null {
+    return this.resolveSelectedEquipmentRarity("armor");
+  }
+
+  get selectedCharacterRelicRarity(): string | null {
+    return this.resolveSelectedEquipmentRarity("relic");
+  }
+
+  get selectedCharacterSummaryLabel(): string {
+    const character = this.selectedPreRunCharacter;
+    if (!character) {
+      return "Unknown Adventurer (Lv 0)";
+    }
+
+    return `${character.name} (Lv ${character.level})`;
+  }
+
+  get isSelectedCharacterActive(): boolean {
+    const state = this.accountState;
+    if (!state || !this.selectedCharacterId) {
+      return false;
+    }
+
+    return state.activeCharacterId === this.selectedCharacterId;
+  }
+
+  onSelectedCharacterChange(event: Event): void {
+    const element = event.target as HTMLSelectElement | null;
+    if (!element) {
+      return;
+    }
+
+    this.selectedCharacterId = element.value;
+  }
+
+  async applySelectedCharacter(): Promise<void> {
+    if (!this.accountState || !this.selectedCharacterId) {
+      return;
+    }
+
+    this.accountRequestInFlight = true;
+    try {
+      const updated = await this.accountApi.setActiveCharacter(this.accountId, this.selectedCharacterId);
+      this.applyAccountState(updated);
+    } catch (error) {
+      this.battleLog = `setActiveCharacter failed: ${String(error)}`;
+    } finally {
+      this.accountRequestInFlight = false;
+    }
+  }
+
+  async reloadAccountState(): Promise<void> {
+    await this.loadAccountState();
+  }
+
+  async equipWeaponFromInventory(weaponInstanceId: string): Promise<boolean> {
+    const character = this.selectedCharacter;
+    if (!character) {
+      return false;
+    }
+
+    this.accountRequestInFlight = true;
+    try {
+      const updatedCharacter = await this.accountApi.equipWeapon(
+        this.accountId,
+        character.characterId,
+        weaponInstanceId
+      );
+      this.updateCharacterSnapshot(updatedCharacter);
+      return true;
+    } catch (error) {
+      this.battleLog = `equipWeapon failed: ${String(error)}`;
+      return false;
+    } finally {
+      this.accountRequestInFlight = false;
+    }
+  }
+
+  formatLootEntry(dropEvent: DropEvent): string {
+    const itemName = this.resolveItemDisplayName(dropEvent.itemId);
+    const quantity = Math.max(1, dropEvent.quantity ?? 1);
+    return quantity > 1 ? `${itemName} x${quantity}` : itemName;
   }
 
   canCastSkill(skillId: string): boolean {
@@ -657,6 +1337,10 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       return null;
     }
 
+    if (bestPoi.type === "species_chest") {
+      return "Press F to interact: Species Chest";
+    }
+
     return `Press F to interact: ${bestPoi.type === "chest" ? "Chest" : "Altar"}`;
   }
 
@@ -682,6 +1366,57 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
 
     const seconds = Math.max(1, Math.ceil(this.altarCooldownRemainingMs / 1000));
     return `Altar CD: ${seconds}s`;
+  }
+
+  get bestiaryFocusEntry(): ArenaBestiaryEntry | null {
+    const focusSpecies = this.resolveBestiaryFocusSpecies();
+    if (!focusSpecies) {
+      return null;
+    }
+
+    return this.bestiaryEntries.find((entry) => entry.species === focusSpecies) ?? null;
+  }
+
+  get bestiaryFocusLabel(): string {
+    const entry = this.bestiaryFocusEntry;
+    if (!entry) {
+      return "No focus";
+    }
+
+    return this.formatSpeciesLabel(entry.species);
+  }
+
+  get bestiaryProgressPercent(): number {
+    const entry = this.bestiaryFocusEntry;
+    if (!entry || entry.nextChestAtKills <= 0) {
+      return 0;
+    }
+
+    return Math.max(0, Math.min(100, (entry.killsTotal / entry.nextChestAtKills) * 100));
+  }
+
+  get activeSpeciesChestHint(): string | null {
+    const scene = this.scene;
+    if (!scene) {
+      return null;
+    }
+
+    const speciesChest = scene.activePois.find((poi) => poi.type === "species_chest");
+    if (!speciesChest) {
+      return null;
+    }
+
+    const seconds = Math.max(1, Math.ceil(speciesChest.remainingMs / 1000));
+    const species = speciesChest.species ? this.formatSpeciesLabel(speciesChest.species) : "Unknown";
+    return `Species Chest: ${species} (${seconds}s)`;
+  }
+
+  get pendingSpeciesChestHint(): string | null {
+    if (!this.pendingSpeciesChest) {
+      return null;
+    }
+
+    return `Pending Species Chest: ${this.formatSpeciesLabel(this.pendingSpeciesChest)}`;
   }
 
   async pingBackend(): Promise<void> {
@@ -829,6 +1564,8 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         clientTick: this.currentBattleTick,
         commands: commandsToSend
       });
+      const battleIdForLoot = response.battleId ?? this.currentBattleId;
+      const lootSources = this.extractLootSourcesFromSnapshot(response);
 
       this.runInAngularZone(() => {
         this.currentBattleId = response.battleId ?? this.currentBattleId;
@@ -836,6 +1573,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         this.currentSeed = response.seed ?? this.currentSeed;
         this.battleStatus = response.battleStatus ?? this.battleStatus;
         this.currentFacingDirection = this.toFacingDirection(response.facingDirection) ?? this.currentFacingDirection;
+        this.applyGameOverStateFromSnapshot(response);
         this.applyBattlePayload(response);
         this.appendCommandResultLogs(response.commandResults, commandsToSend);
         this.syncUiMetaState();
@@ -845,6 +1583,10 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
           this.stopAutoStepLoop();
         }
       });
+
+      if (battleIdForLoot && lootSources.length > 0) {
+        await this.awardLootSources(battleIdForLoot, lootSources);
+      }
     } catch (error) {
       this.runInAngularZone(() => {
         this.requeueCommands(commandsToSend);
@@ -871,9 +1613,13 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       this.battleRequestInFlight = true;
     });
     try {
+      const playerId =
+        this.selectedCharacterId ||
+        this.accountState?.activeCharacterId ||
+        "player_demo";
       const response = await this.battleApi.startBattle({
         arenaId: "arena_demo",
-        playerId: "player_demo"
+        playerId
       });
 
       this.runInAngularZone(() => {
@@ -882,6 +1628,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         this.currentSeed = response.seed ?? 0;
         this.battleStatus = response.battleStatus ?? "started";
         this.currentFacingDirection = this.toFacingDirection(response.facingDirection) ?? "up";
+        this.applyGameOverStateFromSnapshot(response);
         this.recentDamageNumbers = [];
         this.recentCommandResults = [];
         this.applyActorStates(response.actors);
@@ -892,6 +1639,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         this.applyAssistConfigFromSnapshot(response);
         this.applyActiveBuffsFromSnapshot(response);
         this.applyActivePoisFromSnapshot(response);
+        this.applyBestiaryFromSnapshot(response);
         this.updateGlobalCooldownFromSnapshot(response);
         this.updateAltarCooldownFromSnapshot(response);
         this.syncUiMetaState();
@@ -913,6 +1661,271 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     }
   }
 
+  private async loadAccountState(): Promise<void> {
+    this.accountStateRequestInFlight = true;
+    this.accountLoadErrorMessage = "";
+    try {
+      const response = await this.accountApi.getState(this.accountId);
+      this.applyAccountState(response.account, response.itemCatalog, response.equipmentCatalog);
+      this.accountLoaded = true;
+    } catch (error) {
+      this.accountLoaded = false;
+      this.accountLoadErrorMessage = `Failed to load account: ${String(error)}`;
+      this.battleLog = this.accountLoadErrorMessage;
+    } finally {
+      this.accountStateRequestInFlight = false;
+    }
+  }
+
+  private applyAccountState(
+    account: AccountState,
+    itemCatalog: ItemDefinition[] | null = null,
+    equipmentCatalog: EquipmentDefinition[] | null = null
+  ): void {
+    this.accountState = account;
+    if (itemCatalog) {
+      this.itemCatalogById = {};
+      for (const item of itemCatalog) {
+        this.itemCatalogById[item.itemId] = item;
+      }
+    }
+
+    if (equipmentCatalog) {
+      this.equipmentCatalogByItemId = {};
+      for (const definition of equipmentCatalog) {
+        this.equipmentCatalogByItemId[definition.itemId] = definition;
+      }
+    }
+
+    if (!this.selectedCharacterId || !account.characters[this.selectedCharacterId]) {
+      this.selectedCharacterId = this.resolvePreferredCharacterId(account);
+    }
+  }
+
+  private updateCharacterSnapshot(character: CharacterState): void {
+    if (!this.accountState) {
+      return;
+    }
+
+    const nextCharacters = {
+      ...this.accountState.characters,
+      [character.characterId]: character
+    };
+
+    this.accountState = {
+      ...this.accountState,
+      characters: nextCharacters
+    };
+  }
+
+  private resolveItemDisplayName(itemId: string): string {
+    return this.itemCatalogById[itemId]?.displayName ?? itemId;
+  }
+
+  private resolvePreferredCharacterId(account: AccountState): string {
+    if (account.activeCharacterId && account.characters[account.activeCharacterId]) {
+      return account.activeCharacterId;
+    }
+
+    const sorted = Object.values(account.characters).sort((left, right) => {
+      const byName = left.name.localeCompare(right.name, undefined, { sensitivity: "base" });
+      return byName !== 0 ? byName : left.characterId.localeCompare(right.characterId);
+    });
+
+    return sorted[0]?.characterId ?? "";
+  }
+
+  private resolveEquippedWeaponName(character: CharacterState): string {
+    return this.resolveEquippedItemLabel(character, "weapon");
+  }
+
+  private resolveStatusModifier(candidateKeys: ReadonlyArray<string>): string {
+    const definition = this.resolveSelectedWeaponDefinition();
+    if (!definition) {
+      return "--";
+    }
+
+    const modifiers = definition.gameplayModifiers ?? {};
+    const normalizedToOriginal = new Map<string, string>();
+    for (const key of Object.keys(modifiers)) {
+      normalizedToOriginal.set(this.normalizeModifierKey(key), key);
+    }
+
+    for (const candidate of candidateKeys) {
+      const originalKey = normalizedToOriginal.get(this.normalizeModifierKey(candidate));
+      if (!originalKey) {
+        continue;
+      }
+
+      const value = modifiers[originalKey];
+      if (value && value.trim().length > 0) {
+        return value;
+      }
+    }
+
+    return "--";
+  }
+
+  private resolveSelectedWeaponDefinition(): EquipmentDefinition | null {
+    return this.resolveSelectedEquipmentDefinition("weapon");
+  }
+
+  private resolveSelectedEquipmentLabel(slot: "weapon" | "armor" | "relic"): string {
+    const character = this.selectedCharacter;
+    if (!character) {
+      return "None";
+    }
+
+    return this.resolveEquippedItemLabel(character, slot);
+  }
+
+  private resolveSelectedEquipmentRarity(slot: "weapon" | "armor" | "relic"): string | null {
+    const definition = this.resolveSelectedEquipmentDefinition(slot);
+    if (!definition) {
+      return null;
+    }
+
+    const item = this.itemCatalogById[definition.itemId];
+    return item?.rarity ?? null;
+  }
+
+  private resolveSelectedEquipmentDefinition(slot: "weapon" | "armor" | "relic"): EquipmentDefinition | null {
+    const character = this.selectedCharacter;
+    if (!character) {
+      return null;
+    }
+
+    const instanceId = this.resolveEquippedInstanceId(character, slot);
+    if (!instanceId) {
+      return null;
+    }
+
+    const equippedInstance = character.inventory.equipmentInstances[instanceId];
+    if (!equippedInstance) {
+      return null;
+    }
+
+    const definition = this.equipmentCatalogByItemId[equippedInstance.definitionId] ?? null;
+    if (!definition) {
+      return null;
+    }
+
+    return definition.slot.toLowerCase() === slot ? definition : null;
+  }
+
+  private resolveEquippedItemLabel(character: CharacterState, slot: "weapon" | "armor" | "relic"): string {
+    const instanceId = this.resolveEquippedInstanceId(character, slot);
+    if (!instanceId) {
+      return "None";
+    }
+
+    const equipped = character.inventory.equipmentInstances[instanceId];
+    if (!equipped) {
+      return instanceId;
+    }
+
+    return this.resolveItemDisplayName(equipped.definitionId);
+  }
+
+  private resolveEquippedInstanceId(character: CharacterState, slot: "weapon" | "armor" | "relic"): string | null {
+    if (slot === "weapon") {
+      return character.equipment.weaponInstanceId ?? null;
+    }
+
+    if (slot === "armor") {
+      return character.equipment.armorInstanceId ?? null;
+    }
+
+    return character.equipment.relicInstanceId ?? null;
+  }
+
+  private normalizeModifierKey(value: string): string {
+    return value.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+  }
+
+  private extractLootSourcesFromSnapshot(response: StepBattleResponse): DropSource[] {
+    const events = response.events ?? [];
+    const fallbackTick = response.tick ?? this.currentBattleTick;
+    const sources: DropSource[] = [];
+
+    for (const event of events) {
+      const value = event as Record<string, unknown>;
+      const eventType = this.readString(value["type"]);
+      if (!eventType) {
+        continue;
+      }
+
+      if (eventType === "death") {
+        const entityType = this.readString(value["entityType"]);
+        const sourceId = this.readString(value["entityId"]);
+        if (!sourceId || entityType !== "mob") {
+          continue;
+        }
+
+        const tick = this.readNumber(value["tickIndex"]) ?? fallbackTick;
+        sources.push({
+          tick,
+          sourceType: "mob",
+          sourceId,
+          species: mapMobTypeToSpecies(this.readNumber(value["mobType"]))
+        });
+        continue;
+      }
+
+      if (eventType === "poi_interacted") {
+        const poiType = this.readString(value["poiType"]);
+        const poiId = this.readString(value["poiId"]);
+        if (!poiId || (poiType !== "chest" && poiType !== "species_chest")) {
+          continue;
+        }
+
+        sources.push({
+          tick: fallbackTick,
+          sourceType: "chest",
+          sourceId: poiId,
+          species: this.readString(value["species"]) ?? null
+        });
+      }
+    }
+
+    return sources;
+  }
+
+  private async awardLootSources(battleId: string, sources: DropSource[]): Promise<void> {
+    const character = this.selectedCharacter;
+    if (!character || sources.length === 0) {
+      return;
+    }
+
+    const dedupedSources = dedupeDropSources(battleId, sources, this.sentLootSourceKeys);
+    if (dedupedSources.length === 0) {
+      return;
+    }
+
+    const dedupedKeys = dedupedSources.map((source) => buildDropSourceKey(battleId, source));
+    try {
+      const response = await this.accountApi.awardDrops(
+        this.accountId,
+        character.characterId,
+        battleId,
+        dedupedSources
+      );
+
+      this.runInAngularZone(() => {
+        this.updateCharacterSnapshot(response.character);
+        this.lootFeed = [...response.awarded, ...this.lootFeed].slice(0, 50);
+      });
+    } catch (error) {
+      for (const key of dedupedKeys) {
+        this.sentLootSourceKeys.delete(key);
+      }
+
+      this.runInAngularZone(() => {
+        this.battleLog = `awardDrops failed: ${String(error)}`;
+      });
+    }
+  }
+
   private applyBattlePayload(response: StepBattleResponse): void {
     if (!this.scene) {
       return;
@@ -929,12 +1942,14 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.applyAssistConfigFromSnapshot(response);
     this.applyActiveBuffsFromSnapshot(response);
     this.applyActivePoisFromSnapshot(response);
+    this.applyBestiaryFromSnapshot(response);
     this.updatePlayerHudFromActorStates(response.actors);
     this.updateVisibleSkills(skills);
     this.updateGlobalCooldownFromSnapshot(response);
     this.updateAltarCooldownFromSnapshot(response);
     this.activeFxCount = this.getActiveFxCount(this.scene);
     this.appendDamageLogs(applied.damageNumbers);
+    this.appendDamageConsoleLogs(applied.damageNumbers);
   }
 
   private applyActorStates(actors: StartBattleResponse["actors"]): void {
@@ -1008,6 +2023,13 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.scene = this.engine.applyActiveBuffs(this.scene, activeBuffs);
   }
 
+  private applyBestiaryFromSnapshot(snapshot: StartBattleResponse | StepBattleResponse): void {
+    const record = snapshot as Record<string, unknown>;
+    this.bestiaryEntries = this.toBestiaryEntries(record["bestiary"]);
+    this.pendingSpeciesChest = this.readString(record["pendingSpeciesChest"]) ?? null;
+    this.updateBestiaryFocusSpecies();
+  }
+
   private appendDamageLogs(damageEvents: ReadonlyArray<DamageNumberInstance>): void {
     if (damageEvents.length === 0) {
       return;
@@ -1023,6 +2045,15 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     );
 
     this.recentDamageNumbers = [...nextLines, ...this.recentDamageNumbers].slice(0, 8);
+  }
+
+  private appendDamageConsoleLogs(damageEvents: ReadonlyArray<DamageNumberInstance>): void {
+    if (damageEvents.length === 0) {
+      return;
+    }
+
+    const mapped = mapDamageNumbersToConsoleEntries(damageEvents, this.currentBattleTick);
+    this.damageConsoleEntries = mergeDamageConsoleEntries(this.damageConsoleEntries, mapped, 500);
   }
 
   private appendCommandResultLogs(
@@ -1111,6 +2142,14 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         lines.push(isOk
           ? `${tickPrefix} Assist config updated`
           : `${tickPrefix} Assist config update failed: ${reason}`);
+        continue;
+      }
+
+      if (commandType === "set_paused") {
+        const pausedValue = command?.paused === true ? "paused" : "running";
+        lines.push(isOk
+          ? `${tickPrefix} Battle ${pausedValue}`
+          : `${tickPrefix} Set pause failed: ${reason}`);
         continue;
       }
 
@@ -1222,7 +2261,13 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       const tileY = this.readNumber(pos?.["y"]);
       const remainingMs = this.readNumber(poi.remainingMs);
       const species = this.readString(poi.species) ?? undefined;
-      if (!poiId || (type !== "altar" && type !== "chest") || tileX === null || tileY === null || remainingMs === null) {
+      if (
+        !poiId ||
+        (type !== "altar" && type !== "chest" && type !== "species_chest") ||
+        tileX === null ||
+        tileY === null ||
+        remainingMs === null
+      ) {
         continue;
       }
 
@@ -1259,6 +2304,31 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     }
 
     return mapped.sort((left, right) => left.buffId.localeCompare(right.buffId));
+  }
+
+  private toBestiaryEntries(value: unknown): ArenaBestiaryEntry[] {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+
+    const mapped: ArenaBestiaryEntry[] = [];
+    for (const entry of value) {
+      const bestiaryEntry = entry as ApiBestiaryEntry;
+      const species = this.readString(bestiaryEntry.species);
+      const killsTotal = this.readNumber(bestiaryEntry.killsTotal);
+      const nextChestAtKills = this.readNumber(bestiaryEntry.nextChestAtKills);
+      if (!species || killsTotal === null || nextChestAtKills === null || nextChestAtKills <= 0) {
+        continue;
+      }
+
+      mapped.push({
+        species,
+        killsTotal: Math.max(0, killsTotal),
+        nextChestAtKills: Math.max(1, nextChestAtKills)
+      });
+    }
+
+    return mapped.sort((left, right) => left.species.localeCompare(right.species));
   }
 
   private toEngineEvents(events: StepBattleResponse["events"]): ArenaBattleEvent[] {
@@ -1552,6 +2622,10 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
 
     if (reason === "player_dead") {
       return "player is dead";
+    }
+
+    if (reason === "paused") {
+      return "battle is paused";
     }
 
     return reason;
@@ -1883,8 +2957,91 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     return status === "defeat";
   }
 
+  private canTogglePauseModal(): boolean {
+    return this.isInRun && !!this.currentBattleId && this.battleStatus === "started" && !this.isDeathModalOpen;
+  }
+
+  private async syncBackendPauseState(paused: boolean): Promise<void> {
+    if (!this.currentBattleId || this.isTerminalBattleStatus(this.battleStatus)) {
+      return;
+    }
+
+    const battleApi = this.battleApi as unknown as {
+      stepBattle?: (request: StepBattleRequest) => Promise<StepBattleResponse>;
+    };
+    if (typeof battleApi.stepBattle !== "function") {
+      return;
+    }
+
+    if (this.battleRequestInFlight) {
+      return;
+    }
+
+    const pauseCommand: StepCommand = {
+      type: "set_paused",
+      paused
+    };
+
+    this.runInAngularZone(() => {
+      this.battleRequestInFlight = true;
+    });
+
+    try {
+      const response = await battleApi.stepBattle({
+        battleId: this.currentBattleId,
+        clientTick: this.currentBattleTick,
+        commands: [pauseCommand]
+      });
+
+      this.runInAngularZone(() => {
+        this.currentBattleId = response.battleId ?? this.currentBattleId;
+        this.currentBattleTick = response.tick ?? this.currentBattleTick;
+        this.currentSeed = response.seed ?? this.currentSeed;
+        this.battleStatus = response.battleStatus ?? this.battleStatus;
+        this.currentFacingDirection = this.toFacingDirection(response.facingDirection) ?? this.currentFacingDirection;
+        this.applyGameOverStateFromSnapshot(response);
+        this.applyBattlePayload(response);
+        this.appendCommandResultLogs(response.commandResults, [pauseCommand]);
+        this.syncUiMetaState();
+        this.battleLog = JSON.stringify(response, null, 2);
+      });
+    } catch (error) {
+      this.runInAngularZone(() => {
+        this.battleLog = `set_paused failed: ${String(error)}`;
+      });
+      console.error("[ArenaPage] set_paused failed", error);
+    } finally {
+      this.runInAngularZone(() => {
+        this.battleRequestInFlight = false;
+      });
+    }
+  }
+
+  private returnToPreRun(): void {
+    this.stopAutoStepLoop();
+    this.clearAssistConfigDebounce();
+    this.pressedMovementKeys.clear();
+    this.autoStepEnabled = false;
+    this.battleRequestInFlight = false;
+    this.queuedCommands = [];
+    this.queuedCommandCount = 0;
+    this.currentBattleId = "";
+    this.currentBattleTick = 0;
+    this.battleStatus = "idle";
+    this.isPauseModalOpen = false;
+    this.autoStepWasEnabledBeforePause = false;
+    this.isDeathModalOpen = false;
+    this.deathEndReason = null;
+    this.isInRun = false;
+    this.syncUiMetaState();
+  }
+
   private canIssueBattleCommand(): boolean {
-    return !this.battleRequestInFlight && !!this.currentBattleId && this.battleStatus === "started";
+    return !this.battleRequestInFlight &&
+      !!this.currentBattleId &&
+      this.battleStatus === "started" &&
+      !this.isPauseModalOpen &&
+      !this.isDeathModalOpen;
   }
 
   private resolvePointerCommandFromMouse(action: PointerActionKind, event: MouseEvent): StepCommand | null {
@@ -1922,6 +3079,25 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       status: this.battleStatus,
       facing: this.currentFacingDirection
     };
+  }
+
+  private applyGameOverStateFromSnapshot(
+    snapshot: Pick<StartBattleResponse, "isGameOver" | "endReason" | "battleStatus"> | Pick<StepBattleResponse, "isGameOver" | "endReason" | "battleStatus">
+  ): void {
+    const record = snapshot as Record<string, unknown>;
+    const snapshotIsGameOver = this.readBoolean(record["isGameOver"]);
+    const snapshotEndReason = this.readString(record["endReason"]);
+    const snapshotBattleStatus = this.readString(record["battleStatus"]);
+    const isGameOver = snapshotIsGameOver ?? snapshotBattleStatus === "defeat";
+    if (!isGameOver)
+    {
+      return;
+    }
+
+    this.isPauseModalOpen = false;
+    this.autoStepWasEnabledBeforePause = false;
+    this.isDeathModalOpen = true;
+    this.deathEndReason = snapshotEndReason ?? "death";
   }
 
   private runInAngularZone(action: () => void): void {
@@ -2164,11 +3340,181 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       return "down_left";
     }
 
+    return null;
+  }
+
+  private toArenaWindowHotkeyId(key: string): ArenaUiWindowId | null {
+    const normalized = key.toLowerCase();
+    if (normalized === "i") {
+      return ARENA_UI_WINDOW_IDS.backpack;
+    }
+
     if (normalized === "c") {
-      return "down_right";
+      return ARENA_UI_WINDOW_IDS.equipmentCharacter;
+    }
+
+    if (normalized === "l") {
+      return ARENA_UI_WINDOW_IDS.lootFeed;
+    }
+
+    if (normalized === "k") {
+      return ARENA_UI_WINDOW_IDS.statusSkills;
     }
 
     return null;
+  }
+
+  private isArenaWindowId(value: string): value is ArenaUiWindowId {
+    return value === ARENA_UI_WINDOW_IDS.backpack ||
+      value === ARENA_UI_WINDOW_IDS.equipmentCharacter ||
+      value === ARENA_UI_WINDOW_IDS.lootFeed ||
+      value === ARENA_UI_WINDOW_IDS.statusSkills;
+  }
+
+  private toDockModuleId(id: ArenaUiWindowId): DockModuleId | null {
+    if (id === ARENA_UI_WINDOW_IDS.statusSkills) {
+      return "status";
+    }
+
+    if (id === ARENA_UI_WINDOW_IDS.backpack) {
+      return "backpack";
+    }
+
+    if (id === ARENA_UI_WINDOW_IDS.equipmentCharacter) {
+      return "equipment";
+    }
+
+    if (id === ARENA_UI_WINDOW_IDS.lootFeed) {
+      return "loot";
+    }
+
+    return null;
+  }
+
+  private toggleDockModuleFromHotkey(id: DockModuleId): void {
+    const module = this.dockLayoutService.getModule(id);
+    if (!module) {
+      return;
+    }
+
+    if (module.isVisible) {
+      this.dockLayoutService.hide(id);
+      if (id === "backpack") {
+        this.clearBackpackWeaponFilterMode();
+      }
+      return;
+    }
+
+    this.dockLayoutService.show(id);
+    this.dockLayoutService.expand(id);
+  }
+
+  private clearBackpackWeaponFilterMode(): void {
+    this.backpackForcedFilter = null;
+    this.backpackWeaponFilterMode = false;
+  }
+
+  private focusDamageConsole(): void {
+    this.focusLeftLogsPane();
+    this.highlightLogPanel("damage");
+    this.scrollConsoleToBottom(this.damageConsolePanelRef, ".damage-console__body");
+  }
+
+  private focusLootConsole(): void {
+    this.focusLeftLogsPane();
+    this.highlightLogPanel("loot");
+    this.scrollConsoleToBottom(this.lootConsolePanelRef, ".loot-console__body");
+  }
+
+  private focusEquipmentPanel(): void {
+    this.focusPane(this.equipmentPanelRef);
+  }
+
+  private focusBackpackPanel(): void {
+    this.focusPane(this.backpackPanelRef);
+  }
+
+  private focusLeftLogsPane(): void {
+    this.focusPane(this.leftLogsPaneRef);
+  }
+
+  private focusRightInfoPane(): void {
+    this.focusPane(this.rightInfoPaneRef);
+  }
+
+  private focusPane(paneRef: ElementRef<HTMLElement> | undefined): void {
+    const pane = paneRef?.nativeElement;
+    if (!pane) {
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      pane.focus({ preventScroll: true });
+    });
+  }
+
+  private highlightLogPanel(panel: "damage" | "loot"): void {
+    this.highlightedLogPanel = panel;
+    setTimeout(() => {
+      if (this.highlightedLogPanel === panel) {
+        this.highlightedLogPanel = null;
+      }
+    }, 650);
+  }
+
+  private scrollConsoleToBottom(panelRef: ElementRef<HTMLElement> | undefined, selector: string): void {
+    const panel = panelRef?.nativeElement;
+    if (!panel) {
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      const body = panel.querySelector(selector);
+      if (!(body instanceof HTMLElement)) {
+        return;
+      }
+
+      body.scrollTop = body.scrollHeight;
+    });
+  }
+
+  private loadRightInfoTab(): RightInfoTabId {
+    if (!this.canUseStorage()) {
+      return "helper";
+    }
+
+    try {
+      const value = window.localStorage.getItem(RIGHT_INFO_TAB_STORAGE_KEY);
+      return value === "helper" || value === "bestiary" || value === "status"
+        ? value
+        : "helper";
+    } catch {
+      return "helper";
+    }
+  }
+
+  private persistRightInfoTab(): void {
+    if (!this.canUseStorage()) {
+      return;
+    }
+
+    try {
+      window.localStorage.setItem(RIGHT_INFO_TAB_STORAGE_KEY, this.selectedRightInfoTab);
+    } catch {
+      // Ignore storage failures to avoid blocking gameplay.
+    }
+  }
+
+  private canUseStorage(): boolean {
+    if (typeof window === "undefined") {
+      return false;
+    }
+
+    try {
+      return typeof window.localStorage !== "undefined";
+    } catch {
+      return false;
+    }
   }
 
   private resolveMovementDirectionFromPressedKeys(): FacingDirection | null {
@@ -2215,6 +3561,70 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     return null;
   }
 
+  private updateBestiaryFocusSpecies(): void {
+    const focused = this.resolveBestiaryFocusSpeciesFromScene();
+    if (!focused) {
+      return;
+    }
+
+    this.lastFocusedSpecies = focused;
+  }
+
+  private resolveBestiaryFocusSpecies(): string | null {
+    const focused = this.resolveBestiaryFocusSpeciesFromScene();
+    if (focused) {
+      this.lastFocusedSpecies = focused;
+      return focused;
+    }
+
+    return this.lastFocusedSpecies;
+  }
+
+  private resolveBestiaryFocusSpeciesFromScene(): string | null {
+    const scene = this.scene;
+    if (!scene || !scene.effectiveTargetEntityId) {
+      return null;
+    }
+
+    const target = scene.actorsById[scene.effectiveTargetEntityId];
+    if (!target || target.kind !== "mob" || !target.mobType) {
+      return null;
+    }
+
+    return this.mapMobArchetypeToSpecies(target.mobType);
+  }
+
+  private mapMobArchetypeToSpecies(mobType: number): string | null {
+    if (mobType === 1) {
+      return "melee_brute";
+    }
+
+    if (mobType === 2) {
+      return "ranged_archer";
+    }
+
+    if (mobType === 3) {
+      return "melee_demon";
+    }
+
+    if (mobType === 4) {
+      return "ranged_dragon";
+    }
+
+    return null;
+  }
+
+  formatSpeciesLabel(species: string): string {
+    if (!species) {
+      return "Unknown";
+    }
+
+    return species
+      .split("_")
+      .map((token) => (token.length > 0 ? token[0].toUpperCase() + token.slice(1) : token))
+      .join(" ");
+  }
+
   private selectBestInteractablePoi(scene: ArenaScene | undefined): ArenaPoiState | null {
     if (!scene || scene.activePois.length === 0) {
       return null;
@@ -2251,7 +3661,11 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   }
 
   private getPoiTypePriority(type: ArenaPoiState["type"]): number {
-    return type === "chest" ? 0 : type === "altar" ? 1 : 2;
+    return type === "chest" || type === "species_chest"
+      ? 0
+      : type === "altar"
+        ? 1
+        : 2;
   }
 
   private computeChebyshevDistance(sourceTileX: number, sourceTileY: number, targetTileX: number, targetTileY: number): number {

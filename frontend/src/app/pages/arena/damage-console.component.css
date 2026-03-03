@@ -1,0 +1,116 @@
+.damage-console {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  color: #d1d5db;
+  font-family: "Consolas", "Courier New", monospace;
+}
+
+.damage-console__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem;
+  padding: 0 0 0.3rem;
+  border-bottom: 1px solid rgba(71, 85, 105, 0.6);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.damage-console__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.damage-console__follow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  color: #94a3b8;
+  font-size: 0.62rem;
+  text-transform: none;
+}
+
+.damage-console__follow input {
+  width: 12px;
+  height: 12px;
+}
+
+.damage-console__header button,
+.damage-console__filter {
+  border: 1px solid #475569;
+  border-radius: 0.25rem;
+  background: linear-gradient(180deg, #334155 0%, #1f2937 100%);
+  color: #f8fafc;
+  font-size: 0.63rem;
+  line-height: 1;
+  padding: 0.22rem 0.34rem;
+  cursor: pointer;
+}
+
+.damage-console__filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.26rem;
+  padding: 0.3rem 0 0.26rem;
+}
+
+.damage-console__filter--active {
+  border-color: #fbbf24;
+  background: linear-gradient(180deg, #7c4a12 0%, #4f2d09 100%);
+  color: #fde68a;
+}
+
+.damage-console__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 0.15rem 0.12rem 0.2rem 0;
+  font-size: 0.7rem;
+  line-height: 1.24;
+}
+
+.damage-console__tick-group {
+  margin: 0 0 0.2rem;
+}
+
+.damage-console__tick-separator {
+  margin: 0 0 0.1rem;
+  color: #94a3b8;
+  font-size: 0.62rem;
+}
+
+.damage-console__line {
+  margin: 0 0 0.08rem;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.damage-console__line--incoming {
+  color: #f87171;
+}
+
+.damage-console__line--outgoing {
+  color: #d1d5db;
+}
+
+.damage-console__line--heal {
+  color: #67e8f9;
+}
+
+.damage-console__line--shield {
+  color: #7dd3fc;
+}
+
+.damage-console__line--reflect {
+  color: #e879f9;
+}
+
+.damage-console__empty {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.7rem;
+}

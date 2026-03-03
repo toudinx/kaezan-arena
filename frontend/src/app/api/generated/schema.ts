@@ -4,6 +4,174 @@
  */
 
 export interface paths {
+    "/api/v1/account/state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    accountId?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["AccountStateResponseDto"];
+                        "application/json": components["schemas"]["AccountStateResponseDto"];
+                        "text/json": components["schemas"]["AccountStateResponseDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/account/active-character": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": components["schemas"]["SetActiveCharacterRequestDto"];
+                    "text/json": components["schemas"]["SetActiveCharacterRequestDto"];
+                    "application/*+json": components["schemas"]["SetActiveCharacterRequestDto"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["AccountStateDto"];
+                        "application/json": components["schemas"]["AccountStateDto"];
+                        "text/json": components["schemas"]["AccountStateDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/account/equip-weapon": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": components["schemas"]["EquipWeaponRequestDto"];
+                    "text/json": components["schemas"]["EquipWeaponRequestDto"];
+                    "application/*+json": components["schemas"]["EquipWeaponRequestDto"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["CharacterStateDto"];
+                        "application/json": components["schemas"]["CharacterStateDto"];
+                        "text/json": components["schemas"]["CharacterStateDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/account/award-drops": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": components["schemas"]["AwardDropsRequestDto"];
+                    "text/json": components["schemas"]["AwardDropsRequestDto"];
+                    "application/*+json": components["schemas"]["AwardDropsRequestDto"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["AwardDropsResponseDto"];
+                        "application/json": components["schemas"]["AwardDropsResponseDto"];
+                        "text/json": components["schemas"]["AwardDropsResponseDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/battle/start": {
         parameters: {
             query?: never;
@@ -170,15 +338,61 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/ping": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        AccountStateDto: {
+            accountId?: string | null;
+            activeCharacterId?: string | null;
+            /** Format: int32 */
+            version?: number;
+            characters?: {
+                [key: string]: components["schemas"]["CharacterStateDto"];
+            } | null;
+        };
+        AccountStateResponseDto: {
+            account?: components["schemas"]["AccountStateDto"];
+            itemCatalog?: components["schemas"]["ItemDefinitionDto"][] | null;
+            equipmentCatalog?: components["schemas"]["EquipmentDefinitionDto"][] | null;
+        };
         ActorStateDto: {
             actorId?: string | null;
             kind?: string | null;
-            /** Format: int32 */
-            mobType?: components["schemas"]["MobArchetype"] | null;
+            mobType?: components["schemas"]["MobArchetype"];
             /** Format: int32 */
             tileX?: number;
             /** Format: int32 */
@@ -191,6 +405,18 @@ export interface components {
             shield?: number;
             /** Format: int32 */
             maxShield?: number;
+        };
+        AltarActivatedEventDto: Omit<components["schemas"]["BattleEventDto"], "type"> & {
+            /** Format: int32 */
+            requestedCount?: number;
+            /** Format: int32 */
+            spawnedCount?: number;
+        } & {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "altar_activated";
         };
         AoePlanCenterDto: {
             /** Format: int32 */
@@ -215,16 +441,15 @@ export interface components {
             tileY?: number;
             fxId?: string | null;
         };
-        BattleCommandDto: {
-            type?: string | null;
+        AssistCastEventDto: Omit<components["schemas"]["BattleEventDto"], "type"> & {
             skillId?: string | null;
-            dir?: string | null;
-            targetEntityId?: string | null;
-            /** Format: int32 */
-            groundTileX?: number | null;
-            /** Format: int32 */
-            groundTileY?: number | null;
-            assistConfig?: components["schemas"]["AssistConfigDto"] | null;
+            reason?: string | null;
+        } & {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "assist_cast";
         };
         AssistConfigDto: {
             enabled?: boolean | null;
@@ -242,14 +467,7 @@ export interface components {
             /** Format: int32 */
             maxAutoCastsPerTick?: number | null;
         };
-        AssistCastEventDto: {
-            type?: "assist_cast";
-            skillId?: string | null;
-            reason?: string | null;
-        };
-        AttackFxEventDto: {
-            type?: "attack_fx";
-            /** Format: int32 */
+        AttackFxEventDto: Omit<components["schemas"]["BattleEventDto"], "type"> & {
             fxKind?: components["schemas"]["CombatFxKind"];
             /** Format: int32 */
             fromTileX?: number;
@@ -259,7 +477,6 @@ export interface components {
             toTileX?: number;
             /** Format: int32 */
             toTileY?: number;
-            /** Format: int32 */
             elementType?: components["schemas"]["ElementType"];
             /** Format: int32 */
             durationMs?: number;
@@ -267,22 +484,46 @@ export interface components {
             createdAtTick?: number;
             /** Format: int32 */
             eventId?: number;
+        } & {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "attack_fx";
         };
-        BattleEventDto:
-            | components["schemas"]["FxSpawnEventDto"]
-            | components["schemas"]["DamageNumberEventDto"]
-            | components["schemas"]["AttackFxEventDto"]
-            | components["schemas"]["DeathEventDto"]
-            | components["schemas"]["HealNumberEventDto"]
-            | components["schemas"]["ReflectEventDto"]
-            | components["schemas"]["AssistCastEventDto"];
+        AwardDropsRequestDto: {
+            accountId?: string | null;
+            characterId?: string | null;
+            battleId?: string | null;
+            sources?: components["schemas"]["DropSourceDto"][] | null;
+        };
+        AwardDropsResponseDto: {
+            awarded?: components["schemas"]["DropEventDto"][] | null;
+            character?: components["schemas"]["CharacterStateDto"];
+        };
+        BattleBuffDto: {
+            buffId?: string | null;
+            /** Format: int32 */
+            remainingMs?: number;
+        };
+        BattleCommandDto: {
+            type?: string | null;
+            skillId?: string | null;
+            dir?: string | null;
+            targetEntityId?: string | null;
+            paused?: boolean | null;
+            /** Format: int32 */
+            groundTileX?: number | null;
+            /** Format: int32 */
+            groundTileY?: number | null;
+            poiId?: string | null;
+            assistConfig?: components["schemas"]["AssistConfigDto"];
+        };
         BattleDecalDto: {
             entityId?: string | null;
-            /** Format: int32 */
             decalKind?: components["schemas"]["DecalKind"];
             entityType?: string | null;
-            /** Format: int32 */
-            mobType?: components["schemas"]["MobArchetype"] | null;
+            mobType?: components["schemas"]["MobArchetype"];
             /** Format: int32 */
             tileX?: number;
             /** Format: int32 */
@@ -294,6 +535,20 @@ export interface components {
             totalMs?: number;
             /** Format: int32 */
             createdTick?: number;
+        };
+        BattleEventDto: {
+            type: string;
+        };
+        BattlePoiDto: {
+            poiId?: string | null;
+            type?: string | null;
+            pos?: components["schemas"]["BattleTilePosDto"];
+            /** Format: int32 */
+            remainingMs?: number;
+            species?: string | null;
+            metadata?: {
+                [key: string]: string;
+            } | null;
         };
         BattleStartRequestDto: {
             arenaId?: string | null;
@@ -312,18 +567,24 @@ export interface components {
             /** Format: int32 */
             globalCooldownTotalMs?: number;
             /** Format: int32 */
+            altarCooldownRemainingMs?: number;
+            /** Format: int32 */
             seed?: number;
             facingDirection?: string | null;
             battleStatus?: string | null;
+            isGameOver?: boolean;
+            endReason?: string | null;
             effectiveTargetEntityId?: string | null;
             lockedTargetEntityId?: string | null;
-            groundTargetPos?: components["schemas"]["BattleTilePosDto"] | null;
-            assistConfig?: components["schemas"]["AssistConfigDto"] | null;
-            /** Format: int32 */
+            groundTargetPos?: components["schemas"]["BattleTilePosDto"];
+            assistConfig?: components["schemas"]["AssistConfigDto"];
             playerBaseElement?: components["schemas"]["ElementType"];
-            /** Format: int32 */
-            weaponElement?: components["schemas"]["ElementType"] | null;
+            weaponElement?: components["schemas"]["ElementType"];
             decals?: components["schemas"]["BattleDecalDto"][] | null;
+            activeBuffs?: components["schemas"]["BattleBuffDto"][] | null;
+            bestiary?: components["schemas"]["BestiaryEntryDto"][] | null;
+            pendingSpeciesChest?: string | null;
+            activePois?: components["schemas"]["BattlePoiDto"][] | null;
         };
         BattleStepRequestDto: {
             battleId?: string | null;
@@ -342,19 +603,25 @@ export interface components {
             /** Format: int32 */
             globalCooldownTotalMs?: number;
             /** Format: int32 */
+            altarCooldownRemainingMs?: number;
+            /** Format: int32 */
             seed?: number;
             facingDirection?: string | null;
             battleStatus?: string | null;
+            isGameOver?: boolean;
+            endReason?: string | null;
             effectiveTargetEntityId?: string | null;
             lockedTargetEntityId?: string | null;
-            groundTargetPos?: components["schemas"]["BattleTilePosDto"] | null;
-            assistConfig?: components["schemas"]["AssistConfigDto"] | null;
-            /** Format: int32 */
+            groundTargetPos?: components["schemas"]["BattleTilePosDto"];
+            assistConfig?: components["schemas"]["AssistConfigDto"];
             playerBaseElement?: components["schemas"]["ElementType"];
-            /** Format: int32 */
-            weaponElement?: components["schemas"]["ElementType"] | null;
+            weaponElement?: components["schemas"]["ElementType"];
             decals?: components["schemas"]["BattleDecalDto"][] | null;
-            events?: components["schemas"]["BattleEventDto"][] | null;
+            activeBuffs?: components["schemas"]["BattleBuffDto"][] | null;
+            bestiary?: components["schemas"]["BestiaryEntryDto"][] | null;
+            pendingSpeciesChest?: string | null;
+            activePois?: components["schemas"]["BattlePoiDto"][] | null;
+            events?: (components["schemas"]["FxSpawnEventDto"] | components["schemas"]["DamageNumberEventDto"] | components["schemas"]["AttackFxEventDto"] | components["schemas"]["DeathEventDto"] | components["schemas"]["HealNumberEventDto"] | components["schemas"]["ReflectEventDto"] | components["schemas"]["AssistCastEventDto"] | components["schemas"]["PoiInteractedEventDto"] | components["schemas"]["InteractFailedEventDto"] | components["schemas"]["BuffAppliedEventDto"] | components["schemas"]["AltarActivatedEventDto"] | components["schemas"]["SpeciesChestSpawnedEventDto"] | components["schemas"]["SpeciesChestOpenedEventDto"])[] | null;
             commandResults?: components["schemas"]["CommandResultDto"][] | null;
         };
         BattleTilePosDto: {
@@ -363,6 +630,50 @@ export interface components {
             /** Format: int32 */
             y?: number;
         };
+        BestiaryEntryDto: {
+            species?: string | null;
+            /** Format: int32 */
+            killsTotal?: number;
+            /** Format: int32 */
+            nextChestAtKills?: number;
+        };
+        BuffAppliedEventDto: Omit<components["schemas"]["BattleEventDto"], "type"> & {
+            buffId?: string | null;
+            /** Format: int32 */
+            durationMs?: number;
+        } & {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "buff_applied";
+        };
+        CharacterEquipmentDto: {
+            weaponInstanceId?: string | null;
+        };
+        CharacterInventoryDto: {
+            materialStacks?: {
+                [key: string]: number;
+            } | null;
+            equipmentInstances?: {
+                [key: string]: components["schemas"]["OwnedEquipmentInstanceDto"];
+            } | null;
+        };
+        CharacterStateDto: {
+            characterId?: string | null;
+            name?: string | null;
+            /** Format: int32 */
+            level?: number;
+            /** Format: int64 */
+            xp?: number;
+            inventory?: components["schemas"]["CharacterInventoryDto"];
+            equipment?: components["schemas"]["CharacterEquipmentDto"];
+        };
+        /**
+         * Format: int32
+         * @enum {integer}
+         */
+        CombatFxKind: 1 | 2 | 3 | 4 | 5;
         CommandResultDto: {
             /** Format: int32 */
             index?: number;
@@ -370,10 +681,7 @@ export interface components {
             ok?: boolean;
             reason?: string | null;
         };
-        /** @enum {integer} */
-        CombatFxKind: 1 | 2 | 3 | 4 | 5;
-        DamageNumberEventDto: {
-            type?: "damage_number";
+        DamageNumberEventDto: Omit<components["schemas"]["BattleEventDto"], "type"> & {
             sourceEntityId?: string | null;
             /** Format: int32 */
             sourceTileX?: number | null;
@@ -391,7 +699,6 @@ export interface components {
             targetTileY?: number;
             /** Format: int32 */
             damageAmount?: number;
-            /** Format: int32 */
             elementType?: components["schemas"]["ElementType"];
             isKill?: boolean;
             isCrit?: boolean;
@@ -401,29 +708,80 @@ export interface components {
             shieldDamageAmount?: number;
             /** Format: int32 */
             hpDamageAmount?: number;
+        } & {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "damage_number";
         };
-        /** @enum {integer} */
-        DecalKind: 1;
-        DeathEventDto: {
-            type?: "death";
+        DeathEventDto: Omit<components["schemas"]["BattleEventDto"], "type"> & {
             entityId?: string | null;
             entityType?: string | null;
-            /** Format: int32 */
-            mobType?: components["schemas"]["MobArchetype"] | null;
+            mobType?: components["schemas"]["MobArchetype"];
             /** Format: int32 */
             tileX?: number;
             /** Format: int32 */
             tileY?: number;
-            /** Format: int32 */
-            elementType?: components["schemas"]["ElementType"] | null;
+            elementType?: components["schemas"]["ElementType"];
             killerEntityId?: string | null;
             /** Format: int32 */
             tickIndex?: number;
+        } & {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "death";
         };
-        /** @enum {integer} */
+        /**
+         * Format: int32
+         * @enum {integer}
+         */
+        DecalKind: 1;
+        DropEventDto: {
+            dropEventId?: string | null;
+            accountId?: string | null;
+            characterId?: string | null;
+            battleId?: string | null;
+            /** Format: int32 */
+            tick?: number;
+            sourceType?: string | null;
+            sourceId?: string | null;
+            itemId?: string | null;
+            /** Format: int32 */
+            quantity?: number;
+            equipmentInstanceId?: string | null;
+            /** Format: date-time */
+            awardedAtUtc?: string;
+        };
+        DropSourceDto: {
+            /** Format: int32 */
+            tick?: number;
+            sourceType?: string | null;
+            sourceId?: string | null;
+            species?: string | null;
+        };
+        /**
+         * Format: int32
+         * @enum {integer}
+         */
         ElementType: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
-        FxSpawnEventDto: {
-            type?: "fx_spawn";
+        EquipWeaponRequestDto: {
+            accountId?: string | null;
+            characterId?: string | null;
+            weaponInstanceId?: string | null;
+        };
+        EquipmentDefinitionDto: {
+            itemId?: string | null;
+            slot?: string | null;
+            weaponClass?: string | null;
+            weaponElement?: string | null;
+            gameplayModifiers?: {
+                [key: string]: string;
+            } | null;
+        };
+        FxSpawnEventDto: Omit<components["schemas"]["BattleEventDto"], "type"> & {
             fxId?: string | null;
             /** Format: int32 */
             tileX?: number;
@@ -432,18 +790,71 @@ export interface components {
             layer?: string | null;
             /** Format: int32 */
             durationMs?: number;
-            /** Format: int32 */
             element?: components["schemas"]["ElementType"];
+        } & {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "fx_spawn";
         };
-        HealNumberEventDto: {
-            type?: "heal_number";
+        HealNumberEventDto: Omit<components["schemas"]["BattleEventDto"], "type"> & {
             actorId?: string | null;
             /** Format: int32 */
             amount?: number;
             source?: string | null;
+        } & {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "heal_number";
         };
-        ReflectEventDto: {
-            type?: "reflect";
+        HealthResponseDto: {
+            status?: string | null;
+        };
+        InteractFailedEventDto: Omit<components["schemas"]["BattleEventDto"], "type"> & {
+            poiId?: string | null;
+            reason?: string | null;
+        } & {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "interact_failed";
+        };
+        ItemDefinitionDto: {
+            itemId?: string | null;
+            displayName?: string | null;
+            kind?: string | null;
+            stackable?: boolean;
+            rarity?: string | null;
+        };
+        /**
+         * Format: int32
+         * @enum {integer}
+         */
+        MobArchetype: 1 | 2 | 3 | 4;
+        OwnedEquipmentInstanceDto: {
+            instanceId?: string | null;
+            definitionId?: string | null;
+            isLocked?: boolean;
+        };
+        PoiInteractedEventDto: Omit<components["schemas"]["BattleEventDto"], "type"> & {
+            poiId?: string | null;
+            poiType?: string | null;
+            /** Format: int32 */
+            tileX?: number;
+            /** Format: int32 */
+            tileY?: number;
+        } & {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "poi_interacted";
+        };
+        ReflectEventDto: Omit<components["schemas"]["BattleEventDto"], "type"> & {
             sourceEntityId?: string | null;
             /** Format: int32 */
             sourceTileX?: number;
@@ -456,15 +867,18 @@ export interface components {
             targetTileY?: number;
             /** Format: int32 */
             amount?: number;
-            /** Format: int32 */
             elementType?: components["schemas"]["ElementType"];
-            /** Format: int32 */
-            targetMobType?: components["schemas"]["MobArchetype"] | null;
+            targetMobType?: components["schemas"]["MobArchetype"];
+        } & {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "reflect";
         };
-        /** @enum {integer} */
-        MobArchetype: 1 | 2 | 3 | 4;
-        HealthResponseDto: {
-            status?: string | null;
+        SetActiveCharacterRequestDto: {
+            accountId?: string | null;
+            characterId?: string | null;
         };
         SkillStateDto: {
             skillId?: string | null;
@@ -472,6 +886,32 @@ export interface components {
             cooldownRemainingMs?: number;
             /** Format: int32 */
             cooldownTotalMs?: number;
+        };
+        SpeciesChestOpenedEventDto: Omit<components["schemas"]["BattleEventDto"], "type"> & {
+            species?: string | null;
+            buffId?: string | null;
+            /** Format: int32 */
+            durationMs?: number;
+        } & {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "species_chest_opened";
+        };
+        SpeciesChestSpawnedEventDto: Omit<components["schemas"]["BattleEventDto"], "type"> & {
+            species?: string | null;
+            poiId?: string | null;
+            /** Format: int32 */
+            tileX?: number;
+            /** Format: int32 */
+            tileY?: number;
+        } & {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "species_chest_spawned";
         };
     };
     responses: never;

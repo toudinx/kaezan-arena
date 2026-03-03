@@ -1,0 +1,73 @@
+<section class="backpack" (click)="closeContextMenu()">
+  <nav class="backpack__tabs">
+    @for (filter of filters; track filter) {
+      <button
+        type="button"
+        class="backpack__tab"
+        [class.backpack__tab--active]="isFilterActive(filter)"
+        [disabled]="weaponFilterMode"
+        (click)="setFilter(filter)"
+      >
+        {{ filter === "all" ? "All" : filter === "materials" ? "Materials" : "Weapons" }}
+      </button>
+    }
+  </nav>
+  @if (weaponFilterMode) {
+    <p class="backpack__mode-hint">Select a weapon to equip.</p>
+  }
+
+  <div class="backpack__grid" (contextmenu)="onGridContextMenu($event)">
+    @if (visibleSlots.length === 0) {
+      <p class="backpack__empty">No items in this filter.</p>
+    } @else {
+      @for (slot of visibleSlots; track trackSlotById($index, slot)) {
+        <button
+          type="button"
+          class="backpack__slot"
+          [class.backpack__slot--selected]="selectedSlotId === slot.slotId"
+          [class.backpack__slot--equipped]="slot.isEquipped"
+          [class.backpack__slot--pulse]="isSlotPulsing(slot.slotId)"
+          [class.backpack__slot--weapon]="slot.kind === 'equipment' && slot.isWeapon"
+          [class.backpack__slot--material]="slot.kind === 'material'"
+          (click)="selectSlot(slot.slotId)"
+          (contextmenu)="onSlotContextMenu(slot, $event)"
+          [title]="slot.displayName"
+        >
+          <span class="backpack__icon">{{ slot.displayName.slice(0, 1).toUpperCase() }}</span>
+          @if (slot.quantity > 1) {
+            <span class="backpack__count">{{ slot.quantity }}</span>
+          }
+          @if (slot.isEquipped) {
+            <span class="backpack__equipped-badge">E</span>
+          }
+        </button>
+      }
+    }
+  </div>
+
+  @if (selectedSlot) {
+    <div class="backpack__tooltip">
+      <strong>{{ selectedSlot.displayName }}</strong>
+      <span>{{ selectedSlot.kind === "equipment" ? (selectedSlot.isWeapon ? "Weapon" : "Equipment") : "Material" }}</span>
+      <span>Rarity: {{ selectedSlot.rarity }}</span>
+      @if (selectedSlot.kind === "equipment" && selectedSlot.weaponClass) {
+        <span>Class: {{ selectedSlot.weaponClass }}</span>
+      }
+    </div>
+  }
+
+  @if (contextMenu && selectedSlot) {
+    <div class="backpack__context-menu" [style.left.px]="contextMenu.x" [style.top.px]="contextMenu.y" (click)="$event.stopPropagation()">
+      <button type="button" [disabled]="!canEquip(selectedSlot)" (click)="onContextMenuAction('equip')">Equip</button>
+      <button type="button" (click)="onContextMenuAction('inspect')">Inspect</button>
+    </div>
+  }
+
+  @if (inspectSlot) {
+    <div class="backpack__inspect" (click)="$event.stopPropagation()">
+      <p class="backpack__inspect-title">{{ inspectSlot.displayName }}</p>
+      <p>{{ inspectSlot.inspectLabel }}</p>
+      <button type="button" (click)="closeInspect()">Close</button>
+    </div>
+  }
+</section>

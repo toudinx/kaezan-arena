@@ -1,0 +1,68 @@
+.ui-window {
+  position: fixed;
+  overflow: hidden;
+  border: 1px solid #3f4a5c;
+  border-radius: 0.45rem;
+  background: rgba(12, 18, 29, 0.92);
+  color: #e2e8f0;
+  box-shadow: 0 16px 36px rgba(2, 6, 23, 0.46);
+  backdrop-filter: blur(2px);
+}
+
+.ui-window--pinned .ui-window__titlebar {
+  cursor: default;
+}
+
+.ui-window__titlebar {
+  height: 34px;
+  padding: 0 0.45rem 0 0.6rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.45rem;
+  border-bottom: 1px solid rgba(100, 116, 139, 0.55);
+  background: linear-gradient(180deg, #1e293b 0%, #172033 100%);
+  cursor: move;
+  user-select: none;
+}
+
+.ui-window__title {
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.ui-window__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.ui-window__action {
+  width: 22px;
+  height: 22px;
+  border: 1px solid #475569;
+  border-radius: 0.3rem;
+  background: linear-gradient(180deg, #334155 0%, #1f2937 100%);
+  color: #f8fafc;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.ui-window__action:hover {
+  border-color: #60a5fa;
+}
+
+.ui-window__content {
+  height: calc(100% - 34px);
+  padding: 0.6rem;
+  overflow: auto;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.95) 0%, rgba(2, 6, 23, 0.9) 100%);
+}
+
+.ui-window--minimized {
+  height: 34px !important;
+}

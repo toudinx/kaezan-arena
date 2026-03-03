@@ -634,8 +634,8 @@ export class CanvasLayeredRenderer {
       const isInteractable = chebyshevDistance <= 1;
 
       this.context.save();
-      if (poi.type === "chest") {
-        this.drawChestPoiMarker(scene.tileSize, centerX, centerY);
+      if (poi.type === "chest" || poi.type === "species_chest") {
+        this.drawChestPoiMarker(scene.tileSize, centerX, centerY, poi.type === "species_chest");
       } else {
         this.drawAltarPoiMarker(scene.tileSize, centerX, centerY);
       }
@@ -651,20 +651,28 @@ export class CanvasLayeredRenderer {
     }
   }
 
-  private drawChestPoiMarker(tileSize: number, centerX: number, centerY: number): void {
+  private drawChestPoiMarker(tileSize: number, centerX: number, centerY: number, isSpeciesChest: boolean): void {
     const width = tileSize * 0.52;
     const height = tileSize * 0.34;
     const x = centerX - width / 2;
     const y = centerY - height / 2;
 
-    this.context.fillStyle = "rgba(120, 53, 15, 0.92)";
+    this.context.fillStyle = isSpeciesChest ? "rgba(30, 64, 175, 0.9)" : "rgba(120, 53, 15, 0.92)";
     this.context.fillRect(x, y, width, height);
-    this.context.strokeStyle = "rgba(245, 158, 11, 0.95)";
+    this.context.strokeStyle = isSpeciesChest ? "rgba(147, 197, 253, 0.95)" : "rgba(245, 158, 11, 0.95)";
     this.context.lineWidth = Math.max(1.5, tileSize * 0.04);
     this.context.strokeRect(x, y, width, height);
 
-    this.context.fillStyle = "rgba(251, 191, 36, 0.95)";
+    this.context.fillStyle = isSpeciesChest ? "rgba(219, 234, 254, 0.95)" : "rgba(251, 191, 36, 0.95)";
     this.context.fillRect(centerX - tileSize * 0.035, y + height * 0.24, tileSize * 0.07, height * 0.52);
+
+    if (isSpeciesChest) {
+      this.context.fillStyle = "rgba(15, 23, 42, 0.95)";
+      this.context.font = `${Math.max(9, Math.floor(tileSize * 0.2))}px monospace`;
+      this.context.textAlign = "center";
+      this.context.textBaseline = "middle";
+      this.context.fillText("S", centerX, y + height * 0.2);
+    }
   }
 
   private drawAltarPoiMarker(tileSize: number, centerX: number, centerY: number): void {
