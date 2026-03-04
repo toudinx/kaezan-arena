@@ -46,19 +46,26 @@ describe("ArenaPageComponent layout v4", () => {
     expect((component as any).isHotkeysModalOpen).toBe(false);
   });
 
-  it("opens death modal from game-over snapshot and closes only via explicit action", async () => {
+  it("opens run complete overlay from run-ended snapshot and closes only via explicit action", async () => {
     const component = createComponent();
     const beginNewRunSpy = vi.spyOn(component as any, "beginNewRun").mockResolvedValue(undefined);
 
     (component as any).applyGameOverStateFromSnapshot({
+      isRunEnded: true,
+      runEndReason: "defeat_death",
+      runEndedAtMs: 125000,
       isGameOver: true,
       endReason: "death",
       battleStatus: "defeat"
     });
+    expect((component as any).isRunEnded).toBe(true);
+    expect((component as any).runEndReason).toBe("defeat_death");
     expect((component as any).isDeathModalOpen).toBe(true);
-    expect((component as any).deathEndReason).toBe("death");
+    expect((component as any).deathEndReason).toBe("defeat_death");
 
     (component as any).applyGameOverStateFromSnapshot({
+      isRunEnded: false,
+      runEndReason: null,
       isGameOver: false,
       endReason: null,
       battleStatus: "started"
@@ -76,7 +83,9 @@ describe("ArenaPageComponent layout v4", () => {
     (component as any).currentBattleId = "battle-01";
     (component as any).battleStatus = "defeat";
     (component as any).isDeathModalOpen = true;
-    (component as any).deathEndReason = "death";
+    (component as any).deathEndReason = "defeat_death";
+    (component as any).isRunEnded = true;
+    (component as any).runEndReason = "defeat_death";
 
     component.onDeathModalReturnToPreRun();
 
@@ -85,6 +94,25 @@ describe("ArenaPageComponent layout v4", () => {
     expect((component as any).battleStatus).toBe("idle");
     expect((component as any).isDeathModalOpen).toBe(false);
     expect((component as any).deathEndReason).toBeNull();
+    expect((component as any).isRunEnded).toBe(false);
+    expect((component as any).runEndReason).toBeNull();
+  });
+
+  it("sets run complete state for victory snapshots", () => {
+    const component = createComponent();
+
+    (component as any).applyGameOverStateFromSnapshot({
+      isRunEnded: true,
+      runEndReason: "victory_time",
+      runEndedAtMs: 480000,
+      isGameOver: true,
+      endReason: "time",
+      battleStatus: "victory"
+    });
+
+    expect((component as any).isRunEnded).toBe(true);
+    expect((component as any).runEndReason).toBe("victory_time");
+    expect((component as any).isDeathModalOpen).toBe(true);
   });
 
   it("uses ESC to toggle pause modal while alive", () => {

@@ -287,6 +287,15 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   isPauseModalOpen = false;
   isDeathModalOpen = false;
   deathEndReason: string | null = null;
+  isRunEnded = false;
+  runEndReason: string | null = null;
+  runEndedAtMs: number | null = null;
+  runTimeMs = 0;
+  runDurationMs = 480000;
+  timeSurvivedMs = 0;
+  runTotalKills = 0;
+  runEliteKills = 0;
+  runChestsOpened = 0;
   isAwaitingCardChoice = false;
   pendingCardChoiceId: string | null = null;
   offeredCards: ArenaCardOffer[] = [];
@@ -416,6 +425,26 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
 
   get runExpProgressLabel(): string {
     return `${this.runXp} / ${this.xpToNextLevel} XP`;
+  }
+
+  get runCompleteTitle(): string {
+    return this.runEndReason === "victory_time" ? "Victory" : "Defeat";
+  }
+
+  get runCompleteReasonText(): string {
+    if (this.runEndReason === "victory_time") {
+      return "You survived until the time target.";
+    }
+
+    return "Your character was defeated before the timer ended.";
+  }
+
+  get runCompleteTimeLabel(): string {
+    return this.formatDurationMs(this.timeSurvivedMs);
+  }
+
+  get runCompleteKillLabel(): string {
+    return `${this.runTotalKills} normal / ${this.runEliteKills} elite`;
   }
 
   get itemCatalogByIdForUi(): Readonly<Record<string, ItemDefinition>> {
@@ -1040,6 +1069,9 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   async onDeathModalRestartRun(): Promise<void> {
     this.isDeathModalOpen = false;
     this.deathEndReason = null;
+    this.isRunEnded = false;
+    this.runEndReason = null;
+    this.runEndedAtMs = null;
     await this.restartBattle();
   }
 
@@ -1065,6 +1097,15 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.isPauseModalOpen = false;
     this.isDeathModalOpen = false;
     this.deathEndReason = null;
+    this.isRunEnded = false;
+    this.runEndReason = null;
+    this.runEndedAtMs = null;
+    this.runTimeMs = 0;
+    this.runDurationMs = 480000;
+    this.timeSurvivedMs = 0;
+    this.runTotalKills = 0;
+    this.runEliteKills = 0;
+    this.runChestsOpened = 0;
     this.isAwaitingCardChoice = false;
     this.pendingCardChoiceId = null;
     this.offeredCards = [];
@@ -2985,15 +3026,32 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     const parsedRunLevel = this.readNumber(record["runLevel"]);
     const parsedRunXp = this.readNumber(record["runXp"]);
     const parsedXpToNextLevel = this.readNumber(record["xpToNextLevel"]);
+    const parsedRunTimeMs = this.readNumber(record["runTimeMs"]);
+    const parsedRunDurationMs = this.readNumber(record["runDurationMs"]);
+    const parsedTimeSurvivedMs = this.readNumber(record["timeSurvivedMs"]);
+    const parsedTotalKills = this.readNumber(record["totalKills"]);
+    const parsedEliteKills = this.readNumber(record["eliteKills"]);
+    const parsedChestsOpened = this.readNumber(record["chestsOpened"]);
+    const parsedRunEndedAtMs = this.readNumber(record["runEndedAtMs"]);
 
     const nextRunLevel = Math.max(RUN_INITIAL_LEVEL, Math.floor(parsedRunLevel ?? this.runLevel));
     const fallbackXpToNextLevel = this.computeRunXpToNextLevel(nextRunLevel);
     const nextXpToNextLevel = Math.max(1, Math.floor(parsedXpToNextLevel ?? fallbackXpToNextLevel));
     const nextRunXp = Math.max(0, Math.min(nextXpToNextLevel, Math.floor(parsedRunXp ?? this.runXp)));
+    const nextRunTimeMs = Math.max(0, Math.floor(parsedRunTimeMs ?? this.runTimeMs));
+    const nextRunDurationMs = Math.max(1, Math.floor(parsedRunDurationMs ?? this.runDurationMs));
+    const nextTimeSurvivedMs = Math.max(0, Math.floor(parsedTimeSurvivedMs ?? nextRunTimeMs));
 
     this.runLevel = nextRunLevel;
     this.runXp = nextRunXp;
     this.xpToNextLevel = nextXpToNextLevel;
+    this.runTimeMs = nextRunTimeMs;
+    this.runDurationMs = nextRunDurationMs;
+    this.timeSurvivedMs = nextTimeSurvivedMs;
+    this.runEndedAtMs = parsedRunEndedAtMs !== null ? Math.max(0, Math.floor(parsedRunEndedAtMs)) : this.runEndedAtMs;
+    this.runTotalKills = Math.max(0, Math.floor(parsedTotalKills ?? this.runTotalKills));
+    this.runEliteKills = Math.max(0, Math.floor(parsedEliteKills ?? this.runEliteKills));
+    this.runChestsOpened = Math.max(0, Math.floor(parsedChestsOpened ?? this.runChestsOpened));
     this.appendExpLogsFromSnapshot(snapshot);
   }
 
@@ -3073,6 +3131,13 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   private computeRunXpToNextLevel(runLevel: number): number {
     const clampedLevel = Math.max(RUN_INITIAL_LEVEL, Math.floor(runLevel));
     return RUN_LEVEL_XP_BASE + ((clampedLevel - RUN_INITIAL_LEVEL) * RUN_LEVEL_XP_INCREMENT_PER_LEVEL);
+  }
+
+  private formatDurationMs(valueMs: number): string {
+    const totalSeconds = Math.max(0, Math.floor(valueMs / 1000));
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}:${seconds.toString().padStart(2, "0")}`;
   }
 
   private appendExpLogsFromSnapshot(snapshot: StartBattleResponse | StepBattleResponse): void {
@@ -3575,7 +3640,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   }
 
   private isTerminalBattleStatus(status: string): boolean {
-    return status === "defeat";
+    return status === "defeat" || status === "victory" || this.isRunEnded;
   }
 
   private canTogglePauseModal(): boolean {
@@ -3658,6 +3723,15 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.autoStepWasEnabledBeforeCardChoice = false;
     this.isDeathModalOpen = false;
     this.deathEndReason = null;
+    this.isRunEnded = false;
+    this.runEndReason = null;
+    this.runEndedAtMs = null;
+    this.runTimeMs = 0;
+    this.runDurationMs = 480000;
+    this.timeSurvivedMs = 0;
+    this.runTotalKills = 0;
+    this.runEliteKills = 0;
+    this.runChestsOpened = 0;
     this.isAwaitingCardChoice = false;
     this.pendingCardChoiceId = null;
     this.offeredCards = [];
@@ -3723,19 +3797,45 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     snapshot: Pick<StartBattleResponse, "isGameOver" | "endReason" | "battleStatus"> | Pick<StepBattleResponse, "isGameOver" | "endReason" | "battleStatus">
   ): void {
     const record = snapshot as Record<string, unknown>;
+    const snapshotIsRunEnded = this.readBoolean(record["isRunEnded"]);
+    const snapshotRunEndReason = this.readString(record["runEndReason"]);
+    const snapshotRunEndedAtMs = this.readNumber(record["runEndedAtMs"]);
     const snapshotIsGameOver = this.readBoolean(record["isGameOver"]);
     const snapshotEndReason = this.readString(record["endReason"]);
     const snapshotBattleStatus = this.readString(record["battleStatus"]);
-    const isGameOver = snapshotIsGameOver ?? snapshotBattleStatus === "defeat";
-    if (!isGameOver)
-    {
+    const fallbackRunEndReason = this.resolveRunEndReasonFromLegacySnapshot(snapshotEndReason, snapshotBattleStatus);
+    const isRunEnded = snapshotIsRunEnded ?? snapshotIsGameOver ?? (
+      snapshotBattleStatus === "defeat" || snapshotBattleStatus === "victory"
+    );
+
+    if (!isRunEnded) {
       return;
     }
 
+    this.isRunEnded = true;
+    this.runEndReason = snapshotRunEndReason ?? fallbackRunEndReason ?? this.runEndReason ?? "defeat_death";
+    this.runEndedAtMs = snapshotRunEndedAtMs !== null
+      ? Math.max(0, Math.floor(snapshotRunEndedAtMs))
+      : this.runEndedAtMs;
     this.isPauseModalOpen = false;
     this.autoStepWasEnabledBeforePause = false;
     this.isDeathModalOpen = true;
-    this.deathEndReason = snapshotEndReason ?? "death";
+    this.deathEndReason = this.runEndReason;
+  }
+
+  private resolveRunEndReasonFromLegacySnapshot(
+    endReason: string | null,
+    battleStatus: string | null
+  ): "victory_time" | "defeat_death" | null {
+    if (battleStatus === "victory" || endReason === "time") {
+      return "victory_time";
+    }
+
+    if (battleStatus === "defeat" || endReason === "death") {
+      return "defeat_death";
+    }
+
+    return null;
   }
 
   private runInAngularZone(action: () => void): void {

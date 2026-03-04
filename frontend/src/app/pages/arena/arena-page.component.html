@@ -334,7 +334,7 @@
     </section>
   }
 
-  @if (isAwaitingCardChoice && !isDeathModalOpen) {
+  @if (isAwaitingCardChoice && !isRunEnded) {
     <div class="pause-modal__backdrop">
       <section class="pause-modal" role="dialog" aria-modal="true" aria-label="Choose a card">
         <header class="pause-modal__header">
@@ -356,28 +356,57 @@
     </div>
   }
 
-  @if (isDeathModalOpen) {
-    <div class="death-modal__backdrop">
-      <section class="death-modal" role="dialog" aria-modal="true" aria-label="Run ended">
-        <header class="death-modal__header">
-          <h2>Run Ended</h2>
+  @if (isRunEnded) {
+    <div class="run-complete__backdrop">
+      <section class="run-complete" role="dialog" aria-modal="true" aria-label="Run Complete">
+        <header class="run-complete__header">
+          <h2>{{ runCompleteTitle }}</h2>
+          <p>Run Complete</p>
         </header>
-        <p class="death-modal__reason">
-          @if (deathEndReason === "death") {
-            You died.
+        <p class="run-complete__reason">{{ runCompleteReasonText }}</p>
+        <div class="run-complete__stats">
+          <div class="run-complete__stat-row">
+            <span>Time survived</span>
+            <strong>{{ runCompleteTimeLabel }}</strong>
+          </div>
+          <div class="run-complete__stat-row">
+            <span>Run level</span>
+            <strong>{{ runLevel }}</strong>
+          </div>
+          <div class="run-complete__stat-row">
+            <span>Kills</span>
+            <strong>{{ runCompleteKillLabel }}</strong>
+          </div>
+          <div class="run-complete__stat-row">
+            <span>Cards chosen</span>
+            <strong>{{ selectedCards.length }}</strong>
+          </div>
+          <div class="run-complete__stat-row">
+            <span>Chests opened</span>
+            <strong>{{ runChestsOpened }}</strong>
+          </div>
+        </div>
+        <div class="run-complete__cards">
+          <h3>Cards</h3>
+          @if (selectedCards.length === 0) {
+            <p>No cards selected.</p>
           } @else {
-            Run ended.
+            <ul>
+              @for (card of selectedCards; track card.id) {
+                <li>{{ card.name }}</li>
+              }
+            </ul>
           }
-        </p>
-        <div class="death-modal__actions">
+        </div>
+        <div class="run-complete__actions">
           <button type="button" (click)="onDeathModalRestartRun()" [disabled]="battleRequestInFlight">Restart Run</button>
-          <button type="button" (click)="onDeathModalReturnToPreRun()" [disabled]="battleRequestInFlight">Return to Pre-Run</button>
+          <button type="button" (click)="onDeathModalReturnToPreRun()" [disabled]="battleRequestInFlight">Back to Menu</button>
         </div>
       </section>
     </div>
   }
 
-  @if (isPauseModalOpen && !isDeathModalOpen) {
+  @if (isPauseModalOpen && !isRunEnded) {
     <div class="pause-modal__backdrop">
       <section class="pause-modal" role="dialog" aria-modal="true" aria-label="Pause menu">
         <header class="pause-modal__header">

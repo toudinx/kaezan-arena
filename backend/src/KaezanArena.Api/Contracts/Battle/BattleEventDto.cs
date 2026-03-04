@@ -21,4 +21,9 @@ namespace KaezanArena.Api.Contracts.Battle;
 [JsonDerivedType(typeof(XpGainedEventDto), "xp_gained")]
 [JsonDerivedType(typeof(CardChoiceOfferedEventDto), "card_choice_offered")]
 [JsonDerivedType(typeof(CardChosenEventDto), "card_chosen")]
+[JsonDerivedType(typeof(EliteSpawnedEventDto), "elite_spawned")]
+[JsonDerivedType(typeof(EliteBuffAppliedEventDto), "elite_buff_applied")]
+[JsonDerivedType(typeof(EliteBuffRemovedEventDto), "elite_buff_removed")]
+[JsonDerivedType(typeof(EliteDiedEventDto), "elite_died")]
+[JsonDerivedType(typeof(RunEndedEventDto), "run_ended")]
 public abstract record BattleEventDto;

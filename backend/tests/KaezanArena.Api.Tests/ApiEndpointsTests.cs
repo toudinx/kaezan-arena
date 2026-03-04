@@ -5307,6 +5307,16 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
                 $"card_choice_offered:{offered.ChoiceId}:{string.Join(",", offered.OfferedCards.Select(card => card.Id))}",
             CardChosenEventDto chosen =>
                 $"card_chosen:{chosen.ChoiceId}:{chosen.Card.Id}",
+            EliteSpawnedEventDto eliteSpawned =>
+                $"elite_spawned:{eliteSpawned.EliteEntityId}:{(int)eliteSpawned.MobType}",
+            EliteBuffAppliedEventDto eliteBuffApplied =>
+                $"elite_buff_applied:{eliteBuffApplied.EliteEntityId}:{eliteBuffApplied.TargetEntityId}",
+            EliteBuffRemovedEventDto eliteBuffRemoved =>
+                $"elite_buff_removed:{eliteBuffRemoved.EliteEntityId}:{eliteBuffRemoved.TargetEntityId}",
+            EliteDiedEventDto eliteDied =>
+                $"elite_died:{eliteDied.EliteEntityId}:{(int)eliteDied.MobType}",
+            RunEndedEventDto runEnded =>
+                $"run_ended:{runEnded.Reason}:{runEnded.TimestampMs}",
             _ => battleEvent.GetType().Name
         };
     }

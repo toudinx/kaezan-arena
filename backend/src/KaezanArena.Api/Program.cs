@@ -38,7 +38,12 @@ builder.Services.AddSwaggerGen(options =>
                 typeof(LevelUpEventDto),
                 typeof(XpGainedEventDto),
                 typeof(CardChoiceOfferedEventDto),
-                typeof(CardChosenEventDto)
+                typeof(CardChosenEventDto),
+                typeof(EliteSpawnedEventDto),
+                typeof(EliteBuffAppliedEventDto),
+                typeof(EliteBuffRemovedEventDto),
+                typeof(EliteDiedEventDto),
+                typeof(RunEndedEventDto)
             ];
         }
 
@@ -136,6 +141,31 @@ builder.Services.AddSwaggerGen(options =>
         if (subType == typeof(CardChosenEventDto))
         {
             return "card_chosen";
+        }
+
+        if (subType == typeof(EliteSpawnedEventDto))
+        {
+            return "elite_spawned";
+        }
+
+        if (subType == typeof(EliteBuffAppliedEventDto))
+        {
+            return "elite_buff_applied";
+        }
+
+        if (subType == typeof(EliteBuffRemovedEventDto))
+        {
+            return "elite_buff_removed";
+        }
+
+        if (subType == typeof(EliteDiedEventDto))
+        {
+            return "elite_died";
+        }
+
+        if (subType == typeof(RunEndedEventDto))
+        {
+            return "run_ended";
         }
 
         return null;

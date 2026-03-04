@@ -647,7 +647,7 @@ canvas {
   color: #fbbf24;
 }
 
-.death-modal__backdrop {
+.run-complete__backdrop {
   position: fixed;
   inset: 0;
   z-index: 95;
@@ -658,10 +658,12 @@ canvas {
   background: rgba(2, 6, 23, 0.78);
 }
 
-.death-modal {
-  width: min(420px, 100%);
+.run-complete {
+  width: min(520px, 100%);
+  max-height: min(82vh, 680px);
   display: flex;
   flex-direction: column;
+  overflow: auto;
   gap: 0.7rem;
   border: 1px solid #6b7280;
   border-radius: 0.55rem;
@@ -670,25 +672,69 @@ canvas {
   padding: 0.8rem 0.9rem;
 }
 
-.death-modal__header h2 {
+.run-complete__header h2 {
   margin: 0;
   font-size: 0.95rem;
   text-transform: uppercase;
 }
 
-.death-modal__reason {
+.run-complete__header p {
+  margin: 0.12rem 0 0;
+  font-size: 0.7rem;
+  color: #93a4bd;
+  text-transform: uppercase;
+}
+
+.run-complete__reason {
   margin: 0;
   font-size: 0.78rem;
   color: #cbd5e1;
 }
 
-.death-modal__actions {
+.run-complete__stats {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.run-complete__stat-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  border: 1px solid #334155;
+  border-radius: 0.28rem;
+  padding: 0.25rem 0.35rem;
+  font-size: 0.7rem;
+}
+
+.run-complete__cards h3 {
+  margin: 0 0 0.2rem;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  color: #cbd5e1;
+}
+
+.run-complete__cards p {
+  margin: 0;
+  font-size: 0.7rem;
+  color: #a9bbd2;
+}
+
+.run-complete__cards ul {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: grid;
+  gap: 0.14rem;
+  font-size: 0.72rem;
+}
+
+.run-complete__actions {
   display: flex;
   gap: 0.5rem;
   justify-content: flex-end;
 }
 
-.death-modal__actions button {
+.run-complete__actions button {
   border: 1px solid #4b5f7a;
   border-radius: 0.3rem;
   background: #243345;
@@ -698,7 +744,7 @@ canvas {
   cursor: pointer;
 }
 
-.death-modal__actions button:disabled {
+.run-complete__actions button:disabled {
   opacity: 0.55;
   cursor: not-allowed;
 }
