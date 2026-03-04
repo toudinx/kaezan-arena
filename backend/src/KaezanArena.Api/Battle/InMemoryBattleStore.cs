@@ -85,11 +85,13 @@ public sealed class InMemoryBattleStore : IBattleStore
     private const int RunDurationTargetSeconds = 480;
     private const long RunDurationTargetMs = RunDurationTargetSeconds * 1000L;
     private const double MobHpMultStart = 1.0d;
-    private const double MobHpMultEnd = 2.2d;
+    private const double MobHpMultEnd = 2.8d;
     private const double MobDmgMultStart = 1.0d;
-    private const double MobDmgMultEnd = 1.8d;
+    private const double MobDmgMultEnd = 2.2d;
     private const double EliteHpMultiplierFactor = 1.25d;
     private const double EliteDmgMultiplierFactor = 1.15d;
+    private const bool IsRunLevelHpSeasoningEnabled = true;
+    private const double RunLevelHpSeasoningPerLevel = 0.02d;
     private const int EliteCommanderMaxBuffTargets = 3;
     private const int EliteCommanderDamageBonusPercent = 40;
     private const int EliteCommanderAttackSpeedBonusPercent = 30;
@@ -694,8 +696,9 @@ public sealed class InMemoryBattleStore : IBattleStore
         var isGameOver = isRunEnded;
         var endReason = ResolveLegacyEndReason(state.RunEndReason);
         var timeSurvivedMs = state.RunEndedAtMs ?? nowMs;
-        var currentMobHpMult = ResolveCurrentMobHpMult(state);
-        var currentMobDmgMult = ResolveCurrentMobDmgMult(state);
+        var scaling = ResolveScalingDirectorV2(nowMs, state.RunLevel);
+        var currentMobHpMult = scaling.NormalHpMult;
+        var currentMobDmgMult = scaling.NormalDmgMult;
         var activeBuffs = state.ActiveBuffs.Values
             .Where(buff => buff.ExpiresAtMs > nowMs)
             .OrderBy(buff => buff.BuffId, StringComparer.Ordinal)
@@ -764,6 +767,13 @@ public sealed class InMemoryBattleStore : IBattleStore
             RunDurationMs: RunDurationTargetMs,
             CurrentMobHpMult: currentMobHpMult,
             CurrentMobDmgMult: currentMobDmgMult,
+            Scaling: new BattleScalingDto(
+                NormalHpMult: scaling.NormalHpMult,
+                NormalDmgMult: scaling.NormalDmgMult,
+                EliteHpMult: scaling.EliteHpMult,
+                EliteDmgMult: scaling.EliteDmgMult,
+                LvlFactor: scaling.LvlFactor,
+                IsLvlFactorEnabled: scaling.IsLvlFactorEnabled),
             EffectiveTargetEntityId: effectiveTargetEntityId,
             LockedTargetEntityId: state.LockedTargetEntityId,
             GroundTargetPos: groundTargetPos,
@@ -3880,9 +3890,13 @@ public sealed class InMemoryBattleStore : IBattleStore
             return 0;
         }
 
+        var nowMs = GetElapsedMsForTick(state.Tick);
+        var scaling = ResolveScalingDirectorV2(nowMs, state.RunLevel);
         var adjusted = ScaleByMultiplier(
             baseDamage,
-            ResolveCurrentMobDmgMult(state, attacker.IsElite));
+            attacker.IsElite
+                ? scaling.EliteDmgMult
+                : scaling.NormalDmgMult);
 
         if (attacker.BuffSourceEliteId is not null)
         {
@@ -3914,31 +3928,39 @@ public sealed class InMemoryBattleStore : IBattleStore
 
     private static int ResolveScaledMobMaxHp(StoredBattle state, MobArchetypeConfig config, bool isElite)
     {
+        var nowMs = GetElapsedMsForTick(state.Tick);
+        var scaling = ResolveScalingDirectorV2(nowMs, state.RunLevel);
         return ScaleByMultiplier(
             config.MaxHp,
-            ResolveCurrentMobHpMult(state, isElite));
+            isElite
+                ? scaling.EliteHpMult
+                : scaling.NormalHpMult);
     }
 
-    private static double ResolveCurrentMobHpMult(StoredBattle state, bool isElite = false)
+    private static ScalingDirectorV2 ResolveScalingDirectorV2(long nowMs, int runLevel)
     {
-        var mobHpMult = Lerp(MobHpMultStart, MobHpMultEnd, ResolveRunProgress01(state));
-        return isElite
-            ? mobHpMult * EliteHpMultiplierFactor
-            : mobHpMult;
+        var t = Clamp01(Math.Max(0L, nowMs) / (double)RunDurationTargetMs);
+        var baseNormalHpMult = Lerp(MobHpMultStart, MobHpMultEnd, t);
+        var normalDmgMult = Lerp(MobDmgMultStart, MobDmgMultEnd, t);
+        var baseEliteHpMult = baseNormalHpMult * EliteHpMultiplierFactor;
+        var eliteDmgMult = normalDmgMult * EliteDmgMultiplierFactor;
+
+        var lvlFactor = IsRunLevelHpSeasoningEnabled
+            ? ResolveRunLevelHpFactor(runLevel)
+            : 1.0d;
+        return new ScalingDirectorV2(
+            NormalHpMult: baseNormalHpMult * lvlFactor,
+            NormalDmgMult: normalDmgMult,
+            EliteHpMult: baseEliteHpMult * lvlFactor,
+            EliteDmgMult: eliteDmgMult,
+            LvlFactor: lvlFactor,
+            IsLvlFactorEnabled: IsRunLevelHpSeasoningEnabled);
     }
 
-    private static double ResolveCurrentMobDmgMult(StoredBattle state, bool isElite = false)
+    private static double ResolveRunLevelHpFactor(int runLevel)
     {
-        var mobDmgMult = Lerp(MobDmgMultStart, MobDmgMultEnd, ResolveRunProgress01(state));
-        return isElite
-            ? mobDmgMult * EliteDmgMultiplierFactor
-            : mobDmgMult;
-    }
-
-    private static double ResolveRunProgress01(StoredBattle state)
-    {
-        var runTimeMs = GetElapsedMsForTick(state.Tick);
-        return Clamp01(runTimeMs / (double)RunDurationTargetMs);
+        var clampedRunLevel = Math.Max(RunInitialLevel, runLevel);
+        return 1.0d + (RunLevelHpSeasoningPerLevel * (clampedRunLevel - RunInitialLevel));
     }
 
     private static string? ResolveLegacyEndReason(string? runEndReason)
@@ -3959,7 +3981,7 @@ public sealed class InMemoryBattleStore : IBattleStore
         }
 
         var clampedMultiplier = Math.Max(0d, multiplier);
-        var scaled = (int)Math.Floor(baseValue * clampedMultiplier);
+        var scaled = (int)Math.Round(baseValue * clampedMultiplier, MidpointRounding.AwayFromZero);
         return Math.Max(1, scaled);
     }
 
@@ -5403,6 +5425,14 @@ public sealed class InMemoryBattleStore : IBattleStore
 
         public int NextCardChoiceSequence { get; set; }
     }
+
+    private sealed record ScalingDirectorV2(
+        double NormalHpMult,
+        double NormalDmgMult,
+        double EliteHpMult,
+        double EliteDmgMult,
+        double LvlFactor,
+        bool IsLvlFactorEnabled);
 
     private sealed class PlayerModifiers
     {

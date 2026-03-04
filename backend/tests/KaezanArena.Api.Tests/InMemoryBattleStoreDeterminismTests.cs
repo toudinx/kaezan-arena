@@ -82,6 +82,12 @@ public sealed class InMemoryBattleStoreDeterminismTests
         Assert.Equal(0L, start.RunTimeMs);
         Assert.InRange(start.CurrentMobHpMult, 1.0d, 1.000001d);
         Assert.InRange(start.CurrentMobDmgMult, 1.0d, 1.000001d);
+        Assert.InRange(start.Scaling.NormalHpMult, 1.0d, 1.000001d);
+        Assert.InRange(start.Scaling.NormalDmgMult, 1.0d, 1.000001d);
+        Assert.InRange(start.Scaling.EliteHpMult, 1.25d, 1.250001d);
+        Assert.InRange(start.Scaling.EliteDmgMult, 1.15d, 1.150001d);
+        Assert.InRange(start.Scaling.LvlFactor, 1.0d, 1.000001d);
+        Assert.True(start.Scaling.IsLvlFactorEnabled);
     }
 
     [Fact]
@@ -94,8 +100,13 @@ public sealed class InMemoryBattleStoreDeterminismTests
         var step = store.StepBattle(start.BattleId, clientTick: null, commands: []);
 
         Assert.Equal((long)RunDurationTargetMs, step.RunTimeMs);
-        Assert.InRange(step.CurrentMobHpMult, 2.199d, 2.200001d);
-        Assert.InRange(step.CurrentMobDmgMult, 1.799d, 1.800001d);
+        Assert.InRange(step.CurrentMobHpMult, 2.8d, 2.800001d);
+        Assert.InRange(step.CurrentMobDmgMult, 2.2d, 2.200001d);
+        Assert.InRange(step.Scaling.NormalHpMult, 2.8d, 2.800001d);
+        Assert.InRange(step.Scaling.NormalDmgMult, 2.2d, 2.200001d);
+        Assert.InRange(step.Scaling.EliteHpMult, 3.5d, 3.500001d);
+        Assert.InRange(step.Scaling.EliteDmgMult, 2.53d, 2.530001d);
+        Assert.InRange(step.Scaling.LvlFactor, 1.0d, 1.000001d);
     }
 
     [Fact]
@@ -119,6 +130,48 @@ public sealed class InMemoryBattleStoreDeterminismTests
     }
 
     [Fact]
+    public void ScalingDirector_LateMobDamage_IsHigherForSameArchetype()
+    {
+        var store = new InMemoryBattleStore();
+        var start = store.StartBattle("arena-scaling-late-damage", "player-scaling-late-damage", 1337);
+        var attacker = start.Actors
+            .Where(actor => actor.Kind == "mob" && !actor.IsElite)
+            .OrderBy(actor => actor.ActorId, StringComparer.Ordinal)
+            .First();
+
+        const int baseDamage = 2;
+        var earlyDamage = ResolveMobOutgoingDamageViaReflection(store, start.BattleId, attacker.ActorId, baseDamage);
+
+        SetBattleTick(store, start.BattleId, RunDurationTargetTick - 1);
+        var lateDamage = ResolveMobOutgoingDamageViaReflection(store, start.BattleId, attacker.ActorId, baseDamage);
+
+        Assert.True(
+            lateDamage > earlyDamage,
+            $"Expected late damage ({lateDamage}) to exceed early damage ({earlyDamage}) for actor '{attacker.ActorId}'.");
+    }
+
+    [Fact]
+    public void ScalingDirector_EliteCommanderBuff_StacksAfterTimeScaling()
+    {
+        var store = new InMemoryBattleStore();
+        var start = store.StartBattle("arena-scaling-elite-buff-order", "player-scaling-elite-buff-order", 1337);
+        var attacker = start.Actors
+            .Where(actor => actor.Kind == "mob" && !actor.IsElite)
+            .OrderBy(actor => actor.ActorId, StringComparer.Ordinal)
+            .First();
+
+        SetBattleTick(store, start.BattleId, 880);
+        const int baseDamage = 2;
+        var scaledDamage = ResolveMobOutgoingDamageViaReflection(store, start.BattleId, attacker.ActorId, baseDamage);
+
+        SetMobBuffSourceEliteId(store, start.BattleId, attacker.ActorId, "mob.elite.test");
+        var buffedDamage = ResolveMobOutgoingDamageViaReflection(store, start.BattleId, attacker.ActorId, baseDamage);
+        var expectedBuffedDamage = (int)Math.Floor(scaledDamage * 1.4d);
+
+        Assert.Equal(expectedBuffedDamage, buffedDamage);
+    }
+
+    [Fact]
     public void StepBattle_ScalingDirector_IsDeterministicForSameSeedAndTimeline()
     {
         const int seed = 1337;
@@ -138,6 +191,7 @@ public sealed class InMemoryBattleStoreDeterminismTests
             Assert.Equal(first.RunTimeMs, second.RunTimeMs);
             Assert.Equal(first.CurrentMobHpMult, second.CurrentMobHpMult);
             Assert.Equal(first.CurrentMobDmgMult, second.CurrentMobDmgMult);
+            Assert.Equal(first.Scaling, second.Scaling);
         }
     }
 
@@ -673,12 +727,38 @@ public sealed class InMemoryBattleStoreDeterminismTests
         hpProperty.SetValue(actor, Math.Max(0, hp));
     }
 
+    private static void SetMobBuffSourceEliteId(InMemoryBattleStore store, string battleId, string actorId, string? buffSourceEliteId)
+    {
+        var actor = GetStoredActor(store, battleId, actorId);
+        var buffSourceEliteIdProperty = actor.GetType().GetProperty("BuffSourceEliteId");
+        Assert.NotNull(buffSourceEliteIdProperty);
+        buffSourceEliteIdProperty.SetValue(actor, buffSourceEliteId);
+    }
+
     private static void SetBattleTick(InMemoryBattleStore store, string battleId, int tick)
     {
         var state = GetStoredBattle(store, battleId);
         var tickProperty = state.GetType().GetProperty("Tick");
         Assert.NotNull(tickProperty);
         tickProperty.SetValue(state, Math.Max(0, tick));
+    }
+
+    private static int ResolveMobOutgoingDamageViaReflection(
+        InMemoryBattleStore store,
+        string battleId,
+        string actorId,
+        int baseDamage)
+    {
+        var state = GetStoredBattle(store, battleId);
+        var actor = GetStoredActor(store, battleId, actorId);
+        var method = typeof(InMemoryBattleStore).GetMethod(
+            "ResolveMobOutgoingDamage",
+            BindingFlags.NonPublic | BindingFlags.Static);
+        Assert.NotNull(method);
+
+        var result = method.Invoke(null, [state, actor, baseDamage]);
+        Assert.NotNull(result);
+        return Assert.IsType<int>(result);
     }
 
     private static void ForceMobRespawn(InMemoryBattleStore store, string battleId, string actorId)
@@ -718,6 +798,18 @@ public sealed class InMemoryBattleStoreDeterminismTests
         }
 
         throw new Xunit.Sdk.XunitException($"Mob slot was not found for actor '{actorId}'.");
+    }
+
+    private static object GetStoredActor(InMemoryBattleStore store, string battleId, string actorId)
+    {
+        var state = GetStoredBattle(store, battleId);
+        var actorsProperty = state.GetType().GetProperty("Actors");
+        Assert.NotNull(actorsProperty);
+        var actors = actorsProperty.GetValue(state) as IDictionary;
+        Assert.NotNull(actors);
+        var actor = actors[actorId];
+        Assert.NotNull(actor);
+        return actor!;
     }
 
     private static Dictionary<string, int> ReadMobAttackCooldownByActorId(object storedBattle)

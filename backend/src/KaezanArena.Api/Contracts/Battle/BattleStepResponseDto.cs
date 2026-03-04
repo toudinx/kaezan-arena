@@ -27,6 +27,7 @@ public sealed record BattleStepResponseDto(
     long RunDurationMs,
     double CurrentMobHpMult,
     double CurrentMobDmgMult,
+    BattleScalingDto Scaling,
     string? EffectiveTargetEntityId,
     string? LockedTargetEntityId,
     BattleTilePosDto? GroundTargetPos,
