@@ -2379,7 +2379,7 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
         Assert.Contains(outOfRangeStep.ActivePois, poi => poi.PoiId == speciesChest.PoiId);
 
         current = outOfRangeStep;
-        for (var stepIndex = 0; stepIndex < 24; stepIndex += 1)
+        for (var stepIndex = 0; stepIndex < 64; stepIndex += 1)
         {
             var player = GetActor(current.Actors, playerId);
             var distance = ComputeChebyshevDistance(player.TileX, player.TileY, speciesChest.Pos.X, speciesChest.Pos.Y);

@@ -2016,11 +2016,26 @@ public sealed class InMemoryBattleStore : IBattleStore
             shield: 0,
             maxShield: 0,
             mobSlotIndex: slot.SlotIndex);
-        slot.AttackCooldownRemainingMs = 0;
+        slot.AttackCooldownRemainingMs = RollInitialAutoAttackCooldownMs(state, config.AutoAttackCooldownMs);
         slot.AbilityCooldownRemainingMs = 0;
         slot.MoveCooldownRemainingMs = 0;
         slot.CommitTicksRemaining = 0;
         return true;
+    }
+
+    private static int RollInitialAutoAttackCooldownMs(StoredBattle state, int autoAttackCooldownMs)
+    {
+        if (autoAttackCooldownMs <= 0)
+        {
+            return 0;
+        }
+
+        if (autoAttackCooldownMs == 1)
+        {
+            return 1;
+        }
+
+        return state.Rng.Next(1, autoAttackCooldownMs + 1);
     }
 
     private static List<(int TileX, int TileY)> BuildFreeTiles(StoredBattle state)
