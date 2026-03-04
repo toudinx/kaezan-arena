@@ -108,6 +108,19 @@ describe("ArenaPageComponent run progression", () => {
     expect(rows[2]).toEqual({ label: "XP to next", value: "55" });
   });
 
+  it("formats HUD timer labels from snapshot run times", () => {
+    const component = createComponent();
+
+    (component as any).applyRunProgressFromSnapshot({
+      tick: 4,
+      runTimeMs: 94_000,
+      runDurationMs: 180_000
+    });
+
+    expect(component.runHudTimerElapsedLabel).toBe("01:34");
+    expect(component.runHudTimerTotalLabel).toBe("03:00");
+  });
+
   it("tracks card choice pending and selected card snapshots", () => {
     const component = createComponent();
 

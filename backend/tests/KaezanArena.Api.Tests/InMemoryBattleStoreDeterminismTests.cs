@@ -8,9 +8,8 @@ namespace KaezanArena.Api.Tests;
 public sealed class InMemoryBattleStoreDeterminismTests
 {
     private const int StepDeltaMs = 250;
-    private const int RunDurationTargetSeconds = 480;
-    private const int RunDurationTargetMs = RunDurationTargetSeconds * 1000;
-    private const int RunDurationTargetTick = RunDurationTargetMs / StepDeltaMs;
+    private const long RunDurationTargetMs = ArenaConfig.RunDurationMs;
+    private const int RunDurationTargetTick = (int)(RunDurationTargetMs / StepDeltaMs);
     private const int MaxDeterminismDamageSteps = 120;
     private const int MaxStepsToFindCardChoice = 1800;
     private const int MaxStepsToKillElite = 2500;

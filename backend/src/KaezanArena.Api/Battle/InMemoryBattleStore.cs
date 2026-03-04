@@ -82,8 +82,6 @@ public sealed class InMemoryBattleStore : IBattleStore
     private const int MaxCardOfferCount = 3;
     private const int MaxCardSelectionsPerRun = 8;
     private const int MaxGlobalCooldownReductionPercent = 60;
-    private const int RunDurationTargetSeconds = 480;
-    private const long RunDurationTargetMs = RunDurationTargetSeconds * 1000L;
     private const double MobHpMultStart = 1.0d;
     private const double MobHpMultEnd = 2.8d;
     private const double MobDmgMultStart = 1.0d;
@@ -764,7 +762,7 @@ public sealed class InMemoryBattleStore : IBattleStore
             ChestsOpened: state.ChestsOpened,
             TimeSurvivedMs: timeSurvivedMs,
             RunTimeMs: nowMs,
-            RunDurationMs: RunDurationTargetMs,
+            RunDurationMs: ArenaConfig.RunDurationMs,
             CurrentMobHpMult: currentMobHpMult,
             CurrentMobDmgMult: currentMobDmgMult,
             Scaling: new BattleScalingDto(
@@ -910,7 +908,7 @@ public sealed class InMemoryBattleStore : IBattleStore
     private static StoredAssistConfig BuildDefaultAssistConfig()
     {
         return new StoredAssistConfig(
-            enabled: false,
+            enabled: true,
             autoHealEnabled: true,
             healAtHpPercent: AssistDefaultHealAtHpPercent,
             autoGuardEnabled: true,
@@ -3939,7 +3937,7 @@ public sealed class InMemoryBattleStore : IBattleStore
 
     private static ScalingDirectorV2 ResolveScalingDirectorV2(long nowMs, int runLevel)
     {
-        var t = Clamp01(Math.Max(0L, nowMs) / (double)RunDurationTargetMs);
+        var t = Clamp01(Math.Max(0L, nowMs) / (double)ArenaConfig.RunDurationMs);
         var baseNormalHpMult = Lerp(MobHpMultStart, MobHpMultEnd, t);
         var normalDmgMult = Lerp(MobDmgMultStart, MobDmgMultEnd, t);
         var baseEliteHpMult = baseNormalHpMult * EliteHpMultiplierFactor;
@@ -4091,7 +4089,7 @@ public sealed class InMemoryBattleStore : IBattleStore
         }
 
         var nowMs = GetElapsedMsForTick(state.Tick);
-        if (nowMs >= RunDurationTargetMs)
+        if (nowMs >= ArenaConfig.RunDurationMs)
         {
             EndRun(state, events, RunEndReasonVictoryTime);
             return true;

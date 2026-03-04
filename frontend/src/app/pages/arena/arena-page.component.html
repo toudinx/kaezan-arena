@@ -1,61 +1,186 @@
 <section class="arena-client">
   <div class="arena-client__frame">
-    <aside class="pane pane--left" #leftLogsPane tabindex="-1" aria-label="Logs pane">
+    <aside class="pane pane--left" #leftLogsPane tabindex="-1" aria-label="Run intel pane">
       <header class="pane__header">
         <div class="pane__title-row">
-          <h2>Logs</h2>
+          <h2>Run Intel</h2>
         </div>
       </header>
 
-      <div class="pane__body pane__body--logs">
-        <div class="left-logs-split">
-          <section class="left-logs__panel" #damageConsolePanel>
-            <header class="left-logs__panel-header" [class.left-logs__panel-header--active]="highlightedLogPanel === 'damage'">
-              Damage
-            </header>
-            <div class="left-logs__panel-body">
-              <app-damage-console class="pane-module" [entries]="damageConsoleEntries"></app-damage-console>
-            </div>
-          </section>
-
-          <section class="left-logs__panel" #lootConsolePanel>
-            <header class="left-logs__panel-header" [class.left-logs__panel-header--active]="highlightedLogPanel === 'loot'">
-              Loot
-            </header>
-            <div class="left-logs__panel-body">
-              <app-loot-console-window
-                class="pane-module"
-                [dropEvents]="lootFeed"
-                [itemCatalogById]="itemCatalogByIdForUi"
-                (itemClicked)="onLootConsoleItemClicked($event)"
-              ></app-loot-console-window>
-            </div>
-          </section>
-
-          <section class="left-logs__panel" #expConsolePanel>
-            <header class="left-logs__panel-header left-logs__panel-header--with-actions" [class.left-logs__panel-header--active]="highlightedLogPanel === 'exp'">
-              <span>EXP</span>
-              <div class="exp-console__actions">
-                <button type="button" (click)="copyExpConsoleLines()">Copy</button>
-                <button type="button" (click)="clearExpConsole()">Clear</button>
+      <div class="pane__body pane__body--left-layout">
+        <section class="left-panel left-panel--top" #topLeftPanel tabindex="-1">
+          <header class="left-panel__header">
+            <nav class="tab-row tab-row--primary" aria-label="Run analysis tabs">
+              <button
+                type="button"
+                class="tab-row__tab"
+                [class.tab-row__tab--active]="selectedTopLeftTab === 'events'"
+                (click)="setTopLeftTab('events')"
+              >
+                Events
+              </button>
+              <button
+                type="button"
+                class="tab-row__tab"
+                [class.tab-row__tab--active]="selectedTopLeftTab === 'combat'"
+                (click)="setTopLeftTab('combat')"
+              >
+                Combat
+              </button>
+              <button
+                type="button"
+                class="tab-row__tab"
+                [class.tab-row__tab--active]="selectedTopLeftTab === 'economy'"
+                (click)="setTopLeftTab('economy')"
+              >
+                Economy
+              </button>
+            </nav>
+          </header>
+          <div class="left-panel__body">
+            @if (selectedTopLeftTab === "events") {
+              <div class="events-feed">
+                @if (eventFeedEntries.length === 0) {
+                  <p class="events-feed__empty">No run events yet.</p>
+                } @else {
+                  @for (entry of eventFeedEntries; track trackEventFeedEntryById($index, entry)) {
+                    <p class="events-feed__line">
+                      <span class="events-feed__time">{{ formatEventTime(entry.runTimeMs) }}</span>
+                      <span class="events-feed__message">{{ entry.message }}</span>
+                    </p>
+                  }
+                }
               </div>
-            </header>
-            <div class="left-logs__panel-body exp-console__body">
-              @if (expConsoleEntries.length === 0) {
-                <p class="exp-console__empty">No progression events yet.</p>
-              } @else {
-                @for (entry of expConsoleEntries; track trackExpEntryById($index, entry)) {
-                  <p class="exp-console__line">
-                    <span class="exp-console__tick">t{{ entry.tick }}</span>
-                    <span class="exp-console__message" [class.exp-console__message--level-up]="entry.kind === 'level_up'">
-                      {{ entry.message }}
-                    </span>
+            } @else if (selectedTopLeftTab === "combat") {
+              <div class="combat-analyzer__body">
+                <p class="analyzer-window">Rolling window: {{ analyzerWindowSeconds }}s</p>
+                <div class="analyzer-grid">
+                  @for (row of combatAnalyzerRows; track row.label) {
+                    <div class="analyzer-row">
+                      <span>{{ row.label }}</span>
+                      <strong>{{ row.value }}</strong>
+                    </div>
+                  }
+                </div>
+                <button type="button" class="analyzer-toggle" (click)="toggleCombatDetails()">
+                  {{ showCombatDetails ? "Hide Details" : "Show Details" }}
+                </button>
+                @if (showCombatDetails) {
+                  <div class="combat-details__body">
+                    @if (combatDetailLines.length === 0) {
+                      <p class="combat-details__empty">No combat detail lines yet.</p>
+                    } @else {
+                      @for (line of combatDetailLines; track line) {
+                        <p class="combat-details__line">{{ line }}</p>
+                      }
+                    }
+                  </div>
+                }
+              </div>
+            } @else {
+              <div class="economy-analyzer__body">
+                <p class="analyzer-window">Rolling window: {{ analyzerWindowSeconds }}s</p>
+                <div class="analyzer-grid">
+                  @for (row of economyAnalyzerRows; track row.label) {
+                    <div class="analyzer-row">
+                      <span>{{ row.label }}</span>
+                      <strong>{{ row.value }}</strong>
+                    </div>
+                  }
+                </div>
+                @if (economyLootPreview.length > 0) {
+                  <section class="economy-loot">
+                    <h4>Recent Loot</h4>
+                    <ul class="economy-loot__list">
+                      @for (drop of economyLootPreview; track drop.dropEventId) {
+                        <li>
+                          <span>{{ formatLootEntry(drop) }}</span>
+                          <small>t{{ drop.tick }}</small>
+                        </li>
+                      }
+                    </ul>
+                  </section>
+                }
+              </div>
+            }
+          </div>
+        </section>
+
+        <section class="left-panel left-panel--bottom" #toolsPanel tabindex="-1">
+          <header class="left-panel__header left-panel__header--tools">
+            <span class="left-panel__title">Tools</span>
+            <nav class="tab-row tab-row--tools" aria-label="Tools tabs">
+              <button
+                type="button"
+                class="tab-row__tab"
+                [class.tab-row__tab--active]="selectedToolsTab === 'helper'"
+                (click)="setToolsTab('helper')"
+              >
+                Helper
+              </button>
+              <button
+                type="button"
+                class="tab-row__tab"
+                [class.tab-row__tab--active]="selectedToolsTab === 'bestiary'"
+                (click)="setToolsTab('bestiary')"
+              >
+                Bestiary
+              </button>
+            </nav>
+          </header>
+
+          <div class="left-panel__body left-panel__body--tools">
+            @if (selectedToolsTab === "helper") {
+              <div class="pane-module pane-module--scroll">
+                <app-helper-assist-window
+                  [isRunStarted]="isRunStarted"
+                  [assistEnabled]="assistConfig.enabled"
+                  [autoHealEnabled]="assistConfig.autoHealEnabled"
+                  [healAtHpPercent]="assistConfig.healAtHpPercent"
+                  [autoGuardEnabled]="assistConfig.autoGuardEnabled"
+                  [guardAtHpPercent]="assistConfig.guardAtHpPercent"
+                  [autoOffenseEnabled]="assistConfig.autoOffenseEnabled"
+                  [autoSkills]="assistConfig.autoSkills"
+                  (assistEnabledChanged)="onAssistEnabledToggle($event)"
+                  (autoHealEnabledChanged)="onAssistAutoHealEnabledToggle($event)"
+                  (healThresholdChanged)="onAssistHealThresholdChange($event)"
+                  (autoGuardEnabledChanged)="onAssistAutoGuardEnabledToggle($event)"
+                  (guardThresholdChanged)="onAssistGuardThresholdChange($event)"
+                  (autoOffenseEnabledChanged)="onAssistAutoOffenseEnabledToggle($event)"
+                  (autoSkillEnabledChanged)="onAssistAutoSkillToggle($event)"
+                ></app-helper-assist-window>
+              </div>
+            } @else {
+              <div class="pane-module pane-module--placeholder">
+                <h3>Bestiary</h3>
+                @if (selectedCharacterBestiaryRows.length === 0) {
+                  <p>No species tracked yet.</p>
+                } @else {
+                  <div class="bestiary-v1-list">
+                    <div class="bestiary-v1-row bestiary-v1-row--header">
+                      <span>Species</span>
+                      <span>Kills</span>
+                      <span>Primal Core</span>
+                    </div>
+                    @for (row of selectedCharacterBestiaryRows; track row.species) {
+                      <div class="bestiary-v1-row">
+                        <span>{{ formatSpeciesLabel(row.species) }}</span>
+                        <strong>{{ row.kills }}</strong>
+                        <strong>{{ row.primalCore }}</strong>
+                      </div>
+                    }
+                  </div>
+                }
+                @if (bestiaryFocusEntry) {
+                  <p class="bestiary-v1-focus">
+                    Focus: {{ formatSpeciesLabel(bestiaryFocusEntry.species) }}
+                    ({{ bestiaryFocusEntry.killsTotal }}/{{ bestiaryFocusEntry.nextChestAtKills }})
                   </p>
                 }
-              }
-            </div>
-          </section>
-        </div>
+              </div>
+            }
+          </div>
+        </section>
       </div>
     </aside>
 
@@ -69,6 +194,10 @@
           </div>
           <div class="top-hud__meta-row">
             <div class="top-hud__vitals-text">HP {{ playerHpPercentRounded }}% SH {{ playerShieldPercentRounded }}%</div>
+            <div class="top-hud__timer" aria-label="Run timer">
+              <span>{{ runHudTimerElapsedLabel }}</span>
+              <span class="top-hud__timer-total">/ {{ runHudTimerTotalLabel }}</span>
+            </div>
             <div class="top-hud__cooldowns" aria-label="Skill cooldowns">
               @for (slot of bottomBarSkillSlots; track trackSkillSlotBySkillId($index, slot)) {
                 <span class="top-hud__cooldown" [class.top-hud__cooldown--ready]="!slot.cooldownText">
@@ -169,106 +298,30 @@
           </div>
         </section>
 
-        <section class="right-pane__secondary">
-          <nav class="tab-row tab-row--secondary" aria-label="Secondary right tabs">
-            <button
-              type="button"
-              class="tab-row__tab"
-              [class.tab-row__tab--active]="selectedRightInfoTab === 'helper'"
-              (click)="setRightInfoTab('helper')"
-            >
-              Helper
-            </button>
-            <button
-              type="button"
-              class="tab-row__tab"
-              [class.tab-row__tab--active]="selectedRightInfoTab === 'bestiary'"
-              (click)="setRightInfoTab('bestiary')"
-            >
-              Bestiary
-            </button>
-            <button
-              type="button"
-              class="tab-row__tab"
-              [class.tab-row__tab--active]="selectedRightInfoTab === 'status'"
-              (click)="setRightInfoTab('status')"
-            >
-              Status
-            </button>
-          </nav>
-
-          <div class="right-pane__secondary-body">
-            @if (selectedRightInfoTab === "helper") {
-              <div class="pane-module pane-module--scroll">
-                <app-helper-assist-window
-                  [isRunStarted]="isRunStarted"
-                  [assistEnabled]="assistConfig.enabled"
-                  [autoHealEnabled]="assistConfig.autoHealEnabled"
-                  [healAtHpPercent]="assistConfig.healAtHpPercent"
-                  [autoGuardEnabled]="assistConfig.autoGuardEnabled"
-                  [guardAtHpPercent]="assistConfig.guardAtHpPercent"
-                  [autoOffenseEnabled]="assistConfig.autoOffenseEnabled"
-                  [autoSkills]="assistConfig.autoSkills"
-                  (assistEnabledChanged)="onAssistEnabledToggle($event)"
-                  (autoHealEnabledChanged)="onAssistAutoHealEnabledToggle($event)"
-                  (healThresholdChanged)="onAssistHealThresholdChange($event)"
-                  (autoGuardEnabledChanged)="onAssistAutoGuardEnabledToggle($event)"
-                  (guardThresholdChanged)="onAssistGuardThresholdChange($event)"
-                  (autoOffenseEnabledChanged)="onAssistAutoOffenseEnabledToggle($event)"
-                  (autoSkillEnabledChanged)="onAssistAutoSkillToggle($event)"
-                ></app-helper-assist-window>
-              </div>
-            } @else if (selectedRightInfoTab === "bestiary") {
-              <div class="pane-module pane-module--placeholder">
-                <h3>Bestiary</h3>
-                @if (selectedCharacterBestiaryRows.length === 0) {
-                  <p>No species tracked yet.</p>
-                } @else {
-                  <div class="bestiary-v1-list">
-                    <div class="bestiary-v1-row bestiary-v1-row--header">
-                      <span>Species</span>
-                      <span>Kills</span>
-                      <span>Primal Core</span>
-                    </div>
-                    @for (row of selectedCharacterBestiaryRows; track row.species) {
-                      <div class="bestiary-v1-row">
-                        <span>{{ formatSpeciesLabel(row.species) }}</span>
-                        <strong>{{ row.kills }}</strong>
-                        <strong>{{ row.primalCore }}</strong>
-                      </div>
-                    }
+        <section class="right-pane__status" #statusPanel tabindex="-1">
+          <header class="right-pane__status-header">Status</header>
+          <div class="right-pane__status-body">
+            <div class="status-details">
+              <h3>{{ selectedCharacter?.name ?? "Unknown" }}</h3>
+              <div class="status-details__grid">
+                @for (row of statusTabRows; track row.label) {
+                  <div class="status-details__row">
+                    <span>{{ row.label }}</span>
+                    <strong>{{ row.value }}</strong>
                   </div>
                 }
-                @if (bestiaryFocusEntry) {
-                  <p class="bestiary-v1-focus">
-                    Focus: {{ formatSpeciesLabel(bestiaryFocusEntry.species) }}
-                    ({{ bestiaryFocusEntry.killsTotal }}/{{ bestiaryFocusEntry.nextChestAtKills }})
-                  </p>
-                }
               </div>
-            } @else {
-              <div class="status-details">
-                <h3>{{ selectedCharacter?.name ?? "Unknown" }}</h3>
-                <div class="status-details__grid">
-                  @for (row of statusTabRows; track row.label) {
-                    <div class="status-details__row">
-                      <span>{{ row.label }}</span>
-                      <strong>{{ row.value }}</strong>
-                    </div>
+              <h4>Cards</h4>
+              @if (selectedCards.length === 0) {
+                <p>No cards selected yet.</p>
+              } @else {
+                <ul>
+                  @for (card of selectedCards; track card.id) {
+                    <li title="{{ card.description }}">{{ card.name }}</li>
                   }
-                </div>
-                <h4>Cards</h4>
-                @if (selectedCards.length === 0) {
-                  <p>No cards selected yet.</p>
-                } @else {
-                  <ul>
-                    @for (card of selectedCards; track card.id) {
-                      <li title="{{ card.description }}">{{ card.name }}</li>
-                    }
-                  </ul>
-                }
-              </div>
-            }
+                </ul>
+              }
+            </div>
           </div>
         </section>
       </div>
@@ -374,6 +427,10 @@
             <strong>{{ runLevel }}</strong>
           </div>
           <div class="run-complete__stat-row">
+            <span>Run XP</span>
+            <strong>{{ runXp }} / {{ xpToNextLevel }}</strong>
+          </div>
+          <div class="run-complete__stat-row">
             <span>Kills</span>
             <strong>{{ runCompleteKillLabel }}</strong>
           </div>
@@ -400,7 +457,7 @@
         </div>
         <div class="run-complete__actions">
           <button type="button" (click)="onDeathModalRestartRun()" [disabled]="battleRequestInFlight">Restart Run</button>
-          <button type="button" (click)="onDeathModalReturnToPreRun()" [disabled]="battleRequestInFlight">Back to Menu</button>
+          <button type="button" (click)="onDeathModalReturnToPreRun()" [disabled]="battleRequestInFlight">Exit</button>
         </div>
       </section>
     </div>

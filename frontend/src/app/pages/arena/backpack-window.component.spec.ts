@@ -38,6 +38,18 @@ describe("BackpackWindowComponent", () => {
             definitionId: "blade_alpha",
             isLocked: false,
             originSpeciesId: "melee_brute"
+          },
+          "arm-01": {
+            instanceId: "arm-01",
+            definitionId: "plate_guard",
+            isLocked: false,
+            originSpeciesId: "melee_brute"
+          },
+          "rel-01": {
+            instanceId: "rel-01",
+            definitionId: "rune_orb",
+            isLocked: false,
+            originSpeciesId: "melee_brute"
           }
         }
       },
@@ -45,10 +57,14 @@ describe("BackpackWindowComponent", () => {
       primalCoreBySpecies: {}
     };
     const itemCatalogById: Record<string, ItemDefinition> = {
-      blade_alpha: { itemId: "blade_alpha", displayName: "Axe of Dawn", kind: "equipment", stackable: false, rarity: "epic" }
+      blade_alpha: { itemId: "blade_alpha", displayName: "Axe of Dawn", kind: "equipment", stackable: false, rarity: "epic" },
+      plate_guard: { itemId: "plate_guard", displayName: "Plate Guard", kind: "equipment", stackable: false, rarity: "rare" },
+      rune_orb: { itemId: "rune_orb", displayName: "Rune Orb", kind: "equipment", stackable: false, rarity: "legendary" }
     };
     const equipmentCatalogByItemId: Record<string, EquipmentDefinition> = {
-      blade_alpha: { itemId: "blade_alpha", slot: "weapon", weaponClass: "axe", gameplayModifiers: {} }
+      blade_alpha: { itemId: "blade_alpha", slot: "weapon", weaponClass: "axe", gameplayModifiers: {} },
+      plate_guard: { itemId: "plate_guard", slot: "armor", weaponClass: "", gameplayModifiers: {} },
+      rune_orb: { itemId: "rune_orb", slot: "relic", weaponClass: "", gameplayModifiers: {} }
     };
 
     component.character = character;
@@ -59,8 +75,8 @@ describe("BackpackWindowComponent", () => {
   it("dispatches equip action to equipRequested for weapon slots", () => {
     const component = createComponent();
     assignInventoryInputs(component);
-    const emitted: string[] = [];
-    component.equipRequested.subscribe((instanceId) => emitted.push(instanceId));
+    const emitted: Array<{ instanceId: string; slot: string }> = [];
+    component.equipRequested.subscribe((request) => emitted.push(request));
 
     const weaponSlot = component.allSlots.find((slot) => slot.kind === "equipment" && slot.isWeapon);
     expect(weaponSlot).toBeTruthy();
@@ -72,8 +88,30 @@ describe("BackpackWindowComponent", () => {
     );
     component.onContextMenuAction("equip");
 
-    expect(emitted).toEqual(["wpn-01"]);
+    expect(emitted).toEqual([{ instanceId: "wpn-01", slot: "weapon" }]);
     expect(component.contextMenu).toBeNull();
+  });
+
+  it("dispatches equip action to equipRequested for armor and relic slots", () => {
+    const component = createComponent();
+    assignInventoryInputs(component);
+    const emitted: Array<{ instanceId: string; slot: string }> = [];
+    component.equipRequested.subscribe((request) => emitted.push(request));
+
+    const armorSlot = component.allSlots.find((slot) => slot.kind === "equipment" && slot.slot === "armor");
+    const relicSlot = component.allSlots.find((slot) => slot.kind === "equipment" && slot.slot === "relic");
+    expect(armorSlot).toBeTruthy();
+    expect(relicSlot).toBeTruthy();
+
+    component.selectSlot(armorSlot!.slotId);
+    component.onContextMenuAction("equip");
+    component.selectSlot(relicSlot!.slotId);
+    component.onContextMenuAction("equip");
+
+    expect(emitted).toEqual([
+      { instanceId: "arm-01", slot: "armor" },
+      { instanceId: "rel-01", slot: "relic" }
+    ]);
   });
 
   it("inspect action opens inspect popup for selected slot", () => {
@@ -97,15 +135,15 @@ describe("BackpackWindowComponent", () => {
     const component = createComponent();
     assignInventoryInputs(component);
     component.weaponFilterMode = true;
-    const emitted: string[] = [];
-    component.equipRequested.subscribe((instanceId) => emitted.push(instanceId));
+    const emitted: Array<{ instanceId: string; slot: string }> = [];
+    component.equipRequested.subscribe((request) => emitted.push(request));
 
     const weaponSlot = component.allSlots.find((slot) => slot.kind === "equipment" && slot.isWeapon);
     expect(weaponSlot).toBeTruthy();
 
     component.selectSlot(weaponSlot!.slotId);
 
-    expect(emitted).toEqual(["wpn-01"]);
+    expect(emitted).toEqual([{ instanceId: "wpn-01", slot: "weapon" }]);
   });
 
   it("exposes only equipment filters and no Materials tab", () => {

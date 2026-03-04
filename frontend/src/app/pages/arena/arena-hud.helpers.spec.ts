@@ -1,4 +1,4 @@
-import { computeExpProgressPercent, computeUnifiedVitalsPercent } from "./arena-hud.helpers";
+import { computeExpProgressPercent, computeUnifiedVitalsPercent, formatRunTimer } from "./arena-hud.helpers";
 
 describe("arena-hud.helpers", () => {
   it("computes HP/Shield percentages with clamping", () => {
@@ -14,5 +14,12 @@ describe("arena-hud.helpers", () => {
     expect(computeExpProgressPercent(40, 25)).toBe(100);
     expect(computeExpProgressPercent(-10, 25)).toBe(0);
     expect(computeExpProgressPercent(5, 0)).toBe(100);
+  });
+
+  it("formats run timer as mm:ss", () => {
+    expect(formatRunTimer(0)).toBe("00:00");
+    expect(formatRunTimer(94_000)).toBe("01:34");
+    expect(formatRunTimer(180_000)).toBe("03:00");
+    expect(formatRunTimer(-1)).toBe("00:00");
   });
 });

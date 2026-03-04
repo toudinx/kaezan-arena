@@ -12,6 +12,13 @@ export function computeExpProgressPercent(runXp: number, xpToNextLevel: number):
   return clampPercent((safeRunXp / safeXpToNextLevel) * 100);
 }
 
+export function formatRunTimer(valueMs: number): string {
+  const totalSeconds = Math.max(0, Math.floor(valueMs / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
+}
+
 function clampPercent(value: number): number {
   if (!Number.isFinite(value)) {
     return 0;

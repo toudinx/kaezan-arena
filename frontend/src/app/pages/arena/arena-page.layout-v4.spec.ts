@@ -20,9 +20,9 @@ describe("ArenaPageComponent layout v4", () => {
     (component as any).focusLootConsole();
     (component as any).focusExpConsole();
 
-    expect(scrollSpy).toHaveBeenCalledWith(undefined, ".damage-console__body");
-    expect(scrollSpy).toHaveBeenCalledWith(undefined, ".loot-console__body");
-    expect(scrollSpy).toHaveBeenCalledWith(undefined, ".exp-console__body");
+    expect(scrollSpy).toHaveBeenCalledWith(undefined, ".combat-analyzer__body");
+    expect(scrollSpy).toHaveBeenCalledWith(undefined, ".economy-analyzer__body");
+    expect(scrollSpy).toHaveBeenCalledWith(undefined, ".events-feed");
   });
 
   it("shows pre-run mode before start, then enters run mode", async () => {
@@ -104,7 +104,7 @@ describe("ArenaPageComponent layout v4", () => {
     (component as any).applyGameOverStateFromSnapshot({
       isRunEnded: true,
       runEndReason: "victory_time",
-      runEndedAtMs: 480000,
+      runEndedAtMs: 180000,
       isGameOver: true,
       endReason: "time",
       battleStatus: "victory"

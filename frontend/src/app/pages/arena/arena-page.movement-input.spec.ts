@@ -97,35 +97,35 @@ describe("ArenaPageComponent movement input", () => {
     expect(focusSpy).toHaveBeenCalledTimes(0);
   });
 
-  it("uses H hotkey to switch right info tab to helper", () => {
+  it("uses H hotkey to switch tools tab to helper", () => {
     const component = createComponent();
-    (component as any).selectedRightInfoTab = "bestiary";
+    (component as any).selectedToolsTab = "bestiary";
 
     component.onKeyDown(new KeyboardEvent("keydown", { key: "h" }));
-    expect((component as any).selectedRightInfoTab).toBe("helper");
+    expect((component as any).selectedToolsTab).toBe("helper");
   });
 
-  it("uses K hotkey to switch right info tab to status", () => {
+  it("uses K hotkey to focus status panel", () => {
     const component = createComponent();
-    (component as any).selectedRightInfoTab = "helper";
+    const focusStatusSpy = vi.spyOn(component as any, "focusStatusPanel");
 
     component.onKeyDown(new KeyboardEvent("keydown", { key: "k" }));
-    expect((component as any).selectedRightInfoTab).toBe("status");
+    expect(focusStatusSpy).toHaveBeenCalledTimes(1);
   });
 
   it("uses T hotkey to toggle AUTO flag and label", () => {
     const component = createComponent();
 
-    expect((component as any).assistConfig.enabled).toBe(false);
-    expect(component.assistAutoToggleLabel).toBe("AUTO: OFF");
-
-    component.onKeyDown(new KeyboardEvent("keydown", { key: "t" }));
     expect((component as any).assistConfig.enabled).toBe(true);
     expect(component.assistAutoToggleLabel).toBe("AUTO: ON");
 
     component.onKeyDown(new KeyboardEvent("keydown", { key: "t" }));
     expect((component as any).assistConfig.enabled).toBe(false);
     expect(component.assistAutoToggleLabel).toBe("AUTO: OFF");
+
+    component.onKeyDown(new KeyboardEvent("keydown", { key: "t" }));
+    expect((component as any).assistConfig.enabled).toBe(true);
+    expect(component.assistAutoToggleLabel).toBe("AUTO: ON");
   });
 
   it("uses D/L/X hotkeys to focus damage/loot/exp console helpers", () => {

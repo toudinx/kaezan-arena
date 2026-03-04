@@ -1,6 +1,6 @@
 import { CommonModule } from "@angular/common";
 import { Component, ElementRef, EventEmitter, HostListener, Input, OnChanges, OnDestroy, Output, SimpleChanges } from "@angular/core";
-import type { CharacterState, EquipmentDefinition, ItemDefinition } from "../../api/account-api.service";
+import type { CharacterState, EquipmentDefinition, EquipmentSlot, ItemDefinition } from "../../api/account-api.service";
 import {
   type BackpackFilter,
   type BackpackSlot,
@@ -14,6 +14,11 @@ type BackpackContextMenuState = Readonly<{
   slotId: string;
   x: number;
   y: number;
+}>;
+
+export type BackpackEquipRequest = Readonly<{
+  instanceId: string;
+  slot: EquipmentSlot;
 }>;
 
 @Component({
@@ -34,7 +39,7 @@ export class BackpackWindowComponent implements OnChanges, OnDestroy {
   @Input() forcedFilter: BackpackFilter | null = null;
   @Input() weaponFilterMode = false;
 
-  @Output() readonly equipRequested = new EventEmitter<string>();
+  @Output() readonly equipRequested = new EventEmitter<BackpackEquipRequest>();
   @Output() readonly salvageRequested = new EventEmitter<string>();
 
   readonly filters: ReadonlyArray<BackpackFilter> = ["all", "weapons", "armor", "relics"];
@@ -107,14 +112,7 @@ export class BackpackWindowComponent implements OnChanges, OnDestroy {
 
   selectSlot(slotId: string): void {
     const slot = this.allSlots.find((entry) => entry.slotId === slotId) ?? null;
-    if (
-      this.weaponFilterMode &&
-      slot &&
-      slot.isWeapon &&
-      !slot.isEquipped &&
-      !this.equipInFlight
-    ) {
-      this.equipRequested.emit(slot.instanceId);
+    if (this.weaponFilterMode && this.tryEmitEquip(slot)) {
       return;
     }
 
@@ -151,9 +149,7 @@ export class BackpackWindowComponent implements OnChanges, OnDestroy {
     }
 
     if (action === "equip") {
-      if (slot.isWeapon && !slot.isEquipped && !this.equipInFlight) {
-        this.equipRequested.emit(slot.instanceId);
-      }
+      this.tryEmitEquip(slot);
       this.closeContextMenu();
       return;
     }
@@ -183,7 +179,7 @@ export class BackpackWindowComponent implements OnChanges, OnDestroy {
   }
 
   canEquip(slot: BackpackSlot | null): boolean {
-    return !!slot && slot.isWeapon && !slot.isEquipped && !this.equipInFlight;
+    return !!slot && !!this.resolveEquipSlot(slot) && !slot.isEquipped && !this.equipInFlight;
   }
 
   canSalvage(slot: BackpackSlot | null): boolean {
@@ -215,6 +211,10 @@ export class BackpackWindowComponent implements OnChanges, OnDestroy {
     }
 
     this.salvageRequested.emit(slot.instanceId);
+  }
+
+  onEquipSelectedSlot(): void {
+    this.tryEmitEquip(this.selectedSlot);
   }
 
   isSlotPulsing(slotId: string): boolean {
@@ -307,6 +307,31 @@ export class BackpackWindowComponent implements OnChanges, OnDestroy {
 
     if (normalizedRarity === "legendary") {
       return 250;
+    }
+
+    return null;
+  }
+
+  private tryEmitEquip(slot: BackpackSlot | null): boolean {
+    const equipSlot = this.resolveEquipSlot(slot);
+    if (!slot || !equipSlot || slot.isEquipped || this.equipInFlight) {
+      return false;
+    }
+
+    this.equipRequested.emit({
+      instanceId: slot.instanceId,
+      slot: equipSlot
+    });
+    return true;
+  }
+
+  private resolveEquipSlot(slot: BackpackSlot | null): EquipmentSlot | null {
+    if (!slot) {
+      return null;
+    }
+
+    if (slot.slot === "weapon" || slot.slot === "armor" || slot.slot === "relic") {
+      return slot.slot;
     }
 
     return null;

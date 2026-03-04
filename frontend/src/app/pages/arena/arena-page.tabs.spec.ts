@@ -1,15 +1,15 @@
 import {
   ArenaPageComponent,
-  RIGHT_INFO_TAB_STORAGE_KEY
+  TOOLS_TAB_STORAGE_KEY
 } from "./arena-page.component";
 
-describe("ArenaPageComponent tab persistence", () => {
+describe("ArenaPageComponent tools tab persistence", () => {
   beforeEach(() => {
-    localStorage.removeItem(RIGHT_INFO_TAB_STORAGE_KEY);
+    localStorage.removeItem(TOOLS_TAB_STORAGE_KEY);
   });
 
   afterEach(() => {
-    localStorage.removeItem(RIGHT_INFO_TAB_STORAGE_KEY);
+    localStorage.removeItem(TOOLS_TAB_STORAGE_KEY);
   });
 
   function createComponent(): ArenaPageComponent {
@@ -23,23 +23,29 @@ describe("ArenaPageComponent tab persistence", () => {
     );
   }
 
-  it("loads and persists right bottom tab when using H/B/K hotkeys", () => {
-    localStorage.setItem(RIGHT_INFO_TAB_STORAGE_KEY, "helper");
+  it("loads and persists tools tab when using H/B hotkeys", () => {
+    localStorage.setItem(TOOLS_TAB_STORAGE_KEY, "helper");
     const component = createComponent();
 
-    expect(component.selectedRightInfoTab).toBe("helper");
+    expect(component.selectedToolsTab).toBe("helper");
 
     component.onKeyDown(new KeyboardEvent("keydown", { key: "b" }));
-    expect(component.selectedRightInfoTab).toBe("bestiary");
-    expect(localStorage.getItem(RIGHT_INFO_TAB_STORAGE_KEY)).toBe("bestiary");
+    expect(component.selectedToolsTab).toBe("bestiary");
+    expect(localStorage.getItem(TOOLS_TAB_STORAGE_KEY)).toBe("bestiary");
 
     component.onKeyDown(new KeyboardEvent("keydown", { key: "h" }));
-    expect(component.selectedRightInfoTab).toBe("helper");
-    expect(localStorage.getItem(RIGHT_INFO_TAB_STORAGE_KEY)).toBe("helper");
+    expect(component.selectedToolsTab).toBe("helper");
+    expect(localStorage.getItem(TOOLS_TAB_STORAGE_KEY)).toBe("helper");
+  });
 
+  it("uses K hotkey to focus status panel without changing tools tab", () => {
+    const component = createComponent();
+    component.selectedToolsTab = "helper";
+    const statusFocusSpy = vi.spyOn(component as any, "focusStatusPanel");
     component.onKeyDown(new KeyboardEvent("keydown", { key: "k" }));
-    expect(component.selectedRightInfoTab).toBe("status");
-    expect(localStorage.getItem(RIGHT_INFO_TAB_STORAGE_KEY)).toBe("status");
+
+    expect(statusFocusSpy).toHaveBeenCalledTimes(1);
+    expect(component.selectedToolsTab).toBe("helper");
   });
 
   it("uses I/C hotkeys to focus pinned backpack/equipment panels", () => {

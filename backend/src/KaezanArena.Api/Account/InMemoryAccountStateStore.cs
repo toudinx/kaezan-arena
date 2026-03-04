@@ -73,6 +73,11 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
                 throw new InvalidOperationException($"Character '{characterId}' does not own equipment instance '{equipmentInstanceId}'.");
             }
 
+            if (equipmentInstance.IsLocked)
+            {
+                throw new InvalidOperationException($"Equipment instance '{equipmentInstanceId}' is locked and cannot be equipped.");
+            }
+
             if (!AccountCatalog.TryGetEquipment(equipmentInstance.DefinitionId, out var equipmentDefinition))
             {
                 throw new InvalidOperationException($"Equipment definition '{equipmentInstance.DefinitionId}' was not found.");

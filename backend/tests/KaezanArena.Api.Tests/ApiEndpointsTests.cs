@@ -383,6 +383,33 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
         Assert.Equal(HttpStatusCode.OK, relicResponse.StatusCode);
         Assert.NotNull(relicPayload);
         Assert.Equal(ownedRelicInstanceId, relicPayload.Equipment.RelicInstanceId);
+
+        var persisted = await GetAccountStateAsync(state.Account.AccountId);
+        var persistedCharacter = persisted.Account.Characters[state.Account.ActiveCharacterId];
+        Assert.Equal(ownedArmorInstanceId, persistedCharacter.Equipment.ArmorInstanceId);
+        Assert.Equal(ownedRelicInstanceId, persistedCharacter.Equipment.RelicInstanceId);
+    }
+
+    [Fact]
+    public async Task PostEquipItem_RejectsWhenRequestedSlotDoesNotMatchItemSlot()
+    {
+        var state = await GetAccountStateAsync();
+        var character = state.Account.Characters[state.Account.ActiveCharacterId];
+        var ownedArmorInstanceId = FindOwnedEquipmentInstanceForSlot(state, character, "armor");
+
+        var response = await _client.PostAsJsonAsync(
+            "/api/v1/account/equip-item",
+            new EquipItemRequestDto(
+                AccountId: state.Account.AccountId,
+                CharacterId: character.CharacterId,
+                Slot: "weapon",
+                EquipmentInstanceId: ownedArmorInstanceId));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var payload = await response.Content.ReadFromJsonAsync<ApiErrorDto>();
+        Assert.NotNull(payload);
+        Assert.Equal("validation_error", payload.Code);
+        Assert.Contains("cannot be equipped in 'weapon'", payload.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -4465,8 +4492,8 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
         var secondStart = await StartBattleAsync("arena-assist-toggle-b", "player-assist-toggle", 1337);
         AssertArenaInvariants(firstStart.Actors, "player-assist-toggle");
         AssertArenaInvariants(secondStart.Actors, "player-assist-toggle");
-        Assert.Equal(false, firstStart.AssistConfig.Enabled);
-        Assert.Equal(false, secondStart.AssistConfig.Enabled);
+        Assert.Equal(true, firstStart.AssistConfig.Enabled);
+        Assert.Equal(true, secondStart.AssistConfig.Enabled);
 
         var firstTick = firstStart.Tick;
         var secondTick = secondStart.Tick;

@@ -63,7 +63,7 @@ import {
   UiLayoutService
 } from "./ui-layout.service";
 import { BackpackWindowComponent } from "./backpack-window.component";
-import { LootConsoleWindowComponent } from "./loot-console-window.component";
+import type { BackpackEquipRequest } from "./backpack-window.component";
 import {
   type StatusBuffViewModel,
   type StatusSkillSlotViewModel,
@@ -76,14 +76,11 @@ import type { BackpackFilter } from "./backpack-inventory.helpers";
 import { DockLayoutService, type DockModuleId, type DockModuleState } from "./dock-layout.service";
 import { HelperAssistWindowComponent, type AssistSkillToggleChangedEvent } from "./helper-assist-window.component";
 import {
-  DamageConsoleComponent
-} from "./damage-console.component";
-import {
   type DamageConsoleEntry,
   mapDamageNumbersToConsoleEntries,
   mergeDamageConsoleEntries
 } from "./damage-console.helpers";
-import { computeExpProgressPercent, computeUnifiedVitalsPercent } from "./arena-hud.helpers";
+import { computeExpProgressPercent, computeUnifiedVitalsPercent, formatRunTimer } from "./arena-hud.helpers";
 
 type ApiActorState = NonNullable<StartBattleResponse["actors"]>[number];
 type ApiSkillState = NonNullable<StartBattleResponse["skills"]>[number];
@@ -121,7 +118,33 @@ type PressedMovementKeyState = Readonly<{
 }>;
 type AssistOffenseMode = "cooldown_spam" | "smart";
 type AssistSkillId = "exori" | "exori_min" | "exori_mas" | "avalanche";
-type RightInfoTabId = "helper" | "bestiary" | "status";
+type LeftTopTabId = "events" | "combat" | "economy";
+type ToolsTabId = "helper" | "bestiary";
+type NarrativeEventType =
+  | "level_up"
+  | "card_choice_offered"
+  | "card_chosen"
+  | "chest_spawned"
+  | "chest_opened"
+  | "elite_spawned"
+  | "elite_died"
+  | "elite_buff_applied"
+  | "elite_buff_removed"
+  | "run_ended";
+type CombatMetricKind = "damage_dealt" | "damage_taken" | "healing" | "shield_gained";
+type EconomyMetricKind = "xp" | "echo_fragments" | "primal_core";
+type TimedMetricSample<TKind extends string> = Readonly<{
+  kind: TKind;
+  amount: number;
+  runTimeMs: number;
+}>;
+type EventFeedEntry = Readonly<{
+  id: string;
+  tick: number;
+  runTimeMs: number;
+  type: NarrativeEventType;
+  message: string;
+}>;
 type PreRunCharacterViewModel = Readonly<{
   id: string;
   name: string;
@@ -141,7 +164,8 @@ type ArenaCardOffer = Readonly<{
   name: string;
   description: string;
 }>;
-export const RIGHT_INFO_TAB_STORAGE_KEY = "kaezan_arena_right_tab_v1";
+export const TOOLS_TAB_STORAGE_KEY = "kaezan_arena_tools_tab_v1";
+export const RIGHT_INFO_TAB_STORAGE_KEY = TOOLS_TAB_STORAGE_KEY;
 const AVALANCHE_SKILL_ID = "avalanche";
 const ASSIST_CONFIG_DEBOUNCE_MS = 200;
 const MOVEMENT_BUFFER_TTL_MS = 250;
@@ -149,7 +173,13 @@ const RUN_INITIAL_LEVEL = 1;
 const RUN_INITIAL_XP = 0;
 const RUN_LEVEL_XP_BASE = 25;
 const RUN_LEVEL_XP_INCREMENT_PER_LEVEL = 15;
+const DEFAULT_RUN_DURATION_MS = 180_000;
 const EXP_CONSOLE_MAX_ENTRIES = 200;
+const EVENT_FEED_MAX_ENTRIES = 250;
+const COMBAT_DETAILS_MAX_LINES = 200;
+const ANALYZER_WINDOW_MS = 10_000;
+const ANALYZER_SAMPLE_RETENTION_MS = 45_000;
+const ECONOMY_LOOT_PREVIEW_MAX_ENTRIES = 8;
 const ASSIST_SKILL_IDS: readonly AssistSkillId[] = ["exori", "exori_min", "exori_mas", "avalanche"];
 type ArenaAssistConfig = Readonly<{
   enabled: boolean;
@@ -224,10 +254,8 @@ const DEV_LOG_ASSET_IDS = [
   standalone: true,
   imports: [
     BackpackWindowComponent,
-    LootConsoleWindowComponent,
     EquipmentPaperdollWindowComponent,
-    HelperAssistWindowComponent,
-    DamageConsoleComponent
+    HelperAssistWindowComponent
   ],
   templateUrl: "./arena-page.component.html",
   styleUrl: "./arena-page.component.css"
@@ -236,10 +264,10 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   @ViewChild("arenaCanvas", { static: true }) private readonly canvasRef?: ElementRef<HTMLCanvasElement>;
   @ViewChild("canvasViewport", { static: false }) private readonly canvasViewportRef?: ElementRef<HTMLDivElement>;
   @ViewChild("leftLogsPane", { static: false }) private readonly leftLogsPaneRef?: ElementRef<HTMLElement>;
+  @ViewChild("topLeftPanel", { static: false }) private readonly topLeftPanelRef?: ElementRef<HTMLElement>;
+  @ViewChild("toolsPanel", { static: false }) private readonly toolsPanelRef?: ElementRef<HTMLElement>;
   @ViewChild("rightInfoPane", { static: false }) private readonly rightInfoPaneRef?: ElementRef<HTMLElement>;
-  @ViewChild("damageConsolePanel", { static: false }) private readonly damageConsolePanelRef?: ElementRef<HTMLElement>;
-  @ViewChild("lootConsolePanel", { static: false }) private readonly lootConsolePanelRef?: ElementRef<HTMLElement>;
-  @ViewChild("expConsolePanel", { static: false }) private readonly expConsolePanelRef?: ElementRef<HTMLElement>;
+  @ViewChild("statusPanel", { static: false }) private readonly statusPanelRef?: ElementRef<HTMLElement>;
   @ViewChild("equipmentPanel", { static: false }) private readonly equipmentPanelRef?: ElementRef<HTMLElement>;
   @ViewChild("backpackPanel", { static: false }) private readonly backpackPanelRef?: ElementRef<HTMLElement>;
 
@@ -281,8 +309,19 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   backpackHighlightRequestId = 0;
   backpackForcedFilter: BackpackFilter | null = null;
   backpackWeaponFilterMode = false;
-  selectedRightInfoTab: RightInfoTabId = this.loadRightInfoTab();
+  selectedTopLeftTab: LeftTopTabId = "events";
+  selectedToolsTab: ToolsTabId = this.loadToolsTab();
+  showCombatDetails = false;
   highlightedLogPanel: "damage" | "loot" | "exp" | null = null;
+  eventFeedEntries: EventFeedEntry[] = [];
+  combatDetailLines: string[] = [];
+  combatMetricSamples: TimedMetricSample<CombatMetricKind>[] = [];
+  economyMetricSamples: TimedMetricSample<EconomyMetricKind>[] = [];
+  combatPeakHitDealt = 0;
+  combatPeakHitTaken = 0;
+  economyTotalXpGained = 0;
+  economyTotalEchoFragments = 0;
+  economyTotalPrimalCore = 0;
   isHotkeysModalOpen = false;
   isPauseModalOpen = false;
   isDeathModalOpen = false;
@@ -291,7 +330,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   runEndReason: string | null = null;
   runEndedAtMs: number | null = null;
   runTimeMs = 0;
-  runDurationMs = 480000;
+  runDurationMs = DEFAULT_RUN_DURATION_MS;
   timeSurvivedMs = 0;
   runTotalKills = 0;
   runEliteKills = 0;
@@ -307,6 +346,8 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   runXp = RUN_INITIAL_XP;
   xpToNextLevel = this.computeRunXpToNextLevel(RUN_INITIAL_LEVEL);
   private expLogSequence = 0;
+  private eventFeedSequence = 0;
+  private runEndedNarrativeLogged = false;
   ui: ArenaUiState = {
     player: {
       hp: 0,
@@ -364,12 +405,12 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         "Esc toggle Pause modal",
         "I focus Backpack",
         "C focus Equipment (outside run)",
-        "H open Helper tab",
-        "B open Bestiary tab",
-        "K open Status tab",
-        "D focus Damage log",
-        "L focus Loot log",
-        "X focus EXP log"
+        "H open Helper tool tab",
+        "B open Bestiary tool tab",
+        "K focus Status panel",
+        "D open Combat analyzer",
+        "L open Economy analyzer",
+        "X open Events feed"
       ]
     },
     { title: "Skills", entries: ["1-4 cast skills", "5 cast Guard"] }
@@ -427,6 +468,15 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     return `${this.runXp} / ${this.xpToNextLevel} XP`;
   }
 
+  get runHudTimerElapsedLabel(): string {
+    const clampedElapsedMs = Math.max(0, Math.min(this.runTimeMs, this.runDurationMs));
+    return formatRunTimer(clampedElapsedMs);
+  }
+
+  get runHudTimerTotalLabel(): string {
+    return formatRunTimer(this.runDurationMs);
+  }
+
   get runCompleteTitle(): string {
     return this.runEndReason === "victory_time" ? "Victory" : "Defeat";
   }
@@ -440,7 +490,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   }
 
   get runCompleteTimeLabel(): string {
-    return this.formatDurationMs(this.timeSurvivedMs);
+    return formatRunTimer(this.timeSurvivedMs);
   }
 
   get runCompleteKillLabel(): string {
@@ -533,6 +583,47 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       { label: "Reflect", value: this.resolveStatusModifier(["reflect", "thorns"]) },
       { label: "Shield capacity", value: String(Math.max(0, this.ui.player.maxShield)) }
     ];
+  }
+
+  get analyzerWindowSeconds(): number {
+    return Math.round(ANALYZER_WINDOW_MS / 1000);
+  }
+
+  get combatAnalyzerRows(): ReadonlyArray<Readonly<{ label: string; value: string }>> {
+    const windowSeconds = this.resolveRollingWindowSeconds();
+    const sums = this.computeCombatRollingSums();
+    const dps = sums.damageDealt / windowSeconds;
+    const dtps = sums.damageTaken / windowSeconds;
+    const hps = sums.healing / windowSeconds;
+    const shieldPerSecond = sums.shieldGained / windowSeconds;
+    return [
+      { label: "DPS", value: this.formatPerSecond(dps) },
+      { label: "DTPS", value: this.formatPerSecond(dtps) },
+      { label: "HPS", value: this.formatPerSecond(hps) },
+      { label: "Shield/s", value: this.formatPerSecond(shieldPerSecond) },
+      { label: "Peak hit dealt", value: String(this.combatPeakHitDealt) },
+      { label: "Peak hit taken", value: String(this.combatPeakHitTaken) }
+    ];
+  }
+
+  get economyAnalyzerRows(): ReadonlyArray<Readonly<{ label: string; value: string }>> {
+    const windowSeconds = this.resolveRollingWindowSeconds();
+    const sums = this.computeEconomyRollingSums();
+    const xpPerSecond = sums.xp / windowSeconds;
+    const echoPerSecond = sums.echoFragments / windowSeconds;
+    const primalPerSecond = sums.primalCore / windowSeconds;
+    return [
+      { label: "XP gained total", value: String(this.economyTotalXpGained) },
+      { label: "XP/s", value: this.formatPerSecond(xpPerSecond) },
+      { label: "Echo Fragments total", value: String(this.economyTotalEchoFragments) },
+      { label: "Echo Fragments/s", value: this.formatPerSecond(echoPerSecond) },
+      { label: "Primal Core total", value: String(this.economyTotalPrimalCore) },
+      { label: "Primal Core/s", value: this.formatPerSecond(primalPerSecond) }
+    ];
+  }
+
+  get economyLootPreview(): ReadonlyArray<DropEvent> {
+    return this.lootFeed.slice(0, ECONOMY_LOOT_PREVIEW_MAX_ENTRIES);
   }
 
   async ngAfterViewInit(): Promise<void> {
@@ -732,8 +823,8 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         return;
       }
 
-      this.setRightInfoTab("helper");
-      this.focusRightInfoPane();
+      this.setToolsTab("helper");
+      this.focusToolsPanel();
       return;
     }
 
@@ -743,8 +834,8 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         return;
       }
 
-      this.setRightInfoTab("bestiary");
-      this.focusRightInfoPane();
+      this.setToolsTab("bestiary");
+      this.focusToolsPanel();
       return;
     }
 
@@ -754,7 +845,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         return;
       }
 
-      this.setRightInfoTab("status");
+      this.focusStatusPanel();
       this.focusRightInfoPane();
       return;
     }
@@ -881,9 +972,9 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     }
   }
 
-  async onBackpackEquipRequested(weaponInstanceId: string): Promise<void> {
-    const equipped = await this.equipWeaponFromInventory(weaponInstanceId);
-    if (equipped) {
+  async onBackpackEquipRequested(request: BackpackEquipRequest): Promise<void> {
+    const equipped = await this.equipItemFromInventory(request.instanceId, request.slot);
+    if (equipped && request.slot === "weapon") {
       this.clearBackpackWeaponFilterMode();
     }
   }
@@ -951,13 +1042,17 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.updateAssistConfig({ autoSkills: nextAutoSkills });
   }
 
-  setRightInfoTab(tabId: RightInfoTabId): void {
-    if (this.selectedRightInfoTab === tabId) {
+  setToolsTab(tabId: ToolsTabId): void {
+    if (this.selectedToolsTab === tabId) {
       return;
     }
 
-    this.selectedRightInfoTab = tabId;
-    this.persistRightInfoTab();
+    this.selectedToolsTab = tabId;
+    this.persistToolsTab();
+  }
+
+  setTopLeftTab(tabId: LeftTopTabId): void {
+    this.selectedTopLeftTab = tabId;
   }
 
   openHotkeysModal(): void {
@@ -978,6 +1073,14 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
 
   trackSkillSlotBySkillId(_index: number, slot: StatusSkillSlotViewModel): string {
     return slot.skillId;
+  }
+
+  trackEventFeedEntryById(_index: number, entry: EventFeedEntry): string {
+    return entry.id;
+  }
+
+  formatEventTime(runTimeMs: number): string {
+    return formatRunTimer(Math.max(0, Math.floor(runTimeMs)));
   }
 
   onArenaCanvasClick(event: MouseEvent): void {
@@ -1088,7 +1191,18 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.queuedCommandCount = 0;
     this.recentDamageNumbers = [];
     this.damageConsoleEntries = [];
+    this.combatDetailLines = [];
+    this.combatMetricSamples = [];
+    this.combatPeakHitDealt = 0;
+    this.combatPeakHitTaken = 0;
     this.expConsoleEntries = [];
+    this.eventFeedEntries = [];
+    this.eventFeedSequence = 0;
+    this.runEndedNarrativeLogged = false;
+    this.economyMetricSamples = [];
+    this.economyTotalXpGained = 0;
+    this.economyTotalEchoFragments = 0;
+    this.economyTotalPrimalCore = 0;
     this.recentCommandResults = [];
     this.assistConfig = this.buildDefaultAssistConfig();
     this.bestiaryEntries = [];
@@ -1101,7 +1215,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.runEndReason = null;
     this.runEndedAtMs = null;
     this.runTimeMs = 0;
-    this.runDurationMs = 480000;
+    this.runDurationMs = DEFAULT_RUN_DURATION_MS;
     this.timeSurvivedMs = 0;
     this.runTotalKills = 0;
     this.runEliteKills = 0;
@@ -1328,7 +1442,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     await this.loadAccountState();
   }
 
-  async equipWeaponFromInventory(weaponInstanceId: string): Promise<boolean> {
+  async equipItemFromInventory(equipmentInstanceId: string, slot: "weapon" | "armor" | "relic"): Promise<boolean> {
     const character = this.selectedCharacter;
     if (!character) {
       return false;
@@ -1336,15 +1450,16 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
 
     this.accountRequestInFlight = true;
     try {
-      const updatedCharacter = await this.accountApi.equipWeapon(
+      const updatedCharacter = await this.accountApi.equipItem(
         this.accountId,
         character.characterId,
-        weaponInstanceId
+        slot,
+        equipmentInstanceId
       );
       this.updateCharacterSnapshot(updatedCharacter);
       return true;
     } catch (error) {
-      this.battleLog = `equipWeapon failed: ${String(error)}`;
+      this.battleLog = `equipItem failed: ${String(error)}`;
       return false;
     } finally {
       this.accountRequestInFlight = false;
@@ -2219,6 +2334,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       this.runInAngularZone(() => {
         this.updateCharacterSnapshot(response.character);
         this.lootFeed = [...response.awarded, ...this.lootFeed].slice(0, 50);
+        this.recordEconomyMetricsFromDrops(response.awarded);
       });
     } catch (error) {
       for (const key of dedupedKeys) {
@@ -2355,12 +2471,18 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   }
 
   private appendDamageConsoleLogs(damageEvents: ReadonlyArray<DamageNumberInstance>): void {
+    const hasStructuredMetrics = this.recordCombatMetricsFromDamageEvents(damageEvents);
     if (damageEvents.length === 0) {
+      if (!hasStructuredMetrics && this.combatMetricSamples.length === 0) {
+        this.recordCombatMetricsFromLegacyLines(this.recentDamageNumbers);
+      }
       return;
     }
 
     const mapped = mapDamageNumbersToConsoleEntries(damageEvents, this.currentBattleTick);
     this.damageConsoleEntries = mergeDamageConsoleEntries(this.damageConsoleEntries, mapped, 500);
+    const detailLines = mapped.map((entry) => `t${entry.tick} ${entry.message}`);
+    this.combatDetailLines = [...this.combatDetailLines, ...detailLines].slice(-COMBAT_DETAILS_MAX_LINES);
   }
 
   private appendCommandResultLogs(
@@ -3053,6 +3175,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.runEliteKills = Math.max(0, Math.floor(parsedEliteKills ?? this.runEliteKills));
     this.runChestsOpened = Math.max(0, Math.floor(parsedChestsOpened ?? this.runChestsOpened));
     this.appendExpLogsFromSnapshot(snapshot);
+    this.appendEventFeedFromSnapshot(snapshot);
   }
 
   private applyCardChoiceStateFromSnapshot(snapshot: StartBattleResponse | StepBattleResponse): void {
@@ -3133,13 +3256,6 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     return RUN_LEVEL_XP_BASE + ((clampedLevel - RUN_INITIAL_LEVEL) * RUN_LEVEL_XP_INCREMENT_PER_LEVEL);
   }
 
-  private formatDurationMs(valueMs: number): string {
-    const totalSeconds = Math.max(0, Math.floor(valueMs / 1000));
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-    return `${minutes}:${seconds.toString().padStart(2, "0")}`;
-  }
-
   private appendExpLogsFromSnapshot(snapshot: StartBattleResponse | StepBattleResponse): void {
     const tick = Math.max(0, this.readNumber((snapshot as Record<string, unknown>)["tick"]) ?? this.currentBattleTick);
     const nextEntries: ExpConsoleEntry[] = [];
@@ -3165,6 +3281,8 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
             kind: "xp_gained",
             message: `+${amount} XP${sourceLabel}${eliteLabel}`
           });
+          this.recordEconomyMetricSample("xp", amount, this.runTimeMs);
+          this.economyTotalXpGained += amount;
           continue;
         }
 
@@ -3222,7 +3340,376 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     }
 
     this.expConsoleEntries = [...this.expConsoleEntries, ...nextEntries].slice(-EXP_CONSOLE_MAX_ENTRIES);
-    this.scrollConsoleToBottom(this.expConsolePanelRef, ".exp-console__body");
+    if (this.selectedTopLeftTab === "events") {
+      this.scrollConsoleToBottom(this.topLeftPanelRef, ".events-feed");
+    }
+  }
+
+  toggleCombatDetails(): void {
+    this.showCombatDetails = !this.showCombatDetails;
+  }
+
+  private appendEventFeedFromSnapshot(snapshot: StartBattleResponse | StepBattleResponse): void {
+    const tick = Math.max(0, this.readNumber((snapshot as Record<string, unknown>)["tick"]) ?? this.currentBattleTick);
+    const runTimeMs = this.runTimeMs;
+    const nextEntries: EventFeedEntry[] = [];
+    const eventsValue = (snapshot as Record<string, unknown>)["events"];
+
+    if (Array.isArray(eventsValue)) {
+      for (const event of eventsValue) {
+        const eventRecord = event as Record<string, unknown>;
+        const rawType = this.readString(eventRecord["type"]);
+        if (!rawType) {
+          continue;
+        }
+
+        const type = this.toNarrativeEventType(rawType);
+        if (!type) {
+          continue;
+        }
+
+        const message = this.formatNarrativeEventMessage(type, eventRecord);
+        if (!message) {
+          continue;
+        }
+
+        nextEntries.push({
+          id: `event-${tick}-${this.eventFeedSequence++}`,
+          tick,
+          runTimeMs,
+          type,
+          message
+        });
+      }
+    }
+
+    if (this.isRunEnded && !this.runEndedNarrativeLogged) {
+      nextEntries.push({
+        id: `event-${tick}-${this.eventFeedSequence++}`,
+        tick,
+        runTimeMs,
+        type: "run_ended",
+        message: `Run ended: ${this.formatRunEndReason(this.runEndReason)}`
+      });
+      this.runEndedNarrativeLogged = true;
+    }
+
+    if (nextEntries.some((entry) => entry.type === "run_ended")) {
+      this.runEndedNarrativeLogged = true;
+    }
+
+    if (nextEntries.length === 0) {
+      return;
+    }
+
+    this.eventFeedEntries = [...this.eventFeedEntries, ...nextEntries].slice(-EVENT_FEED_MAX_ENTRIES);
+    if (this.selectedTopLeftTab === "events") {
+      this.scrollConsoleToBottom(this.topLeftPanelRef, ".events-feed");
+    }
+  }
+
+  private toNarrativeEventType(rawType: string): NarrativeEventType | null {
+    if (
+      rawType === "level_up" ||
+      rawType === "card_choice_offered" ||
+      rawType === "card_chosen" ||
+      rawType === "elite_spawned" ||
+      rawType === "elite_died" ||
+      rawType === "elite_buff_applied" ||
+      rawType === "elite_buff_removed" ||
+      rawType === "run_ended"
+    ) {
+      return rawType;
+    }
+
+    if (rawType === "species_chest_spawned" || rawType === "chest_spawned") {
+      return "chest_spawned";
+    }
+
+    if (rawType === "species_chest_opened" || rawType === "chest_opened") {
+      return "chest_opened";
+    }
+
+    return null;
+  }
+
+  private formatNarrativeEventMessage(type: NarrativeEventType, eventRecord: Record<string, unknown>): string | null {
+    if (type === "level_up") {
+      const newLevel = Math.max(RUN_INITIAL_LEVEL, Math.floor(this.readNumber(eventRecord["newLevel"]) ?? this.runLevel));
+      const runXp = Math.max(0, Math.floor(this.readNumber(eventRecord["runXp"]) ?? this.runXp));
+      const xpToNext = Math.max(1, Math.floor(this.readNumber(eventRecord["xpToNextLevel"]) ?? this.xpToNextLevel));
+      return `Level up: Run Lv. ${newLevel} (${runXp}/${xpToNext} XP)`;
+    }
+
+    if (type === "card_choice_offered") {
+      const offered = this.toCardOffers(eventRecord["offeredCards"]);
+      if (offered.length === 0) {
+        return "Card choice offered";
+      }
+
+      const names = offered.map((card) => card.name).join(" / ");
+      return `Card choice offered: ${names}`;
+    }
+
+    if (type === "card_chosen") {
+      const cardEntry = (eventRecord["card"] ?? null) as ApiCardOffer | null;
+      const cardId = this.readString(cardEntry?.id);
+      const cardName = this.readString(cardEntry?.name) ?? (cardId ? this.formatCardNameFromId(cardId) : null);
+      return cardName ? `Card chosen: ${cardName}` : "Card chosen";
+    }
+
+    if (type === "chest_spawned") {
+      const species = this.readString(eventRecord["species"]);
+      if (species) {
+        return `Chest spawned: ${this.formatSpeciesLabel(species)}`;
+      }
+
+      const poiId = this.readString(eventRecord["poiId"]);
+      return poiId ? `Chest spawned: ${poiId}` : "Chest spawned";
+    }
+
+    if (type === "chest_opened") {
+      const species = this.readString(eventRecord["species"]);
+      const buffId = this.readString(eventRecord["buffId"]);
+      const durationMs = this.readNumber(eventRecord["durationMs"]);
+      const durationLabel = durationMs !== null ? ` (${Math.max(1, Math.round(durationMs / 1000))}s)` : "";
+      const chestLabel = species ? `Chest opened: ${this.formatSpeciesLabel(species)}` : "Chest opened";
+      if (!buffId) {
+        return chestLabel;
+      }
+
+      return `${chestLabel} -> ${buffId}${durationLabel}`;
+    }
+
+    if (type === "elite_spawned" || type === "elite_died") {
+      const eliteEntityId = this.readString(eventRecord["eliteEntityId"]);
+      const mobType = this.readNumber(eventRecord["mobType"]);
+      const species = mapMobTypeToSpecies(mobType);
+      const speciesLabel = species ? this.formatSpeciesLabel(species) : "Elite";
+      const verb = type === "elite_spawned" ? "spawned" : "died";
+      const idSuffix = eliteEntityId ? ` (${eliteEntityId})` : "";
+      return `Elite ${verb}: ${speciesLabel}${idSuffix}`;
+    }
+
+    if (type === "elite_buff_applied" || type === "elite_buff_removed") {
+      const eliteEntityId = this.readString(eventRecord["eliteEntityId"]) ?? "elite";
+      const targetEntityId = this.readString(eventRecord["targetEntityId"]) ?? "target";
+      const verb = type === "elite_buff_applied" ? "applied to" : "removed from";
+      return `Elite buff ${verb}: ${eliteEntityId} -> ${targetEntityId}`;
+    }
+
+    if (type === "run_ended") {
+      const reason = this.readString(eventRecord["reason"]) ?? this.runEndReason;
+      return `Run ended: ${this.formatRunEndReason(reason)}`;
+    }
+
+    return null;
+  }
+
+  private formatRunEndReason(reason: string | null): string {
+    if (!reason || reason.trim().length === 0) {
+      return "Unknown";
+    }
+
+    return reason
+      .split("_")
+      .map((token) => token.length > 0 ? `${token[0].toUpperCase()}${token.slice(1)}` : token)
+      .join(" ");
+  }
+
+  private recordCombatMetricsFromDamageEvents(damageEvents: ReadonlyArray<DamageNumberInstance>): boolean {
+    if (damageEvents.length === 0) {
+      return false;
+    }
+
+    const runtimeMs = this.runTimeMs;
+    for (const event of damageEvents) {
+      const amount = Math.max(0, Math.floor(event.amount));
+      if (amount <= 0) {
+        continue;
+      }
+
+      if (event.isHeal) {
+        this.recordCombatMetricSample("healing", amount, runtimeMs);
+        continue;
+      }
+
+      if (event.isShieldChange && event.shieldChangeDirection === "gain") {
+        this.recordCombatMetricSample("shield_gained", amount, runtimeMs);
+        continue;
+      }
+
+      if (event.isDamageReceived) {
+        this.recordCombatMetricSample("damage_taken", amount, runtimeMs);
+        this.combatPeakHitTaken = Math.max(this.combatPeakHitTaken, amount);
+      } else {
+        this.recordCombatMetricSample("damage_dealt", amount, runtimeMs);
+        this.combatPeakHitDealt = Math.max(this.combatPeakHitDealt, amount);
+      }
+    }
+
+    this.pruneCombatMetricSamples(runtimeMs);
+    return true;
+  }
+
+  private recordCombatMetricsFromLegacyLines(lines: ReadonlyArray<string>): void {
+    if (lines.length === 0) {
+      return;
+    }
+
+    for (const line of lines) {
+      const parsed = this.parseCombatMetricSampleFromLegacyLogLine(line, this.runTimeMs);
+      if (!parsed) {
+        continue;
+      }
+
+      this.recordCombatMetricSample(parsed.kind, parsed.amount, parsed.runTimeMs);
+    }
+
+    this.pruneCombatMetricSamples(this.runTimeMs);
+  }
+
+  private parseCombatMetricSampleFromLegacyLogLine(
+    line: string,
+    runTimeMs: number
+  ): TimedMetricSample<CombatMetricKind> | null {
+    const match = /(?:^|\s)([+-])(\d+)(?:\s|$)/.exec(line);
+    if (!match) {
+      return null;
+    }
+
+    const amount = Math.max(0, Math.floor(Number(match[2])));
+    if (amount <= 0) {
+      return null;
+    }
+
+    // Legacy parser fallback for unstructured combat logs.
+    const kind: CombatMetricKind = match[1] === "+" ? "healing" : "damage_taken";
+    return {
+      kind,
+      amount,
+      runTimeMs
+    };
+  }
+
+  private recordCombatMetricSample(kind: CombatMetricKind, amount: number, runTimeMs: number): void {
+    this.combatMetricSamples = [
+      ...this.combatMetricSamples,
+      { kind, amount, runTimeMs }
+    ];
+  }
+
+  private recordEconomyMetricSample(kind: EconomyMetricKind, amount: number, runTimeMs: number): void {
+    if (amount <= 0) {
+      return;
+    }
+
+    this.economyMetricSamples = [
+      ...this.economyMetricSamples,
+      { kind, amount, runTimeMs }
+    ];
+    this.pruneEconomyMetricSamples(runTimeMs);
+  }
+
+  private recordEconomyMetricsFromDrops(drops: ReadonlyArray<DropEvent>): void {
+    if (drops.length === 0) {
+      return;
+    }
+
+    for (const drop of drops) {
+      const amount = Math.max(0, Math.floor(drop.quantity ?? 0));
+      if (amount <= 0) {
+        continue;
+      }
+
+      if (drop.rewardKind === "echo_fragments") {
+        this.economyTotalEchoFragments += amount;
+        this.recordEconomyMetricSample("echo_fragments", amount, this.runTimeMs);
+        continue;
+      }
+
+      if (drop.rewardKind === "primal_core") {
+        this.economyTotalPrimalCore += amount;
+        this.recordEconomyMetricSample("primal_core", amount, this.runTimeMs);
+      }
+    }
+  }
+
+  private computeCombatRollingSums(): Readonly<{
+    damageDealt: number;
+    damageTaken: number;
+    healing: number;
+    shieldGained: number;
+  }> {
+    const windowStartMs = Math.max(0, this.runTimeMs - ANALYZER_WINDOW_MS);
+    let damageDealt = 0;
+    let damageTaken = 0;
+    let healing = 0;
+    let shieldGained = 0;
+
+    for (const sample of this.combatMetricSamples) {
+      if (sample.runTimeMs < windowStartMs) {
+        continue;
+      }
+
+      if (sample.kind === "damage_dealt") {
+        damageDealt += sample.amount;
+      } else if (sample.kind === "damage_taken") {
+        damageTaken += sample.amount;
+      } else if (sample.kind === "healing") {
+        healing += sample.amount;
+      } else if (sample.kind === "shield_gained") {
+        shieldGained += sample.amount;
+      }
+    }
+
+    return { damageDealt, damageTaken, healing, shieldGained };
+  }
+
+  private computeEconomyRollingSums(): Readonly<{
+    xp: number;
+    echoFragments: number;
+    primalCore: number;
+  }> {
+    const windowStartMs = Math.max(0, this.runTimeMs - ANALYZER_WINDOW_MS);
+    let xp = 0;
+    let echoFragments = 0;
+    let primalCore = 0;
+
+    for (const sample of this.economyMetricSamples) {
+      if (sample.runTimeMs < windowStartMs) {
+        continue;
+      }
+
+      if (sample.kind === "xp") {
+        xp += sample.amount;
+      } else if (sample.kind === "echo_fragments") {
+        echoFragments += sample.amount;
+      } else if (sample.kind === "primal_core") {
+        primalCore += sample.amount;
+      }
+    }
+
+    return { xp, echoFragments, primalCore };
+  }
+
+  private resolveRollingWindowSeconds(): number {
+    const elapsedInWindowMs = Math.max(1000, Math.min(ANALYZER_WINDOW_MS, this.runTimeMs));
+    return elapsedInWindowMs / 1000;
+  }
+
+  private formatPerSecond(value: number): string {
+    return value.toFixed(1);
+  }
+
+  private pruneCombatMetricSamples(nowMs: number): void {
+    const minTimeMs = Math.max(0, nowMs - ANALYZER_SAMPLE_RETENTION_MS);
+    this.combatMetricSamples = this.combatMetricSamples.filter((sample) => sample.runTimeMs >= minTimeMs);
+  }
+
+  private pruneEconomyMetricSamples(nowMs: number): void {
+    const minTimeMs = Math.max(0, nowMs - ANALYZER_SAMPLE_RETENTION_MS);
+    this.economyMetricSamples = this.economyMetricSamples.filter((sample) => sample.runTimeMs >= minTimeMs);
   }
 
   private animationLoop(timestamp: number): void {
@@ -3357,7 +3844,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
 
   private buildDefaultAssistConfig(): ArenaAssistConfig {
     return {
-      enabled: false,
+      enabled: true,
       autoHealEnabled: true,
       healAtHpPercent: 40,
       autoGuardEnabled: true,
@@ -3553,6 +4040,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   private isMovementInputContextActive(): boolean {
     return !!this.currentBattleId &&
       this.battleStatus === "started" &&
+      !this.isRunEnded &&
       !this.isAwaitingCardChoice &&
       !this.cardChoiceRequestInFlight &&
       !this.isPauseModalOpen &&
@@ -3727,7 +4215,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.runEndReason = null;
     this.runEndedAtMs = null;
     this.runTimeMs = 0;
-    this.runDurationMs = 480000;
+    this.runDurationMs = DEFAULT_RUN_DURATION_MS;
     this.timeSurvivedMs = 0;
     this.runTotalKills = 0;
     this.runEliteKills = 0;
@@ -3737,6 +4225,17 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.offeredCards = [];
     this.selectedCards = [];
     this.cardChoiceRequestInFlight = false;
+    this.eventFeedEntries = [];
+    this.eventFeedSequence = 0;
+    this.runEndedNarrativeLogged = false;
+    this.combatDetailLines = [];
+    this.combatMetricSamples = [];
+    this.combatPeakHitDealt = 0;
+    this.combatPeakHitTaken = 0;
+    this.economyMetricSamples = [];
+    this.economyTotalXpGained = 0;
+    this.economyTotalEchoFragments = 0;
+    this.economyTotalPrimalCore = 0;
     this.expConsoleEntries = [];
     this.runLevel = RUN_INITIAL_LEVEL;
     this.runXp = RUN_INITIAL_XP;
@@ -3751,6 +4250,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       !this.cardChoiceRequestInFlight &&
       !!this.currentBattleId &&
       this.battleStatus === "started" &&
+      !this.isRunEnded &&
       !this.isAwaitingCardChoice &&
       !this.isPauseModalOpen &&
       !this.isDeathModalOpen;
@@ -4142,21 +4642,27 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   }
 
   private focusDamageConsole(): void {
+    this.setTopLeftTab("combat");
+    this.focusTopLeftPanel();
     this.focusLeftLogsPane();
     this.highlightLogPanel("damage");
-    this.scrollConsoleToBottom(this.damageConsolePanelRef, ".damage-console__body");
+    this.scrollConsoleToBottom(this.topLeftPanelRef, ".combat-analyzer__body");
   }
 
   private focusLootConsole(): void {
+    this.setTopLeftTab("economy");
+    this.focusTopLeftPanel();
     this.focusLeftLogsPane();
     this.highlightLogPanel("loot");
-    this.scrollConsoleToBottom(this.lootConsolePanelRef, ".loot-console__body");
+    this.scrollConsoleToBottom(this.topLeftPanelRef, ".economy-analyzer__body");
   }
 
   private focusExpConsole(): void {
+    this.setTopLeftTab("events");
+    this.focusTopLeftPanel();
     this.focusLeftLogsPane();
     this.highlightLogPanel("exp");
-    this.scrollConsoleToBottom(this.expConsolePanelRef, ".exp-console__body");
+    this.scrollConsoleToBottom(this.topLeftPanelRef, ".events-feed");
   }
 
   private focusEquipmentPanel(): void {
@@ -4165,6 +4671,18 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
 
   private focusBackpackPanel(): void {
     this.focusPane(this.backpackPanelRef);
+  }
+
+  private focusToolsPanel(): void {
+    this.focusPane(this.toolsPanelRef);
+  }
+
+  private focusTopLeftPanel(): void {
+    this.focusPane(this.topLeftPanelRef);
+  }
+
+  private focusStatusPanel(): void {
+    this.focusPane(this.statusPanelRef);
   }
 
   private focusLeftLogsPane(): void {
@@ -4211,14 +4729,14 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     });
   }
 
-  private loadRightInfoTab(): RightInfoTabId {
+  private loadToolsTab(): ToolsTabId {
     if (!this.canUseStorage()) {
       return "helper";
     }
 
     try {
-      const value = window.localStorage.getItem(RIGHT_INFO_TAB_STORAGE_KEY);
-      return value === "helper" || value === "bestiary" || value === "status"
+      const value = window.localStorage.getItem(TOOLS_TAB_STORAGE_KEY);
+      return value === "helper" || value === "bestiary"
         ? value
         : "helper";
     } catch {
@@ -4226,13 +4744,13 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     }
   }
 
-  private persistRightInfoTab(): void {
+  private persistToolsTab(): void {
     if (!this.canUseStorage()) {
       return;
     }
 
     try {
-      window.localStorage.setItem(RIGHT_INFO_TAB_STORAGE_KEY, this.selectedRightInfoTab);
+      window.localStorage.setItem(TOOLS_TAB_STORAGE_KEY, this.selectedToolsTab);
     } catch {
       // Ignore storage failures to avoid blocking gameplay.
     }
