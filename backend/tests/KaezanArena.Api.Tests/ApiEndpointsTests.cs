@@ -911,10 +911,7 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
         var currentPlayer = GetActor(cast.Actors, playerId);
         var playerAutoAttackTriggered = cast.Events
             .OfType<DamageNumberEventDto>()
-            .Any(evt =>
-                evt.AttackerEntityId == playerId &&
-                evt.TargetEntityId.StartsWith("mob.", StringComparison.Ordinal) &&
-                evt.DamageAmount == 3);
+            .Any(evt => IsPlayerAutoAttackDamageEvent(cast, playerId, evt));
         var incomingDamage = cast.Events
             .OfType<DamageNumberEventDto>()
             .Where(evt => evt.TargetEntityId == playerId)
@@ -1013,9 +1010,9 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
             AssertArenaInvariants(step.Actors, playerId);
 
             var playerAutoAttackHitDuringGcd = step.GlobalCooldownRemainingMs > 0
-                && step.Events.OfType<DamageNumberEventDto>().Any(evt =>
-                    evt.DamageAmount == 3
-                    && evt.TargetEntityId.StartsWith("mob.", StringComparison.Ordinal));
+                && step.Events
+                    .OfType<DamageNumberEventDto>()
+                    .Any(evt => IsPlayerAutoAttackDamageEvent(step, playerId, evt));
 
             if (playerAutoAttackHitDuringGcd)
             {
@@ -1112,9 +1109,7 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
             var currentPlayer = GetActor(step.Actors, playerId);
             var autoAttackTriggered = step.Events
                 .OfType<DamageNumberEventDto>()
-                .Any(evt =>
-                    evt.TargetEntityId.StartsWith("mob.slime.", StringComparison.Ordinal) &&
-                    evt.DamageAmount == 3);
+                .Any(evt => IsPlayerAutoAttackDamageEvent(step, playerId, evt));
             var shieldBeforeDamage = Math.Min(
                 previousPlayer.MaxShield,
                 previousPlayer.Shield + (autoAttackTriggered ? 5 : 0));
@@ -2506,7 +2501,7 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
 
             sawMobDamage = sawMobDamage || step.Events
                 .OfType<DamageNumberEventDto>()
-                .Any(evt => evt.TargetEntityId.StartsWith("mob.slime.", StringComparison.Ordinal) && evt.DamageAmount == 3);
+                .Any(evt => IsPlayerAutoAttackDamageEvent(step, playerId, evt));
 
             sawPhysicalElementEvent = sawPhysicalElementEvent
                 || step.Events.OfType<FxSpawnEventDto>().Any(evt => evt.Element == ElementType.Physical)
@@ -3144,10 +3139,10 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
             .Select(actor => (actor.TileX, actor.TileY))
             .ToHashSet();
 
-        // No player auto-attack should happen: no mob should take the deterministic player AA damage.
+        // No player auto-attack should happen.
         Assert.DoesNotContain(
             quietStep.Events.OfType<DamageNumberEventDto>(),
-            evt => evt.TargetEntityId.StartsWith("mob.slime.", StringComparison.Ordinal) && evt.DamageAmount == 3);
+            evt => IsPlayerAutoAttackDamageEvent(quietStep, playerId, evt));
 
         Assert.DoesNotContain(
             quietStep.Events.OfType<FxSpawnEventDto>(),
@@ -3421,9 +3416,7 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
 
             var playerAutoAttack = step.Events
                 .OfType<DamageNumberEventDto>()
-                .FirstOrDefault(evt =>
-                    evt.AttackerEntityId == playerId &&
-                    evt.DamageAmount == 3);
+                .FirstOrDefault(evt => IsPlayerAutoAttackDamageEvent(step, playerId, evt));
             if (playerAutoAttack is null || !lockIsInRange)
             {
                 if (step.BattleStatus == "defeat")
@@ -3470,9 +3463,7 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
 
             var playerAutoAttack = step.Events
                 .OfType<DamageNumberEventDto>()
-                .FirstOrDefault(evt =>
-                    evt.AttackerEntityId == playerId &&
-                    evt.DamageAmount == 3);
+                .FirstOrDefault(evt => IsPlayerAutoAttackDamageEvent(step, playerId, evt));
             if (playerAutoAttack is null)
             {
                 if (step.BattleStatus == "defeat")
@@ -3592,8 +3583,7 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
             var mobDamageEvents = step.Events
                 .OfType<DamageNumberEventDto>()
                 .Where(evt =>
-                    evt.TargetEntityId.StartsWith("mob.slime.", StringComparison.Ordinal) &&
-                    evt.DamageAmount == 3 &&
+                    IsPlayerAutoAttackDamageEvent(step, playerId, evt) &&
                     !evt.IsCrit)
                 .ToList();
             if (mobDamageEvents.Count == 0)
@@ -3879,9 +3869,7 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
             if (!sawPlayerMeleeSwing)
             {
                 var playerAutoAttack = damageEvents.FirstOrDefault(evt =>
-                    evt.AttackerEntityId == playerId &&
-                    evt.TargetEntityId.StartsWith("mob.", StringComparison.Ordinal) &&
-                    evt.DamageAmount == 3);
+                    IsPlayerAutoAttackDamageEvent(step, playerId, evt));
                 if (playerAutoAttack is not null)
                 {
                     Assert.Contains(
@@ -4936,6 +4924,29 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
         return elapsedMs < EarlyMobConcurrentCapDurationMs
             ? EarlyMobConcurrentCap
             : MaxAliveMobs;
+    }
+
+    private static bool IsPlayerAutoAttackDamageEvent(
+        BattleStepResponseDto step,
+        string playerId,
+        DamageNumberEventDto damage)
+    {
+        if (!string.Equals(damage.AttackerEntityId, playerId, StringComparison.Ordinal) ||
+            !damage.TargetEntityId.StartsWith("mob.", StringComparison.Ordinal) ||
+            damage.DamageAmount <= 0 ||
+            damage.ElementType != ElementType.Physical)
+        {
+            return false;
+        }
+
+        return step.Events
+            .OfType<AttackFxEventDto>()
+            .Any(attackFx =>
+                attackFx.FxKind == CombatFxKind.MeleeSwing &&
+                attackFx.FromTileX == damage.AttackerTileX &&
+                attackFx.FromTileY == damage.AttackerTileY &&
+                attackFx.ToTileX == damage.TargetTileX &&
+                attackFx.ToTileY == damage.TargetTileY);
     }
 
     private static bool IsRangedMob(ActorStateDto actor)

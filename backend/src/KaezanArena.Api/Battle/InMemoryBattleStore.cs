@@ -24,6 +24,10 @@ public sealed class InMemoryBattleStore : IBattleStore
     private const int PlayerAutoAttackDamage = 3;
     private const int PlayerShieldGainPerAction = 5;
     private const int PlayerLifeLeechPercent = 30;
+    private const double PlayerDamageVarianceMinMultiplier = 0.90d;
+    private const double PlayerDamageVarianceMaxMultiplier = 1.10d;
+    private const double MobDamageVarianceMinMultiplier = 0.85d;
+    private const double MobDamageVarianceMaxMultiplier = 1.15d;
     private const int CriticalHitChancePercent = 20;
     private const int CritTextDurationMs = 800;
     private const string CritTextLabel = "CRIT!";
@@ -2687,7 +2691,8 @@ public sealed class InMemoryBattleStore : IBattleStore
         }
 
         var previousHp = player.Hp;
-        var remainingDamage = ApplyIncomingDamageModifiers(state, damage, isRangedAutoAttack);
+        var modifiedDamage = ApplyIncomingDamageModifiers(state, damage, isRangedAutoAttack);
+        var remainingDamage = RollDamageForAttacker(state, modifiedDamage, attacker);
         var absorbed = Math.Min(player.Shield, remainingDamage);
         player.Shield -= absorbed;
         remainingDamage -= absorbed;
@@ -2865,6 +2870,8 @@ public sealed class InMemoryBattleStore : IBattleStore
         {
             remainingDamage = ApplyOutgoingDamageModifiers(state, remainingDamage);
         }
+
+        remainingDamage = RollDamageForAttacker(state, remainingDamage, attacker);
         var absorbed = 0;
         if (mob.Shield > 0 && remainingDamage > 0)
         {
@@ -3219,6 +3226,58 @@ public sealed class InMemoryBattleStore : IBattleStore
 
         var nowMs = GetElapsedMsForTick(state.Tick);
         return buff.ExpiresAtMs > nowMs;
+    }
+
+    private static int RollDamageForAttacker(StoredBattle state, int baseDamage, StoredActor? attacker)
+    {
+        if (baseDamage <= 0)
+        {
+            return 0;
+        }
+
+        if (attacker is not null &&
+            string.Equals(attacker.Kind, "player", StringComparison.Ordinal))
+        {
+            return RollDamage(
+                baseDamage,
+                PlayerDamageVarianceMinMultiplier,
+                PlayerDamageVarianceMaxMultiplier,
+                state.Rng);
+        }
+
+        return RollDamage(
+            baseDamage,
+            MobDamageVarianceMinMultiplier,
+            MobDamageVarianceMaxMultiplier,
+            state.Rng);
+    }
+
+    private static int RollDamage(int baseDamage, double minMultiplier, double maxMultiplier, Random rng)
+    {
+        if (baseDamage <= 0)
+        {
+            return 0;
+        }
+
+        if (maxMultiplier < minMultiplier)
+        {
+            (minMultiplier, maxMultiplier) = (maxMultiplier, minMultiplier);
+        }
+
+        var clampedMin = Math.Max(0d, minMultiplier);
+        var clampedMax = Math.Max(clampedMin, maxMultiplier);
+        var multiplier = clampedMin + ((clampedMax - clampedMin) * rng.NextDouble());
+        var scaledDamage = baseDamage * multiplier;
+        var flooredDamage = (int)Math.Floor(scaledDamage);
+        var fractionalDamage = Math.Clamp(scaledDamage - flooredDamage, 0d, 1d);
+
+        var rolledDamage = flooredDamage;
+        if (fractionalDamage > 0d && rng.NextDouble() < fractionalDamage)
+        {
+            rolledDamage += 1;
+        }
+
+        return Math.Max(1, rolledDamage);
     }
 
     private static StoredActor? GetPlayerActor(StoredBattle state)
