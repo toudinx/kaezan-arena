@@ -8,9 +8,11 @@ describe("arena-hud.helpers", () => {
     expect(computeUnifiedVitalsPercent(5, 0)).toBe(0);
   });
 
-  it("computes deterministic EXP progress percentage", () => {
-    expect(computeExpProgressPercent(6, 750)).toBeCloseTo(62.5);
-    expect(computeExpProgressPercent(6, 1200)).toBe(0);
-    expect(computeExpProgressPercent(6, 1500)).toBe(25);
+  it("computes deterministic run EXP progress percentage", () => {
+    expect(computeExpProgressPercent(15, 25)).toBe(60);
+    expect(computeExpProgressPercent(25, 25)).toBe(100);
+    expect(computeExpProgressPercent(40, 25)).toBe(100);
+    expect(computeExpProgressPercent(-10, 25)).toBe(0);
+    expect(computeExpProgressPercent(5, 0)).toBe(100);
   });
 });

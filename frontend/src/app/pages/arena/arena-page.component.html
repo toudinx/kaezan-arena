@@ -31,13 +31,37 @@
               ></app-loot-console-window>
             </div>
           </section>
+
+          <section class="left-logs__panel" #expConsolePanel>
+            <header class="left-logs__panel-header left-logs__panel-header--with-actions" [class.left-logs__panel-header--active]="highlightedLogPanel === 'exp'">
+              <span>EXP</span>
+              <div class="exp-console__actions">
+                <button type="button" (click)="copyExpConsoleLines()">Copy</button>
+                <button type="button" (click)="clearExpConsole()">Clear</button>
+              </div>
+            </header>
+            <div class="left-logs__panel-body exp-console__body">
+              @if (expConsoleEntries.length === 0) {
+                <p class="exp-console__empty">No progression events yet.</p>
+              } @else {
+                @for (entry of expConsoleEntries; track trackExpEntryById($index, entry)) {
+                  <p class="exp-console__line">
+                    <span class="exp-console__tick">t{{ entry.tick }}</span>
+                    <span class="exp-console__message" [class.exp-console__message--level-up]="entry.kind === 'level_up'">
+                      {{ entry.message }}
+                    </span>
+                  </p>
+                }
+              }
+            </div>
+          </section>
         </div>
       </div>
     </aside>
 
     <section class="center-column" aria-label="Gameplay pane">
       <header class="top-hud">
-        <div class="top-hud__identity">{{ selectedCharacterSummaryLabel }}</div>
+        <div class="top-hud__identity">{{ runHudIdentityLabel }}</div>
         <div class="top-hud__bars">
           <div class="top-hud__vitals-track">
             <div class="top-hud__vitals-fill top-hud__vitals-fill--hp" [style.width.%]="playerHpPercent"></div>
@@ -81,6 +105,7 @@
         <div class="bottom-hotbar__exp-track" aria-label="Experience bar">
           <div class="bottom-hotbar__exp-fill" [style.width.%]="playerExpPercent"></div>
         </div>
+        <div class="top-hud__vitals-text">{{ runExpProgressLabel }}</div>
         <div class="bottom-hotbar__skills-grid">
           @for (slot of bottomBarSkillSlots; track trackSkillSlotBySkillId($index, slot)) {
             <button
@@ -224,7 +249,6 @@
             } @else {
               <div class="status-details">
                 <h3>{{ selectedCharacter?.name ?? "Unknown" }}</h3>
-                <p>Level {{ selectedCharacter?.level ?? 0 }} | XP {{ selectedCharacter?.xp ?? 0 }}</p>
                 <div class="status-details__grid">
                   @for (row of statusTabRows; track row.label) {
                     <div class="status-details__row">

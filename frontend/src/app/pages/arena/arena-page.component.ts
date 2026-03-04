@@ -124,10 +124,21 @@ type PreRunCharacterViewModel = Readonly<{
   equippedWeaponName: string;
   isActive: boolean;
 }>;
+type ExpConsoleEntry = Readonly<{
+  id: string;
+  tick: number;
+  message: string;
+  kind: "xp_gained" | "level_up";
+}>;
 export const RIGHT_INFO_TAB_STORAGE_KEY = "kaezan_arena_right_tab_v1";
 const AVALANCHE_SKILL_ID = "avalanche";
 const ASSIST_CONFIG_DEBOUNCE_MS = 200;
 const MOVEMENT_BUFFER_TTL_MS = 250;
+const RUN_INITIAL_LEVEL = 1;
+const RUN_INITIAL_XP = 0;
+const RUN_LEVEL_XP_BASE = 25;
+const RUN_LEVEL_XP_INCREMENT_PER_LEVEL = 15;
+const EXP_CONSOLE_MAX_ENTRIES = 200;
 const ASSIST_SKILL_IDS: readonly AssistSkillId[] = ["exori", "exori_min", "exori_mas", "avalanche"];
 type ArenaAssistConfig = Readonly<{
   enabled: boolean;
@@ -217,6 +228,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   @ViewChild("rightInfoPane", { static: false }) private readonly rightInfoPaneRef?: ElementRef<HTMLElement>;
   @ViewChild("damageConsolePanel", { static: false }) private readonly damageConsolePanelRef?: ElementRef<HTMLElement>;
   @ViewChild("lootConsolePanel", { static: false }) private readonly lootConsolePanelRef?: ElementRef<HTMLElement>;
+  @ViewChild("expConsolePanel", { static: false }) private readonly expConsolePanelRef?: ElementRef<HTMLElement>;
   @ViewChild("equipmentPanel", { static: false }) private readonly equipmentPanelRef?: ElementRef<HTMLElement>;
   @ViewChild("backpackPanel", { static: false }) private readonly backpackPanelRef?: ElementRef<HTMLElement>;
 
@@ -259,12 +271,17 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   backpackForcedFilter: BackpackFilter | null = null;
   backpackWeaponFilterMode = false;
   selectedRightInfoTab: RightInfoTabId = this.loadRightInfoTab();
-  highlightedLogPanel: "damage" | "loot" | null = null;
+  highlightedLogPanel: "damage" | "loot" | "exp" | null = null;
   isHotkeysModalOpen = false;
   isPauseModalOpen = false;
   isDeathModalOpen = false;
   deathEndReason: string | null = null;
   damageConsoleEntries: DamageConsoleEntry[] = [];
+  expConsoleEntries: ExpConsoleEntry[] = [];
+  runLevel = RUN_INITIAL_LEVEL;
+  runXp = RUN_INITIAL_XP;
+  xpToNextLevel = this.computeRunXpToNextLevel(RUN_INITIAL_LEVEL);
+  private expLogSequence = 0;
   ui: ArenaUiState = {
     player: {
       hp: 0,
@@ -325,7 +342,8 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         "B open Bestiary tab",
         "K open Status tab",
         "D focus Damage log",
-        "L focus Loot log"
+        "L focus Loot log",
+        "X focus EXP log"
       ]
     },
     { title: "Skills", entries: ["1-4 cast skills", "5 cast Guard"] }
@@ -370,7 +388,17 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   }
 
   get playerExpPercent(): number {
-    return computeExpProgressPercent(this.selectedCharacter?.level ?? 1, this.selectedCharacter?.xp ?? 0);
+    return computeExpProgressPercent(this.runXp, this.xpToNextLevel);
+  }
+
+  get runHudIdentityLabel(): string {
+    const selected = this.selectedCharacter ?? this.selectedPreRunCharacter;
+    const name = selected?.name ?? "Unknown Adventurer";
+    return `${name} (Run Lv. ${this.runLevel})`;
+  }
+
+  get runExpProgressLabel(): string {
+    return `${this.runXp} / ${this.xpToNextLevel} XP`;
   }
 
   get itemCatalogByIdForUi(): Readonly<Record<string, ItemDefinition>> {
@@ -450,6 +478,9 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
 
   get statusTabRows(): ReadonlyArray<Readonly<{ label: string; value: string }>> {
     return [
+      { label: "Run level", value: String(this.runLevel) },
+      { label: "Run XP", value: `${this.runXp} / ${this.xpToNextLevel}` },
+      { label: "XP to next", value: String(this.xpToNextLevel) },
       { label: "Attack", value: this.resolveStatusModifier(["attack", "atk", "power"]) },
       { label: "Crit rate", value: this.resolveStatusModifier(["crit_rate", "crit", "critical"]) },
       { label: "Life leech", value: this.resolveStatusModifier(["life_leech", "leech"]) },
@@ -616,6 +647,13 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       if (!event.repeat) {
         this.focusDamageConsole();
       }
+    }
+
+    if (normalizedKey === "x") {
+      if (!event.repeat) {
+        this.focusExpConsole();
+      }
+      return;
     }
 
     if (normalizedKey === "i") {
@@ -997,6 +1035,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.queuedCommandCount = 0;
     this.recentDamageNumbers = [];
     this.damageConsoleEntries = [];
+    this.expConsoleEntries = [];
     this.recentCommandResults = [];
     this.assistConfig = this.buildDefaultAssistConfig();
     this.bestiaryEntries = [];
@@ -1008,6 +1047,10 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.autoStepWasEnabledBeforePause = false;
     this.sentLootSourceKeys.clear();
     this.lootFeed = [];
+    this.runLevel = RUN_INITIAL_LEVEL;
+    this.runXp = RUN_INITIAL_XP;
+    this.xpToNextLevel = this.computeRunXpToNextLevel(RUN_INITIAL_LEVEL);
+    this.expLogSequence = 0;
     this.bootErrorMessage = "";
     this.readyPulseSkillIds = new Set<string>();
     this.ui = {
@@ -1264,6 +1307,24 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     const itemName = this.resolveItemDisplayName(dropEvent.itemId);
     const quantity = Math.max(1, dropEvent.quantity ?? 1);
     return quantity > 1 ? `${itemName} x${quantity}` : itemName;
+  }
+
+  clearExpConsole(): void {
+    this.expConsoleEntries = [];
+  }
+
+  async copyExpConsoleLines(limit = 50): Promise<void> {
+    const selected = this.expConsoleEntries.slice(Math.max(0, this.expConsoleEntries.length - limit));
+    const text = selected.map((entry) => `t${entry.tick} ${entry.message}`).join("\n");
+    if (text.length === 0) {
+      return;
+    }
+
+    await copyTextBestEffort(text);
+  }
+
+  trackExpEntryById(_index: number, entry: ExpConsoleEntry): string {
+    return entry.id;
   }
 
   canCastSkill(skillId: string): boolean {
@@ -1702,6 +1763,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         this.applyBestiaryFromSnapshot(response);
         this.updateGlobalCooldownFromSnapshot(response);
         this.updateAltarCooldownFromSnapshot(response);
+        this.applyRunProgressFromSnapshot(response);
         this.syncUiMetaState();
         this.battleLog = JSON.stringify(response, null, 2);
         this.activeFxCount = this.getActiveFxCount(this.scene);
@@ -2040,6 +2102,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.updateVisibleSkills(skills);
     this.updateGlobalCooldownFromSnapshot(response);
     this.updateAltarCooldownFromSnapshot(response);
+    this.applyRunProgressFromSnapshot(response);
     this.activeFxCount = this.getActiveFxCount(this.scene);
     this.appendDamageLogs(applied.damageNumbers);
     this.appendDamageConsoleLogs(applied.damageNumbers);
@@ -2803,6 +2866,80 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.altarCooldownRemainingMs = remainingMs;
   }
 
+  private applyRunProgressFromSnapshot(snapshot: StartBattleResponse | StepBattleResponse): void {
+    const record = snapshot as Record<string, unknown>;
+    const parsedRunLevel = this.readNumber(record["runLevel"]);
+    const parsedRunXp = this.readNumber(record["runXp"]);
+    const parsedXpToNextLevel = this.readNumber(record["xpToNextLevel"]);
+
+    const nextRunLevel = Math.max(RUN_INITIAL_LEVEL, Math.floor(parsedRunLevel ?? this.runLevel));
+    const fallbackXpToNextLevel = this.computeRunXpToNextLevel(nextRunLevel);
+    const nextXpToNextLevel = Math.max(1, Math.floor(parsedXpToNextLevel ?? fallbackXpToNextLevel));
+    const nextRunXp = Math.max(0, Math.min(nextXpToNextLevel, Math.floor(parsedRunXp ?? this.runXp)));
+
+    this.runLevel = nextRunLevel;
+    this.runXp = nextRunXp;
+    this.xpToNextLevel = nextXpToNextLevel;
+    this.appendExpLogsFromSnapshot(snapshot);
+  }
+
+  private computeRunXpToNextLevel(runLevel: number): number {
+    const clampedLevel = Math.max(RUN_INITIAL_LEVEL, Math.floor(runLevel));
+    return RUN_LEVEL_XP_BASE + ((clampedLevel - RUN_INITIAL_LEVEL) * RUN_LEVEL_XP_INCREMENT_PER_LEVEL);
+  }
+
+  private appendExpLogsFromSnapshot(snapshot: StartBattleResponse | StepBattleResponse): void {
+    const tick = Math.max(0, this.readNumber((snapshot as Record<string, unknown>)["tick"]) ?? this.currentBattleTick);
+    const nextEntries: ExpConsoleEntry[] = [];
+
+    const eventsValue = (snapshot as Record<string, unknown>)["events"];
+    if (Array.isArray(eventsValue)) {
+      for (const event of eventsValue) {
+        const eventRecord = event as Record<string, unknown>;
+        const eventType = this.readString(eventRecord["type"]);
+        if (eventType === "xp_gained") {
+          const amount = Math.max(0, Math.floor(this.readNumber(eventRecord["amount"]) ?? 0));
+          if (amount <= 0) {
+            continue;
+          }
+
+          const sourceSpeciesId = this.readString(eventRecord["sourceSpeciesId"]);
+          const isElite = this.readBoolean(eventRecord["isElite"]) === true;
+          const sourceLabel = sourceSpeciesId ? ` (${this.formatSpeciesLabel(sourceSpeciesId)})` : "";
+          const eliteLabel = isElite ? " [Elite]" : "";
+          nextEntries.push({
+            id: `exp-${tick}-${this.expLogSequence++}`,
+            tick,
+            kind: "xp_gained",
+            message: `+${amount} XP${sourceLabel}${eliteLabel}`
+          });
+          continue;
+        }
+
+        if (eventType !== "level_up") {
+          continue;
+        }
+
+        const newLevel = Math.max(RUN_INITIAL_LEVEL, Math.floor(this.readNumber(eventRecord["newLevel"]) ?? this.runLevel));
+        const runXp = Math.max(0, Math.floor(this.readNumber(eventRecord["runXp"]) ?? this.runXp));
+        const xpToNextLevel = Math.max(1, Math.floor(this.readNumber(eventRecord["xpToNextLevel"]) ?? this.computeRunXpToNextLevel(newLevel)));
+        nextEntries.push({
+          id: `exp-${tick}-${this.expLogSequence++}`,
+          tick,
+          kind: "level_up",
+          message: `Run Lv. ${newLevel} reached (${runXp}/${xpToNextLevel} XP)`
+        });
+      }
+    }
+
+    if (nextEntries.length === 0) {
+      return;
+    }
+
+    this.expConsoleEntries = [...this.expConsoleEntries, ...nextEntries].slice(-EXP_CONSOLE_MAX_ENTRIES);
+    this.scrollConsoleToBottom(this.expConsolePanelRef, ".exp-console__body");
+  }
+
   private animationLoop(timestamp: number): void {
     if (!this.scene || !this.renderer) {
       this.animationFrameId = requestAnimationFrame((nextTs) => this.animationLoop(nextTs));
@@ -3282,6 +3419,11 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.autoStepWasEnabledBeforePause = false;
     this.isDeathModalOpen = false;
     this.deathEndReason = null;
+    this.expConsoleEntries = [];
+    this.runLevel = RUN_INITIAL_LEVEL;
+    this.runXp = RUN_INITIAL_XP;
+    this.xpToNextLevel = this.computeRunXpToNextLevel(RUN_INITIAL_LEVEL);
+    this.expLogSequence = 0;
     this.isInRun = false;
     this.syncUiMetaState();
   }
@@ -3665,6 +3807,12 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.scrollConsoleToBottom(this.lootConsolePanelRef, ".loot-console__body");
   }
 
+  private focusExpConsole(): void {
+    this.focusLeftLogsPane();
+    this.highlightLogPanel("exp");
+    this.scrollConsoleToBottom(this.expConsolePanelRef, ".exp-console__body");
+  }
+
   private focusEquipmentPanel(): void {
     this.focusPane(this.equipmentPanelRef);
   }
@@ -3692,7 +3840,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     });
   }
 
-  private highlightLogPanel(panel: "damage" | "loot"): void {
+  private highlightLogPanel(panel: "damage" | "loot" | "exp"): void {
     this.highlightedLogPanel = panel;
     setTimeout(() => {
       if (this.highlightedLogPanel === panel) {
@@ -4133,4 +4281,39 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       requestAnimationFrame(() => resolve());
     });
   }
+}
+
+async function copyTextBestEffort(text: string): Promise<boolean> {
+  if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      // Fall through to legacy path.
+    }
+  }
+
+  if (typeof document === "undefined") {
+    return false;
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.style.position = "fixed";
+  textarea.style.left = "-9999px";
+  textarea.style.top = "0";
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+
+  let copied = false;
+  try {
+    copied = document.execCommand("copy");
+  } catch {
+    copied = false;
+  } finally {
+    document.body.removeChild(textarea);
+  }
+
+  return copied;
 }

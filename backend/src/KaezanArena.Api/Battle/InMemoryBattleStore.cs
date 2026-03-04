@@ -73,6 +73,11 @@ public sealed class InMemoryBattleStore : IBattleStore
     private const int KinaReflectPercent = 20;
     private const int KinaRangedReflectMultiplier = 2;
     private const string PlayerClassKina = "kina";
+    private const int RunInitialLevel = 1;
+    private const int RunInitialXp = 0;
+    private const int NormalMobKillXp = 10;
+    private const int RunLevelXpBase = 25;
+    private const int RunLevelXpIncrementPerLevel = 15;
 
     private const string StatusStarted = "started";
     private const string StatusDefeat = "defeat";
@@ -268,6 +273,8 @@ public sealed class InMemoryBattleStore : IBattleStore
             playerFacingDirection: FacingUp,
             battleStatus: StatusStarted,
             isPaused: false,
+            runXp: RunInitialXp,
+            runLevel: RunInitialLevel,
             playerMoveCooldownRemainingMs: 0,
             playerAttackCooldownRemainingMs: 0,
             playerGlobalCooldownRemainingMs: 0,
@@ -474,6 +481,7 @@ public sealed class InMemoryBattleStore : IBattleStore
         var effectiveTargetEntityId = ResolveEffectivePlayerAutoAttackTargetEntityId(state);
         var isGameOver = IsDefeat(state);
         var endReason = isGameOver ? EndReasonDeath : null;
+        var xpToNextLevel = GetXpToNextLevel(state.RunLevel);
         var nowMs = GetElapsedMsForTick(state.Tick);
         var activeBuffs = state.ActiveBuffs.Values
             .Where(buff => buff.ExpiresAtMs > nowMs)
@@ -516,6 +524,9 @@ public sealed class InMemoryBattleStore : IBattleStore
             BattleStatus: state.BattleStatus,
             IsGameOver: isGameOver,
             EndReason: endReason,
+            RunXp: state.RunXp,
+            RunLevel: state.RunLevel,
+            XpToNextLevel: xpToNextLevel,
             EffectiveTargetEntityId: effectiveTargetEntityId,
             LockedTargetEntityId: state.LockedTargetEntityId,
             GroundTargetPos: groundTargetPos,
@@ -619,6 +630,12 @@ public sealed class InMemoryBattleStore : IBattleStore
         {
             return (battleSeed * 214013) ^ 0x1A2B3C4D;
         }
+    }
+
+    private static int GetXpToNextLevel(int runLevel)
+    {
+        var clampedLevel = Math.Max(RunInitialLevel, runLevel);
+        return RunLevelXpBase + ((clampedLevel - RunInitialLevel) * RunLevelXpIncrementPerLevel);
     }
 
     private static int ComputeInitialBestiaryThreshold(Random bestiaryRng)
@@ -2948,6 +2965,7 @@ public sealed class InMemoryBattleStore : IBattleStore
         }
 
         RegisterBestiaryKill(state, events, mob);
+        GrantRunXpForMobKill(state, events, mob);
 
         if (string.Equals(state.LockedTargetEntityId, mob.ActorId, StringComparison.Ordinal))
         {
@@ -3008,6 +3026,54 @@ public sealed class InMemoryBattleStore : IBattleStore
 
         var nowMs = GetElapsedMsForTick(state.Tick);
         TrySpawnPendingSpeciesChest(state, events, nowMs);
+    }
+
+    private static void GrantRunXpForMobKill(StoredBattle state, List<BattleEventDto> events, StoredActor mob)
+    {
+        var awardedXp = ResolveRunXpForMobKill(mob);
+        if (awardedXp <= 0)
+        {
+            return;
+        }
+
+        var sourceSpeciesId = mob.MobType is MobArchetype mobType
+            ? GetSpeciesId(mobType)
+            : null;
+        events.Add(new XpGainedEventDto(
+            Amount: awardedXp,
+            SourceSpeciesId: sourceSpeciesId,
+            IsElite: IsEliteMob(mob)));
+
+        state.RunXp += awardedXp;
+        while (state.RunXp >= GetXpToNextLevel(state.RunLevel))
+        {
+            var previousLevel = state.RunLevel;
+            var previousThreshold = GetXpToNextLevel(previousLevel);
+            state.RunXp -= previousThreshold;
+            state.RunLevel += 1;
+
+            events.Add(new LevelUpEventDto(
+                PreviousLevel: previousLevel,
+                NewLevel: state.RunLevel,
+                RunXp: state.RunXp,
+                XpToNextLevel: GetXpToNextLevel(state.RunLevel)));
+        }
+    }
+
+    private static int ResolveRunXpForMobKill(StoredActor mob)
+    {
+        if (mob.MobType is not MobArchetype)
+        {
+            return 0;
+        }
+
+        return NormalMobKillXp;
+    }
+
+    private static bool IsEliteMob(StoredActor _mob)
+    {
+        // TODO(prompt5): Keep this extension point for elite/miniboss/boss XP tuning.
+        return false;
     }
 
     private static void AddCorpseDecal(StoredBattle state, StoredActor entity)
@@ -4080,6 +4146,23 @@ public sealed class InMemoryBattleStore : IBattleStore
                 $"Player move cooldown is invalid: {state.PlayerMoveCooldownRemainingMs}.");
         }
 
+        if (state.RunLevel < RunInitialLevel)
+        {
+            throw new InvalidOperationException($"Run level is invalid: {state.RunLevel}.");
+        }
+
+        if (state.RunXp < 0)
+        {
+            throw new InvalidOperationException($"Run XP is invalid: {state.RunXp}.");
+        }
+
+        var xpToNextLevel = GetXpToNextLevel(state.RunLevel);
+        if (state.RunXp >= xpToNextLevel)
+        {
+            throw new InvalidOperationException(
+                $"Run XP must be below the current threshold: xp={state.RunXp}, threshold={xpToNextLevel}.");
+        }
+
         if (state.NextChestSpawnCheckAtMs < 0)
         {
             throw new InvalidOperationException(
@@ -4221,6 +4304,8 @@ public sealed class InMemoryBattleStore : IBattleStore
             string playerFacingDirection,
             string battleStatus,
             bool isPaused,
+            int runXp,
+            int runLevel,
             int playerMoveCooldownRemainingMs,
             int playerAttackCooldownRemainingMs,
             int playerGlobalCooldownRemainingMs,
@@ -4255,6 +4340,8 @@ public sealed class InMemoryBattleStore : IBattleStore
             PlayerFacingDirection = playerFacingDirection;
             BattleStatus = battleStatus;
             IsPaused = isPaused;
+            RunXp = runXp;
+            RunLevel = runLevel;
             PlayerMoveCooldownRemainingMs = playerMoveCooldownRemainingMs;
             PlayerAttackCooldownRemainingMs = playerAttackCooldownRemainingMs;
             PlayerGlobalCooldownRemainingMs = playerGlobalCooldownRemainingMs;
@@ -4305,6 +4392,10 @@ public sealed class InMemoryBattleStore : IBattleStore
         public string BattleStatus { get; set; }
 
         public bool IsPaused { get; set; }
+
+        public int RunXp { get; set; }
+
+        public int RunLevel { get; set; }
 
         public int PlayerMoveCooldownRemainingMs { get; set; }
 

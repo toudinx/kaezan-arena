@@ -166,7 +166,7 @@
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-rows: 3fr 2fr;
+  grid-template-rows: 3fr 2fr 1.4fr;
   gap: 0.35rem;
 }
 
@@ -187,6 +187,13 @@
   text-transform: uppercase;
 }
 
+.left-logs__panel-header--with-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.3rem;
+}
+
 .left-logs__panel-header--active {
   color: #fde68a;
   border-bottom-color: #fbbf24;
@@ -197,6 +204,48 @@
   min-height: 0;
   overflow: hidden;
   padding: 0.24rem 0.3rem;
+}
+
+.exp-console__body {
+  overflow: auto;
+}
+
+.exp-console__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.exp-console__actions button {
+  border: 1px solid #475569;
+  border-radius: 0.25rem;
+  background: #1f2937;
+  color: #f8fafc;
+  font-size: 0.58rem;
+  line-height: 1;
+  padding: 0.16rem 0.28rem;
+  cursor: pointer;
+}
+
+.exp-console__empty {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 0.62rem;
+}
+
+.exp-console__line {
+  margin: 0 0 0.1rem;
+  color: #d1d5db;
+  font-size: 0.62rem;
+  line-height: 1.24;
+}
+
+.exp-console__tick {
+  color: #93c5fd;
+}
+
+.exp-console__message--level-up {
+  color: #fde68a;
 }
 
 .center-column {

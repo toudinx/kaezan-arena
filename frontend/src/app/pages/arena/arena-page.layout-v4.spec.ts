@@ -12,15 +12,17 @@ describe("ArenaPageComponent layout v4", () => {
     );
   }
 
-  it("targets both log consoles when focus helpers run", () => {
+  it("targets all log consoles when focus helpers run", () => {
     const component = createComponent();
     const scrollSpy = vi.spyOn(component as any, "scrollConsoleToBottom");
 
     (component as any).focusDamageConsole();
     (component as any).focusLootConsole();
+    (component as any).focusExpConsole();
 
     expect(scrollSpy).toHaveBeenCalledWith(undefined, ".damage-console__body");
     expect(scrollSpy).toHaveBeenCalledWith(undefined, ".loot-console__body");
+    expect(scrollSpy).toHaveBeenCalledWith(undefined, ".exp-console__body");
   });
 
   it("shows pre-run mode before start, then enters run mode", async () => {

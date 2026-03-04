@@ -6,12 +6,10 @@ export function computeUnifiedVitalsPercent(current: number, max: number): numbe
   return clampPercent((current / max) * 100);
 }
 
-export function computeExpProgressPercent(level: number, xpTotal: number): number {
-  const safeLevel = Math.max(1, Math.floor(level));
-  const safeXpTotal = Math.max(0, Math.floor(xpTotal));
-  const levelBandXp = Math.max(100, safeLevel * 200);
-  const progressXp = safeXpTotal % levelBandXp;
-  return clampPercent((progressXp / levelBandXp) * 100);
+export function computeExpProgressPercent(runXp: number, xpToNextLevel: number): number {
+  const safeXpToNextLevel = Math.max(1, Math.floor(xpToNextLevel));
+  const safeRunXp = Math.max(0, Math.min(safeXpToNextLevel, Math.floor(runXp)));
+  return clampPercent((safeRunXp / safeXpToNextLevel) * 100);
 }
 
 function clampPercent(value: number): number {

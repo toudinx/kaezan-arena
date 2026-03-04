@@ -34,7 +34,9 @@ builder.Services.AddSwaggerGen(options =>
                 typeof(AltarActivatedEventDto),
                 typeof(SpeciesChestSpawnedEventDto),
                 typeof(SpeciesChestOpenedEventDto),
-                typeof(CritTextEventDto)
+                typeof(CritTextEventDto),
+                typeof(LevelUpEventDto),
+                typeof(XpGainedEventDto)
             ];
         }
 
@@ -112,6 +114,16 @@ builder.Services.AddSwaggerGen(options =>
         if (subType == typeof(CritTextEventDto))
         {
             return "crit_text";
+        }
+
+        if (subType == typeof(LevelUpEventDto))
+        {
+            return "level_up";
+        }
+
+        if (subType == typeof(XpGainedEventDto))
+        {
+            return "xp_gained";
         }
 
         return null;

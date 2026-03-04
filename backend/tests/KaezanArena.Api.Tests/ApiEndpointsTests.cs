@@ -35,6 +35,10 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
     private const int AntiRangedPressureDurationMs = 8000;
     private const int ThornsBoostDurationMs = 8000;
     private const int DamageBoostDurationMs = 6000;
+    private const int RunInitialLevel = 1;
+    private const int RunXpPerNormalMobKill = 10;
+    private const int RunLevelXpBase = 25;
+    private const int RunLevelXpIncrementPerLevel = 15;
     private readonly HttpClient _client;
 
     public ApiEndpointsTests(WebApplicationFactory<Program> factory)
@@ -2521,6 +2525,151 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
     }
 
     [Fact]
+    public async Task PostBattleStart_RunProgression_FieldsAreInitialized()
+    {
+        var start = await StartBattleAsync("arena-run-progression-start", "player-run-progression-start", 1337);
+        AssertArenaInvariants(start.Actors, "player-run-progression-start");
+
+        Assert.Equal(0, start.RunXp);
+        Assert.Equal(RunInitialLevel, start.RunLevel);
+        Assert.Equal(ComputeXpToNextLevel(start.RunLevel), start.XpToNextLevel);
+    }
+
+    [Fact]
+    public async Task PostBattleStep_RunProgression_KillsGrantXp_LevelUpsCarryExcess_AndEmitEvents()
+    {
+        var playerId = "player-run-progression";
+        var start = await StartBattleAsync("arena-run-progression", playerId, 1337);
+        AssertArenaInvariants(start.Actors, playerId);
+        Assert.Equal(0, start.RunXp);
+        Assert.Equal(RunInitialLevel, start.RunLevel);
+        Assert.Equal(ComputeXpToNextLevel(start.RunLevel), start.XpToNextLevel);
+
+        var currentTick = start.Tick;
+        var currentSkills = start.Skills;
+        var totalKillXp = 0;
+        var sawKill = false;
+        var sawLevelUp = false;
+        var sawCarryOver = false;
+        var sawXpGainedEvent = false;
+
+        for (var stepIndex = 0; stepIndex < 260; stepIndex += 1)
+        {
+            var step = await StepBattleAsync(start.BattleId, currentTick, BuildReadySkillCommands(currentSkills));
+            currentTick = step.Tick;
+            currentSkills = step.Skills;
+            AssertArenaInvariants(step.Actors, playerId);
+
+            var killedMobCount = step.Events
+                .OfType<DeathEventDto>()
+                .Count(evt => string.Equals(evt.EntityType, "mob", StringComparison.Ordinal));
+            if (killedMobCount > 0)
+            {
+                sawKill = true;
+                totalKillXp += killedMobCount * RunXpPerNormalMobKill;
+            }
+
+            var xpGainedEvents = step.Events.OfType<XpGainedEventDto>().ToList();
+            Assert.Equal(killedMobCount, xpGainedEvents.Count);
+            if (xpGainedEvents.Count > 0)
+            {
+                sawXpGainedEvent = true;
+                Assert.All(xpGainedEvents, evt =>
+                {
+                    Assert.Equal(RunXpPerNormalMobKill, evt.Amount);
+                    Assert.False(evt.IsElite);
+                    Assert.False(string.IsNullOrWhiteSpace(evt.SourceSpeciesId));
+                });
+            }
+
+            var expectedProgress = ComputeExpectedRunProgress(totalKillXp);
+            Assert.Equal(expectedProgress.RunLevel, step.RunLevel);
+            Assert.Equal(expectedProgress.RunXp, step.RunXp);
+            Assert.Equal(expectedProgress.XpToNextLevel, step.XpToNextLevel);
+
+            var levelUpEvents = step.Events.OfType<LevelUpEventDto>().ToList();
+            if (levelUpEvents.Count > 0)
+            {
+                sawLevelUp = true;
+                var lastLevelUp = levelUpEvents[^1];
+                Assert.Equal(step.RunLevel, lastLevelUp.NewLevel);
+                Assert.Equal(step.RunXp, lastLevelUp.RunXp);
+                Assert.Equal(step.XpToNextLevel, lastLevelUp.XpToNextLevel);
+                sawCarryOver = sawCarryOver || step.RunXp > 0;
+            }
+
+            if (xpGainedEvents.Count > 0 && levelUpEvents.Count > 0)
+            {
+                var xpEventIndex = step.Events.ToList().FindIndex(evt => evt is XpGainedEventDto);
+                var levelUpEventIndex = step.Events.ToList().FindIndex(evt => evt is LevelUpEventDto);
+                Assert.True(
+                    xpEventIndex >= 0 && levelUpEventIndex > xpEventIndex,
+                    "Expected xp_gained events to be emitted before level_up events in the same step.");
+            }
+
+            if (sawKill && sawXpGainedEvent && sawLevelUp && sawCarryOver)
+            {
+                return;
+            }
+
+            if (step.BattleStatus == "defeat")
+            {
+                break;
+            }
+        }
+
+        Assert.True(sawKill, "Expected at least one mob kill to grant run XP.");
+        Assert.True(sawXpGainedEvent, "Expected at least one xp_gained event for a mob kill.");
+        Assert.True(sawLevelUp, "Expected at least one deterministic run level-up event.");
+        Assert.True(sawCarryOver, "Expected level-up to carry excess XP instead of resetting to zero.");
+    }
+
+    [Fact]
+    public async Task PostBattleStep_RunProgression_XpGainedEventOrder_IsDeterministicForSameSeed()
+    {
+        const int seed = 1337;
+        var firstStart = await StartBattleAsync("arena-run-xp-events-a", "player-run-xp-events", seed);
+        var secondStart = await StartBattleAsync("arena-run-xp-events-b", "player-run-xp-events", seed);
+        AssertArenaInvariants(firstStart.Actors, "player-run-xp-events");
+        AssertArenaInvariants(secondStart.Actors, "player-run-xp-events");
+
+        var firstTick = firstStart.Tick;
+        var secondTick = secondStart.Tick;
+        var firstSkills = firstStart.Skills;
+        var secondSkills = secondStart.Skills;
+        var sawXpGain = false;
+
+        for (var stepIndex = 0; stepIndex < 180; stepIndex += 1)
+        {
+            var firstStep = await StepBattleAsync(firstStart.BattleId, firstTick, BuildReadySkillCommands(firstSkills));
+            var secondStep = await StepBattleAsync(secondStart.BattleId, secondTick, BuildReadySkillCommands(secondSkills));
+            firstTick = firstStep.Tick;
+            secondTick = secondStep.Tick;
+            firstSkills = firstStep.Skills;
+            secondSkills = secondStep.Skills;
+            AssertArenaInvariants(firstStep.Actors, "player-run-xp-events");
+            AssertArenaInvariants(secondStep.Actors, "player-run-xp-events");
+
+            var firstXpSignatures = firstStep.Events.OfType<XpGainedEventDto>()
+                .Select(evt => $"{evt.Amount}:{evt.SourceSpeciesId}:{evt.IsElite}")
+                .ToList();
+            var secondXpSignatures = secondStep.Events.OfType<XpGainedEventDto>()
+                .Select(evt => $"{evt.Amount}:{evt.SourceSpeciesId}:{evt.IsElite}")
+                .ToList();
+
+            Assert.Equal(firstXpSignatures, secondXpSignatures);
+            sawXpGain = sawXpGain || firstXpSignatures.Count > 0;
+
+            if (firstStep.BattleStatus == "defeat" || secondStep.BattleStatus == "defeat")
+            {
+                break;
+            }
+        }
+
+        Assert.True(sawXpGain, "Expected at least one deterministic xp_gained event.");
+    }
+
+    [Fact]
     public async Task PostBattleStep_RangedMobs_DoNotRemainFarForLong()
     {
         var playerId = "player-ranged-band";
@@ -4978,6 +5127,27 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
                 .Select(entry => $"{entry.Species}:{entry.KillsTotal}:{entry.NextChestAtKills}"));
     }
 
+    private static int ComputeXpToNextLevel(int runLevel)
+    {
+        var clampedLevel = Math.Max(RunInitialLevel, runLevel);
+        return RunLevelXpBase + ((clampedLevel - RunInitialLevel) * RunLevelXpIncrementPerLevel);
+    }
+
+    private static RunProgressSnapshot ComputeExpectedRunProgress(int totalRunXp)
+    {
+        var runLevel = RunInitialLevel;
+        var remainingXp = Math.Max(0, totalRunXp);
+        var xpToNextLevel = ComputeXpToNextLevel(runLevel);
+        while (remainingXp >= xpToNextLevel)
+        {
+            remainingXp -= xpToNextLevel;
+            runLevel += 1;
+            xpToNextLevel = ComputeXpToNextLevel(runLevel);
+        }
+
+        return new RunProgressSnapshot(runLevel, remainingXp, xpToNextLevel);
+    }
+
     private static string MapMobArchetypeToSpeciesId(MobArchetype archetype)
     {
         return archetype switch
@@ -5050,6 +5220,10 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
                 $"species_chest_opened:{speciesChestOpened.Species}:{speciesChestOpened.BuffId}:{speciesChestOpened.DurationMs}",
             CritTextEventDto critText =>
                 $"crit_text:{critText.Text}:{critText.TileX}:{critText.TileY}:{critText.StartAtMs}:{critText.DurationMs}",
+            LevelUpEventDto levelUp =>
+                $"level_up:{levelUp.PreviousLevel}:{levelUp.NewLevel}:{levelUp.RunXp}:{levelUp.XpToNextLevel}",
+            XpGainedEventDto xpGained =>
+                $"xp_gained:{xpGained.Amount}:{xpGained.SourceSpeciesId}:{xpGained.IsElite}",
             _ => battleEvent.GetType().Name
         };
     }
@@ -5178,4 +5352,9 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
         BattleStepResponseDto ActivatedStep,
         IReadOnlyList<ActorStateDto> ActorsBeforeActivation,
         string ConsumedPoiId);
+
+    private sealed record RunProgressSnapshot(
+        int RunLevel,
+        int RunXp,
+        int XpToNextLevel);
 }

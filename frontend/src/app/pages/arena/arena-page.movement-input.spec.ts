@@ -128,16 +128,19 @@ describe("ArenaPageComponent movement input", () => {
     expect(component.assistAutoToggleLabel).toBe("AUTO: OFF");
   });
 
-  it("uses D/L hotkeys to focus damage/loot console helpers", () => {
+  it("uses D/L/X hotkeys to focus damage/loot/exp console helpers", () => {
     const component = createComponent();
     const focusDamageSpy = vi.spyOn(component as any, "focusDamageConsole");
     const focusLootSpy = vi.spyOn(component as any, "focusLootConsole");
+    const focusExpSpy = vi.spyOn(component as any, "focusExpConsole");
 
     component.onKeyDown(new KeyboardEvent("keydown", { key: "d" }));
     component.onKeyDown(new KeyboardEvent("keydown", { key: "l" }));
+    component.onKeyDown(new KeyboardEvent("keydown", { key: "x" }));
 
     expect(focusDamageSpy).toHaveBeenCalledTimes(1);
     expect(focusLootSpy).toHaveBeenCalledTimes(1);
+    expect(focusExpSpy).toHaveBeenCalledTimes(1);
   });
 
   it("buffers movement and retries after cooldown failure while key remains held", () => {

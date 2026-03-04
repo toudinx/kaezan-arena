@@ -17,4 +17,6 @@ namespace KaezanArena.Api.Contracts.Battle;
 [JsonDerivedType(typeof(SpeciesChestSpawnedEventDto), "species_chest_spawned")]
 [JsonDerivedType(typeof(SpeciesChestOpenedEventDto), "species_chest_opened")]
 [JsonDerivedType(typeof(CritTextEventDto), "crit_text")]
+[JsonDerivedType(typeof(LevelUpEventDto), "level_up")]
+[JsonDerivedType(typeof(XpGainedEventDto), "xp_gained")]
 public abstract record BattleEventDto;
