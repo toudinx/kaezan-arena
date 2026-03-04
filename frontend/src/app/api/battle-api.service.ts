@@ -5,6 +5,12 @@ export type StartBattleRequest = components["schemas"]["BattleStartRequestDto"];
 export type StartBattleResponse = components["schemas"]["BattleStartResponseDto"];
 export type StepBattleRequest = components["schemas"]["BattleStepRequestDto"];
 export type StepBattleResponse = components["schemas"]["BattleStepResponseDto"];
+export type ChooseCardRequest = {
+  battleId: string;
+  choiceId: string;
+  selectedCardId: string;
+};
+export type ChooseCardResponse = StepBattleResponse;
 
 @Injectable({ providedIn: "root" })
 export class BattleApiService {
@@ -21,6 +27,14 @@ export class BattleApiService {
       "/api/v1/battle/step",
       request,
       "Battle step"
+    );
+  }
+
+  async chooseCard(request: ChooseCardRequest): Promise<ChooseCardResponse> {
+    return this.postJson<ChooseCardRequest, ChooseCardResponse>(
+      "/api/v1/battle/choose-card",
+      request,
+      "Choose card"
     );
   }
 

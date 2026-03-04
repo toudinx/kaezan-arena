@@ -29,5 +29,9 @@ public sealed record BattleSnapshot(
     IReadOnlyList<BestiaryEntryDto> Bestiary,
     string? PendingSpeciesChest,
     IReadOnlyList<BattlePoiDto> ActivePois,
+    bool IsAwaitingCardChoice,
+    string? PendingChoiceId,
+    IReadOnlyList<BattleCardOfferDto> OfferedCards,
+    IReadOnlyList<BattleCardOfferDto> SelectedCards,
     IReadOnlyList<BattleEventDto> Events,
     IReadOnlyList<CommandResultDto> CommandResults);

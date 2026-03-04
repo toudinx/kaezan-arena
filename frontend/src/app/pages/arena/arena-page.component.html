@@ -257,6 +257,16 @@
                     </div>
                   }
                 </div>
+                <h4>Cards</h4>
+                @if (selectedCards.length === 0) {
+                  <p>No cards selected yet.</p>
+                } @else {
+                  <ul>
+                    @for (card of selectedCards; track card.id) {
+                      <li title="{{ card.description }}">{{ card.name }}</li>
+                    }
+                  </ul>
+                }
               </div>
             }
           </div>
@@ -322,6 +332,28 @@
         }
       </div>
     </section>
+  }
+
+  @if (isAwaitingCardChoice && !isDeathModalOpen) {
+    <div class="pause-modal__backdrop">
+      <section class="pause-modal" role="dialog" aria-modal="true" aria-label="Choose a card">
+        <header class="pause-modal__header">
+          <h2>Choose a Card</h2>
+          <p>Simulation paused. Pick one to continue.</p>
+        </header>
+        <div class="pause-modal__actions">
+          @for (card of offeredCards; track card.id) {
+            <button
+              type="button"
+              (click)="onCardChoiceSelected(card.id)"
+              [disabled]="cardChoiceRequestInFlight"
+            >
+              {{ card.name }}: {{ card.description }}
+            </button>
+          }
+        </div>
+      </section>
+    </div>
   }
 
   @if (isDeathModalOpen) {

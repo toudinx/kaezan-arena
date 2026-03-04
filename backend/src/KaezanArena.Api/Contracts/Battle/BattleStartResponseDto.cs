@@ -26,4 +26,8 @@ public sealed record BattleStartResponseDto(
     IReadOnlyList<BattleBuffDto> ActiveBuffs,
     IReadOnlyList<BestiaryEntryDto> Bestiary,
     string? PendingSpeciesChest,
-    IReadOnlyList<BattlePoiDto> ActivePois);
+    IReadOnlyList<BattlePoiDto> ActivePois,
+    bool IsAwaitingCardChoice,
+    string? PendingChoiceId,
+    IReadOnlyList<BattleCardOfferDto> OfferedCards,
+    IReadOnlyList<BattleCardOfferDto> SelectedCards);

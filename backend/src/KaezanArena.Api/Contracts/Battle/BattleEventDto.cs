@@ -19,4 +19,6 @@ namespace KaezanArena.Api.Contracts.Battle;
 [JsonDerivedType(typeof(CritTextEventDto), "crit_text")]
 [JsonDerivedType(typeof(LevelUpEventDto), "level_up")]
 [JsonDerivedType(typeof(XpGainedEventDto), "xp_gained")]
+[JsonDerivedType(typeof(CardChoiceOfferedEventDto), "card_choice_offered")]
+[JsonDerivedType(typeof(CardChosenEventDto), "card_chosen")]
 public abstract record BattleEventDto;

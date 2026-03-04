@@ -8,5 +8,7 @@ public interface IBattleStore
 
     BattleSnapshot StepBattle(string battleId, int? clientTick, IReadOnlyList<BattleCommandDto>? commands);
 
+    BattleSnapshot ChooseCard(string battleId, string choiceId, string selectedCardId);
+
     bool TryGetBattleSeed(string battleId, out int seed);
 }

@@ -78,6 +78,9 @@ public sealed class InMemoryBattleStore : IBattleStore
     private const int NormalMobKillXp = 10;
     private const int RunLevelXpBase = 25;
     private const int RunLevelXpIncrementPerLevel = 15;
+    private const int MaxCardOfferCount = 3;
+    private const int MaxCardSelectionsPerRun = 8;
+    private const int MaxGlobalCooldownReductionPercent = 60;
 
     private const string StatusStarted = "started";
     private const string StatusDefeat = "defeat";
@@ -123,6 +126,7 @@ public sealed class InMemoryBattleStore : IBattleStore
     private const string NotStartedReason = "not_started";
     private const string DefeatReason = "defeat";
     private const string PausedReason = "paused";
+    private const string AwaitingCardChoiceReason = "awaiting_card_choice";
     private const string EndReasonDeath = "death";
     private const string PoiTypeChest = "chest";
     private const string PoiTypeSpeciesChest = "species_chest";
@@ -189,6 +193,81 @@ public sealed class InMemoryBattleStore : IBattleStore
             pair => pair.Value,
             pair => pair.Key,
             StringComparer.Ordinal);
+    private static readonly IReadOnlyList<CardDefinition> CardPool =
+    [
+        new(
+            Id: "colossus_heart",
+            Name: "Colossus Heart",
+            Description: "+40% max HP and +6 damage.",
+            Effects: new CardEffectBundle(FlatDamageBonus: 6, PercentMaxHpBonus: 40)),
+        new(
+            Id: "bloodletter_edge",
+            Name: "Bloodletter Edge",
+            Description: "+22% damage and +2 HP on hit.",
+            Effects: new CardEffectBundle(PercentDamageBonus: 22, FlatHpOnHit: 2)),
+        new(
+            Id: "frenzy_clockwork",
+            Name: "Frenzy Clockwork",
+            Description: "+35% attack speed and +8% damage.",
+            Effects: new CardEffectBundle(PercentDamageBonus: 8, PercentAttackSpeedBonus: 35)),
+        new(
+            Id: "butcher_mark",
+            Name: "Butcher Mark",
+            Description: "+12 flat damage.",
+            Effects: new CardEffectBundle(FlatDamageBonus: 12)),
+        new(
+            Id: "vampiric_spikes",
+            Name: "Vampiric Spikes",
+            Description: "+4 HP on hit and +10% max HP.",
+            Effects: new CardEffectBundle(PercentMaxHpBonus: 10, FlatHpOnHit: 4)),
+        new(
+            Id: "overclocked_reflex",
+            Name: "Overclocked Reflex",
+            Description: "+25% global cooldown reduction and +20% attack speed.",
+            Effects: new CardEffectBundle(PercentAttackSpeedBonus: 20, GlobalCooldownReductionPercent: 25)),
+        new(
+            Id: "warlord_banner",
+            Name: "Warlord Banner",
+            Description: "+18% damage and +20% max HP.",
+            Effects: new CardEffectBundle(PercentDamageBonus: 18, PercentMaxHpBonus: 20)),
+        new(
+            Id: "titan_grip",
+            Name: "Titan Grip",
+            Description: "+10 flat damage and +20% attack speed.",
+            Effects: new CardEffectBundle(FlatDamageBonus: 10, PercentAttackSpeedBonus: 20)),
+        new(
+            Id: "arcane_tempo",
+            Name: "Arcane Tempo",
+            Description: "+30% global cooldown reduction.",
+            Effects: new CardEffectBundle(GlobalCooldownReductionPercent: 30)),
+        new(
+            Id: "crushing_momentum",
+            Name: "Crushing Momentum",
+            Description: "+16% damage and +16% attack speed.",
+            Effects: new CardEffectBundle(PercentDamageBonus: 16, PercentAttackSpeedBonus: 16)),
+        new(
+            Id: "iron_fortress",
+            Name: "Iron Fortress",
+            Description: "+55% max HP.",
+            Effects: new CardEffectBundle(PercentMaxHpBonus: 55)),
+        new(
+            Id: "executioner_oath",
+            Name: "Executioner Oath",
+            Description: "+30% damage.",
+            Effects: new CardEffectBundle(PercentDamageBonus: 30)),
+        new(
+            Id: "sanguine_engine",
+            Name: "Sanguine Engine",
+            Description: "+3 HP on hit and +15% attack speed.",
+            Effects: new CardEffectBundle(FlatHpOnHit: 3, PercentAttackSpeedBonus: 15)),
+        new(
+            Id: "battle_hymn",
+            Name: "Battle Hymn",
+            Description: "+8 flat damage and +20% global cooldown reduction.",
+            Effects: new CardEffectBundle(FlatDamageBonus: 8, GlobalCooldownReductionPercent: 20))
+    ];
+    private static readonly IReadOnlyDictionary<string, CardDefinition> CardById =
+        CardPool.ToDictionary(card => card.Id, StringComparer.Ordinal);
 
     private readonly ConcurrentDictionary<string, StoredBattle> _battles = new();
     private int _sequence;
@@ -316,7 +395,12 @@ public sealed class InMemoryBattleStore : IBattleStore
             pois: BuildInitialPois(),
             mobSlots: mobSlots,
             bestiary: bestiary,
-            pendingSpeciesChestArchetype: null);
+            pendingSpeciesChestArchetype: null,
+            playerModifiers: new PlayerModifiers(),
+            pendingCardChoice: null,
+            selectedCardIds: [],
+            cardSelectionsGranted: 0,
+            nextCardChoiceSequence: 1);
 
         var initialMobCap = GetMaxAliveMobsForTick(state.Tick);
         foreach (var slot in state.MobSlots.Values.OrderBy(value => value.SlotIndex))
@@ -355,6 +439,12 @@ public sealed class InMemoryBattleStore : IBattleStore
             {
                 var pausedCommandResults = BuildPausedCommandResults(commands, preAppliedPauseResults);
                 return ToSnapshot(state, [], pausedCommandResults);
+            }
+
+            if (state.PendingCardChoice is not null)
+            {
+                var awaitingCardChoiceResults = BuildAwaitingCardChoiceCommandResults(commands, preAppliedPauseResults);
+                return ToSnapshot(state, [], awaitingCardChoiceResults);
             }
 
             state.Tick += 1;
@@ -417,6 +507,79 @@ public sealed class InMemoryBattleStore : IBattleStore
         }
     }
 
+    public BattleSnapshot ChooseCard(string battleId, string choiceId, string selectedCardId)
+    {
+        if (string.IsNullOrWhiteSpace(battleId) || !_battles.TryGetValue(battleId.Trim(), out var state))
+        {
+            throw new KeyNotFoundException($"Battle '{battleId}' was not found.");
+        }
+
+        var normalizedChoiceId = NormalizeChoiceId(choiceId);
+        if (normalizedChoiceId is null)
+        {
+            throw new ArgumentException("choiceId is required.", nameof(choiceId));
+        }
+
+        var normalizedSelectedCardId = NormalizeCardId(selectedCardId);
+        if (normalizedSelectedCardId is null)
+        {
+            throw new ArgumentException("selectedCardId is required.", nameof(selectedCardId));
+        }
+
+        lock (state.Sync)
+        {
+            if (!IsStarted(state))
+            {
+                throw new InvalidOperationException("Battle is not in a started state.");
+            }
+
+            var pendingChoice = state.PendingCardChoice;
+            if (pendingChoice is null)
+            {
+                throw new InvalidOperationException("No pending card choice exists for this battle.");
+            }
+
+            if (!string.Equals(pendingChoice.ChoiceId, normalizedChoiceId, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException("choiceId does not match the current pending card choice.");
+            }
+
+            if (!pendingChoice.OfferedCardIds.Contains(normalizedSelectedCardId, StringComparer.Ordinal))
+            {
+                throw new InvalidOperationException("selectedCardId is not part of the current offer.");
+            }
+
+            if (!CardById.TryGetValue(normalizedSelectedCardId, out var selectedCard))
+            {
+                throw new InvalidOperationException($"Card '{normalizedSelectedCardId}' was not found in the card pool.");
+            }
+
+            if (state.SelectedCardIds.Contains(selectedCard.Id, StringComparer.Ordinal))
+            {
+                throw new InvalidOperationException($"Card '{selectedCard.Id}' has already been selected in this run.");
+            }
+
+            var player = GetPlayerActor(state);
+            if (player is null)
+            {
+                throw new InvalidOperationException("Player actor is missing.");
+            }
+
+            ApplyCardEffects(state, player, selectedCard);
+            state.SelectedCardIds.Add(selectedCard.Id);
+            state.PendingCardChoice = null;
+
+            var events = new List<BattleEventDto>
+            {
+                new CardChosenEventDto(
+                    ChoiceId: pendingChoice.ChoiceId,
+                    Card: ToCardOfferDto(selectedCard))
+            };
+
+            return ToSnapshot(state, events, []);
+        }
+    }
+
     public bool TryGetBattleSeed(string battleId, out int seed)
     {
         seed = 0;
@@ -455,7 +618,7 @@ public sealed class InMemoryBattleStore : IBattleStore
             .Select(skill => new SkillStateDto(
                 SkillId: skill.SkillId,
                 CooldownRemainingMs: skill.CooldownRemainingMs,
-                CooldownTotalMs: skill.CooldownTotalMs))
+                CooldownTotalMs: ResolveSkillCooldownTotalMs(state, skill)))
             .ToList();
 
         var decals = state.Decals
@@ -510,6 +673,19 @@ public sealed class InMemoryBattleStore : IBattleStore
                     ? null
                     : new Dictionary<string, string>(poi.Metadata, StringComparer.Ordinal)))
             .ToList();
+        var offeredCards = state.PendingCardChoice is null
+            ? []
+            : state.PendingCardChoice.OfferedCardIds
+                .Select(cardId => CardById.TryGetValue(cardId, out var definition) ? definition : null)
+                .Where(definition => definition is not null)
+                .Select(definition => ToCardOfferDto(definition!))
+                .ToList();
+        var selectedCards = state.SelectedCardIds
+            .Select(cardId => CardById.TryGetValue(cardId, out var definition) ? definition : null)
+            .Where(definition => definition is not null)
+            .Select(definition => ToCardOfferDto(definition!))
+            .ToList();
+        var playerGlobalCooldownTotalMs = ResolvePlayerGlobalCooldownMs(state);
 
         return new BattleSnapshot(
             BattleId: state.BattleId,
@@ -517,7 +693,7 @@ public sealed class InMemoryBattleStore : IBattleStore
             Actors: actors,
             Skills: skills,
             GlobalCooldownRemainingMs: state.PlayerGlobalCooldownRemainingMs,
-            GlobalCooldownTotalMs: PlayerGlobalCooldownMs,
+            GlobalCooldownTotalMs: playerGlobalCooldownTotalMs,
             AltarCooldownRemainingMs: (int)Math.Max(0, state.NextAltarInteractAllowedAtMs - nowMs),
             Seed: state.Seed,
             FacingDirection: state.PlayerFacingDirection,
@@ -540,6 +716,10 @@ public sealed class InMemoryBattleStore : IBattleStore
                 ? null
                 : GetSpeciesId(state.PendingSpeciesChestArchetype.Value),
             ActivePois: activePois,
+            IsAwaitingCardChoice: state.PendingCardChoice is not null,
+            PendingChoiceId: state.PendingCardChoice?.ChoiceId,
+            OfferedCards: offeredCards,
+            SelectedCards: selectedCards,
             Events: events,
             CommandResults: commandResults);
     }
@@ -766,6 +946,42 @@ public sealed class InMemoryBattleStore : IBattleStore
         return (int)Math.Floor(maxHp * 0.8d);
     }
 
+    private static int ResolvePlayerMaxHp(StoredBattle state)
+    {
+        return Math.Max(
+            1,
+            ApplyPercentIncrease(
+                PlayerBaseHp,
+                Math.Max(0, state.PlayerModifiers.PercentMaxHpBonus)));
+    }
+
+    private static int ResolvePlayerAutoAttackCooldownMs(StoredBattle state)
+    {
+        return Math.Max(
+            1,
+            ApplyPercentReduction(
+                PlayerAutoAttackCooldownMs,
+                Math.Max(0, state.PlayerModifiers.PercentAttackSpeedBonus)));
+    }
+
+    private static int ResolvePlayerGlobalCooldownMs(StoredBattle state)
+    {
+        var reductionPercent = Math.Clamp(
+            state.PlayerModifiers.GlobalCooldownReductionPercent,
+            0,
+            MaxGlobalCooldownReductionPercent);
+        return Math.Max(1, ApplyPercentReduction(PlayerGlobalCooldownMs, reductionPercent));
+    }
+
+    private static int ResolveSkillCooldownTotalMs(StoredBattle state, StoredSkill skill)
+    {
+        var reductionPercent = Math.Clamp(
+            state.PlayerModifiers.GlobalCooldownReductionPercent,
+            0,
+            MaxGlobalCooldownReductionPercent);
+        return Math.Max(1, ApplyPercentReduction(skill.CooldownTotalMs, reductionPercent));
+    }
+
     private static ElementType GetPlayerBaseElement(StoredBattle state)
     {
         return state.EquippedWeaponElement ?? ElementType.Physical;
@@ -867,6 +1083,31 @@ public sealed class InMemoryBattleStore : IBattleStore
 
             var commandType = NormalizeCommandType(commands[index].Type);
             commandResults.Add(new CommandResultDto(index, commandType, false, PausedReason));
+        }
+
+        return commandResults;
+    }
+
+    private static IReadOnlyList<CommandResultDto> BuildAwaitingCardChoiceCommandResults(
+        IReadOnlyList<BattleCommandDto>? commands,
+        IReadOnlyDictionary<int, CommandResultDto> preAppliedPauseResults)
+    {
+        var commandResults = new List<CommandResultDto>();
+        if (commands is null || commands.Count == 0)
+        {
+            return commandResults;
+        }
+
+        for (var index = 0; index < commands.Count; index += 1)
+        {
+            if (preAppliedPauseResults.TryGetValue(index, out var preAppliedResult))
+            {
+                commandResults.Add(preAppliedResult);
+                continue;
+            }
+
+            var commandType = NormalizeCommandType(commands[index].Type);
+            commandResults.Add(new CommandResultDto(index, commandType, false, AwaitingCardChoiceReason));
         }
 
         return commandResults;
@@ -1418,8 +1659,7 @@ public sealed class InMemoryBattleStore : IBattleStore
                 fxId: ExoriFxId,
                 element: ExoriElement,
                 ref pendingLifeLeechHeal);
-            skill.CooldownRemainingMs = skill.CooldownTotalMs;
-            state.PlayerGlobalCooldownRemainingMs = PlayerGlobalCooldownMs;
+            ApplyPlayerCooldownsForCast(state, skill);
             GrantPlayerShield(state, events, PlayerShieldGainPerAction);
             return SkillCastResult.Ok(hitAnyTarget ? null : NoTargetReason);
         }
@@ -1435,8 +1675,7 @@ public sealed class InMemoryBattleStore : IBattleStore
                 fxId: ExoriMasFxId,
                 element: ExoriMasElement,
                 ref pendingLifeLeechHeal);
-            skill.CooldownRemainingMs = skill.CooldownTotalMs;
-            state.PlayerGlobalCooldownRemainingMs = PlayerGlobalCooldownMs;
+            ApplyPlayerCooldownsForCast(state, skill);
             GrantPlayerShield(state, events, PlayerShieldGainPerAction);
             return SkillCastResult.Ok(hitAnyTarget ? null : NoTargetReason);
         }
@@ -1451,8 +1690,7 @@ public sealed class InMemoryBattleStore : IBattleStore
                 fxId: ExoriMinFxId,
                 element: ExoriMinElement,
                 ref pendingLifeLeechHeal);
-            skill.CooldownRemainingMs = skill.CooldownTotalMs;
-            state.PlayerGlobalCooldownRemainingMs = PlayerGlobalCooldownMs;
+            ApplyPlayerCooldownsForCast(state, skill);
             GrantPlayerShield(state, events, PlayerShieldGainPerAction);
             return SkillCastResult.Ok(hitAnyTarget ? null : NoTargetReason);
         }
@@ -1460,16 +1698,14 @@ public sealed class InMemoryBattleStore : IBattleStore
         if (string.Equals(normalizedSkillId, HealSkillId, StringComparison.Ordinal))
         {
             ApplySelfHealSkill(state, events, player);
-            skill.CooldownRemainingMs = skill.CooldownTotalMs;
-            state.PlayerGlobalCooldownRemainingMs = PlayerGlobalCooldownMs;
+            ApplyPlayerCooldownsForCast(state, skill);
             return SkillCastResult.Ok(null);
         }
 
         if (string.Equals(normalizedSkillId, GuardSkillId, StringComparison.Ordinal))
         {
             ApplyGuardSkill(events, player);
-            skill.CooldownRemainingMs = skill.CooldownTotalMs;
-            state.PlayerGlobalCooldownRemainingMs = PlayerGlobalCooldownMs;
+            ApplyPlayerCooldownsForCast(state, skill);
             return SkillCastResult.Ok(null);
         }
 
@@ -1492,13 +1728,18 @@ public sealed class InMemoryBattleStore : IBattleStore
                 element: AvalancheElement,
                 attacker: player,
                 ref pendingLifeLeechHeal);
-            skill.CooldownRemainingMs = skill.CooldownTotalMs;
-            state.PlayerGlobalCooldownRemainingMs = PlayerGlobalCooldownMs;
+            ApplyPlayerCooldownsForCast(state, skill);
             GrantPlayerShield(state, events, PlayerShieldGainPerAction);
             return SkillCastResult.Ok(hitAnyTarget ? null : NoTargetReason);
         }
 
         return SkillCastResult.Fail(UnknownSkillReason);
+    }
+
+    private static void ApplyPlayerCooldownsForCast(StoredBattle state, StoredSkill skill)
+    {
+        skill.CooldownRemainingMs = ResolveSkillCooldownTotalMs(state, skill);
+        state.PlayerGlobalCooldownRemainingMs = ResolvePlayerGlobalCooldownMs(state);
     }
 
     private static void EvaluateCombatAssist(
@@ -2143,7 +2384,7 @@ public sealed class InMemoryBattleStore : IBattleStore
             attacker: player);
         pendingLifeLeechHeal += ComputeLifeLeechHeal(hpDamageApplied);
         GrantPlayerShield(state, events, PlayerShieldGainPerAction);
-        state.PlayerAttackCooldownRemainingMs = PlayerAutoAttackCooldownMs;
+        state.PlayerAttackCooldownRemainingMs = ResolvePlayerAutoAttackCooldownMs(state);
     }
 
     private static void UpdatePlayerFacingTowardEffectiveAutoAttackTarget(StoredBattle state)
@@ -2929,6 +3170,14 @@ public sealed class InMemoryBattleStore : IBattleStore
             EmitCritTextEvent(events, mob.TileX, mob.TileY, nowMs);
         }
 
+        if (allowPlayerDamageBuffs &&
+            hpDamageApplied > 0 &&
+            attacker is not null &&
+            string.Equals(attacker.Kind, "player", StringComparison.Ordinal))
+        {
+            ApplyPlayerFlatHpOnHit(state, events);
+        }
+
         if (!isFinalBlow)
         {
             return hpDamageApplied;
@@ -3057,6 +3306,106 @@ public sealed class InMemoryBattleStore : IBattleStore
                 NewLevel: state.RunLevel,
                 RunXp: state.RunXp,
                 XpToNextLevel: GetXpToNextLevel(state.RunLevel)));
+
+            TryOfferCardChoiceAfterLevelUp(state, events);
+        }
+    }
+
+    private static void TryOfferCardChoiceAfterLevelUp(StoredBattle state, List<BattleEventDto> events)
+    {
+        if (state.PendingCardChoice is not null)
+        {
+            return;
+        }
+
+        if (state.CardSelectionsGranted >= MaxCardSelectionsPerRun)
+        {
+            return;
+        }
+
+        var offeredCards = RollCardOffer(state);
+        if (offeredCards.Count == 0)
+        {
+            return;
+        }
+
+        var choiceId = $"card-choice-{state.NextCardChoiceSequence:D2}";
+        state.NextCardChoiceSequence += 1;
+        state.PendingCardChoice = new PendingCardChoiceState(
+            choiceId: choiceId,
+            offeredCardIds: offeredCards.Select(card => card.Id).ToList());
+        state.CardSelectionsGranted += 1;
+
+        events.Add(new CardChoiceOfferedEventDto(
+            ChoiceId: choiceId,
+            OfferedCards: offeredCards
+                .Select(ToCardOfferDto)
+                .ToList()));
+    }
+
+    private static IReadOnlyList<CardDefinition> RollCardOffer(StoredBattle state)
+    {
+        var availableCards = CardPool
+            .Where(card => !state.SelectedCardIds.Contains(card.Id, StringComparer.Ordinal))
+            .OrderBy(card => card.Id, StringComparer.Ordinal)
+            .ToList();
+        if (availableCards.Count == 0)
+        {
+            return [];
+        }
+
+        var offerCount = Math.Min(MaxCardOfferCount, availableCards.Count);
+        var offeredCards = new List<CardDefinition>(offerCount);
+        for (var index = 0; index < offerCount; index += 1)
+        {
+            var rolledIndex = state.Rng.Next(availableCards.Count);
+            offeredCards.Add(availableCards[rolledIndex]);
+            availableCards.RemoveAt(rolledIndex);
+        }
+
+        return offeredCards;
+    }
+
+    private static void ApplyCardEffects(StoredBattle state, StoredActor player, CardDefinition card)
+    {
+        var previousMaxHp = player.MaxHp;
+
+        state.PlayerModifiers.FlatDamageBonus += Math.Max(0, card.Effects.FlatDamageBonus);
+        state.PlayerModifiers.PercentDamageBonus += Math.Max(0, card.Effects.PercentDamageBonus);
+        state.PlayerModifiers.PercentAttackSpeedBonus += Math.Max(0, card.Effects.PercentAttackSpeedBonus);
+        state.PlayerModifiers.PercentMaxHpBonus += Math.Max(0, card.Effects.PercentMaxHpBonus);
+        state.PlayerModifiers.FlatHpOnHit += Math.Max(0, card.Effects.FlatHpOnHit);
+        state.PlayerModifiers.GlobalCooldownReductionPercent = Math.Clamp(
+            state.PlayerModifiers.GlobalCooldownReductionPercent + Math.Max(0, card.Effects.GlobalCooldownReductionPercent),
+            0,
+            MaxGlobalCooldownReductionPercent);
+
+        var resolvedMaxHp = ResolvePlayerMaxHp(state);
+        player.MaxHp = resolvedMaxHp;
+        player.MaxShield = ComputePlayerMaxShield(resolvedMaxHp);
+        if (resolvedMaxHp > previousMaxHp)
+        {
+            player.Hp = Math.Min(resolvedMaxHp, player.Hp + (resolvedMaxHp - previousMaxHp));
+        }
+        else if (player.Hp > resolvedMaxHp)
+        {
+            player.Hp = resolvedMaxHp;
+        }
+
+        if (player.Shield > player.MaxShield)
+        {
+            player.Shield = player.MaxShield;
+        }
+
+        state.PlayerAttackCooldownRemainingMs = Math.Min(
+            state.PlayerAttackCooldownRemainingMs,
+            ResolvePlayerAutoAttackCooldownMs(state));
+        state.PlayerGlobalCooldownRemainingMs = Math.Min(
+            state.PlayerGlobalCooldownRemainingMs,
+            ResolvePlayerGlobalCooldownMs(state));
+        foreach (var skill in state.Skills.Values)
+        {
+            skill.CooldownRemainingMs = Math.Min(skill.CooldownRemainingMs, ResolveSkillCooldownTotalMs(state, skill));
         }
     }
 
@@ -3104,6 +3453,23 @@ public sealed class InMemoryBattleStore : IBattleStore
         }
 
         return (int)Math.Floor(hpDamageApplied * (PlayerLifeLeechPercent / 100.0d));
+    }
+
+    private static void ApplyPlayerFlatHpOnHit(StoredBattle state, List<BattleEventDto> events)
+    {
+        var hpOnHit = Math.Max(0, state.PlayerModifiers.FlatHpOnHit);
+        if (hpOnHit <= 0)
+        {
+            return;
+        }
+
+        var player = GetPlayerActor(state);
+        if (player is null || player.Hp <= 0)
+        {
+            return;
+        }
+
+        _ = ApplyPlayerHeal(state, events, player, hpOnHit, "card_hp_on_hit");
     }
 
     private static void ApplyPlayerLifeLeech(StoredBattle state, List<BattleEventDto> events, int pendingLifeLeechHeal)
@@ -3254,7 +3620,8 @@ public sealed class InMemoryBattleStore : IBattleStore
             return 0;
         }
 
-        var adjustedDamage = baseDamage;
+        var adjustedDamage = baseDamage + Math.Max(0, state.PlayerModifiers.FlatDamageBonus);
+        adjustedDamage = ApplyPercentIncrease(adjustedDamage, Math.Max(0, state.PlayerModifiers.PercentDamageBonus));
         if (IsBuffActive(state, DamageBoostBuffId))
         {
             adjustedDamage = ApplyPercentIncrease(adjustedDamage, DamageBoostBonusPercent);
@@ -3689,6 +4056,26 @@ public sealed class InMemoryBattleStore : IBattleStore
         return value.Trim().ToLowerInvariant();
     }
 
+    private static string? NormalizeChoiceId(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        return value.Trim();
+    }
+
+    private static string? NormalizeCardId(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        return value.Trim().ToLowerInvariant();
+    }
+
     private static string? NormalizePoiId(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -3723,6 +4110,14 @@ public sealed class InMemoryBattleStore : IBattleStore
             "nw" or "north_west" or "northwest" or "up-left" or "up_left" => FacingUpLeft,
             _ => null
         };
+    }
+
+    private static BattleCardOfferDto ToCardOfferDto(CardDefinition card)
+    {
+        return new BattleCardOfferDto(
+            Id: card.Id,
+            Name: card.Name,
+            Description: card.Description);
     }
 
     private static string BuildMobActorId(int slotIndex)
@@ -4163,6 +4558,84 @@ public sealed class InMemoryBattleStore : IBattleStore
                 $"Run XP must be below the current threshold: xp={state.RunXp}, threshold={xpToNextLevel}.");
         }
 
+        if (state.CardSelectionsGranted < 0 || state.CardSelectionsGranted > MaxCardSelectionsPerRun)
+        {
+            throw new InvalidOperationException($"Card selection count is invalid: {state.CardSelectionsGranted}.");
+        }
+
+        if (state.NextCardChoiceSequence < 1)
+        {
+            throw new InvalidOperationException($"Next card choice sequence is invalid: {state.NextCardChoiceSequence}.");
+        }
+
+        var selectedCardIds = state.SelectedCardIds.ToList();
+        if (selectedCardIds.Count != selectedCardIds.Distinct(StringComparer.Ordinal).Count())
+        {
+            throw new InvalidOperationException("Selected cards contain duplicates.");
+        }
+
+        foreach (var selectedCardId in selectedCardIds)
+        {
+            if (!CardById.ContainsKey(selectedCardId))
+            {
+                throw new InvalidOperationException($"Selected card id is invalid: '{selectedCardId}'.");
+            }
+        }
+
+        if (state.PendingCardChoice is not null)
+        {
+            if (string.IsNullOrWhiteSpace(state.PendingCardChoice.ChoiceId))
+            {
+                throw new InvalidOperationException("Pending card choice id is invalid.");
+            }
+
+            if (state.PendingCardChoice.OfferedCardIds.Count == 0 ||
+                state.PendingCardChoice.OfferedCardIds.Count > MaxCardOfferCount)
+            {
+                throw new InvalidOperationException(
+                    $"Pending card offer count is invalid: {state.PendingCardChoice.OfferedCardIds.Count}.");
+            }
+
+            foreach (var offeredCardId in state.PendingCardChoice.OfferedCardIds)
+            {
+                if (!CardById.ContainsKey(offeredCardId))
+                {
+                    throw new InvalidOperationException($"Pending offered card id is invalid: '{offeredCardId}'.");
+                }
+
+                if (state.SelectedCardIds.Contains(offeredCardId, StringComparer.Ordinal))
+                {
+                    throw new InvalidOperationException(
+                        $"Pending card offer contains an already selected card: '{offeredCardId}'.");
+                }
+            }
+        }
+
+        if (state.PlayerModifiers.FlatDamageBonus < 0 ||
+            state.PlayerModifiers.PercentDamageBonus < 0 ||
+            state.PlayerModifiers.PercentAttackSpeedBonus < 0 ||
+            state.PlayerModifiers.PercentMaxHpBonus < 0 ||
+            state.PlayerModifiers.FlatHpOnHit < 0 ||
+            state.PlayerModifiers.GlobalCooldownReductionPercent < 0 ||
+            state.PlayerModifiers.GlobalCooldownReductionPercent > MaxGlobalCooldownReductionPercent)
+        {
+            throw new InvalidOperationException("Player card modifiers are invalid.");
+        }
+
+        var expectedPlayerMaxHp = ResolvePlayerMaxHp(state);
+        if (player.MaxHp != expectedPlayerMaxHp)
+        {
+            throw new InvalidOperationException(
+                $"Player max HP is inconsistent with modifiers: actual={player.MaxHp}, expected={expectedPlayerMaxHp}.");
+        }
+
+        var expectedPlayerMaxShield = ComputePlayerMaxShield(expectedPlayerMaxHp);
+        if (player.MaxShield != expectedPlayerMaxShield)
+        {
+            throw new InvalidOperationException(
+                $"Player max shield is inconsistent with max HP: actual={player.MaxShield}, expected={expectedPlayerMaxShield}.");
+        }
+
         if (state.NextChestSpawnCheckAtMs < 0)
         {
             throw new InvalidOperationException(
@@ -4325,7 +4798,12 @@ public sealed class InMemoryBattleStore : IBattleStore
             Dictionary<string, StoredPoi> pois,
             Dictionary<int, MobSlotState> mobSlots,
             Dictionary<MobArchetype, StoredBestiaryEntry> bestiary,
-            MobArchetype? pendingSpeciesChestArchetype)
+            MobArchetype? pendingSpeciesChestArchetype,
+            PlayerModifiers playerModifiers,
+            PendingCardChoiceState? pendingCardChoice,
+            List<string> selectedCardIds,
+            int cardSelectionsGranted,
+            int nextCardChoiceSequence)
         {
             BattleId = battleId;
             ArenaId = arenaId;
@@ -4363,6 +4841,11 @@ public sealed class InMemoryBattleStore : IBattleStore
             MobSlots = mobSlots;
             Bestiary = bestiary;
             PendingSpeciesChestArchetype = pendingSpeciesChestArchetype;
+            PlayerModifiers = playerModifiers;
+            PendingCardChoice = pendingCardChoice;
+            SelectedCardIds = selectedCardIds;
+            CardSelectionsGranted = cardSelectionsGranted;
+            NextCardChoiceSequence = nextCardChoiceSequence;
         }
 
         public object Sync { get; } = new();
@@ -4438,7 +4921,59 @@ public sealed class InMemoryBattleStore : IBattleStore
         public Dictionary<MobArchetype, StoredBestiaryEntry> Bestiary { get; }
 
         public MobArchetype? PendingSpeciesChestArchetype { get; set; }
+
+        public PlayerModifiers PlayerModifiers { get; }
+
+        public PendingCardChoiceState? PendingCardChoice { get; set; }
+
+        public List<string> SelectedCardIds { get; }
+
+        public int CardSelectionsGranted { get; set; }
+
+        public int NextCardChoiceSequence { get; set; }
     }
+
+    private sealed class PlayerModifiers
+    {
+        public int FlatDamageBonus { get; set; }
+
+        public int PercentDamageBonus { get; set; }
+
+        public int PercentAttackSpeedBonus { get; set; }
+
+        public int PercentMaxHpBonus { get; set; }
+
+        public int FlatHpOnHit { get; set; }
+
+        public int GlobalCooldownReductionPercent { get; set; }
+    }
+
+    private sealed class PendingCardChoiceState
+    {
+        public PendingCardChoiceState(string choiceId, IReadOnlyList<string> offeredCardIds)
+        {
+            ChoiceId = choiceId;
+            OfferedCardIds = offeredCardIds;
+        }
+
+        public string ChoiceId { get; }
+
+        public IReadOnlyList<string> OfferedCardIds { get; }
+    }
+
+    private sealed record CardDefinition(
+        string Id,
+        string Name,
+        string Description,
+        CardEffectBundle Effects);
+
+    private sealed record CardEffectBundle(
+        int FlatDamageBonus = 0,
+        int PercentDamageBonus = 0,
+        int PercentAttackSpeedBonus = 0,
+        int PercentMaxHpBonus = 0,
+        int FlatHpOnHit = 0,
+        int GlobalCooldownReductionPercent = 0);
 
     private sealed class StoredAssistConfig
     {
@@ -4539,11 +5074,11 @@ public sealed class InMemoryBattleStore : IBattleStore
 
         public int Hp { get; set; }
 
-        public int MaxHp { get; }
+        public int MaxHp { get; set; }
 
         public int Shield { get; set; }
 
-        public int MaxShield { get; }
+        public int MaxShield { get; set; }
 
         public int? MobSlotIndex { get; }
     }

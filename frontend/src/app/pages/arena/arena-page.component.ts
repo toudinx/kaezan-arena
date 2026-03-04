@@ -39,6 +39,7 @@ import {
 } from "../../api/account-api.service";
 import {
   BattleApiService,
+  ChooseCardRequest,
   StartBattleResponse,
   StepBattleRequest,
   StepBattleResponse
@@ -106,6 +107,11 @@ type ApiBuffState = {
   buffId?: unknown;
   remainingMs?: unknown;
 };
+type ApiCardOffer = {
+  id?: unknown;
+  name?: unknown;
+  description?: unknown;
+};
 type StepCommand = NonNullable<StepBattleRequest["commands"]>[number];
 type FacingDirection = "up" | "up_right" | "right" | "down_right" | "down" | "down_left" | "left" | "up_left";
 type MovementInputKey = "w" | "a" | "s" | "d" | "q" | "e" | "z" | "c";
@@ -128,7 +134,12 @@ type ExpConsoleEntry = Readonly<{
   id: string;
   tick: number;
   message: string;
-  kind: "xp_gained" | "level_up";
+  kind: "xp_gained" | "level_up" | "system";
+}>;
+type ArenaCardOffer = Readonly<{
+  id: string;
+  name: string;
+  description: string;
 }>;
 export const RIGHT_INFO_TAB_STORAGE_KEY = "kaezan_arena_right_tab_v1";
 const AVALANCHE_SKILL_ID = "avalanche";
@@ -276,6 +287,11 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   isPauseModalOpen = false;
   isDeathModalOpen = false;
   deathEndReason: string | null = null;
+  isAwaitingCardChoice = false;
+  pendingCardChoiceId: string | null = null;
+  offeredCards: ArenaCardOffer[] = [];
+  selectedCards: ArenaCardOffer[] = [];
+  cardChoiceRequestInFlight = false;
   damageConsoleEntries: DamageConsoleEntry[] = [];
   expConsoleEntries: ExpConsoleEntry[] = [];
   runLevel = RUN_INITIAL_LEVEL;
@@ -321,6 +337,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   private autoStepTimerId: ReturnType<typeof setTimeout> | null = null;
   private assistConfigDebounceTimerId: ReturnType<typeof setTimeout> | null = null;
   private autoStepWasEnabledBeforePause = false;
+  private autoStepWasEnabledBeforeCardChoice = false;
   private autoStepLoopRunId = 0;
   private lastKnownViewportWidthCss = 0;
   private lastKnownViewportHeightCss = 0;
@@ -865,6 +882,10 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.castSkill(skillId);
   }
 
+  onCardChoiceSelected(cardId: string): void {
+    void this.chooseCard(cardId);
+  }
+
   onAssistEnabledToggle(enabled: boolean): void {
     this.updateAssistConfig({ enabled });
   }
@@ -1044,6 +1065,12 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.isPauseModalOpen = false;
     this.isDeathModalOpen = false;
     this.deathEndReason = null;
+    this.isAwaitingCardChoice = false;
+    this.pendingCardChoiceId = null;
+    this.offeredCards = [];
+    this.selectedCards = [];
+    this.cardChoiceRequestInFlight = false;
+    this.autoStepWasEnabledBeforeCardChoice = false;
     this.autoStepWasEnabledBeforePause = false;
     this.sentLootSourceKeys.clear();
     this.lootFeed = [];
@@ -1328,7 +1355,13 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   }
 
   canCastSkill(skillId: string): boolean {
-    if (this.battleRequestInFlight || !this.currentBattleId || this.ui.status !== "started") {
+    if (
+      this.battleRequestInFlight ||
+      this.cardChoiceRequestInFlight ||
+      this.isAwaitingCardChoice ||
+      !this.currentBattleId ||
+      this.ui.status !== "started"
+    ) {
       return false;
     }
 
@@ -1669,7 +1702,13 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   }
 
   private async stepBattleSafe(): Promise<void> {
-    if (this.battleRequestInFlight || !this.currentBattleId || this.isTerminalBattleStatus(this.battleStatus)) {
+    if (
+      this.battleRequestInFlight ||
+      this.cardChoiceRequestInFlight ||
+      !this.currentBattleId ||
+      this.isAwaitingCardChoice ||
+      this.isTerminalBattleStatus(this.battleStatus)
+    ) {
       return;
     }
 
@@ -1699,6 +1738,12 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         this.appendCommandResultLogs(response.commandResults, commandsToSend);
         this.syncUiMetaState();
         this.battleLog = JSON.stringify(response, null, 2);
+        if (this.isAwaitingCardChoice) {
+          this.autoStepWasEnabledBeforeCardChoice = this.autoStepEnabled;
+          this.autoStepEnabled = false;
+          this.stopAutoStepLoop();
+        }
+
         if (this.isTerminalBattleStatus(this.battleStatus)) {
           this.autoStepEnabled = false;
           this.stopAutoStepLoop();
@@ -1721,6 +1766,69 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     } finally {
       this.runInAngularZone(() => {
         this.battleRequestInFlight = false;
+      });
+    }
+  }
+
+  private async chooseCard(selectedCardId: string): Promise<void> {
+    if (
+      this.cardChoiceRequestInFlight ||
+      this.battleRequestInFlight ||
+      !this.currentBattleId ||
+      !this.isAwaitingCardChoice ||
+      !this.pendingCardChoiceId ||
+      this.isTerminalBattleStatus(this.battleStatus)
+    ) {
+      return;
+    }
+
+    const request: ChooseCardRequest = {
+      battleId: this.currentBattleId,
+      choiceId: this.pendingCardChoiceId,
+      selectedCardId
+    };
+
+    this.runInAngularZone(() => {
+      this.cardChoiceRequestInFlight = true;
+    });
+
+    let shouldResumeAutoStep = false;
+    try {
+      const response = await this.battleApi.chooseCard(request);
+      this.runInAngularZone(() => {
+        this.currentBattleId = response.battleId ?? this.currentBattleId;
+        this.currentBattleTick = response.tick ?? this.currentBattleTick;
+        this.currentSeed = response.seed ?? this.currentSeed;
+        this.battleStatus = response.battleStatus ?? this.battleStatus;
+        this.currentFacingDirection = this.toFacingDirection(response.facingDirection) ?? this.currentFacingDirection;
+        this.applyGameOverStateFromSnapshot(response);
+        this.applyBattlePayload(response);
+        this.syncUiMetaState();
+        this.battleLog = JSON.stringify(response, null, 2);
+      });
+
+      shouldResumeAutoStep =
+        !this.isAwaitingCardChoice &&
+        this.autoStepWasEnabledBeforeCardChoice &&
+        !this.isPauseModalOpen &&
+        !this.isDeathModalOpen &&
+        this.battleStatus === "started";
+    } catch (error) {
+      this.runInAngularZone(() => {
+        this.battleLog = `choose_card failed: ${String(error)}`;
+      });
+      console.error("[ArenaPage] choose_card failed", error);
+    } finally {
+      this.runInAngularZone(() => {
+        this.cardChoiceRequestInFlight = false;
+        if (shouldResumeAutoStep) {
+          this.autoStepEnabled = true;
+          this.startOrRestartAutoStepLoop();
+        }
+
+        if (!this.isAwaitingCardChoice) {
+          this.autoStepWasEnabledBeforeCardChoice = false;
+        }
       });
     }
   }
@@ -1764,6 +1872,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         this.updateGlobalCooldownFromSnapshot(response);
         this.updateAltarCooldownFromSnapshot(response);
         this.applyRunProgressFromSnapshot(response);
+        this.applyCardChoiceStateFromSnapshot(response);
         this.syncUiMetaState();
         this.battleLog = JSON.stringify(response, null, 2);
         this.activeFxCount = this.getActiveFxCount(this.scene);
@@ -2103,6 +2212,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.updateGlobalCooldownFromSnapshot(response);
     this.updateAltarCooldownFromSnapshot(response);
     this.applyRunProgressFromSnapshot(response);
+    this.applyCardChoiceStateFromSnapshot(response);
     this.activeFxCount = this.getActiveFxCount(this.scene);
     this.appendDamageLogs(applied.damageNumbers);
     this.appendDamageConsoleLogs(applied.damageNumbers);
@@ -2808,6 +2918,10 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       return "battle is paused";
     }
 
+    if (reason === "awaiting_card_choice") {
+      return "choose a card first";
+    }
+
     return reason;
   }
 
@@ -2883,6 +2997,79 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.appendExpLogsFromSnapshot(snapshot);
   }
 
+  private applyCardChoiceStateFromSnapshot(snapshot: StartBattleResponse | StepBattleResponse): void {
+    const record = snapshot as Record<string, unknown>;
+    const isAwaiting = this.readBoolean(record["isAwaitingCardChoice"]) === true;
+    const pendingChoiceId = this.readString(record["pendingChoiceId"]);
+    const offeredCards = this.toCardOffers(record["offeredCards"]);
+    const selectedCards = this.toCardOffers(record["selectedCards"]);
+    const hasValidPendingChoice = isAwaiting && pendingChoiceId !== null && offeredCards.length > 0;
+
+    this.selectedCards = selectedCards;
+    this.isAwaitingCardChoice = hasValidPendingChoice;
+    this.pendingCardChoiceId = hasValidPendingChoice ? pendingChoiceId : null;
+    this.offeredCards = hasValidPendingChoice ? offeredCards : [];
+
+    if (hasValidPendingChoice) {
+      this.queuedCommands = [];
+      this.queuedCommandCount = 0;
+      this.clearMovementInputState();
+    }
+  }
+
+  private toCardOffers(value: unknown): ArenaCardOffer[] {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+
+    const offers: ArenaCardOffer[] = [];
+    const seenIds = new Set<string>();
+    for (const entry of value) {
+      if (typeof entry === "string") {
+        const id = this.readString(entry);
+        if (!id || seenIds.has(id)) {
+          continue;
+        }
+
+        seenIds.add(id);
+        offers.push({
+          id,
+          name: this.formatCardNameFromId(id),
+          description: ""
+        });
+        continue;
+      }
+
+      if (!entry || typeof entry !== "object") {
+        continue;
+      }
+
+      const typedEntry = entry as ApiCardOffer;
+      const id = this.readString(typedEntry.id);
+      if (!id || seenIds.has(id)) {
+        continue;
+      }
+
+      const name = this.readString(typedEntry.name) ?? this.formatCardNameFromId(id);
+      const description = this.readString(typedEntry.description) ?? "";
+      seenIds.add(id);
+      offers.push({ id, name, description });
+    }
+
+    return offers;
+  }
+
+  private formatCardNameFromId(cardId: string): string {
+    if (!cardId) {
+      return "Unknown Card";
+    }
+
+    return cardId
+      .split("_")
+      .map((token) => (token.length > 0 ? token[0].toUpperCase() + token.slice(1) : token))
+      .join(" ");
+  }
+
   private computeRunXpToNextLevel(runLevel: number): number {
     const clampedLevel = Math.max(RUN_INITIAL_LEVEL, Math.floor(runLevel));
     return RUN_LEVEL_XP_BASE + ((clampedLevel - RUN_INITIAL_LEVEL) * RUN_LEVEL_XP_INCREMENT_PER_LEVEL);
@@ -2912,6 +3099,39 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
             tick,
             kind: "xp_gained",
             message: `+${amount} XP${sourceLabel}${eliteLabel}`
+          });
+          continue;
+        }
+
+        if (eventType === "card_choice_offered") {
+          const offered = this.toCardOffers(eventRecord["offeredCards"]);
+          if (offered.length === 0) {
+            continue;
+          }
+
+          const offeredNames = offered.map((card) => card.name).join(" / ");
+          nextEntries.push({
+            id: `exp-${tick}-${this.expLogSequence++}`,
+            tick,
+            kind: "system",
+            message: `Card choice offered: ${offeredNames}`
+          });
+          continue;
+        }
+
+        if (eventType === "card_chosen") {
+          const cardEntry = (eventRecord["card"] ?? null) as ApiCardOffer | null;
+          const cardId = this.readString(cardEntry?.id);
+          const cardName = this.readString(cardEntry?.name) ?? (cardId ? this.formatCardNameFromId(cardId) : null);
+          if (!cardName) {
+            continue;
+          }
+
+          nextEntries.push({
+            id: `exp-${tick}-${this.expLogSequence++}`,
+            tick,
+            kind: "system",
+            message: `Card chosen: ${cardName}`
           });
           continue;
         }
@@ -3268,6 +3488,8 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   private isMovementInputContextActive(): boolean {
     return !!this.currentBattleId &&
       this.battleStatus === "started" &&
+      !this.isAwaitingCardChoice &&
+      !this.cardChoiceRequestInFlight &&
       !this.isPauseModalOpen &&
       !this.isDeathModalOpen;
   }
@@ -3299,7 +3521,13 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   private startOrRestartAutoStepLoop(): void {
     this.stopAutoStepLoop();
 
-    if (!this.autoStepEnabled || !this.currentBattleId || this.battleStatus !== "started") {
+    if (
+      !this.autoStepEnabled ||
+      !this.currentBattleId ||
+      this.battleStatus !== "started" ||
+      this.isAwaitingCardChoice ||
+      this.cardChoiceRequestInFlight
+    ) {
       return;
     }
 
@@ -3314,7 +3542,13 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         return;
       }
 
-      if (!this.autoStepEnabled || !this.currentBattleId || this.battleStatus !== "started") {
+      if (
+        !this.autoStepEnabled ||
+        !this.currentBattleId ||
+        this.battleStatus !== "started" ||
+        this.isAwaitingCardChoice ||
+        this.cardChoiceRequestInFlight
+      ) {
         return;
       }
 
@@ -3345,11 +3579,15 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   }
 
   private canTogglePauseModal(): boolean {
-    return this.isInRun && !!this.currentBattleId && this.battleStatus === "started" && !this.isDeathModalOpen;
+    return this.isInRun &&
+      !!this.currentBattleId &&
+      this.battleStatus === "started" &&
+      !this.isDeathModalOpen &&
+      !this.isAwaitingCardChoice;
   }
 
   private async syncBackendPauseState(paused: boolean): Promise<void> {
-    if (!this.currentBattleId || this.isTerminalBattleStatus(this.battleStatus)) {
+    if (!this.currentBattleId || this.isTerminalBattleStatus(this.battleStatus) || this.isAwaitingCardChoice) {
       return;
     }
 
@@ -3360,7 +3598,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       return;
     }
 
-    if (this.battleRequestInFlight) {
+    if (this.battleRequestInFlight || this.cardChoiceRequestInFlight) {
       return;
     }
 
@@ -3417,8 +3655,14 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.battleStatus = "idle";
     this.isPauseModalOpen = false;
     this.autoStepWasEnabledBeforePause = false;
+    this.autoStepWasEnabledBeforeCardChoice = false;
     this.isDeathModalOpen = false;
     this.deathEndReason = null;
+    this.isAwaitingCardChoice = false;
+    this.pendingCardChoiceId = null;
+    this.offeredCards = [];
+    this.selectedCards = [];
+    this.cardChoiceRequestInFlight = false;
     this.expConsoleEntries = [];
     this.runLevel = RUN_INITIAL_LEVEL;
     this.runXp = RUN_INITIAL_XP;
@@ -3430,8 +3674,10 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
 
   private canIssueBattleCommand(): boolean {
     return !this.battleRequestInFlight &&
+      !this.cardChoiceRequestInFlight &&
       !!this.currentBattleId &&
       this.battleStatus === "started" &&
+      !this.isAwaitingCardChoice &&
       !this.isPauseModalOpen &&
       !this.isDeathModalOpen;
   }

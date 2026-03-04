@@ -1,14 +1,21 @@
 import { ArenaPageComponent } from "./arena-page.component";
 
 describe("ArenaPageComponent run progression", () => {
-  function createComponent(): ArenaPageComponent {
+  function createComponent(overrides?: { battleApi?: unknown }): ArenaPageComponent {
+    const ngZoneStub = {
+      run: (action: () => void): void => action()
+    };
+    const cdrStub = {
+      markForCheck: (): void => undefined
+    };
+
     return new ArenaPageComponent(
       {} as never,
       {} as never,
+      (overrides?.battleApi ?? {}) as never,
       {} as never,
-      {} as never,
-      {} as never,
-      {} as never
+      ngZoneStub as never,
+      cdrStub as never
     );
   }
 
@@ -99,5 +106,154 @@ describe("ArenaPageComponent run progression", () => {
     expect(rows[0]).toEqual({ label: "Run level", value: "3" });
     expect(rows[1]).toEqual({ label: "Run XP", value: "7 / 55" });
     expect(rows[2]).toEqual({ label: "XP to next", value: "55" });
+  });
+
+  it("tracks card choice pending and selected card snapshots", () => {
+    const component = createComponent();
+
+    (component as any).applyCardChoiceStateFromSnapshot({
+      isAwaitingCardChoice: true,
+      pendingChoiceId: "card-choice-01",
+      offeredCards: [
+        { id: "colossus_heart", name: "Colossus Heart", description: "+40% max HP and +6 damage." },
+        { id: "butcher_mark", name: "Butcher Mark", description: "+12 flat damage." }
+      ],
+      selectedCards: []
+    });
+
+    expect((component as any).isAwaitingCardChoice).toBe(true);
+    expect((component as any).pendingCardChoiceId).toBe("card-choice-01");
+    expect((component as any).offeredCards).toHaveLength(2);
+
+    (component as any).applyCardChoiceStateFromSnapshot({
+      isAwaitingCardChoice: false,
+      pendingChoiceId: null,
+      offeredCards: [],
+      selectedCards: [{ id: "colossus_heart", name: "Colossus Heart", description: "+40% max HP and +6 damage." }]
+    });
+
+    expect((component as any).isAwaitingCardChoice).toBe(false);
+    expect((component as any).pendingCardChoiceId).toBeNull();
+    expect((component as any).offeredCards).toEqual([]);
+    expect((component as any).selectedCards).toHaveLength(1);
+    expect((component as any).selectedCards[0]?.id).toBe("colossus_heart");
+  });
+
+  it("logs card progression events in the EXP console", () => {
+    const component = createComponent();
+
+    (component as any).applyRunProgressFromSnapshot({
+      tick: 9,
+      runLevel: 2,
+      runXp: 8,
+      xpToNextLevel: 40,
+      events: [
+        {
+          type: "card_choice_offered",
+          choiceId: "card-choice-02",
+          offeredCards: [
+            { id: "colossus_heart", name: "Colossus Heart", description: "+40% max HP and +6 damage." },
+            { id: "butcher_mark", name: "Butcher Mark", description: "+12 flat damage." }
+          ]
+        },
+        {
+          type: "card_chosen",
+          choiceId: "card-choice-02",
+          card: { id: "colossus_heart", name: "Colossus Heart", description: "+40% max HP and +6 damage." }
+        }
+      ]
+    });
+
+    const messages = ((component as any).expConsoleEntries as Array<{ message: string }>).map((entry) => entry.message);
+    expect(messages.some((message) => message.includes("Card choice offered"))).toBe(true);
+    expect(messages.some((message) => message.includes("Card chosen: Colossus Heart"))).toBe(true);
+  });
+
+  it("choosing a card clears awaiting state and restarts auto-step loop", async () => {
+    const chooseCardResponse = {
+      battleId: "battle-card",
+      tick: 12,
+      actors: [],
+      skills: [],
+      globalCooldownRemainingMs: 0,
+      globalCooldownTotalMs: 400,
+      altarCooldownRemainingMs: 0,
+      seed: 1337,
+      facingDirection: "up",
+      battleStatus: "started",
+      isGameOver: false,
+      endReason: null,
+      runXp: 0,
+      runLevel: 1,
+      xpToNextLevel: 25,
+      effectiveTargetEntityId: null,
+      lockedTargetEntityId: null,
+      groundTargetPos: null,
+      assistConfig: {
+        enabled: false,
+        autoHealEnabled: true,
+        healAtHpPercent: 40,
+        autoGuardEnabled: true,
+        guardAtHpPercent: 60,
+        autoOffenseEnabled: true,
+        offenseMode: "cooldown_spam",
+        autoSkills: { exori: true, exori_min: true, exori_mas: true, avalanche: true },
+        maxAutoCastsPerTick: 1
+      },
+      playerBaseElement: 1,
+      weaponElement: null,
+      decals: [],
+      activeBuffs: [],
+      bestiary: [],
+      pendingSpeciesChest: null,
+      activePois: [],
+      isAwaitingCardChoice: false,
+      pendingChoiceId: null,
+      offeredCards: [],
+      selectedCards: [{ id: "colossus_heart", name: "Colossus Heart", description: "+40% max HP and +6 damage." }],
+      events: [
+        {
+          type: "card_chosen",
+          choiceId: "card-choice-01",
+          card: { id: "colossus_heart", name: "Colossus Heart", description: "+40% max HP and +6 damage." }
+        }
+      ],
+      commandResults: []
+    };
+    const chooseCardSpy = vi.fn().mockResolvedValue(chooseCardResponse);
+    const component = createComponent({
+      battleApi: {
+        chooseCard: chooseCardSpy
+      }
+    });
+    (component as any).scene = (component as any).engine.createTestScene();
+    (component as any).currentBattleId = "battle-card";
+    (component as any).battleStatus = "started";
+    (component as any).isAwaitingCardChoice = true;
+    (component as any).pendingCardChoiceId = "card-choice-01";
+    (component as any).offeredCards = [
+      { id: "colossus_heart", name: "Colossus Heart", description: "+40% max HP and +6 damage." }
+    ];
+    (component as any).autoStepEnabled = false;
+    (component as any).autoStepWasEnabledBeforeCardChoice = true;
+
+    const restartSpy = vi
+      .spyOn(component as any, "startOrRestartAutoStepLoop")
+      .mockImplementation(() => undefined);
+
+    await (component as any).chooseCard("colossus_heart");
+
+    expect(chooseCardSpy).toHaveBeenCalledWith({
+      battleId: "battle-card",
+      choiceId: "card-choice-01",
+      selectedCardId: "colossus_heart"
+    });
+    expect((component as any).isAwaitingCardChoice).toBe(false);
+    expect((component as any).pendingCardChoiceId).toBeNull();
+    expect((component as any).offeredCards).toEqual([]);
+    expect((component as any).selectedCards).toHaveLength(1);
+    expect((component as any).cardChoiceRequestInFlight).toBe(false);
+    expect((component as any).autoStepEnabled).toBe(true);
+    expect(restartSpy).toHaveBeenCalledTimes(1);
   });
 });

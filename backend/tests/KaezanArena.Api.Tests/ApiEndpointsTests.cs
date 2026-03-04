@@ -4692,6 +4692,39 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
         Assert.True(resumed.Tick > paused.Tick);
     }
 
+    [Fact]
+    public async Task PostBattleChooseCard_ValidatesSelectionAndResumesSimulation()
+    {
+        var playerId = "player-choose-card";
+        var start = await StartBattleAsync("arena-choose-card", playerId, 1337);
+        AssertArenaInvariants(start.Actors, playerId);
+
+        var pending = await WaitForCardChoiceAsync(start.BattleId, start.Tick, start.Skills);
+        Assert.True(pending.IsAwaitingCardChoice);
+        Assert.False(string.IsNullOrWhiteSpace(pending.PendingChoiceId));
+        Assert.NotEmpty(pending.OfferedCards);
+
+        var invalidResponse = await _client.PostAsJsonAsync(
+            "/api/v1/battle/choose-card",
+            new ChooseCardRequestDto(
+                BattleId: start.BattleId,
+                ChoiceId: pending.PendingChoiceId!,
+                SelectedCardId: "invalid_card"));
+        Assert.Equal(HttpStatusCode.BadRequest, invalidResponse.StatusCode);
+
+        var selectedCardId = pending.OfferedCards[0].Id;
+        var chosen = await ChooseCardAsync(start.BattleId, pending.PendingChoiceId!, selectedCardId);
+        AssertArenaInvariants(chosen.Actors, playerId);
+        Assert.False(chosen.IsAwaitingCardChoice);
+        Assert.Contains(chosen.SelectedCards, card => card.Id == selectedCardId);
+        Assert.Contains(
+            chosen.Events.OfType<CardChosenEventDto>(),
+            evt => evt.Card.Id == selectedCardId && evt.ChoiceId == pending.PendingChoiceId);
+
+        var resumed = await StepBattleAsync(start.BattleId, chosen.Tick, []);
+        Assert.True(resumed.Tick > chosen.Tick);
+    }
+
     private async Task<AccountStateResponseDto> GetAccountStateAsync(string accountId = "dev_account")
     {
         var response = await _client.GetAsync($"/api/v1/account/state?accountId={accountId}");
@@ -4769,6 +4802,52 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.NotNull(payload);
         return payload;
+    }
+
+    private async Task<BattleStepResponseDto> ChooseCardAsync(
+        string battleId,
+        string choiceId,
+        string selectedCardId)
+    {
+        var response = await _client.PostAsJsonAsync(
+            "/api/v1/battle/choose-card",
+            new ChooseCardRequestDto(
+                BattleId: battleId,
+                ChoiceId: choiceId,
+                SelectedCardId: selectedCardId));
+        var payload = await response.Content.ReadFromJsonAsync<BattleStepResponseDto>();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(payload);
+        return payload;
+    }
+
+    private async Task<BattleStepResponseDto> WaitForCardChoiceAsync(
+        string battleId,
+        int initialTick,
+        IReadOnlyList<SkillStateDto> initialSkills,
+        int maxSteps = 2200)
+    {
+        var currentTick = initialTick;
+        var currentSkills = initialSkills;
+        BattleStepResponseDto? latest = null;
+
+        for (var stepIndex = 0; stepIndex < maxSteps; stepIndex += 1)
+        {
+            latest = await StepBattleAsync(
+                battleId,
+                currentTick,
+                BuildReadySkillCommands(currentSkills));
+            currentTick = latest.Tick;
+            currentSkills = latest.Skills;
+
+            if (latest.IsAwaitingCardChoice)
+            {
+                return latest;
+            }
+        }
+
+        throw new Xunit.Sdk.XunitException("Expected a pending card choice but none was offered.");
     }
 
     private async Task<BattleStepResponseDto> WaitUntilSkillReadyAsync(
@@ -5224,6 +5303,10 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
                 $"level_up:{levelUp.PreviousLevel}:{levelUp.NewLevel}:{levelUp.RunXp}:{levelUp.XpToNextLevel}",
             XpGainedEventDto xpGained =>
                 $"xp_gained:{xpGained.Amount}:{xpGained.SourceSpeciesId}:{xpGained.IsElite}",
+            CardChoiceOfferedEventDto offered =>
+                $"card_choice_offered:{offered.ChoiceId}:{string.Join(",", offered.OfferedCards.Select(card => card.Id))}",
+            CardChosenEventDto chosen =>
+                $"card_chosen:{chosen.ChoiceId}:{chosen.Card.Id}",
             _ => battleEvent.GetType().Name
         };
     }

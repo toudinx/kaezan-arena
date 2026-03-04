@@ -36,7 +36,9 @@ builder.Services.AddSwaggerGen(options =>
                 typeof(SpeciesChestOpenedEventDto),
                 typeof(CritTextEventDto),
                 typeof(LevelUpEventDto),
-                typeof(XpGainedEventDto)
+                typeof(XpGainedEventDto),
+                typeof(CardChoiceOfferedEventDto),
+                typeof(CardChosenEventDto)
             ];
         }
 
@@ -124,6 +126,16 @@ builder.Services.AddSwaggerGen(options =>
         if (subType == typeof(XpGainedEventDto))
         {
             return "xp_gained";
+        }
+
+        if (subType == typeof(CardChoiceOfferedEventDto))
+        {
+            return "card_choice_offered";
+        }
+
+        if (subType == typeof(CardChosenEventDto))
+        {
+            return "card_chosen";
         }
 
         return null;
