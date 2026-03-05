@@ -28,7 +28,9 @@ describe("BackpackWindowComponent", () => {
       level: 13,
       xp: 1500,
       equipment: {
-        weaponInstanceId: null
+        weaponInstanceId: null,
+        armorInstanceId: null,
+        relicInstanceId: null
       },
       inventory: {
         materialStacks: {},
@@ -131,10 +133,10 @@ describe("BackpackWindowComponent", () => {
     expect(component.contextMenu).toBeNull();
   });
 
-  it("clicking weapon slot in weapon filter mode triggers equip flow directly", () => {
+  it("clicking weapon slot in weapon equip mode triggers equip flow directly", () => {
     const component = createComponent();
     assignInventoryInputs(component);
-    component.weaponFilterMode = true;
+    component.equipMode = "weapon";
     const emitted: Array<{ instanceId: string; slot: string }> = [];
     component.equipRequested.subscribe((request) => emitted.push(request));
 
@@ -144,6 +146,29 @@ describe("BackpackWindowComponent", () => {
     component.selectSlot(weaponSlot!.slotId);
 
     expect(emitted).toEqual([{ instanceId: "wpn-01", slot: "weapon" }]);
+  });
+
+  it("clicking armor or relic slot in matching equip mode triggers equip flow directly", () => {
+    const component = createComponent();
+    assignInventoryInputs(component);
+    const emitted: Array<{ instanceId: string; slot: string }> = [];
+    component.equipRequested.subscribe((request) => emitted.push(request));
+
+    const armorSlot = component.allSlots.find((slot) => slot.kind === "equipment" && slot.slot === "armor");
+    const relicSlot = component.allSlots.find((slot) => slot.kind === "equipment" && slot.slot === "relic");
+    expect(armorSlot).toBeTruthy();
+    expect(relicSlot).toBeTruthy();
+
+    component.equipMode = "armor";
+    component.selectSlot(armorSlot!.slotId);
+
+    component.equipMode = "relic";
+    component.selectSlot(relicSlot!.slotId);
+
+    expect(emitted).toEqual([
+      { instanceId: "arm-01", slot: "armor" },
+      { instanceId: "rel-01", slot: "relic" }
+    ]);
   });
 
   it("exposes only equipment filters and no Materials tab", () => {

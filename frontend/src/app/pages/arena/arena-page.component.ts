@@ -63,7 +63,7 @@ import {
   UiLayoutService
 } from "./ui-layout.service";
 import { BackpackWindowComponent } from "./backpack-window.component";
-import type { BackpackEquipRequest } from "./backpack-window.component";
+import type { BackpackEquipMode, BackpackEquipRequest } from "./backpack-window.component";
 import {
   type StatusBuffViewModel,
   type StatusSkillSlotViewModel,
@@ -180,6 +180,9 @@ const COMBAT_DETAILS_MAX_LINES = 200;
 const ANALYZER_WINDOW_MS = 10_000;
 const ANALYZER_SAMPLE_RETENTION_MS = 45_000;
 const ECONOMY_LOOT_PREVIEW_MAX_ENTRIES = 8;
+const EARLY_MOB_CONCURRENT_CAP = 6;
+const MAX_MOB_CONCURRENT_CAP = 10;
+const EARLY_MOB_CAP_DURATION_MS = 75_000;
 const ASSIST_SKILL_IDS: readonly AssistSkillId[] = ["exori", "exori_min", "exori_mas", "avalanche"];
 type ArenaAssistConfig = Readonly<{
   enabled: boolean;
@@ -308,7 +311,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   backpackHighlightItemId: string | null = null;
   backpackHighlightRequestId = 0;
   backpackForcedFilter: BackpackFilter | null = null;
-  backpackWeaponFilterMode = false;
+  backpackEquipMode: BackpackEquipMode = null;
   selectedTopLeftTab: LeftTopTabId = "events";
   selectedToolsTab: ToolsTabId = this.loadToolsTab();
   showCombatDetails = false;
@@ -335,6 +338,14 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   runTotalKills = 0;
   runEliteKills = 0;
   runChestsOpened = 0;
+  currentMobHpMult = 1;
+  currentMobDmgMult = 1;
+  scalingNormalHpMult = 1;
+  scalingNormalDmgMult = 1;
+  scalingEliteHpMult = 1;
+  scalingEliteDmgMult = 1;
+  scalingLvlFactor = 1;
+  scalingLvlFactorEnabled = true;
   isAwaitingCardChoice = false;
   pendingCardChoiceId: string | null = null;
   offeredCards: ArenaCardOffer[] = [];
@@ -469,7 +480,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   }
 
   get runHudTimerElapsedLabel(): string {
-    const clampedElapsedMs = Math.max(0, Math.min(this.runTimeMs, this.runDurationMs));
+    const clampedElapsedMs = Math.max(0, Math.min(this.resolveDisplayedRunTimeMs(), this.runDurationMs));
     return formatRunTimer(clampedElapsedMs);
   }
 
@@ -486,6 +497,14 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       return "You survived until the time target.";
     }
 
+    if (this.runEndReason === "defeat_death") {
+      return "Your character was defeated before the timer ended.";
+    }
+
+    if (this.runEndReason) {
+      return `Run ended: ${this.formatRunEndReason(this.runEndReason)}.`;
+    }
+
     return "Your character was defeated before the timer ended.";
   }
 
@@ -493,8 +512,24 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     return formatRunTimer(this.timeSurvivedMs);
   }
 
-  get runCompleteKillLabel(): string {
-    return `${this.runTotalKills} normal / ${this.runEliteKills} elite`;
+  get runCompleteEndedAtLabel(): string {
+    return formatRunTimer(this.resolveRunEndedAtMsForDisplay());
+  }
+
+  get runCompleteSummaryRows(): ReadonlyArray<Readonly<{ label: string; value: string }>> {
+    return [
+      { label: "Time survived", value: this.runCompleteTimeLabel },
+      {
+        label: "Run time",
+        value: `${this.runHudTimerElapsedLabel} / ${this.runHudTimerTotalLabel}`
+      },
+      { label: "Ended at", value: this.runCompleteEndedAtLabel },
+      { label: "Run level reached", value: String(this.runLevel) },
+      { label: "Total kills", value: String(this.runTotalKills) },
+      { label: "Elite kills", value: String(this.runEliteKills) },
+      { label: "Chests opened", value: String(this.runChestsOpened) },
+      { label: "Cards chosen", value: String(this.selectedCards.length) }
+    ];
   }
 
   get itemCatalogByIdForUi(): Readonly<Record<string, ItemDefinition>> {
@@ -619,6 +654,31 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       { label: "Echo Fragments/s", value: this.formatPerSecond(echoPerSecond) },
       { label: "Primal Core total", value: String(this.economyTotalPrimalCore) },
       { label: "Primal Core/s", value: this.formatPerSecond(primalPerSecond) }
+    ];
+  }
+
+  get scalingAnalyzerRows(): ReadonlyArray<Readonly<{ label: string; value: string }>> {
+    return [
+      { label: "Current Mob HP Mult", value: this.formatMultiplier(this.currentMobHpMult) },
+      { label: "Current Mob Dmg Mult", value: this.formatMultiplier(this.currentMobDmgMult) },
+      { label: "Scaling Normal HP", value: this.formatMultiplier(this.scalingNormalHpMult) },
+      { label: "Scaling Normal Dmg", value: this.formatMultiplier(this.scalingNormalDmgMult) },
+      { label: "Scaling Elite HP", value: this.formatMultiplier(this.scalingEliteHpMult) },
+      { label: "Scaling Elite Dmg", value: this.formatMultiplier(this.scalingEliteDmgMult) },
+      { label: "Run Lv. Factor", value: this.formatMultiplier(this.scalingLvlFactor) },
+      { label: "Lv. Factor Enabled", value: this.scalingLvlFactorEnabled ? "yes" : "no" }
+    ];
+  }
+
+  get pacingTelemetryRows(): ReadonlyArray<Readonly<{ label: string; value: string }>> {
+    const displayedRunTimeMs = this.resolveDisplayedRunTimeMs();
+    return [
+      { label: "Time survived", value: formatRunTimer(this.timeSurvivedMs) },
+      { label: "Run time", value: `${formatRunTimer(displayedRunTimeMs)} / ${formatRunTimer(this.runDurationMs)}` },
+      { label: "Derived mob cap", value: String(this.resolveDerivedMobCap()) },
+      { label: "Kills", value: String(this.runTotalKills) },
+      { label: "Elite kills", value: String(this.runEliteKills) },
+      { label: "Chests opened", value: String(this.runChestsOpened) }
     ];
   }
 
@@ -929,7 +989,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     }
 
     if (id === ARENA_UI_WINDOW_IDS.backpack) {
-      this.clearBackpackWeaponFilterMode();
+      this.clearBackpackEquipMode();
     }
 
     this.uiLayoutService.close(id);
@@ -968,14 +1028,14 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   onDockModuleHideRequested(id: DockModuleId): void {
     this.dockLayoutService.hide(id);
     if (id === "backpack") {
-      this.clearBackpackWeaponFilterMode();
+      this.clearBackpackEquipMode();
     }
   }
 
   async onBackpackEquipRequested(request: BackpackEquipRequest): Promise<void> {
     const equipped = await this.equipItemFromInventory(request.instanceId, request.slot);
-    if (equipped && request.slot === "weapon") {
-      this.clearBackpackWeaponFilterMode();
+    if (equipped && request.slot === this.backpackEquipMode) {
+      this.clearBackpackEquipMode();
     }
   }
 
@@ -984,7 +1044,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   }
 
   onLootConsoleItemClicked(itemId: string): void {
-    this.clearBackpackWeaponFilterMode();
+    this.clearBackpackEquipMode();
     this.focusBackpackPanel();
     this.focusRightInfoPane();
     this.backpackHighlightItemId = itemId;
@@ -992,8 +1052,20 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   }
 
   onEquipmentWeaponSlotActivated(): void {
-    this.backpackForcedFilter = "weapons";
-    this.backpackWeaponFilterMode = true;
+    this.activateBackpackEquipMode("weapon");
+  }
+
+  onEquipmentArmorSlotActivated(): void {
+    this.activateBackpackEquipMode("armor");
+  }
+
+  onEquipmentRelicSlotActivated(): void {
+    this.activateBackpackEquipMode("relic");
+  }
+
+  private activateBackpackEquipMode(slot: Exclude<BackpackEquipMode, null>): void {
+    this.backpackEquipMode = slot;
+    this.backpackForcedFilter = this.toBackpackFilter(slot);
     this.focusBackpackPanel();
     this.focusRightInfoPane();
   }
@@ -1220,6 +1292,14 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.runTotalKills = 0;
     this.runEliteKills = 0;
     this.runChestsOpened = 0;
+    this.currentMobHpMult = 1;
+    this.currentMobDmgMult = 1;
+    this.scalingNormalHpMult = 1;
+    this.scalingNormalDmgMult = 1;
+    this.scalingEliteHpMult = 1;
+    this.scalingEliteDmgMult = 1;
+    this.scalingLvlFactor = 1;
+    this.scalingLvlFactorEnabled = true;
     this.isAwaitingCardChoice = false;
     this.pendingCardChoiceId = null;
     this.offeredCards = [];
@@ -2028,6 +2108,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         this.updateGlobalCooldownFromSnapshot(response);
         this.updateAltarCooldownFromSnapshot(response);
         this.applyRunProgressFromSnapshot(response);
+        this.applyScalingTelemetryFromSnapshot(response);
         this.applyCardChoiceStateFromSnapshot(response);
         this.syncUiMetaState();
         this.battleLog = JSON.stringify(response, null, 2);
@@ -2369,6 +2450,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.updateGlobalCooldownFromSnapshot(response);
     this.updateAltarCooldownFromSnapshot(response);
     this.applyRunProgressFromSnapshot(response);
+    this.applyScalingTelemetryFromSnapshot(response);
     this.applyCardChoiceStateFromSnapshot(response);
     this.activeFxCount = this.getActiveFxCount(this.scene);
     this.appendDamageLogs(applied.damageNumbers);
@@ -3176,6 +3258,30 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.runChestsOpened = Math.max(0, Math.floor(parsedChestsOpened ?? this.runChestsOpened));
     this.appendExpLogsFromSnapshot(snapshot);
     this.appendEventFeedFromSnapshot(snapshot);
+  }
+
+  private applyScalingTelemetryFromSnapshot(snapshot: StartBattleResponse | StepBattleResponse): void {
+    const record = snapshot as Record<string, unknown>;
+    const parsedCurrentMobHpMult = this.readNumber(record["currentMobHpMult"]);
+    const parsedCurrentMobDmgMult = this.readNumber(record["currentMobDmgMult"]);
+    const scaling = this.readRecord(record["scaling"]);
+    const parsedNormalHpMult = this.readNumber(scaling?.["normalHpMult"]);
+    const parsedNormalDmgMult = this.readNumber(scaling?.["normalDmgMult"]);
+    const parsedEliteHpMult = this.readNumber(scaling?.["eliteHpMult"]);
+    const parsedEliteDmgMult = this.readNumber(scaling?.["eliteDmgMult"]);
+    const parsedLvlFactor = this.readNumber(scaling?.["lvlFactor"]);
+    const parsedLvlFactorEnabled = this.readBoolean(scaling?.["isLvlFactorEnabled"]);
+
+    this.currentMobHpMult = Math.max(0, parsedCurrentMobHpMult ?? this.currentMobHpMult);
+    this.currentMobDmgMult = Math.max(0, parsedCurrentMobDmgMult ?? this.currentMobDmgMult);
+    this.scalingNormalHpMult = Math.max(0, parsedNormalHpMult ?? this.scalingNormalHpMult);
+    this.scalingNormalDmgMult = Math.max(0, parsedNormalDmgMult ?? this.scalingNormalDmgMult);
+    this.scalingEliteHpMult = Math.max(0, parsedEliteHpMult ?? this.scalingEliteHpMult);
+    this.scalingEliteDmgMult = Math.max(0, parsedEliteDmgMult ?? this.scalingEliteDmgMult);
+    this.scalingLvlFactor = Math.max(0, parsedLvlFactor ?? this.scalingLvlFactor);
+    if (parsedLvlFactorEnabled !== null) {
+      this.scalingLvlFactorEnabled = parsedLvlFactorEnabled;
+    }
   }
 
   private applyCardChoiceStateFromSnapshot(snapshot: StartBattleResponse | StepBattleResponse): void {
@@ -4300,6 +4406,8 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     const snapshotIsRunEnded = this.readBoolean(record["isRunEnded"]);
     const snapshotRunEndReason = this.readString(record["runEndReason"]);
     const snapshotRunEndedAtMs = this.readNumber(record["runEndedAtMs"]);
+    const snapshotTimeSurvivedMs = this.readNumber(record["timeSurvivedMs"]);
+    const snapshotRunTimeMs = this.readNumber(record["runTimeMs"]);
     const snapshotIsGameOver = this.readBoolean(record["isGameOver"]);
     const snapshotEndReason = this.readString(record["endReason"]);
     const snapshotBattleStatus = this.readString(record["battleStatus"]);
@@ -4314,9 +4422,17 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
 
     this.isRunEnded = true;
     this.runEndReason = snapshotRunEndReason ?? fallbackRunEndReason ?? this.runEndReason ?? "defeat_death";
-    this.runEndedAtMs = snapshotRunEndedAtMs !== null
-      ? Math.max(0, Math.floor(snapshotRunEndedAtMs))
-      : this.runEndedAtMs;
+    const resolvedRunEndedAtMs =
+      snapshotRunEndedAtMs ??
+      snapshotTimeSurvivedMs ??
+      snapshotRunTimeMs ??
+      this.runEndedAtMs ??
+      this.timeSurvivedMs ??
+      this.runTimeMs;
+    this.runEndedAtMs = Math.max(0, Math.floor(resolvedRunEndedAtMs));
+    if (snapshotTimeSurvivedMs === null && this.timeSurvivedMs <= 0) {
+      this.timeSurvivedMs = this.runEndedAtMs;
+    }
     this.isPauseModalOpen = false;
     this.autoStepWasEnabledBeforePause = false;
     this.isDeathModalOpen = true;
@@ -4378,6 +4494,14 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
 
   private readBoolean(value: unknown): boolean | null {
     return typeof value === "boolean" ? value : null;
+  }
+
+  private readRecord(value: unknown): Record<string, unknown> | null {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      return null;
+    }
+
+    return value as Record<string, unknown>;
   }
 
   private readHitKind(value: unknown): "normal" | "crit" | null {
@@ -4496,6 +4620,36 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
 
   private clampAssistMaxAutoCasts(value: number): number {
     return Math.min(3, Math.max(1, value));
+  }
+
+  private resolveRunEndedAtMsForDisplay(): number {
+    if (this.runEndedAtMs !== null) {
+      return Math.max(0, Math.floor(this.runEndedAtMs));
+    }
+
+    return Math.max(0, Math.floor(this.timeSurvivedMs));
+  }
+
+  private resolveDisplayedRunTimeMs(): number {
+    if (!this.isRunEnded) {
+      return Math.max(0, Math.floor(this.runTimeMs));
+    }
+
+    return this.resolveRunEndedAtMsForDisplay();
+  }
+
+  private resolveDerivedMobCap(): number {
+    return this.runTimeMs < EARLY_MOB_CAP_DURATION_MS
+      ? EARLY_MOB_CONCURRENT_CAP
+      : MAX_MOB_CONCURRENT_CAP;
+  }
+
+  private formatMultiplier(value: number): string {
+    if (!Number.isFinite(value)) {
+      return "0.00x";
+    }
+
+    return `${value.toFixed(2)}x`;
   }
 
   private toFacingDirection(raw: string | null | undefined): FacingDirection | null {
@@ -4627,7 +4781,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     if (module.isVisible) {
       this.dockLayoutService.hide(id);
       if (id === "backpack") {
-        this.clearBackpackWeaponFilterMode();
+        this.clearBackpackEquipMode();
       }
       return;
     }
@@ -4636,9 +4790,21 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.dockLayoutService.expand(id);
   }
 
-  private clearBackpackWeaponFilterMode(): void {
+  private clearBackpackEquipMode(): void {
     this.backpackForcedFilter = null;
-    this.backpackWeaponFilterMode = false;
+    this.backpackEquipMode = null;
+  }
+
+  private toBackpackFilter(slot: Exclude<BackpackEquipMode, null>): BackpackFilter {
+    if (slot === "weapon") {
+      return "weapons";
+    }
+
+    if (slot === "armor") {
+      return "armor";
+    }
+
+    return "relics";
   }
 
   private focusDamageConsole(): void {

@@ -21,6 +21,8 @@ export type BackpackEquipRequest = Readonly<{
   slot: EquipmentSlot;
 }>;
 
+export type BackpackEquipMode = "weapon" | "armor" | "relic" | null;
+
 @Component({
   selector: "app-backpack-window",
   standalone: true,
@@ -37,7 +39,7 @@ export class BackpackWindowComponent implements OnChanges, OnDestroy {
   @Input() highlightItemId: string | null = null;
   @Input() highlightRequestId = 0;
   @Input() forcedFilter: BackpackFilter | null = null;
-  @Input() weaponFilterMode = false;
+  @Input() equipMode: BackpackEquipMode = null;
 
   @Output() readonly equipRequested = new EventEmitter<BackpackEquipRequest>();
   @Output() readonly salvageRequested = new EventEmitter<string>();
@@ -74,8 +76,8 @@ export class BackpackWindowComponent implements OnChanges, OnDestroy {
   }
 
   get visibleSlots(): BackpackSlot[] {
-    if (this.weaponFilterMode) {
-      return filterBackpackSlots(this.allSlots, "weapons");
+    if (this.equipMode) {
+      return filterBackpackSlots(this.allSlots, this.resolveFilterForEquipMode(this.equipMode));
     }
 
     if (this.forcedFilter) {
@@ -102,7 +104,7 @@ export class BackpackWindowComponent implements OnChanges, OnDestroy {
   }
 
   setFilter(filter: BackpackFilter): void {
-    if (this.weaponFilterMode) {
+    if (this.equipMode) {
       return;
     }
 
@@ -112,7 +114,7 @@ export class BackpackWindowComponent implements OnChanges, OnDestroy {
 
   selectSlot(slotId: string): void {
     const slot = this.allSlots.find((entry) => entry.slotId === slotId) ?? null;
-    if (this.weaponFilterMode && this.tryEmitEquip(slot)) {
+    if (this.equipMode && this.tryEmitEquip(slot)) {
       return;
     }
 
@@ -167,8 +169,8 @@ export class BackpackWindowComponent implements OnChanges, OnDestroy {
   }
 
   isFilterActive(filter: BackpackFilter): boolean {
-    if (this.weaponFilterMode) {
-      return filter === "weapons";
+    if (this.equipMode) {
+      return this.resolveFilterForEquipMode(this.equipMode) === filter;
     }
 
     if (this.forcedFilter) {
@@ -176,6 +178,22 @@ export class BackpackWindowComponent implements OnChanges, OnDestroy {
     }
 
     return this.selectedFilter === filter;
+  }
+
+  get equipModeHint(): string {
+    if (this.equipMode === "weapon") {
+      return "Select a weapon to equip.";
+    }
+
+    if (this.equipMode === "armor") {
+      return "Select armor to equip.";
+    }
+
+    if (this.equipMode === "relic") {
+      return "Select a relic to equip.";
+    }
+
+    return "";
   }
 
   canEquip(slot: BackpackSlot | null): boolean {
@@ -335,5 +353,17 @@ export class BackpackWindowComponent implements OnChanges, OnDestroy {
     }
 
     return null;
+  }
+
+  private resolveFilterForEquipMode(equipMode: Exclude<BackpackEquipMode, null>): BackpackFilter {
+    if (equipMode === "weapon") {
+      return "weapons";
+    }
+
+    if (equipMode === "armor") {
+      return "armor";
+    }
+
+    return "relics";
   }
 }

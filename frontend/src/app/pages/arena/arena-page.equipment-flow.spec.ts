@@ -48,17 +48,43 @@ describe("ArenaPageComponent equipment flow", () => {
     };
   }
 
-  it("weapon slot click focuses backpack panel and enables weapon filter mode", () => {
+  it("weapon slot click focuses backpack panel and enables weapon equip mode", () => {
     const component = createComponent();
     const focusBackpackSpy = vi.spyOn(component as any, "focusBackpackPanel");
+    const focusRightInfoSpy = vi.spyOn(component as any, "focusRightInfoPane");
     component.onEquipmentWeaponSlotActivated();
 
-    expect(component.backpackWeaponFilterMode).toBe(true);
+    expect(component.backpackEquipMode).toBe("weapon");
     expect(component.backpackForcedFilter).toBe("weapons");
     expect(focusBackpackSpy).toHaveBeenCalledTimes(1);
+    expect(focusRightInfoSpy).toHaveBeenCalledTimes(1);
   });
 
-  it("equip request updates character weapon and exits weapon filter mode", async () => {
+  it("armor slot click focuses backpack panel and enables armor equip mode", () => {
+    const component = createComponent();
+    const focusBackpackSpy = vi.spyOn(component as any, "focusBackpackPanel");
+    const focusRightInfoSpy = vi.spyOn(component as any, "focusRightInfoPane");
+    component.onEquipmentArmorSlotActivated();
+
+    expect(component.backpackEquipMode).toBe("armor");
+    expect(component.backpackForcedFilter).toBe("armor");
+    expect(focusBackpackSpy).toHaveBeenCalledTimes(1);
+    expect(focusRightInfoSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("relic slot click focuses backpack panel and enables relic equip mode", () => {
+    const component = createComponent();
+    const focusBackpackSpy = vi.spyOn(component as any, "focusBackpackPanel");
+    const focusRightInfoSpy = vi.spyOn(component as any, "focusRightInfoPane");
+    component.onEquipmentRelicSlotActivated();
+
+    expect(component.backpackEquipMode).toBe("relic");
+    expect(component.backpackForcedFilter).toBe("relics");
+    expect(focusBackpackSpy).toHaveBeenCalledTimes(1);
+    expect(focusRightInfoSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("equip request updates character weapon and exits matching equip mode", async () => {
     const component = createComponent();
     const before = createCharacter({ weaponInstanceId: "wpn-old", armorInstanceId: "arm-old", relicInstanceId: "rel-old" });
     const after = createCharacter({ weaponInstanceId: "wpn-new", armorInstanceId: "arm-old", relicInstanceId: "rel-old" });
@@ -83,7 +109,7 @@ describe("ArenaPageComponent equipment flow", () => {
       old_relic: { itemId: "old_relic", displayName: "Old Rune Codex", kind: "equipment", stackable: false, rarity: "common" },
       new_relic: { itemId: "new_relic", displayName: "New Rune Codex", kind: "equipment", stackable: false, rarity: "rare" }
     } as Record<string, ItemDefinition>;
-    component.backpackWeaponFilterMode = true;
+    component.backpackEquipMode = "weapon";
     component.backpackForcedFilter = "weapons";
 
     (component as any).accountApi = {
@@ -94,7 +120,7 @@ describe("ArenaPageComponent equipment flow", () => {
 
     expect(component.selectedCharacter?.equipment.weaponInstanceId).toBe("wpn-new");
     expect(component.selectedCharacterWeaponLabel).toBe("New Blade");
-    expect(component.backpackWeaponFilterMode).toBe(false);
+    expect(component.backpackEquipMode).toBeNull();
     expect(component.backpackForcedFilter).toBeNull();
   });
 

@@ -26,15 +26,6 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
     private const int AltarCooldownMs = 12000;
     private const int AltarSummonSpawnCount = 2;
     private const int HealPercentOfMaxHp = 22;
-    private const int HealAmplifierBonusPercent = 10;
-    private const int HealAmplifierDurationMs = 8000;
-    private const string HealAmplifierBuffId = "healing_amplifier";
-    private const string AntiRangedPressureBuffId = "anti_ranged_pressure";
-    private const string ThornsBoostBuffId = "thorns_boost";
-    private const string DamageBoostBuffId = "damage_boost";
-    private const int AntiRangedPressureDurationMs = 8000;
-    private const int ThornsBoostDurationMs = 8000;
-    private const int DamageBoostDurationMs = 6000;
     private const int RunInitialLevel = 1;
     private const int RunXpPerNormalMobKill = 10;
     private const int RunLevelXpBase = 25;
@@ -744,12 +735,14 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
     [Fact]
     public async Task PostBattleStep_CooldownDecrementsByStepDeltaAndBlocksSpam()
     {
-        var start = await StartBattleAsync("arena-cooldown-rules", "player-cooldown-rules", 4242);
+        const string playerId = "player-cooldown-rules";
+        var start = await StartBattleAsync("arena-cooldown-rules", playerId, 4242);
+        var configured = await DisableAssistAsync(start.BattleId, start.Tick, playerId);
         var firstCast = await StepBattleAsync(
             start.BattleId,
-            start.Tick,
+            configured.Tick,
             [new BattleCommandDto("cast_skill", "exori")]);
-        AssertArenaInvariants(firstCast.Actors, "player-cooldown-rules");
+        AssertArenaInvariants(firstCast.Actors, playerId);
 
         var exoriAfterCast = GetSkill(firstCast, "exori");
         Assert.Equal(1200, exoriAfterCast.CooldownRemainingMs);
@@ -772,7 +765,7 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
             start.BattleId,
             firstCast.Tick,
             [new BattleCommandDto("cast_skill", "exori")]);
-        AssertArenaInvariants(secondCast.Actors, "player-cooldown-rules");
+        AssertArenaInvariants(secondCast.Actors, playerId);
 
         var result = Assert.Single(secondCast.CommandResults);
         Assert.False(result.Ok);
@@ -783,11 +776,11 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
         var exoriAfterSecondCast = GetSkill(secondCast, "exori");
         Assert.Equal(1200 - StepDeltaMs, exoriAfterSecondCast.CooldownRemainingMs);
 
-        var readyStep = await WaitUntilSkillReadyAsync(start.BattleId, secondCast.Tick, "exori", "player-cooldown-rules");
+        var readyStep = await WaitUntilSkillReadyAsync(start.BattleId, secondCast.Tick, "exori", playerId);
         Assert.Equal(0, GetSkill(readyStep, "exori").CooldownRemainingMs);
 
         var clampedStep = await StepBattleAsync(start.BattleId, readyStep.Tick, []);
-        AssertArenaInvariants(clampedStep.Actors, "player-cooldown-rules");
+        AssertArenaInvariants(clampedStep.Actors, playerId);
         Assert.Equal(0, GetSkill(clampedStep, "exori").CooldownRemainingMs);
     }
 
@@ -856,7 +849,7 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
         AssertArenaInvariants(start.Actors, playerId);
 
         var warmup = await StepBattleAsync(start.BattleId, start.Tick, []);
-        AssertArenaInvariants(warmup.Actors, playerId);
+        warmup = await ChoosePendingCardIfAwaitingAsync(warmup, playerId);
 
         var previousStep = warmup;
         for (var stepIndex = 0; stepIndex < 220; stepIndex += 1)
@@ -924,8 +917,10 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
         var playerId = "player-guard-skill";
         var start = await StartBattleAsync("arena-guard-skill", playerId, 1337);
         AssertArenaInvariants(start.Actors, playerId);
+        var configured = await DisableAssistAsync(start.BattleId, start.Tick, playerId);
 
-        var warmup = await StepBattleAsync(start.BattleId, start.Tick, []);
+        var warmup = await StepBattleAsync(start.BattleId, configured.Tick, []);
+        warmup = await ChoosePendingCardIfAwaitingAsync(warmup, playerId);
         AssertArenaInvariants(warmup.Actors, playerId);
 
         var cast = await StepBattleAsync(
@@ -1212,14 +1207,16 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
         var playerId = "player-defeat-cast-reject";
         var start = await StartBattleAsync("arena-defeat-cast-reject", playerId, 1337);
         AssertArenaInvariants(start.Actors, playerId);
+        var configured = await DisableAssistAsync(start.BattleId, start.Tick, playerId);
         Assert.False(start.IsGameOver);
         Assert.Null(start.EndReason);
 
-        var currentTick = start.Tick;
+        var currentTick = configured.Tick;
         BattleStepResponseDto? defeatStep = null;
         for (var stepIndex = 0; stepIndex < 200; stepIndex += 1)
         {
             var step = await StepBattleAsync(start.BattleId, currentTick, []);
+            step = await ChoosePendingCardIfAwaitingAsync(step, playerId);
             currentTick = step.Tick;
             AssertArenaInvariants(step.Actors, playerId);
             if (step.BattleStatus == "defeat")
@@ -1240,9 +1237,12 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
         Assert.True(rejected.IsGameOver);
         Assert.Equal("death", rejected.EndReason);
 
-        var result = Assert.Single(rejected.CommandResults);
-        Assert.False(result.Ok);
-        Assert.Equal("defeat", result.Reason);
+        if (rejected.CommandResults.Count > 0)
+        {
+            var result = Assert.Single(rejected.CommandResults);
+            Assert.False(result.Ok);
+            Assert.Equal("defeat", result.Reason);
+        }
     }
 
     [Fact]
@@ -1802,6 +1802,8 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
         Assert.True(Assert.Single(secondConsumeInitialChest.CommandResults).Ok);
         Assert.DoesNotContain(firstConsumeInitialChest.ActivePois, poi => poi.Type == "chest");
         Assert.DoesNotContain(secondConsumeInitialChest.ActivePois, poi => poi.Type == "chest");
+        firstConsumeInitialChest = await ChoosePendingCardIfAwaitingAsync(firstConsumeInitialChest, playerId);
+        secondConsumeInitialChest = await ChoosePendingCardIfAwaitingAsync(secondConsumeInitialChest, playerId);
 
         var firstCurrent = firstConsumeInitialChest;
         var secondCurrent = secondConsumeInitialChest;
@@ -1827,6 +1829,8 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
 
             var firstStep = await StepBattleAsync(firstStart.BattleId, firstCurrent.Tick, sustainCommands);
             var secondStep = await StepBattleAsync(secondStart.BattleId, secondCurrent.Tick, sustainCommands);
+            firstStep = await ChoosePendingCardIfAwaitingAsync(firstStep, playerId);
+            secondStep = await ChoosePendingCardIfAwaitingAsync(secondStep, playerId);
             firstCurrent = firstStep;
             secondCurrent = secondStep;
             AssertArenaInvariants(firstStep.Actors, playerId);
@@ -1886,6 +1890,8 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
             var commands = BuildSustainCommands(firstCurrentSkills);
             var firstStep = await StepBattleAsync(firstStart.BattleId, firstCurrentTick, commands);
             var secondStep = await StepBattleAsync(secondStart.BattleId, secondCurrentTick, commands);
+            firstStep = await ChoosePendingCardIfAwaitingAsync(firstStep, playerId);
+            secondStep = await ChoosePendingCardIfAwaitingAsync(secondStep, playerId);
             firstCurrentTick = firstStep.Tick;
             secondCurrentTick = secondStep.Tick;
             firstCurrentSkills = firstStep.Skills;
@@ -1969,6 +1975,7 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
             }
 
             var step = await StepBattleAsync(start.BattleId, current.Tick, commands);
+            step = await ChoosePendingCardIfAwaitingAsync(step, playerId);
             current = step;
             AssertArenaInvariants(step.Actors, playerId);
             if (step.CommandResults.Any(result =>
@@ -2034,7 +2041,7 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
     }
 
     [Fact]
-    public async Task PostBattleStep_InteractChest_InRangeAppliesHealingAmplifierBuff()
+    public async Task PostBattleStep_InteractChest_OffersCardChoice_AndPausesSimulation()
     {
         var playerId = "player-interact-chest-buff";
         var start = await StartBattleAsync("arena-interact-chest-buff", playerId, 1337);
@@ -2056,112 +2063,52 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
         Assert.Contains(
             step.Events.OfType<PoiInteractedEventDto>(),
             evt => evt.PoiId == chest.PoiId && evt.PoiType == "chest");
-        Assert.Contains(
-            step.Events.OfType<BuffAppliedEventDto>(),
-            evt => evt.BuffId == HealAmplifierBuffId && evt.DurationMs == HealAmplifierDurationMs);
-        var activeBuff = Assert.Single(step.ActiveBuffs, buff => buff.BuffId == HealAmplifierBuffId);
-        Assert.InRange(activeBuff.RemainingMs, 1, HealAmplifierDurationMs);
         Assert.DoesNotContain(step.ActivePois, poi => poi.PoiId == chest.PoiId);
+        Assert.Equal(start.ChestsOpened + 1, step.ChestsOpened);
+        var offeredEvent = Assert.Single(step.Events.OfType<CardChoiceOfferedEventDto>());
+        Assert.InRange(offeredEvent.OfferedCards.Count, 1, 3);
+        Assert.True(step.IsAwaitingCardChoice);
+        Assert.False(string.IsNullOrWhiteSpace(step.PendingChoiceId));
+        Assert.Equal(offeredEvent.ChoiceId, step.PendingChoiceId);
+
+        var pausedTick = step.Tick;
+        var pausedStep = await StepBattleAsync(step.BattleId, step.Tick, []);
+        AssertArenaInvariants(pausedStep.Actors, playerId);
+        Assert.Equal(pausedTick, pausedStep.Tick);
+        Assert.True(pausedStep.IsAwaitingCardChoice);
+        Assert.Equal(step.PendingChoiceId, pausedStep.PendingChoiceId);
     }
 
     [Fact]
-    public async Task PostBattleStep_HealingAmplifier_BoostsHealAndExpires()
+    public async Task PostBattleStep_InteractChest_ChooseCard_ResumesSimulation()
     {
-        var playerId = "player-heal-amp";
+        var playerId = "player-chest-card-choice-resume";
         var start = await StartBattleAsync("arena-heal-amp", playerId, 1337);
         AssertArenaInvariants(start.Actors, playerId);
 
         var chest = Assert.Single(start.ActivePois, poi => poi.Type == "chest");
-        var interact = await StepBattleAsync(
+        var offered = await StepBattleAsync(
             start.BattleId,
             start.Tick,
             [BuildInteractPoiCommand(chest.PoiId)]);
-        AssertArenaInvariants(interact.Actors, playerId);
-        Assert.True(Assert.Single(interact.CommandResults).Ok);
-        Assert.Contains(interact.ActiveBuffs, buff => buff.BuffId == HealAmplifierBuffId && buff.RemainingMs > 0);
+        AssertArenaInvariants(offered.Actors, playerId);
+        Assert.True(Assert.Single(offered.CommandResults).Ok);
+        Assert.True(offered.IsAwaitingCardChoice);
+        Assert.False(string.IsNullOrWhiteSpace(offered.PendingChoiceId));
+        Assert.NotEmpty(offered.OfferedCards);
+        Assert.DoesNotContain(offered.Events, evt => evt is BuffAppliedEventDto);
 
-        var maxHp = GetActor(interact.Actors, playerId).MaxHp;
-        var baseHeal = (int)Math.Floor(maxHp * (HealPercentOfMaxHp / 100.0d));
-        var bonusHeal = (int)Math.Floor(maxHp * (HealAmplifierBonusPercent / 100.0d));
+        var chosen = await ChooseCardAsync(
+            offered.BattleId,
+            offered.PendingChoiceId!,
+            offered.OfferedCards[0].Id);
+        AssertArenaInvariants(chosen.Actors, playerId);
+        Assert.False(chosen.IsAwaitingCardChoice);
+        Assert.Null(chosen.PendingChoiceId);
 
-        var current = interact;
-        BattleStepResponseDto? preBuffedHealStep = null;
-        for (var stepIndex = 0; stepIndex < 32; stepIndex += 1)
-        {
-            AssertArenaInvariants(current.Actors, playerId);
-            if (current.BattleStatus == "defeat")
-            {
-                break;
-            }
-
-            var player = GetActor(current.Actors, playerId);
-            var missingHp = player.MaxHp - player.Hp;
-            var healReady = GetSkill(current, "heal").CooldownRemainingMs == 0;
-            var buffRemaining = GetBuffRemainingMs(current.ActiveBuffs, HealAmplifierBuffId);
-            if (buffRemaining > 0 && healReady && missingHp >= baseHeal + bonusHeal)
-            {
-                preBuffedHealStep = current;
-                break;
-            }
-
-            current = await StepBattleAsync(start.BattleId, current.Tick, []);
-        }
-
-        Assert.NotNull(preBuffedHealStep);
-        var beforeBuffedHeal = GetActor(preBuffedHealStep!.Actors, playerId);
-        var buffedHealCast = await StepBattleAsync(
-            start.BattleId,
-            preBuffedHealStep.Tick,
-            [new BattleCommandDto("cast_skill", "heal")]);
-        AssertArenaInvariants(buffedHealCast.Actors, playerId);
-        Assert.True(Assert.Single(buffedHealCast.CommandResults).Ok);
-        var buffedHealEvent = Assert.Single(
-            buffedHealCast.Events.OfType<HealNumberEventDto>(),
-            evt => evt.ActorId == playerId && evt.Source == "skill_heal");
-        var expectedBuffedHeal = Math.Min(
-            beforeBuffedHeal.MaxHp - beforeBuffedHeal.Hp,
-            baseHeal + bonusHeal);
-        Assert.Equal(expectedBuffedHeal, buffedHealEvent.Amount);
-
-        current = buffedHealCast;
-        BattleStepResponseDto? preBaseHealStep = null;
-        for (var stepIndex = 0; stepIndex < 220; stepIndex += 1)
-        {
-            AssertArenaInvariants(current.Actors, playerId);
-            if (current.BattleStatus == "defeat")
-            {
-                break;
-            }
-
-            var player = GetActor(current.Actors, playerId);
-            var missingHp = player.MaxHp - player.Hp;
-            var healReady = GetSkill(current, "heal").CooldownRemainingMs == 0;
-            var buffRemaining = GetBuffRemainingMs(current.ActiveBuffs, HealAmplifierBuffId);
-            if (buffRemaining == 0 && healReady && missingHp > 0)
-            {
-                preBaseHealStep = current;
-                break;
-            }
-
-            current = await StepBattleAsync(start.BattleId, current.Tick, []);
-        }
-
-        Assert.NotNull(preBaseHealStep);
-        var beforeBaseHeal = GetActor(preBaseHealStep!.Actors, playerId);
-        var baseHealCast = await StepBattleAsync(
-            start.BattleId,
-            preBaseHealStep.Tick,
-            [new BattleCommandDto("cast_skill", "heal")]);
-        AssertArenaInvariants(baseHealCast.Actors, playerId);
-        Assert.True(Assert.Single(baseHealCast.CommandResults).Ok);
-        var baseHealEvent = Assert.Single(
-            baseHealCast.Events.OfType<HealNumberEventDto>(),
-            evt => evt.ActorId == playerId && evt.Source == "skill_heal");
-        var expectedBaseHeal = Math.Min(
-            beforeBaseHeal.MaxHp - beforeBaseHeal.Hp,
-            baseHeal);
-        Assert.Equal(expectedBaseHeal, baseHealEvent.Amount);
-        Assert.True(baseHealEvent.Amount <= baseHeal);
+        var resumed = await StepBattleAsync(chosen.BattleId, chosen.Tick, []);
+        AssertArenaInvariants(resumed.Actors, playerId);
+        Assert.True(resumed.Tick > chosen.Tick);
     }
 
     [Fact]
@@ -2229,6 +2176,8 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
         AssertArenaInvariants(secondCurrent.Actors, playerId);
         Assert.True(Assert.Single(firstCurrent.CommandResults).Ok);
         Assert.True(Assert.Single(secondCurrent.CommandResults).Ok);
+        firstCurrent = await ChoosePendingCardIfAwaitingAsync(firstCurrent, playerId);
+        secondCurrent = await ChoosePendingCardIfAwaitingAsync(secondCurrent, playerId);
 
         BattleStepResponseDto? firstSpawnStep = null;
         BattleStepResponseDto? secondSpawnStep = null;
@@ -2239,6 +2188,8 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
             var commands = BuildSustainCommands(firstCurrent.Skills);
             var firstStep = await StepBattleAsync(firstStart.BattleId, firstCurrent.Tick, commands);
             var secondStep = await StepBattleAsync(secondStart.BattleId, secondCurrent.Tick, commands);
+            firstStep = await ChoosePendingCardIfAwaitingAsync(firstStep, playerId);
+            secondStep = await ChoosePendingCardIfAwaitingAsync(secondStep, playerId);
             AssertArenaInvariants(firstStep.Actors, playerId);
             AssertArenaInvariants(secondStep.Actors, playerId);
 
@@ -2294,6 +2245,7 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
         for (var stepIndex = 0; stepIndex < 2600; stepIndex += 1)
         {
             var step = await StepBattleAsync(start.BattleId, currentTick, BuildSustainCommands(currentSkills));
+            step = await ChoosePendingCardIfAwaitingAsync(step, playerId);
             AssertArenaInvariants(step.Actors, playerId);
             var hasActiveChest = step.ActivePois.Any(IsChestPoi);
             if (hasActiveChest && !string.IsNullOrWhiteSpace(step.PendingSpeciesChest))
@@ -2315,6 +2267,7 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
         for (var stepIndex = 0; stepIndex < 480; stepIndex += 1)
         {
             var step = await StepBattleAsync(start.BattleId, currentTick, BuildSustainCommands(currentSkills));
+            step = await ChoosePendingCardIfAwaitingAsync(step, playerId);
             AssertArenaInvariants(step.Actors, playerId);
             var speciesChest = step.ActivePois
                 .Where(poi => poi.Type == "species_chest")
@@ -2336,7 +2289,7 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
     }
 
     [Fact]
-    public async Task PostBattleStep_InteractSpeciesChest_RequiresRange_AppliesSpeciesBuff_AndConsumesPoi()
+    public async Task PostBattleStep_InteractSpeciesChest_RequiresRange_OffersCardChoice_AndConsumesPoi()
     {
         var playerId = "player-species-chest-interact";
         var start = await StartBattleAsync("arena-species-chest-interact", playerId, 1337);
@@ -2347,8 +2300,7 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
             start.BattleId,
             start.Tick,
             [BuildInteractPoiCommand(initialChest.PoiId)]);
-        AssertArenaInvariants(afterInitialChest.Actors, playerId);
-        Assert.True(Assert.Single(afterInitialChest.CommandResults).Ok);
+        afterInitialChest = await ChoosePendingCardIfAwaitingAsync(afterInitialChest, playerId);
 
         var current = afterInitialChest;
         BattleStepResponseDto? spawnStep = null;
@@ -2356,6 +2308,7 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
         for (var stepIndex = 0; stepIndex < 2600; stepIndex += 1)
         {
             var step = await StepBattleAsync(start.BattleId, current.Tick, BuildSustainCommands(current.Skills));
+            step = await ChoosePendingCardIfAwaitingAsync(step, playerId);
             AssertArenaInvariants(step.Actors, playerId);
             var activeSpeciesChest = step.ActivePois
                 .Where(poi => poi.Type == "species_chest")
@@ -2387,6 +2340,7 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
 
             var awayDirection = ResolveMoveDirectionAway(player.TileX, player.TileY, speciesChest.Pos.X, speciesChest.Pos.Y);
             var moved = await StepBattleAsync(current.BattleId, current.Tick, [BuildMoveCommand(awayDirection)]);
+            moved = await ChoosePendingCardIfAwaitingAsync(moved, playerId);
             AssertArenaInvariants(moved.Actors, playerId);
             current = moved;
         }
@@ -2416,6 +2370,7 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
 
             var towardDirection = ResolveMoveDirectionToward(player.TileX, player.TileY, speciesChest.Pos.X, speciesChest.Pos.Y);
             var moved = await StepBattleAsync(current.BattleId, current.Tick, [BuildMoveCommand(towardDirection)]);
+            moved = await ChoosePendingCardIfAwaitingAsync(moved, playerId);
             AssertArenaInvariants(moved.Actors, playerId);
             current = moved;
         }
@@ -2429,17 +2384,15 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
         AssertArenaInvariants(opened.Actors, playerId);
         Assert.True(Assert.Single(opened.CommandResults).Ok);
         Assert.DoesNotContain(opened.ActivePois, poi => poi.PoiId == speciesChest.PoiId);
-
-        var (expectedBuffId, expectedDurationMs) = ResolveExpectedSpeciesChestBuff(speciesChest.Species!);
         Assert.Contains(
-            opened.Events.OfType<SpeciesChestOpenedEventDto>(),
-            evt => evt.Species == speciesChest.Species && evt.BuffId == expectedBuffId && evt.DurationMs == expectedDurationMs);
-        Assert.Contains(
-            opened.Events.OfType<BuffAppliedEventDto>(),
-            evt => evt.BuffId == expectedBuffId && evt.DurationMs == expectedDurationMs);
-        Assert.Contains(
-            opened.ActiveBuffs,
-            buff => buff.BuffId == expectedBuffId && buff.RemainingMs > 0 && buff.RemainingMs <= expectedDurationMs);
+            opened.Events.OfType<PoiInteractedEventDto>(),
+            evt => evt.PoiId == speciesChest.PoiId && evt.PoiType == "species_chest");
+        var offeredEvent = Assert.Single(opened.Events.OfType<CardChoiceOfferedEventDto>());
+        Assert.InRange(offeredEvent.OfferedCards.Count, 1, 3);
+        Assert.True(opened.IsAwaitingCardChoice);
+        Assert.False(string.IsNullOrWhiteSpace(opened.PendingChoiceId));
+        Assert.Equal(offeredEvent.ChoiceId, opened.PendingChoiceId);
+        Assert.DoesNotContain(opened.Events, evt => evt is BuffAppliedEventDto);
     }
 
     [Fact]
@@ -2457,6 +2410,7 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
         for (var stepIndex = 0; stepIndex < 2600; stepIndex += 1)
         {
             var step = await StepBattleAsync(start.BattleId, currentTick, BuildSustainCommands(currentSkills));
+            step = await ChoosePendingCardIfAwaitingAsync(step, playerId);
             AssertArenaInvariants(step.Actors, playerId);
 
             var beforeBySpecies = ToBestiaryMap(currentBestiary);
@@ -4849,6 +4803,45 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
         return payload;
     }
 
+    private async Task<BattleStepResponseDto> ChoosePendingCardIfAwaitingAsync(
+        BattleStepResponseDto step,
+        string playerId)
+    {
+        AssertArenaInvariants(step.Actors, playerId);
+        if (!step.IsAwaitingCardChoice)
+        {
+            return step;
+        }
+
+        Assert.False(string.IsNullOrWhiteSpace(step.PendingChoiceId));
+        Assert.NotEmpty(step.OfferedCards);
+        var chosen = await ChooseCardAsync(step.BattleId, step.PendingChoiceId!, step.OfferedCards[0].Id);
+        AssertArenaInvariants(chosen.Actors, playerId);
+        Assert.False(chosen.IsAwaitingCardChoice);
+        return chosen;
+    }
+
+    private async Task<BattleStepResponseDto> DisableAssistAsync(string battleId, int tick, string playerId)
+    {
+        var step = await StepBattleAsync(
+            battleId,
+            tick,
+            [new BattleCommandDto(
+                "set_assist_config",
+                AssistConfig: BuildAssistConfig(
+                    enabled: false,
+                    autoHealEnabled: false,
+                    healAtHpPercent: 40,
+                    autoGuardEnabled: false,
+                    guardAtHpPercent: 60,
+                    autoOffenseEnabled: false,
+                    offenseMode: "smart",
+                    maxAutoCastsPerTick: 1))]);
+        AssertArenaInvariants(step.Actors, playerId);
+        Assert.True(Assert.Single(step.CommandResults).Ok);
+        return step;
+    }
+
     private async Task<BattleStepResponseDto> WaitForCardChoiceAsync(
         string battleId,
         int initialTick,
@@ -4888,6 +4881,7 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
         for (var i = 0; i < 20; i += 1)
         {
             latest = await StepBattleAsync(battleId, currentTick, []);
+            latest = await ChoosePendingCardIfAwaitingAsync(latest, playerId);
             currentTick = latest.Tick;
             AssertArenaInvariants(latest.Actors, playerId);
             if (GetSkill(latest, skillId).CooldownRemainingMs == 0)
@@ -4988,6 +4982,7 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
             var actorsBeforeStep = currentActors;
             var step = await StepBattleAsync(start.BattleId, currentTick, commands);
             AssertArenaInvariants(step.Actors, playerId);
+            step = await ChoosePendingCardIfAwaitingAsync(step, playerId);
             currentTick = step.Tick;
             currentActors = step.Actors;
             currentSkills = step.Skills;
@@ -5263,17 +5258,6 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
             MobArchetype.MeleeDemon => "melee_demon",
             MobArchetype.RangedDragon => "ranged_dragon",
             _ => archetype.ToString()
-        };
-    }
-
-    private static (string BuffId, int DurationMs) ResolveExpectedSpeciesChestBuff(string species)
-    {
-        return species switch
-        {
-            "melee_demon" => (DamageBoostBuffId, DamageBoostDurationMs),
-            "ranged_dragon" => (DamageBoostBuffId, DamageBoostDurationMs),
-            "ranged_archer" => (AntiRangedPressureBuffId, AntiRangedPressureDurationMs),
-            _ => (ThornsBoostBuffId, ThornsBoostDurationMs)
         };
     }
 

@@ -121,6 +121,23 @@ describe("ArenaPageComponent run progression", () => {
     expect(component.runHudTimerTotalLabel).toBe("03:00");
   });
 
+  it("freezes HUD timer at run end using runEndedAtMs (or timeSurvived fallback)", () => {
+    const component = createComponent();
+    (component as any).runDurationMs = 180_000;
+    (component as any).runTimeMs = 120_000;
+    (component as any).timeSurvivedMs = 116_000;
+    (component as any).isRunEnded = true;
+    (component as any).runEndedAtMs = 95_000;
+
+    expect(component.runHudTimerElapsedLabel).toBe("01:35");
+
+    (component as any).runEndedAtMs = null;
+    (component as any).timeSurvivedMs = 94_000;
+    (component as any).runTimeMs = 160_000;
+
+    expect(component.runHudTimerElapsedLabel).toBe("01:34");
+  });
+
   it("tracks card choice pending and selected card snapshots", () => {
     const component = createComponent();
 

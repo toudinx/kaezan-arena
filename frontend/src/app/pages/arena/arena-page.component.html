@@ -62,6 +62,17 @@
                     </div>
                   }
                 </div>
+                <section class="analyzer-panel analyzer-panel--scaling">
+                  <h4>Scaling Director</h4>
+                  <div class="analyzer-grid">
+                    @for (row of scalingAnalyzerRows; track row.label) {
+                      <div class="analyzer-row">
+                        <span>{{ row.label }}</span>
+                        <strong>{{ row.value }}</strong>
+                      </div>
+                    }
+                  </div>
+                </section>
                 <button type="button" class="analyzer-toggle" (click)="toggleCombatDetails()">
                   {{ showCombatDetails ? "Hide Details" : "Show Details" }}
                 </button>
@@ -88,6 +99,17 @@
                     </div>
                   }
                 </div>
+                <section class="analyzer-panel analyzer-panel--pacing">
+                  <h4>Pacing Telemetry</h4>
+                  <div class="analyzer-grid">
+                    @for (row of pacingTelemetryRows; track row.label) {
+                      <div class="analyzer-row">
+                        <span>{{ row.label }}</span>
+                        <strong>{{ row.value }}</strong>
+                      </div>
+                    }
+                  </div>
+                </section>
                 @if (economyLootPreview.length > 0) {
                   <section class="economy-loot">
                     <h4>Recent Loot</h4>
@@ -273,8 +295,10 @@
               [weaponRarity]="selectedCharacterWeaponRarity"
               [armorRarity]="selectedCharacterArmorRarity"
               [relicRarity]="selectedCharacterRelicRarity"
-              [weaponFilterMode]="backpackWeaponFilterMode"
+              [equipMode]="backpackEquipMode"
               (weaponSlotActivated)="onEquipmentWeaponSlotActivated()"
+              (armorSlotActivated)="onEquipmentArmorSlotActivated()"
+              (relicSlotActivated)="onEquipmentRelicSlotActivated()"
             ></app-equipment-paperdoll-window>
           </div>
         </section>
@@ -291,7 +315,7 @@
               [highlightItemId]="backpackHighlightItemId"
               [highlightRequestId]="backpackHighlightRequestId"
               [forcedFilter]="backpackForcedFilter"
-              [weaponFilterMode]="backpackWeaponFilterMode"
+              [equipMode]="backpackEquipMode"
               (equipRequested)="onBackpackEquipRequested($event)"
               (salvageRequested)="onBackpackSalvageRequested($event)"
             ></app-backpack-window>
@@ -417,32 +441,14 @@
           <p>Run Complete</p>
         </header>
         <p class="run-complete__reason">{{ runCompleteReasonText }}</p>
-        <div class="run-complete__stats">
-          <div class="run-complete__stat-row">
-            <span>Time survived</span>
-            <strong>{{ runCompleteTimeLabel }}</strong>
-          </div>
-          <div class="run-complete__stat-row">
-            <span>Run level</span>
-            <strong>{{ runLevel }}</strong>
-          </div>
-          <div class="run-complete__stat-row">
-            <span>Run XP</span>
-            <strong>{{ runXp }} / {{ xpToNextLevel }}</strong>
-          </div>
-          <div class="run-complete__stat-row">
-            <span>Kills</span>
-            <strong>{{ runCompleteKillLabel }}</strong>
-          </div>
-          <div class="run-complete__stat-row">
-            <span>Cards chosen</span>
-            <strong>{{ selectedCards.length }}</strong>
-          </div>
-          <div class="run-complete__stat-row">
-            <span>Chests opened</span>
-            <strong>{{ runChestsOpened }}</strong>
-          </div>
-        </div>
+        <section class="run-complete__stats run-complete__stats--summary">
+          @for (row of runCompleteSummaryRows; track row.label) {
+            <div class="run-complete__stat-row">
+              <span>{{ row.label }}</span>
+              <strong>{{ row.value }}</strong>
+            </div>
+          }
+        </section>
         <div class="run-complete__cards">
           <h3>Cards</h3>
           @if (selectedCards.length === 0) {

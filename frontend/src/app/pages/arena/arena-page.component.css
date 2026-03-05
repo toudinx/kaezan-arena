@@ -293,6 +293,23 @@
   cursor: pointer;
 }
 
+.analyzer-panel {
+  border: 1px solid #334155;
+  border-radius: 0.3rem;
+  background: #111827;
+  padding: 0.24rem 0.28rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.analyzer-panel h4 {
+  margin: 0;
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  color: #cbd5e1;
+}
+
 .combat-details__body {
   border: 1px solid #334155;
   border-radius: 0.28rem;
@@ -822,6 +839,13 @@ canvas {
 .run-complete__stats {
   display: grid;
   gap: 0.25rem;
+}
+
+.run-complete__stats--summary {
+  border: 1px solid #334155;
+  border-radius: 0.34rem;
+  background: #111827;
+  padding: 0.28rem;
 }
 
 .run-complete__stat-row {

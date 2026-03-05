@@ -19,33 +19,33 @@
     </div>
 
     <div class="paperdoll__slot-wrap">
-      <div
+      <button
+        type="button"
         class="paperdoll__slot"
         [ngClass]="getSlotRarityClass(armorRarity)"
         [title]="slotTooltip('Armor', equippedArmorLabel)"
-        role="img"
-        aria-label="Armor slot"
+        (click)="onArmorSlotClick()"
       >
         <span class="paperdoll__slot-glyph">A</span>
-      </div>
+      </button>
       <span class="paperdoll__slot-name">Armor</span>
     </div>
 
     <div class="paperdoll__slot-wrap">
-      <div
+      <button
+        type="button"
         class="paperdoll__slot"
         [ngClass]="getSlotRarityClass(relicRarity)"
         [title]="slotTooltip('Relic', equippedRelicLabel)"
-        role="img"
-        aria-label="Relic slot"
+        (click)="onRelicSlotClick()"
       >
         <span class="paperdoll__slot-glyph">R</span>
-      </div>
+      </button>
       <span class="paperdoll__slot-name">Relic</span>
     </div>
   </div>
 
-  @if (weaponFilterMode) {
-    <p class="paperdoll__hint">Select a weapon to equip.</p>
+  @if (equipMode) {
+    <p class="paperdoll__hint">{{ equipModeHint }}</p>
   }
 </section>

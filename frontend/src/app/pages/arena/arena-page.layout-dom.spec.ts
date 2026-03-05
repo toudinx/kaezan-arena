@@ -90,4 +90,35 @@ describe("ArenaPageComponent layout DOM", () => {
     expect(statusPanel?.textContent).toContain("Status");
     expect(rightTabs).toBeNull();
   });
+
+  it("renders run complete summary metrics and selected cards", () => {
+    const fixture = TestBed.createComponent(ArenaPageComponent);
+    fixture.componentInstance.isInRun = true;
+    fixture.componentInstance.isRunEnded = true;
+    fixture.componentInstance.runEndReason = "victory_time";
+    fixture.componentInstance.runEndedAtMs = 180_000;
+    fixture.componentInstance.timeSurvivedMs = 180_000;
+    fixture.componentInstance.runTimeMs = 180_000;
+    fixture.componentInstance.runDurationMs = 180_000;
+    fixture.componentInstance.runLevel = 9;
+    fixture.componentInstance.runTotalKills = 143;
+    fixture.componentInstance.runEliteKills = 17;
+    fixture.componentInstance.runChestsOpened = 5;
+    fixture.componentInstance.selectedCards = [
+      { id: "colossus_heart", name: "Colossus Heart", description: "" },
+      { id: "avenger_instinct", name: "Avenger Instinct", description: "" }
+    ];
+    fixture.detectChanges();
+
+    const host = fixture.nativeElement as HTMLElement;
+    const overlay = host.querySelector(".run-complete");
+    expect(overlay).not.toBeNull();
+    expect(overlay?.textContent).toContain("Victory");
+    expect(overlay?.textContent).toContain("Run level reached");
+    expect(overlay?.textContent).toContain("Total kills");
+    expect(overlay?.textContent).toContain("Elite kills");
+    expect(overlay?.textContent).toContain("Chests opened");
+    expect(overlay?.textContent).toContain("Colossus Heart");
+    expect(overlay?.textContent).toContain("Avenger Instinct");
+  });
 });

@@ -115,6 +115,22 @@ describe("ArenaPageComponent layout v4", () => {
     expect((component as any).isDeathModalOpen).toBe(true);
   });
 
+  it("falls back runEndedAtMs from timeSurvivedMs when end timestamp is missing", () => {
+    const component = createComponent();
+
+    (component as any).applyGameOverStateFromSnapshot({
+      isRunEnded: true,
+      runEndReason: "defeat_death",
+      runEndedAtMs: null,
+      timeSurvivedMs: 91_000,
+      isGameOver: true,
+      endReason: "death",
+      battleStatus: "defeat"
+    });
+
+    expect((component as any).runEndedAtMs).toBe(91_000);
+  });
+
   it("uses ESC to toggle pause modal while alive", () => {
     const component = createComponent();
     (component as any).isInRun = true;

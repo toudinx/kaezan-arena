@@ -10,6 +10,20 @@ public sealed class InMemoryBattleStoreDeterminismTests
     private const int StepDeltaMs = 250;
     private const long RunDurationTargetMs = ArenaConfig.RunDurationMs;
     private const int RunDurationTargetTick = (int)(RunDurationTargetMs / StepDeltaMs);
+    private const long MidRunTargetMs = RunDurationTargetMs / 2;
+    private const int MidRunTargetTick = (int)(MidRunTargetMs / StepDeltaMs);
+    private const long NearEndTargetMs = RunDurationTargetMs - StepDeltaMs;
+    private const int NearEndTargetTick = RunDurationTargetTick - 1;
+    private const int RunInitialLevel = 1;
+    private const double MobHpMultStart = 1.0d;
+    private const double MobHpMultEnd = 3.2d;
+    private const double MobDmgMultStart = 1.0d;
+    private const double MobDmgMultEnd = 2.6d;
+    private const double EliteHpMultiplierFactor = 1.35d;
+    private const double EliteDmgMultiplierFactor = 1.30d;
+    private const bool IsRunLevelHpSeasoningEnabled = true;
+    private const double RunLevelHpSeasoningPerLevel = 0.015d;
+    private const double ScalingTolerance = 0.000001d;
     private const int MaxDeterminismDamageSteps = 120;
     private const int MaxStepsToFindCardChoice = 1800;
     private const int MaxStepsToKillElite = 2500;
@@ -83,10 +97,39 @@ public sealed class InMemoryBattleStoreDeterminismTests
         Assert.InRange(start.CurrentMobDmgMult, 1.0d, 1.000001d);
         Assert.InRange(start.Scaling.NormalHpMult, 1.0d, 1.000001d);
         Assert.InRange(start.Scaling.NormalDmgMult, 1.0d, 1.000001d);
-        Assert.InRange(start.Scaling.EliteHpMult, 1.25d, 1.250001d);
-        Assert.InRange(start.Scaling.EliteDmgMult, 1.15d, 1.150001d);
+        Assert.InRange(start.Scaling.EliteHpMult, 1.35d, 1.350001d);
+        Assert.InRange(start.Scaling.EliteDmgMult, 1.30d, 1.300001d);
         Assert.InRange(start.Scaling.LvlFactor, 1.0d, 1.000001d);
         Assert.True(start.Scaling.IsLvlFactorEnabled);
+        AssertScalingMatchesExpected(start, expectedRunTimeMs: 0L, runLevel: RunInitialLevel);
+    }
+
+    [Fact]
+    public void StepBattle_ScalingDirector_Midpoint_InterpolatesDeterministically()
+    {
+        var store = new InMemoryBattleStore();
+        var start = store.StartBattle("arena-scaling-mid", "player-scaling-mid", 1337);
+        SetBattleTick(store, start.BattleId, MidRunTargetTick - 1);
+
+        var step = store.StepBattle(start.BattleId, clientTick: null, commands: []);
+
+        Assert.Equal(MidRunTargetMs, step.RunTimeMs);
+        AssertScalingMatchesExpected(step, expectedRunTimeMs: MidRunTargetMs, runLevel: RunInitialLevel);
+    }
+
+    [Fact]
+    public void StepBattle_ScalingDirector_NearEnd_ApproachesConfiguredMaxWithoutOvershoot()
+    {
+        var store = new InMemoryBattleStore();
+        var start = store.StartBattle("arena-scaling-near-end", "player-scaling-near-end", 1337);
+        SetBattleTick(store, start.BattleId, NearEndTargetTick - 1);
+
+        var step = store.StepBattle(start.BattleId, clientTick: null, commands: []);
+
+        Assert.Equal(NearEndTargetMs, step.RunTimeMs);
+        AssertScalingMatchesExpected(step, expectedRunTimeMs: NearEndTargetMs, runLevel: RunInitialLevel);
+        Assert.True(step.CurrentMobHpMult < MobHpMultEnd);
+        Assert.True(step.CurrentMobDmgMult < MobDmgMultEnd);
     }
 
     [Fact]
@@ -99,13 +142,14 @@ public sealed class InMemoryBattleStoreDeterminismTests
         var step = store.StepBattle(start.BattleId, clientTick: null, commands: []);
 
         Assert.Equal((long)RunDurationTargetMs, step.RunTimeMs);
-        Assert.InRange(step.CurrentMobHpMult, 2.8d, 2.800001d);
-        Assert.InRange(step.CurrentMobDmgMult, 2.2d, 2.200001d);
-        Assert.InRange(step.Scaling.NormalHpMult, 2.8d, 2.800001d);
-        Assert.InRange(step.Scaling.NormalDmgMult, 2.2d, 2.200001d);
-        Assert.InRange(step.Scaling.EliteHpMult, 3.5d, 3.500001d);
-        Assert.InRange(step.Scaling.EliteDmgMult, 2.53d, 2.530001d);
+        Assert.InRange(step.CurrentMobHpMult, 3.2d, 3.200001d);
+        Assert.InRange(step.CurrentMobDmgMult, 2.6d, 2.600001d);
+        Assert.InRange(step.Scaling.NormalHpMult, 3.2d, 3.200001d);
+        Assert.InRange(step.Scaling.NormalDmgMult, 2.6d, 2.600001d);
+        Assert.InRange(step.Scaling.EliteHpMult, 4.32d, 4.320001d);
+        Assert.InRange(step.Scaling.EliteDmgMult, 3.38d, 3.380001d);
         Assert.InRange(step.Scaling.LvlFactor, 1.0d, 1.000001d);
+        AssertScalingMatchesExpected(step, expectedRunTimeMs: RunDurationTargetMs, runLevel: RunInitialLevel);
     }
 
     [Fact]
@@ -331,7 +375,7 @@ public sealed class InMemoryBattleStoreDeterminismTests
     }
 
     [Fact]
-    public void CardChoiceCap_StopsOfferingAfterEightSelections()
+    public void CardChoiceCap_StopsOfferingAfterTwelveSelections()
     {
         const int seed = 1337;
         var store = new InMemoryBattleStore();
@@ -354,14 +398,14 @@ public sealed class InMemoryBattleStoreDeterminismTests
                 continue;
             }
 
-            if (selectedChoices >= 8 && step.Events.OfType<LevelUpEventDto>().Any())
+            if (selectedChoices >= 12 && step.Events.OfType<LevelUpEventDto>().Any())
             {
                 sawLevelUpAfterCapWithoutChoice = true;
                 break;
             }
         }
 
-        Assert.Equal(8, selectedChoices);
+        Assert.Equal(12, selectedChoices);
         Assert.True(sawLevelUpAfterCapWithoutChoice);
         Assert.False(step.IsAwaitingCardChoice);
     }
@@ -573,6 +617,43 @@ public sealed class InMemoryBattleStoreDeterminismTests
         Assert.Equal(firstAssignments, secondAssignments);
     }
 
+    [Fact]
+    public void StepBattle_SpawnAndEliteDirector_SignaturesAreDeterministicForSameSeed()
+    {
+        const int seed = 97531;
+        const int maxSteps = 420;
+        var store = new InMemoryBattleStore();
+        var first = store.StartBattle("arena-spawn-director-det-a", "player-spawn-director-det", seed);
+        var second = store.StartBattle("arena-spawn-director-det-b", "player-spawn-director-det", seed);
+        var firstTick = first.Tick;
+        var secondTick = second.Tick;
+
+        var firstSignatures = new List<string> { BuildSpawnEliteSignature(first) };
+        var secondSignatures = new List<string> { BuildSpawnEliteSignature(second) };
+
+        for (var stepIndex = 0; stepIndex < maxSteps; stepIndex += 1)
+        {
+            first = AdvanceBattleSelectingCards(store, first.BattleId, firstTick, BuildAggressiveCommands());
+            second = AdvanceBattleSelectingCards(store, second.BattleId, secondTick, BuildAggressiveCommands());
+            firstTick = first.Tick;
+            secondTick = second.Tick;
+
+            var firstSignature = BuildSpawnEliteSignature(first);
+            var secondSignature = BuildSpawnEliteSignature(second);
+            firstSignatures.Add(firstSignature);
+            secondSignatures.Add(secondSignature);
+
+            Assert.Equal(firstSignature, secondSignature);
+            if (first.IsRunEnded || second.IsRunEnded)
+            {
+                break;
+            }
+        }
+
+        Assert.True(firstSignatures.Count > 50, "Expected to collect enough spawn timeline signatures before run end.");
+        Assert.Equal(firstSignatures, secondSignatures);
+    }
+
     private static BattleSnapshot WaitForCardChoiceStep(InMemoryBattleStore store, string battleId, int initialTick)
     {
         var tick = initialTick;
@@ -648,6 +729,33 @@ public sealed class InMemoryBattleStoreDeterminismTests
             .ToList();
 
         return $"{snapshot.Tick}|elites:{string.Join(",", elites)}|buffs:{string.Join(",", assignments)}";
+    }
+
+    private static string BuildSpawnEliteSignature(BattleSnapshot snapshot)
+    {
+        var mobs = snapshot.Actors
+            .Where(actor => actor.Kind == "mob")
+            .OrderBy(actor => actor.ActorId, StringComparer.Ordinal)
+            .ToList();
+        var mobIds = mobs
+            .Select(actor => $"{actor.ActorId}:{(actor.IsElite ? "elite" : "normal")}")
+            .ToList();
+        var eliteSpawnEvents = snapshot.Events
+            .OfType<EliteSpawnedEventDto>()
+            .OrderBy(evt => evt.EliteEntityId, StringComparer.Ordinal)
+            .Select(evt => evt.EliteEntityId)
+            .ToList();
+
+        return string.Join(
+            "|",
+            snapshot.Tick,
+            snapshot.RunTimeMs,
+            snapshot.TotalKills,
+            snapshot.EliteKills,
+            $"alive={mobs.Count}",
+            $"eliteAlive={mobs.Count(actor => actor.IsElite)}",
+            $"eliteSpawns={string.Join(",", eliteSpawnEvents)}",
+            $"mobs={string.Join(",", mobIds)}");
     }
 
     private static BattleSnapshot WaitForSnapshot(
@@ -840,6 +948,52 @@ public sealed class InMemoryBattleStoreDeterminismTests
         }
 
         return cooldownByActorId;
+    }
+
+    private static void AssertScalingMatchesExpected(
+        BattleSnapshot snapshot,
+        long expectedRunTimeMs,
+        int runLevel)
+    {
+        Assert.Equal(expectedRunTimeMs, snapshot.RunTimeMs);
+
+        var t = Clamp01(expectedRunTimeMs / (double)RunDurationTargetMs);
+        var expectedLvlFactor = IsRunLevelHpSeasoningEnabled
+            ? 1.0d + (RunLevelHpSeasoningPerLevel * (Math.Max(RunInitialLevel, runLevel) - RunInitialLevel))
+            : 1.0d;
+        var expectedNormalHpMult = Lerp(MobHpMultStart, MobHpMultEnd, t) * expectedLvlFactor;
+        var expectedNormalDmgMult = Lerp(MobDmgMultStart, MobDmgMultEnd, t);
+        var expectedEliteHpMult = expectedNormalHpMult * EliteHpMultiplierFactor;
+        var expectedEliteDmgMult = expectedNormalDmgMult * EliteDmgMultiplierFactor;
+
+        Assert.InRange(snapshot.CurrentMobHpMult, expectedNormalHpMult, expectedNormalHpMult + ScalingTolerance);
+        Assert.InRange(snapshot.CurrentMobDmgMult, expectedNormalDmgMult, expectedNormalDmgMult + ScalingTolerance);
+        Assert.InRange(snapshot.Scaling.NormalHpMult, expectedNormalHpMult, expectedNormalHpMult + ScalingTolerance);
+        Assert.InRange(snapshot.Scaling.NormalDmgMult, expectedNormalDmgMult, expectedNormalDmgMult + ScalingTolerance);
+        Assert.InRange(snapshot.Scaling.EliteHpMult, expectedEliteHpMult, expectedEliteHpMult + ScalingTolerance);
+        Assert.InRange(snapshot.Scaling.EliteDmgMult, expectedEliteDmgMult, expectedEliteDmgMult + ScalingTolerance);
+        Assert.InRange(snapshot.Scaling.LvlFactor, expectedLvlFactor, expectedLvlFactor + ScalingTolerance);
+        Assert.Equal(IsRunLevelHpSeasoningEnabled, snapshot.Scaling.IsLvlFactorEnabled);
+    }
+
+    private static double Clamp01(double value)
+    {
+        if (value <= 0d)
+        {
+            return 0d;
+        }
+
+        if (value >= 1d)
+        {
+            return 1d;
+        }
+
+        return value;
+    }
+
+    private static double Lerp(double start, double end, double t)
+    {
+        return start + ((end - start) * t);
     }
 
     private static string ToDamageSignature(DamageNumberEventDto damage)

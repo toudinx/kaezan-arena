@@ -5,7 +5,7 @@
         type="button"
         class="backpack__tab"
         [class.backpack__tab--active]="isFilterActive(filter)"
-        [disabled]="weaponFilterMode"
+        [disabled]="!!equipMode"
         (click)="setFilter(filter)"
       >
         {{
@@ -20,8 +20,8 @@
       </button>
     }
   </nav>
-  @if (weaponFilterMode) {
-    <p class="backpack__mode-hint">Select a weapon to equip.</p>
+  @if (equipMode) {
+    <p class="backpack__mode-hint">{{ equipModeHint }}</p>
   }
 
   <div class="backpack__grid" (contextmenu)="onGridContextMenu($event)">

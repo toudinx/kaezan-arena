@@ -4,7 +4,7 @@ using KaezanArena.Api.Contracts.Battle;
 
 namespace KaezanArena.Api.Battle;
 
-public sealed class InMemoryBattleStore : IBattleStore
+public sealed partial class InMemoryBattleStore : IBattleStore
 {
     // Deterministic simulation delta per battle step.
     private const int StepDeltaMs = 250;
@@ -16,7 +16,6 @@ public sealed class InMemoryBattleStore : IBattleStore
     private const int MobSpawnRingMinDistance = 2;
     private const int MobSpawnRingMaxDistance = 4;
     private const int EarlyMobConcurrentCap = 6;
-    private const int EarlyMobConcurrentCapDurationMs = 75000;
     private const int RangedPreferredDistanceMin = 2;
     private const int RangedPreferredDistanceMax = 3;
     private const int RangedApproachDistance = 4;
@@ -80,16 +79,16 @@ public sealed class InMemoryBattleStore : IBattleStore
     private const int RunLevelXpBase = 25;
     private const int RunLevelXpIncrementPerLevel = 15;
     private const int MaxCardOfferCount = 3;
-    private const int MaxCardSelectionsPerRun = 8;
+    private const int MaxCardSelectionsPerRun = 12;
     private const int MaxGlobalCooldownReductionPercent = 60;
     private const double MobHpMultStart = 1.0d;
-    private const double MobHpMultEnd = 2.8d;
+    private const double MobHpMultEnd = 3.2d;
     private const double MobDmgMultStart = 1.0d;
-    private const double MobDmgMultEnd = 2.2d;
-    private const double EliteHpMultiplierFactor = 1.25d;
-    private const double EliteDmgMultiplierFactor = 1.15d;
+    private const double MobDmgMultEnd = 2.6d;
+    private const double EliteHpMultiplierFactor = 1.35d;
+    private const double EliteDmgMultiplierFactor = 1.30d;
     private const bool IsRunLevelHpSeasoningEnabled = true;
-    private const double RunLevelHpSeasoningPerLevel = 0.02d;
+    private const double RunLevelHpSeasoningPerLevel = 0.015d;
     private const int EliteCommanderMaxBuffTargets = 3;
     private const int EliteCommanderDamageBonusPercent = 40;
     private const int EliteCommanderAttackSpeedBonusPercent = 30;
@@ -160,10 +159,6 @@ public sealed class InMemoryBattleStore : IBattleStore
     private const int ChestSpawnChancePercent = 40;
     private const int ChestLifetimeMs = 10000;
     private const int SpeciesChestLifetimeMs = 10000;
-    private const int HealAmplifierDurationMs = 8000;
-    private const int AntiRangedPressureDurationMs = 8000;
-    private const int ThornsBoostDurationMs = 8000;
-    private const int DamageBoostDurationMs = 6000;
     private const int HealAmplifierBonusPercent = 10;
     private const int AntiRangedPressureReductionPercent = 20;
     private const int ThornsBoostBonusPercent = 30;
@@ -204,11 +199,6 @@ public sealed class InMemoryBattleStore : IBattleStore
             [MobArchetype.MeleeDemon] = "melee_demon",
             [MobArchetype.RangedDragon] = "ranged_dragon"
         };
-    private static readonly IReadOnlyDictionary<string, MobArchetype> ArchetypeBySpecies =
-        SpeciesByArchetype.ToDictionary(
-            pair => pair.Value,
-            pair => pair.Key,
-            StringComparer.Ordinal);
     private static readonly IReadOnlyList<CardDefinition> CardPool =
     [
         new(
@@ -426,7 +416,7 @@ public sealed class InMemoryBattleStore : IBattleStore
             cardSelectionsGranted: 0,
             nextCardChoiceSequence: 1);
 
-        var initialMobCap = GetMaxAliveMobsForTick(state.Tick);
+        var initialMobCap = ResolveSpawnPacingDirector(state).MaxAliveMobs;
         foreach (var slot in state.MobSlots.Values.OrderBy(value => value.SlotIndex))
         {
             if (slot.SlotIndex > initialMobCap)
@@ -635,164 +625,6 @@ public sealed class InMemoryBattleStore : IBattleStore
         return true;
     }
 
-    private static BattleSnapshot ToSnapshot(
-        StoredBattle state,
-        IReadOnlyList<BattleEventDto> events,
-        IReadOnlyList<CommandResultDto> commandResults)
-    {
-        AssertBattleInvariants(state);
-
-        var actors = state.Actors.Values
-            .OrderBy(actor => actor.ActorId, StringComparer.Ordinal)
-            .Select(actor => new ActorStateDto(
-                ActorId: actor.ActorId,
-                Kind: actor.Kind,
-                MobType: actor.MobType,
-                IsElite: actor.IsElite,
-                IsBuffedByElite: actor.BuffSourceEliteId is not null,
-                BuffSourceEliteId: actor.BuffSourceEliteId,
-                TileX: actor.TileX,
-                TileY: actor.TileY,
-                Hp: actor.Hp,
-                MaxHp: actor.MaxHp,
-                Shield: actor.Shield,
-                MaxShield: actor.MaxShield))
-            .ToList();
-
-        var skills = state.Skills.Values
-            .OrderBy(skill => skill.SkillId, StringComparer.Ordinal)
-            .Select(skill => new SkillStateDto(
-                SkillId: skill.SkillId,
-                CooldownRemainingMs: skill.CooldownRemainingMs,
-                CooldownTotalMs: ResolveSkillCooldownTotalMs(state, skill)))
-            .ToList();
-
-        var decals = state.Decals
-            .OrderBy(decal => decal.CreatedTick)
-            .ThenBy(decal => decal.EntityId, StringComparer.Ordinal)
-            .ThenBy(decal => decal.TileY)
-            .ThenBy(decal => decal.TileX)
-            .Select(decal => new BattleDecalDto(
-                EntityId: decal.EntityId,
-                DecalKind: decal.DecalKind,
-                EntityType: decal.EntityType,
-                MobType: decal.MobType,
-                TileX: decal.TileX,
-                TileY: decal.TileY,
-                SpriteKey: decal.SpriteKey,
-                RemainingMs: decal.RemainingMs,
-                TotalMs: decal.TotalMs,
-                CreatedTick: decal.CreatedTick))
-            .ToList();
-        var groundTargetPos = state.GroundTargetTileX is int groundX && state.GroundTargetTileY is int groundY
-            ? new BattleTilePosDto(groundX, groundY)
-            : null;
-        var effectiveTargetEntityId = ResolveEffectivePlayerAutoAttackTargetEntityId(state);
-        var xpToNextLevel = GetXpToNextLevel(state.RunLevel);
-        var nowMs = GetElapsedMsForTick(state.Tick);
-        var isRunEnded = state.IsRunEnded;
-        var isGameOver = isRunEnded;
-        var endReason = ResolveLegacyEndReason(state.RunEndReason);
-        var timeSurvivedMs = state.RunEndedAtMs ?? nowMs;
-        var scaling = ResolveScalingDirectorV2(nowMs, state.RunLevel);
-        var currentMobHpMult = scaling.NormalHpMult;
-        var currentMobDmgMult = scaling.NormalDmgMult;
-        var activeBuffs = state.ActiveBuffs.Values
-            .Where(buff => buff.ExpiresAtMs > nowMs)
-            .OrderBy(buff => buff.BuffId, StringComparer.Ordinal)
-            .Select(buff => new BattleBuffDto(
-                BuffId: buff.BuffId,
-                RemainingMs: (int)Math.Max(0, buff.ExpiresAtMs - nowMs)))
-            .ToList();
-        var bestiary = state.Bestiary
-            .OrderBy(entry => (int)entry.Key)
-            .Select(entry => new BestiaryEntryDto(
-                Species: GetSpeciesId(entry.Key),
-                KillsTotal: entry.Value.KillsTotal,
-                NextChestAtKills: entry.Value.NextChestAtKills))
-            .ToList();
-        var activePois = state.Pois.Values
-            .Where(poi => poi.ExpiresAtMs > nowMs)
-            .OrderBy(poi => poi.PoiId, StringComparer.Ordinal)
-            .Select(poi => new BattlePoiDto(
-                PoiId: poi.PoiId,
-                Type: poi.Type,
-                Pos: new BattleTilePosDto(poi.TileX, poi.TileY),
-                RemainingMs: (int)Math.Max(0, poi.ExpiresAtMs - nowMs),
-                Species: poi.Species,
-                Metadata: poi.Metadata is null
-                    ? null
-                    : new Dictionary<string, string>(poi.Metadata, StringComparer.Ordinal)))
-            .ToList();
-        var offeredCards = state.PendingCardChoice is null
-            ? []
-            : state.PendingCardChoice.OfferedCardIds
-                .Select(cardId => CardById.TryGetValue(cardId, out var definition) ? definition : null)
-                .Where(definition => definition is not null)
-                .Select(definition => ToCardOfferDto(definition!))
-                .ToList();
-        var selectedCards = state.SelectedCardIds
-            .Select(cardId => CardById.TryGetValue(cardId, out var definition) ? definition : null)
-            .Where(definition => definition is not null)
-            .Select(definition => ToCardOfferDto(definition!))
-            .ToList();
-        var playerGlobalCooldownTotalMs = ResolvePlayerGlobalCooldownMs(state);
-
-        return new BattleSnapshot(
-            BattleId: state.BattleId,
-            Tick: state.Tick,
-            Actors: actors,
-            Skills: skills,
-            GlobalCooldownRemainingMs: state.PlayerGlobalCooldownRemainingMs,
-            GlobalCooldownTotalMs: playerGlobalCooldownTotalMs,
-            AltarCooldownRemainingMs: (int)Math.Max(0, state.NextAltarInteractAllowedAtMs - nowMs),
-            Seed: state.Seed,
-            FacingDirection: state.PlayerFacingDirection,
-            BattleStatus: state.BattleStatus,
-            IsGameOver: isGameOver,
-            EndReason: endReason,
-            IsRunEnded: isRunEnded,
-            RunEndReason: state.RunEndReason,
-            RunEndedAtMs: state.RunEndedAtMs,
-            RunXp: state.RunXp,
-            RunLevel: state.RunLevel,
-            XpToNextLevel: xpToNextLevel,
-            TotalKills: state.TotalKills,
-            EliteKills: state.EliteKills,
-            ChestsOpened: state.ChestsOpened,
-            TimeSurvivedMs: timeSurvivedMs,
-            RunTimeMs: nowMs,
-            RunDurationMs: ArenaConfig.RunDurationMs,
-            CurrentMobHpMult: currentMobHpMult,
-            CurrentMobDmgMult: currentMobDmgMult,
-            Scaling: new BattleScalingDto(
-                NormalHpMult: scaling.NormalHpMult,
-                NormalDmgMult: scaling.NormalDmgMult,
-                EliteHpMult: scaling.EliteHpMult,
-                EliteDmgMult: scaling.EliteDmgMult,
-                LvlFactor: scaling.LvlFactor,
-                IsLvlFactorEnabled: scaling.IsLvlFactorEnabled),
-            EffectiveTargetEntityId: effectiveTargetEntityId,
-            LockedTargetEntityId: state.LockedTargetEntityId,
-            GroundTargetPos: groundTargetPos,
-            AssistConfig: ToAssistConfigDto(state.AssistConfig),
-            PlayerBaseElement: GetPlayerBaseElement(state),
-            WeaponElement: state.EquippedWeaponElement,
-            Decals: decals,
-            ActiveBuffs: activeBuffs,
-            Bestiary: bestiary,
-            PendingSpeciesChest: state.PendingSpeciesChestArchetype is null
-                ? null
-                : GetSpeciesId(state.PendingSpeciesChestArchetype.Value),
-            ActivePois: activePois,
-            IsAwaitingCardChoice: state.PendingCardChoice is not null,
-            PendingChoiceId: state.PendingCardChoice?.ChoiceId,
-            OfferedCards: offeredCards,
-            SelectedCards: selectedCards,
-            Events: events,
-            CommandResults: commandResults);
-    }
-
     private static Dictionary<int, MobSlotState> BuildMobSlots()
     {
         var slots = new Dictionary<int, MobSlotState>();
@@ -804,7 +636,7 @@ public sealed class InMemoryBattleStore : IBattleStore
                 actorId: BuildMobActorId(slotIndex),
                 kind: "mob",
                 archetype: archetype,
-                isElite: IsEliteSlot(slotIndex),
+                isEliteSlot: IsEliteSlotIndex(slotIndex),
                 respawnRemainingMs: 0,
                 attackCooldownRemainingMs: 0,
                 abilityCooldownRemainingMs: 0,
@@ -813,21 +645,6 @@ public sealed class InMemoryBattleStore : IBattleStore
         }
 
         return slots;
-    }
-
-    private static Dictionary<string, StoredPoi> BuildInitialPois()
-    {
-        return new Dictionary<string, StoredPoi>(StringComparer.Ordinal)
-        {
-            [InitialChestPoiId] = new StoredPoi(
-                poiId: InitialChestPoiId,
-                type: PoiTypeChest,
-                tileX: ArenaConfig.PlayerTileX + 1,
-                tileY: ArenaConfig.PlayerTileY,
-                expiresAtMs: ChestLifetimeMs,
-                species: null,
-                metadata: null)
-        };
     }
 
     private static Dictionary<MobArchetype, StoredBestiaryEntry> BuildInitialBestiaryEntries(
@@ -848,38 +665,6 @@ public sealed class InMemoryBattleStore : IBattleStore
         }
 
         return entries;
-    }
-
-    private static int GenerateSeed(int battleIndex)
-    {
-        unchecked
-        {
-            return 0x5F3759DF + battleIndex * 7919;
-        }
-    }
-
-    private static int GeneratePoiSeed(int battleSeed)
-    {
-        unchecked
-        {
-            return (battleSeed * 486187739) ^ 0x2C1B3C6D;
-        }
-    }
-
-    private static int GenerateBestiarySeed(int battleSeed)
-    {
-        unchecked
-        {
-            return (battleSeed * 92821) ^ 0x41D2A7C3;
-        }
-    }
-
-    private static int GenerateCritSeed(int battleSeed)
-    {
-        unchecked
-        {
-            return (battleSeed * 214013) ^ 0x1A2B3C4D;
-        }
     }
 
     private static int GetXpToNextLevel(int runLevel)
@@ -1522,177 +1307,6 @@ public sealed class InMemoryBattleStore : IBattleStore
         return commandResults;
     }
 
-    private static bool TryExecutePoiInteraction(
-        StoredBattle state,
-        List<BattleEventDto> events,
-        string? rawPoiId,
-        out string? failReason)
-    {
-        failReason = null;
-        var normalizedPoiId = NormalizePoiId(rawPoiId);
-        if (normalizedPoiId is null)
-        {
-            failReason = UnknownPoiReason;
-            events.Add(new InteractFailedEventDto(null, UnknownPoiReason));
-            return false;
-        }
-
-        var player = GetPlayerActor(state);
-        if (player is null || player.Hp <= 0)
-        {
-            failReason = PlayerDeadReason;
-            events.Add(new InteractFailedEventDto(normalizedPoiId, PlayerDeadReason));
-            return false;
-        }
-
-        if (!state.Pois.TryGetValue(normalizedPoiId, out var poi))
-        {
-            failReason = UnknownPoiReason;
-            events.Add(new InteractFailedEventDto(normalizedPoiId, UnknownPoiReason));
-            return false;
-        }
-
-        var nowMs = GetElapsedMsForTick(state.Tick);
-        if (poi.ExpiresAtMs <= nowMs)
-        {
-            state.Pois.Remove(normalizedPoiId);
-            failReason = UnknownPoiReason;
-            events.Add(new InteractFailedEventDto(normalizedPoiId, UnknownPoiReason));
-            return false;
-        }
-
-        if (string.Equals(poi.Type, PoiTypeAltar, StringComparison.Ordinal) &&
-            nowMs < state.NextAltarInteractAllowedAtMs)
-        {
-            failReason = CooldownReason;
-            events.Add(new InteractFailedEventDto(normalizedPoiId, CooldownReason));
-            return false;
-        }
-
-        var distance = ComputeChebyshevDistance(player.TileX, player.TileY, poi.TileX, poi.TileY);
-        if (distance > 1)
-        {
-            failReason = OutOfRangeReason;
-            events.Add(new InteractFailedEventDto(normalizedPoiId, OutOfRangeReason));
-            return false;
-        }
-
-        state.Pois.Remove(normalizedPoiId);
-        events.Add(new PoiInteractedEventDto(
-            PoiId: poi.PoiId,
-            PoiType: poi.Type,
-            TileX: poi.TileX,
-            TileY: poi.TileY));
-
-        if (string.Equals(poi.Type, PoiTypeChest, StringComparison.Ordinal))
-        {
-            state.ChestsOpened += 1;
-            ApplyOrRefreshBuff(state, HealingAmplifierBuffId, HealAmplifierDurationMs);
-            events.Add(new BuffAppliedEventDto(
-                BuffId: HealingAmplifierBuffId,
-                DurationMs: HealAmplifierDurationMs));
-        }
-        else if (string.Equals(poi.Type, PoiTypeSpeciesChest, StringComparison.Ordinal))
-        {
-            state.ChestsOpened += 1;
-            var speciesArchetype = TryResolveArchetypeBySpecies(poi.Species);
-            var (buffId, durationMs) = ResolveSpeciesChestBuff(speciesArchetype);
-            ApplyOrRefreshBuff(state, buffId, durationMs);
-            events.Add(new BuffAppliedEventDto(
-                BuffId: buffId,
-                DurationMs: durationMs));
-            events.Add(new SpeciesChestOpenedEventDto(
-                Species: poi.Species ?? "unknown",
-                BuffId: buffId,
-                DurationMs: durationMs));
-        }
-        else if (string.Equals(poi.Type, PoiTypeAltar, StringComparison.Ordinal))
-        {
-            state.NextAltarInteractAllowedAtMs = nowMs + AltarCooldownMs;
-            var spawnedCount = SummonMobsAroundPlayer(state, AltarSummonSpawnCount, events);
-            events.Add(new AltarActivatedEventDto(
-                RequestedCount: AltarSummonSpawnCount,
-                SpawnedCount: spawnedCount));
-        }
-
-        TrySpawnPendingSpeciesChest(state, events, nowMs);
-
-        return true;
-    }
-
-    private static int SummonMobsAroundPlayer(StoredBattle state, int requestedCount, List<BattleEventDto> events)
-    {
-        if (requestedCount <= 0)
-        {
-            return 0;
-        }
-
-        var availableSlots = state.MobSlots.Values
-            .Where(slot => !state.Actors.ContainsKey(slot.ActorId))
-            .OrderBy(slot => slot.SlotIndex)
-            .ToList();
-        if (availableSlots.Count == 0)
-        {
-            return 0;
-        }
-
-        var targetCount = Math.Min(requestedCount, availableSlots.Count);
-        var spawnedCount = 0;
-        for (var index = 0; index < targetCount; index += 1)
-        {
-            var slot = availableSlots[index];
-            slot.RespawnRemainingMs = 0;
-            if (!TrySpawnMobInSlot(state, slot, events))
-            {
-                break;
-            }
-
-            spawnedCount += 1;
-        }
-
-        return spawnedCount;
-    }
-
-    private static void ApplyOrRefreshBuff(StoredBattle state, string buffId, int durationMs)
-    {
-        if (durationMs <= 0)
-        {
-            return;
-        }
-
-        var nowMs = GetElapsedMsForTick(state.Tick);
-        state.ActiveBuffs[buffId] = new StoredBuff(
-            buffId: buffId,
-            expiresAtMs: nowMs + durationMs);
-    }
-
-    private static (string BuffId, int DurationMs) ResolveSpeciesChestBuff(MobArchetype? speciesArchetype)
-    {
-        if (speciesArchetype is MobArchetype.MeleeDemon or MobArchetype.RangedDragon)
-        {
-            return (DamageBoostBuffId, DamageBoostDurationMs);
-        }
-
-        if (speciesArchetype is MobArchetype.RangedArcher)
-        {
-            return (AntiRangedPressureBuffId, AntiRangedPressureDurationMs);
-        }
-
-        return (ThornsBoostBuffId, ThornsBoostDurationMs);
-    }
-
-    private static MobArchetype? TryResolveArchetypeBySpecies(string? species)
-    {
-        if (string.IsNullOrWhiteSpace(species))
-        {
-            return null;
-        }
-
-        return ArchetypeBySpecies.TryGetValue(species.Trim(), out var archetype)
-            ? archetype
-            : null;
-    }
-
     private static SkillCastResult TryExecutePlayerSkillCast(
         StoredBattle state,
         List<BattleEventDto> events,
@@ -2025,7 +1639,7 @@ public sealed class InMemoryBattleStore : IBattleStore
 
     private static void TickMobRespawns(StoredBattle state, List<BattleEventDto> events)
     {
-        var maxAliveMobs = GetMaxAliveMobsForTick(state.Tick);
+        var maxAliveMobs = ResolveSpawnPacingDirector(state).MaxAliveMobs;
         foreach (var slot in state.MobSlots.Values.OrderBy(value => value.SlotIndex))
         {
             if (slot.SlotIndex > maxAliveMobs)
@@ -2071,245 +1685,6 @@ public sealed class InMemoryBattleStore : IBattleStore
         }
     }
 
-    private static void TickPois(StoredBattle state, List<BattleEventDto> events)
-    {
-        var nowMs = GetElapsedMsForTick(state.Tick);
-        if (state.Pois.Count > 0)
-        {
-            var expiredPoiIds = state.Pois.Values
-                .Where(poi => poi.ExpiresAtMs <= nowMs)
-                .Select(poi => poi.PoiId)
-                .ToList();
-            foreach (var poiId in expiredPoiIds)
-            {
-                state.Pois.Remove(poiId);
-            }
-        }
-
-        TrySpawnPendingSpeciesChest(state, events, nowMs);
-
-        // Chest spawn checks run on a fixed simulation cadence to keep outcomes deterministic.
-        while (nowMs >= state.NextChestSpawnCheckAtMs)
-        {
-            TrySpawnChestPoi(state, state.NextChestSpawnCheckAtMs);
-            state.NextChestSpawnCheckAtMs += ChestSpawnCheckMs;
-        }
-
-        // Altar checks run after chest checks to keep POI ordering deterministic.
-        while (nowMs >= state.NextAltarSpawnCheckAtMs)
-        {
-            TrySpawnAltarPoi(state, state.NextAltarSpawnCheckAtMs);
-            state.NextAltarSpawnCheckAtMs += AltarSpawnCheckMs;
-        }
-    }
-
-    private static void TickBuffs(StoredBattle state)
-    {
-        if (state.ActiveBuffs.Count == 0)
-        {
-            return;
-        }
-
-        var nowMs = GetElapsedMsForTick(state.Tick);
-        var expiredBuffIds = state.ActiveBuffs.Values
-            .Where(buff => buff.ExpiresAtMs <= nowMs)
-            .Select(buff => buff.BuffId)
-            .ToList();
-        foreach (var buffId in expiredBuffIds)
-        {
-            state.ActiveBuffs.Remove(buffId);
-        }
-    }
-
-    private static void TrySpawnChestPoi(StoredBattle state, long checkAtMs)
-    {
-        if (state.PendingSpeciesChestArchetype is not null)
-        {
-            return;
-        }
-
-        if (HasAnyActiveChestPoi(state, checkAtMs))
-        {
-            return;
-        }
-
-        if (state.PoiRng.Next(100) >= ChestSpawnChancePercent)
-        {
-            return;
-        }
-
-        var freeTiles = BuildPoiSpawnTiles(state, checkAtMs);
-        if (freeTiles.Count == 0)
-        {
-            return;
-        }
-
-        var tileIndex = state.PoiRng.Next(freeTiles.Count);
-        var tile = freeTiles[tileIndex];
-        var poiId = BuildChestPoiId(state.NextPoiSequence);
-        state.NextPoiSequence += 1;
-        state.Pois[poiId] = new StoredPoi(
-            poiId: poiId,
-            type: PoiTypeChest,
-            tileX: tile.TileX,
-            tileY: tile.TileY,
-            expiresAtMs: checkAtMs + ChestLifetimeMs,
-            species: null,
-            metadata: null);
-    }
-
-    private static void TrySpawnAltarPoi(StoredBattle state, long checkAtMs)
-    {
-        if (HasActiveAltarPoi(state, checkAtMs))
-        {
-            return;
-        }
-
-        if (state.Rng.Next(100) >= AltarSpawnChancePercent)
-        {
-            return;
-        }
-
-        var freeTiles = BuildPoiSpawnTiles(state, checkAtMs);
-        if (freeTiles.Count == 0)
-        {
-            return;
-        }
-
-        var tileIndex = state.Rng.Next(freeTiles.Count);
-        var tile = freeTiles[tileIndex];
-        var poiId = BuildAltarPoiId(state.NextPoiSequence);
-        state.NextPoiSequence += 1;
-        state.Pois[poiId] = new StoredPoi(
-            poiId: poiId,
-            type: PoiTypeAltar,
-            tileX: tile.TileX,
-            tileY: tile.TileY,
-            expiresAtMs: checkAtMs + AltarLifetimeMs,
-            species: null,
-            metadata: null);
-    }
-
-    private static void TrySpawnPendingSpeciesChest(
-        StoredBattle state,
-        List<BattleEventDto> events,
-        long nowMs)
-    {
-        if (state.PendingSpeciesChestArchetype is not MobArchetype archetype)
-        {
-            return;
-        }
-
-        if (HasAnyActiveChestPoi(state, nowMs))
-        {
-            return;
-        }
-
-        if (TrySpawnSpeciesChestPoi(state, events, archetype, nowMs))
-        {
-            state.PendingSpeciesChestArchetype = null;
-        }
-    }
-
-    private static bool TrySpawnSpeciesChestPoi(
-        StoredBattle state,
-        List<BattleEventDto> events,
-        MobArchetype speciesArchetype,
-        long spawnAtMs)
-    {
-        var freeTiles = BuildPoiSpawnTiles(state, spawnAtMs);
-        if (freeTiles.Count == 0)
-        {
-            return false;
-        }
-
-        var tileIndex = state.PoiRng.Next(freeTiles.Count);
-        var tile = freeTiles[tileIndex];
-        var poiId = BuildSpeciesChestPoiId(state.NextPoiSequence);
-        state.NextPoiSequence += 1;
-        var species = GetSpeciesId(speciesArchetype);
-        state.Pois[poiId] = new StoredPoi(
-            poiId: poiId,
-            type: PoiTypeSpeciesChest,
-            tileX: tile.TileX,
-            tileY: tile.TileY,
-            expiresAtMs: spawnAtMs + SpeciesChestLifetimeMs,
-            species: species,
-            metadata: null);
-        events.Add(new SpeciesChestSpawnedEventDto(
-            Species: species,
-            PoiId: poiId,
-            TileX: tile.TileX,
-            TileY: tile.TileY));
-        return true;
-    }
-
-    private static bool HasActiveChestPoi(StoredBattle state, long nowMs)
-    {
-        return state.Pois.Values.Any(poi =>
-            IsChestPoiType(poi.Type) &&
-            poi.ExpiresAtMs > nowMs);
-    }
-
-    private static bool HasAnyActiveChestPoi(StoredBattle state, long nowMs)
-    {
-        return HasActiveChestPoi(state, nowMs);
-    }
-
-    private static bool HasActiveAltarPoi(StoredBattle state, long nowMs)
-    {
-        return state.Pois.Values.Any(poi =>
-            string.Equals(poi.Type, PoiTypeAltar, StringComparison.Ordinal) &&
-            poi.ExpiresAtMs > nowMs);
-    }
-
-    private static List<(int TileX, int TileY)> BuildPoiSpawnTiles(StoredBattle state, long nowMs)
-    {
-        var occupiedActorTiles = new HashSet<(int TileX, int TileY)>(
-            state.Actors.Values.Select(actor => (actor.TileX, actor.TileY)));
-        var occupiedPoiTiles = new HashSet<(int TileX, int TileY)>(
-            state.Pois.Values
-                .Where(poi => poi.ExpiresAtMs > nowMs)
-                .Select(poi => (poi.TileX, poi.TileY)));
-
-        var freeTiles = new List<(int TileX, int TileY)>();
-        for (var y = 0; y < ArenaConfig.Height; y += 1)
-        {
-            for (var x = 0; x < ArenaConfig.Width; x += 1)
-            {
-                if (occupiedActorTiles.Contains((x, y)) || occupiedPoiTiles.Contains((x, y)))
-                {
-                    continue;
-                }
-
-                freeTiles.Add((x, y));
-            }
-        }
-
-        return freeTiles;
-    }
-
-    private static string BuildChestPoiId(int sequence)
-    {
-        return $"poi.chest.{sequence:D4}";
-    }
-
-    private static string BuildSpeciesChestPoiId(int sequence)
-    {
-        return $"poi.species_chest.{sequence:D4}";
-    }
-
-    private static string BuildAltarPoiId(int sequence)
-    {
-        return $"poi.altar.{sequence:D4}";
-    }
-
-    private static bool IsChestPoiType(string poiType)
-    {
-        return string.Equals(poiType, PoiTypeChest, StringComparison.Ordinal) ||
-               string.Equals(poiType, PoiTypeSpeciesChest, StringComparison.Ordinal);
-    }
-
     private static bool TrySpawnMobInSlot(StoredBattle state, MobSlotState slot, List<BattleEventDto>? events = null)
     {
         if (state.Actors.ContainsKey(slot.ActorId))
@@ -2338,12 +1713,13 @@ public sealed class InMemoryBattleStore : IBattleStore
         var tileIndex = state.Rng.Next(candidateTiles.Count);
         var tile = candidateTiles[tileIndex];
         var config = GetMobConfig(slot.Archetype);
-        var maxHp = ResolveScaledMobMaxHp(state, config, slot.IsElite);
+        var spawnAsElite = ShouldSpawnEliteForSlot(state, slot);
+        var maxHp = ResolveScaledMobMaxHp(state, config, spawnAsElite);
         state.Actors[slot.ActorId] = new StoredActor(
             actorId: slot.ActorId,
             kind: slot.Kind,
             mobType: slot.Archetype,
-            isElite: slot.IsElite,
+            isElite: spawnAsElite,
             buffSourceEliteId: null,
             facingDirection: FacingUp,
             tileX: tile.TileX,
@@ -2353,14 +1729,14 @@ public sealed class InMemoryBattleStore : IBattleStore
             shield: 0,
             maxShield: 0,
             mobSlotIndex: slot.SlotIndex);
-        if (slot.IsElite && events is not null)
+        if (spawnAsElite && events is not null)
         {
             events.Add(new EliteSpawnedEventDto(
                 EliteEntityId: slot.ActorId,
                 MobType: slot.Archetype));
         }
 
-        if (slot.IsElite)
+        if (spawnAsElite)
         {
             MaintainEliteCommanderBuffs(state, events);
         }
@@ -2373,6 +1749,17 @@ public sealed class InMemoryBattleStore : IBattleStore
         slot.MoveCooldownRemainingMs = 0;
         slot.CommitTicksRemaining = 0;
         return true;
+    }
+
+    private static bool ShouldSpawnEliteForSlot(StoredBattle state, MobSlotState slot)
+    {
+        if (!slot.IsEliteSlot)
+        {
+            return false;
+        }
+
+        var eliteChancePercent = ResolveSpawnPacingDirector(state).EliteSpawnChancePercent;
+        return state.Rng.Next(100) < eliteChancePercent;
     }
 
     private static int RollInitialAutoAttackCooldownMs(StoredBattle state, int autoAttackCooldownMs)
@@ -2388,130 +1775,6 @@ public sealed class InMemoryBattleStore : IBattleStore
         }
 
         return state.Rng.Next(1, autoAttackCooldownMs + 1);
-    }
-
-    private static void MaintainEliteCommanderBuffs(StoredBattle state, List<BattleEventDto>? events)
-    {
-        var elites = state.Actors.Values
-            .Where(actor =>
-                string.Equals(actor.Kind, "mob", StringComparison.Ordinal) &&
-                actor.IsElite)
-            .OrderBy(actor => actor.ActorId, StringComparer.Ordinal)
-            .ToList();
-        if (elites.Count == 0)
-        {
-            return;
-        }
-
-        var aliveEliteIds = elites
-            .Select(elite => elite.ActorId)
-            .ToHashSet(StringComparer.Ordinal);
-        var staleBuffTargets = state.Actors.Values
-            .Where(actor =>
-                string.Equals(actor.Kind, "mob", StringComparison.Ordinal) &&
-                !actor.IsElite &&
-                actor.BuffSourceEliteId is not null &&
-                !aliveEliteIds.Contains(actor.BuffSourceEliteId))
-            .OrderBy(actor => actor.ActorId, StringComparer.Ordinal)
-            .ToList();
-        foreach (var staleTarget in staleBuffTargets)
-        {
-            if (staleTarget.BuffSourceEliteId is not string staleSourceEliteId)
-            {
-                continue;
-            }
-
-            TryRemoveEliteCommanderBuffFromMob(staleTarget, staleSourceEliteId, events);
-        }
-
-        foreach (var elite in elites)
-        {
-            var assignedCount = state.Actors.Values.Count(actor =>
-                string.Equals(actor.Kind, "mob", StringComparison.Ordinal) &&
-                !actor.IsElite &&
-                string.Equals(actor.BuffSourceEliteId, elite.ActorId, StringComparison.Ordinal));
-            var remaining = EliteCommanderMaxBuffTargets - assignedCount;
-            if (remaining <= 0)
-            {
-                continue;
-            }
-
-            var sameSpeciesCandidates = state.Actors.Values
-                .Where(actor =>
-                    IsValidEliteBuffTarget(elite, actor) &&
-                    actor.MobType == elite.MobType)
-                .OrderBy(actor => actor.ActorId, StringComparer.Ordinal)
-                .ToList();
-            var anyCandidates = state.Actors.Values
-                .Where(actor => IsValidEliteBuffTarget(elite, actor))
-                .OrderBy(actor => actor.ActorId, StringComparer.Ordinal)
-                .ToList();
-
-            while (remaining > 0)
-            {
-                var candidatePool = sameSpeciesCandidates.Count > 0
-                    ? sameSpeciesCandidates
-                    : anyCandidates;
-                if (candidatePool.Count == 0)
-                {
-                    break;
-                }
-
-                var selectedIndex = state.Rng.Next(candidatePool.Count);
-                var selected = candidatePool[selectedIndex];
-                selected.BuffSourceEliteId = elite.ActorId;
-                events?.Add(new EliteBuffAppliedEventDto(
-                    EliteEntityId: elite.ActorId,
-                    TargetEntityId: selected.ActorId));
-                remaining -= 1;
-
-                sameSpeciesCandidates.RemoveAll(candidate =>
-                    string.Equals(candidate.ActorId, selected.ActorId, StringComparison.Ordinal));
-                anyCandidates.RemoveAll(candidate =>
-                    string.Equals(candidate.ActorId, selected.ActorId, StringComparison.Ordinal));
-            }
-        }
-    }
-
-    private static bool IsValidEliteBuffTarget(StoredActor elite, StoredActor candidate)
-    {
-        return string.Equals(candidate.Kind, "mob", StringComparison.Ordinal) &&
-               !candidate.IsElite &&
-               candidate.Hp > 0 &&
-               string.IsNullOrWhiteSpace(candidate.BuffSourceEliteId) &&
-               !string.Equals(candidate.ActorId, elite.ActorId, StringComparison.Ordinal);
-    }
-
-    private static bool TryRemoveEliteCommanderBuffFromMob(
-        StoredActor mob,
-        string sourceEliteId,
-        List<BattleEventDto>? events)
-    {
-        if (!string.Equals(mob.BuffSourceEliteId, sourceEliteId, StringComparison.Ordinal))
-        {
-            return false;
-        }
-
-        mob.BuffSourceEliteId = null;
-        events?.Add(new EliteBuffRemovedEventDto(
-            EliteEntityId: sourceEliteId,
-            TargetEntityId: mob.ActorId));
-        return true;
-    }
-
-    private static void RemoveEliteCommanderBuffs(StoredBattle state, string eliteActorId, List<BattleEventDto>? events)
-    {
-        var buffedTargets = state.Actors.Values
-            .Where(actor =>
-                string.Equals(actor.Kind, "mob", StringComparison.Ordinal) &&
-                !actor.IsElite &&
-                string.Equals(actor.BuffSourceEliteId, eliteActorId, StringComparison.Ordinal))
-            .OrderBy(actor => actor.ActorId, StringComparer.Ordinal)
-            .ToList();
-        foreach (var target in buffedTargets)
-        {
-            TryRemoveEliteCommanderBuffFromMob(target, eliteActorId, events);
-        }
     }
 
     private static List<(int TileX, int TileY)> BuildFreeTiles(StoredBattle state)
@@ -3547,11 +2810,11 @@ public sealed class InMemoryBattleStore : IBattleStore
                 RunXp: state.RunXp,
                 XpToNextLevel: GetXpToNextLevel(state.RunLevel)));
 
-            TryOfferCardChoiceAfterLevelUp(state, events);
+            TryOfferCardChoice(state, events);
         }
     }
 
-    private static void TryOfferCardChoiceAfterLevelUp(StoredBattle state, List<BattleEventDto> events)
+    private static void TryOfferCardChoice(StoredBattle state, List<BattleEventDto> events)
     {
         if (state.PendingCardChoice is not null)
         {
@@ -3836,227 +3099,6 @@ public sealed class InMemoryBattleStore : IBattleStore
         return (int)Math.Floor(maxValue * (percent / 100.0d));
     }
 
-    private static int ApplyIncomingDamageModifiers(StoredBattle state, int baseDamage, bool isRangedAutoAttack)
-    {
-        if (baseDamage <= 0)
-        {
-            return 0;
-        }
-
-        var adjustedDamage = baseDamage;
-        if (isRangedAutoAttack && IsBuffActive(state, AntiRangedPressureBuffId))
-        {
-            adjustedDamage = ApplyPercentReduction(adjustedDamage, AntiRangedPressureReductionPercent);
-        }
-
-        return Math.Max(1, adjustedDamage);
-    }
-
-    private static int ApplyOutgoingDamageModifiers(StoredBattle state, int baseDamage)
-    {
-        if (baseDamage <= 0)
-        {
-            return 0;
-        }
-
-        var adjustedDamage = baseDamage + Math.Max(0, state.PlayerModifiers.FlatDamageBonus);
-        adjustedDamage = ApplyPercentIncrease(adjustedDamage, Math.Max(0, state.PlayerModifiers.PercentDamageBonus));
-        if (IsBuffActive(state, DamageBoostBuffId))
-        {
-            adjustedDamage = ApplyPercentIncrease(adjustedDamage, DamageBoostBonusPercent);
-        }
-
-        return Math.Max(1, adjustedDamage);
-    }
-
-    private static int ResolveMobAutoAttackCooldownMs(MobArchetypeConfig config, StoredActor mob)
-    {
-        var attackSpeedBonusPercent = mob.BuffSourceEliteId is null
-            ? 0
-            : EliteCommanderAttackSpeedBonusPercent;
-        return Math.Max(
-            1,
-            ApplyPercentReduction(
-                config.AutoAttackCooldownMs,
-                attackSpeedBonusPercent));
-    }
-
-    private static int ResolveMobOutgoingDamage(StoredBattle state, StoredActor attacker, int baseDamage)
-    {
-        if (baseDamage <= 0)
-        {
-            return 0;
-        }
-
-        var nowMs = GetElapsedMsForTick(state.Tick);
-        var scaling = ResolveScalingDirectorV2(nowMs, state.RunLevel);
-        var adjusted = ScaleByMultiplier(
-            baseDamage,
-            attacker.IsElite
-                ? scaling.EliteDmgMult
-                : scaling.NormalDmgMult);
-
-        if (attacker.BuffSourceEliteId is not null)
-        {
-            adjusted = ApplyPercentIncrease(adjusted, EliteCommanderDamageBonusPercent);
-        }
-
-        return Math.Max(1, adjusted);
-    }
-
-    private static int ApplyPercentIncrease(int value, int percent)
-    {
-        if (value <= 0 || percent <= 0)
-        {
-            return value;
-        }
-
-        return (int)Math.Floor(value * ((100 + percent) / 100.0d));
-    }
-
-    private static int ApplyPercentReduction(int value, int percent)
-    {
-        if (value <= 0 || percent <= 0)
-        {
-            return value;
-        }
-
-        return (int)Math.Floor(value * ((100 - percent) / 100.0d));
-    }
-
-    private static int ResolveScaledMobMaxHp(StoredBattle state, MobArchetypeConfig config, bool isElite)
-    {
-        var nowMs = GetElapsedMsForTick(state.Tick);
-        var scaling = ResolveScalingDirectorV2(nowMs, state.RunLevel);
-        return ScaleByMultiplier(
-            config.MaxHp,
-            isElite
-                ? scaling.EliteHpMult
-                : scaling.NormalHpMult);
-    }
-
-    private static ScalingDirectorV2 ResolveScalingDirectorV2(long nowMs, int runLevel)
-    {
-        var t = Clamp01(Math.Max(0L, nowMs) / (double)ArenaConfig.RunDurationMs);
-        var baseNormalHpMult = Lerp(MobHpMultStart, MobHpMultEnd, t);
-        var normalDmgMult = Lerp(MobDmgMultStart, MobDmgMultEnd, t);
-        var baseEliteHpMult = baseNormalHpMult * EliteHpMultiplierFactor;
-        var eliteDmgMult = normalDmgMult * EliteDmgMultiplierFactor;
-
-        var lvlFactor = IsRunLevelHpSeasoningEnabled
-            ? ResolveRunLevelHpFactor(runLevel)
-            : 1.0d;
-        return new ScalingDirectorV2(
-            NormalHpMult: baseNormalHpMult * lvlFactor,
-            NormalDmgMult: normalDmgMult,
-            EliteHpMult: baseEliteHpMult * lvlFactor,
-            EliteDmgMult: eliteDmgMult,
-            LvlFactor: lvlFactor,
-            IsLvlFactorEnabled: IsRunLevelHpSeasoningEnabled);
-    }
-
-    private static double ResolveRunLevelHpFactor(int runLevel)
-    {
-        var clampedRunLevel = Math.Max(RunInitialLevel, runLevel);
-        return 1.0d + (RunLevelHpSeasoningPerLevel * (clampedRunLevel - RunInitialLevel));
-    }
-
-    private static string? ResolveLegacyEndReason(string? runEndReason)
-    {
-        return runEndReason switch
-        {
-            RunEndReasonDefeatDeath => EndReasonDeath,
-            RunEndReasonVictoryTime => EndReasonTime,
-            _ => null
-        };
-    }
-
-    private static int ScaleByMultiplier(int baseValue, double multiplier)
-    {
-        if (baseValue <= 0)
-        {
-            return 0;
-        }
-
-        var clampedMultiplier = Math.Max(0d, multiplier);
-        var scaled = (int)Math.Round(baseValue * clampedMultiplier, MidpointRounding.AwayFromZero);
-        return Math.Max(1, scaled);
-    }
-
-    private static double Lerp(double start, double end, double t)
-    {
-        var clampedT = Clamp01(t);
-        return start + ((end - start) * clampedT);
-    }
-
-    private static double Clamp01(double value)
-    {
-        return Math.Clamp(value, 0d, 1d);
-    }
-
-    private static bool IsBuffActive(StoredBattle state, string buffId)
-    {
-        if (!state.ActiveBuffs.TryGetValue(buffId, out var buff))
-        {
-            return false;
-        }
-
-        var nowMs = GetElapsedMsForTick(state.Tick);
-        return buff.ExpiresAtMs > nowMs;
-    }
-
-    private static int RollDamageForAttacker(StoredBattle state, int baseDamage, StoredActor? attacker)
-    {
-        if (baseDamage <= 0)
-        {
-            return 0;
-        }
-
-        if (attacker is not null &&
-            string.Equals(attacker.Kind, "player", StringComparison.Ordinal))
-        {
-            return RollDamage(
-                baseDamage,
-                PlayerDamageVarianceMinMultiplier,
-                PlayerDamageVarianceMaxMultiplier,
-                state.Rng);
-        }
-
-        return RollDamage(
-            baseDamage,
-            MobDamageVarianceMinMultiplier,
-            MobDamageVarianceMaxMultiplier,
-            state.Rng);
-    }
-
-    private static int RollDamage(int baseDamage, double minMultiplier, double maxMultiplier, Random rng)
-    {
-        if (baseDamage <= 0)
-        {
-            return 0;
-        }
-
-        if (maxMultiplier < minMultiplier)
-        {
-            (minMultiplier, maxMultiplier) = (maxMultiplier, minMultiplier);
-        }
-
-        var clampedMin = Math.Max(0d, minMultiplier);
-        var clampedMax = Math.Max(clampedMin, maxMultiplier);
-        var multiplier = clampedMin + ((clampedMax - clampedMin) * rng.NextDouble());
-        var scaledDamage = baseDamage * multiplier;
-        var flooredDamage = (int)Math.Floor(scaledDamage);
-        var fractionalDamage = Math.Clamp(scaledDamage - flooredDamage, 0d, 1d);
-
-        var rolledDamage = flooredDamage;
-        if (fractionalDamage > 0d && rng.NextDouble() < fractionalDamage)
-        {
-            rolledDamage += 1;
-        }
-
-        return Math.Max(1, rolledDamage);
-    }
-
     private static StoredActor? GetPlayerActor(StoredBattle state)
     {
         if (state.Actors.TryGetValue(state.PlayerActorId, out var player))
@@ -4175,164 +3217,9 @@ public sealed class InMemoryBattleStore : IBattleStore
         return true;
     }
 
-    private static int ComputeChebyshevDistance(StoredActor actor, int centerX, int centerY)
-    {
-        var deltaX = Math.Abs(actor.TileX - centerX);
-        var deltaY = Math.Abs(actor.TileY - centerY);
-        return Math.Max(deltaX, deltaY);
-    }
-
-    private static int ComputeChebyshevDistance(int sourceX, int sourceY, int targetX, int targetY)
-    {
-        var deltaX = Math.Abs(sourceX - targetX);
-        var deltaY = Math.Abs(sourceY - targetY);
-        return Math.Max(deltaX, deltaY);
-    }
-
-    private static int ComputeManhattanDistance(int sourceX, int sourceY, int targetX, int targetY)
-    {
-        var deltaX = Math.Abs(sourceX - targetX);
-        var deltaY = Math.Abs(sourceY - targetY);
-        return deltaX + deltaY;
-    }
-
-    private static bool TryGetFirstWalkableGreedyStepTowardTarget(
-        StoredBattle state,
-        StoredActor mob,
-        int targetTileX,
-        int targetTileY,
-        out (int TileX, int TileY)? destination)
-    {
-        destination = null;
-        foreach (var candidate in BuildGreedyStepCandidates(mob, targetTileX - mob.TileX, targetTileY - mob.TileY))
-        {
-            if (!IsWalkableTile(state, mob, candidate))
-            {
-                continue;
-            }
-
-            destination = candidate;
-            return true;
-        }
-
-        return false;
-    }
-
-    private static bool TryGetFirstWalkableGreedyStepAwayFromTarget(
-        StoredBattle state,
-        StoredActor mob,
-        int targetTileX,
-        int targetTileY,
-        out (int TileX, int TileY)? destination)
-    {
-        destination = null;
-        foreach (var candidate in BuildGreedyStepCandidates(mob, mob.TileX - targetTileX, mob.TileY - targetTileY))
-        {
-            if (!IsWalkableTile(state, mob, candidate))
-            {
-                continue;
-            }
-
-            destination = candidate;
-            return true;
-        }
-
-        return false;
-    }
-
-    private static IEnumerable<(int TileX, int TileY)> BuildGreedyStepCandidates(StoredActor mob, int deltaX, int deltaY)
-    {
-        var stepX = Math.Sign(deltaX);
-        var stepY = Math.Sign(deltaY);
-
-        (int TileX, int TileY)? preferredTile;
-        (int TileX, int TileY)? fallbackTile;
-
-        if (Math.Abs(deltaX) >= Math.Abs(deltaY))
-        {
-            preferredTile = stepX == 0 ? null : (mob.TileX + stepX, mob.TileY);
-            fallbackTile = stepY == 0 ? null : (mob.TileX, mob.TileY + stepY);
-        }
-        else
-        {
-            preferredTile = stepY == 0 ? null : (mob.TileX, mob.TileY + stepY);
-            fallbackTile = stepX == 0 ? null : (mob.TileX + stepX, mob.TileY);
-        }
-
-        if (preferredTile.HasValue)
-        {
-            yield return preferredTile.Value;
-        }
-
-        if (fallbackTile.HasValue)
-        {
-            yield return fallbackTile.Value;
-        }
-    }
-
-    private static bool IsWalkableTile(StoredBattle state, StoredActor mob, (int TileX, int TileY) destination)
-    {
-        if (!IsInBounds(destination.TileX, destination.TileY))
-        {
-            return false;
-        }
-
-        var isOccupied = state.Actors.Values.Any(actor =>
-            !string.Equals(actor.ActorId, mob.ActorId, StringComparison.Ordinal) &&
-            actor.TileX == destination.TileX &&
-            actor.TileY == destination.TileY);
-        return !isOccupied;
-    }
-
-    private static bool TryMoveMobToTile(StoredBattle state, StoredActor mob, (int TileX, int TileY)? destination)
-    {
-        if (!destination.HasValue)
-        {
-            return false;
-        }
-
-        var (destinationX, destinationY) = destination.Value;
-        if (!IsWalkableTile(state, mob, (destinationX, destinationY)))
-        {
-            return false;
-        }
-
-        mob.TileX = destinationX;
-        mob.TileY = destinationY;
-        return true;
-    }
-
-    private static int GetMaxAliveMobsForTick(int tick)
-    {
-        var elapsedMs = (long)tick * StepDeltaMs;
-        return elapsedMs < EarlyMobConcurrentCapDurationMs
-            ? EarlyMobConcurrentCap
-            : ArenaConfig.MaxAliveMobs;
-    }
-
-    private static bool IsEliteSlot(int slotIndex)
+    private static bool IsEliteSlotIndex(int slotIndex)
     {
         return slotIndex is 7 or 10;
-    }
-
-    private static long GetElapsedMsForTick(int tick)
-    {
-        return (long)tick * StepDeltaMs;
-    }
-
-    private static void SetRangedCommitWindowIfNeeded(MobSlotState slot)
-    {
-        if (!IsRangedArchetype(slot.Archetype))
-        {
-            return;
-        }
-
-        slot.CommitTicksRemaining = RangedCommitWindowTicks;
-    }
-
-    private static bool IsRangedArchetype(MobArchetype archetype)
-    {
-        return archetype is MobArchetype.RangedArcher or MobArchetype.RangedDragon;
     }
 
     private static string GetSpeciesId(MobArchetype archetype)
@@ -4343,169 +3230,6 @@ public sealed class InMemoryBattleStore : IBattleStore
         }
 
         return archetype.ToString();
-    }
-
-    private static bool TryChooseRangedBandMove(
-        StoredBattle state,
-        StoredActor mob,
-        StoredActor player,
-        MobSlotState slot,
-        out (int TileX, int TileY)? destination)
-    {
-        if (slot.CommitTicksRemaining > 0)
-        {
-            SetMobFacingTowardTarget(mob, player.TileX, player.TileY);
-            destination = null;
-            return false;
-        }
-
-        var distance = ComputeChebyshevDistance(mob, player.TileX, player.TileY);
-        if (distance >= RangedApproachDistance)
-        {
-            return TryGetFirstWalkableGreedyStepTowardTarget(state, mob, player.TileX, player.TileY, out destination);
-        }
-
-        if (distance <= 1)
-        {
-            return TryGetFirstWalkableGreedyStepAwayFromTarget(state, mob, player.TileX, player.TileY, out destination);
-        }
-
-        if (TryGetFirstWalkableBandOrbitStep(state, mob, player, distance, out destination))
-        {
-            return true;
-        }
-
-        destination = null;
-        return false;
-    }
-
-    private static bool TryGetFirstWalkableBandOrbitStep(
-        StoredBattle state,
-        StoredActor mob,
-        StoredActor player,
-        int currentDistance,
-        out (int TileX, int TileY)? destination)
-    {
-        destination = null;
-        (int TileX, int TileY)? fallbackBandStep = null;
-        foreach (var offset in EnumerateDeterministicNeighborOffsets())
-        {
-            var candidate = (TileX: mob.TileX + offset.OffsetX, TileY: mob.TileY + offset.OffsetY);
-            if (!IsWalkableTile(state, mob, candidate))
-            {
-                continue;
-            }
-
-            var nextDistance = ComputeChebyshevDistance(candidate.TileX, candidate.TileY, player.TileX, player.TileY);
-            if (nextDistance < RangedPreferredDistanceMin || nextDistance > RangedPreferredDistanceMax)
-            {
-                continue;
-            }
-
-            if (nextDistance == currentDistance)
-            {
-                destination = candidate;
-                return true;
-            }
-
-            fallbackBandStep ??= candidate;
-        }
-
-        if (fallbackBandStep.HasValue)
-        {
-            destination = fallbackBandStep.Value;
-            return true;
-        }
-
-        return false;
-    }
-
-    private static IEnumerable<(int OffsetX, int OffsetY)> EnumerateDeterministicNeighborOffsets()
-    {
-        yield return (0, -1);
-        yield return (1, -1);
-        yield return (1, 0);
-        yield return (1, 1);
-        yield return (0, 1);
-        yield return (-1, 1);
-        yield return (-1, 0);
-        yield return (-1, -1);
-    }
-
-    private static string NormalizeCommandType(string value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return string.Empty;
-        }
-
-        return value.Trim().ToLowerInvariant();
-    }
-
-    private static string? NormalizeSkillId(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return null;
-        }
-
-        return value.Trim().ToLowerInvariant();
-    }
-
-    private static string? NormalizeChoiceId(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return null;
-        }
-
-        return value.Trim();
-    }
-
-    private static string? NormalizeCardId(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return null;
-        }
-
-        return value.Trim().ToLowerInvariant();
-    }
-
-    private static string? NormalizePoiId(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return null;
-        }
-
-        return value.Trim();
-    }
-
-    private static string? NormalizeDirection(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return null;
-        }
-
-        var normalized = value.Trim().ToLowerInvariant();
-        return normalized switch
-        {
-            "n" or "north" => FacingUp,
-            FacingUp => FacingUp,
-            "ne" or "north_east" or "northeast" or "up-right" or "up_right" => FacingUpRight,
-            "e" or "east" => FacingRight,
-            "se" or "south_east" or "southeast" or "down-right" or "down_right" => FacingDownRight,
-            "s" or "south" => FacingDown,
-            FacingDown => FacingDown,
-            "sw" or "south_west" or "southwest" or "down-left" or "down_left" => FacingDownLeft,
-            "w" or "west" => FacingLeft,
-            FacingLeft => FacingLeft,
-            FacingRight => FacingRight,
-            "nw" or "north_west" or "northwest" or "up-left" or "up_left" => FacingUpLeft,
-            _ => null
-        };
     }
 
     private static BattleCardOfferDto ToCardOfferDto(CardDefinition card)
@@ -4616,66 +3340,6 @@ public sealed class InMemoryBattleStore : IBattleStore
             FacingDownLeft => FacingLeft,
             _ => normalizedFacing
         };
-    }
-
-    private static void SetMobFacingTowardTarget(StoredActor mob, int targetTileX, int targetTileY)
-    {
-        mob.FacingDirection = ResolveFacingDirectionTowardTile(
-            mob.TileX,
-            mob.TileY,
-            targetTileX,
-            targetTileY,
-            mob.FacingDirection);
-    }
-
-    private static string ResolveFacingDirectionTowardTile(
-        int sourceTileX,
-        int sourceTileY,
-        int targetTileX,
-        int targetTileY,
-        string currentFacingDirection)
-    {
-        var deltaX = targetTileX - sourceTileX;
-        var deltaY = targetTileY - sourceTileY;
-        if (deltaX == 0 && deltaY == 0)
-        {
-            return currentFacingDirection;
-        }
-
-        if (Math.Abs(deltaX) >= Math.Abs(deltaY))
-        {
-            if (deltaX > 0)
-            {
-                return FacingRight;
-            }
-
-            if (deltaX < 0)
-            {
-                return FacingLeft;
-            }
-        }
-        else
-        {
-            if (deltaY > 0)
-            {
-                return FacingDown;
-            }
-
-            if (deltaY < 0)
-            {
-                return FacingUp;
-            }
-        }
-
-        return currentFacingDirection;
-    }
-
-    private static bool IsInBounds(int tileX, int tileY)
-    {
-        return tileX >= 0 &&
-               tileY >= 0 &&
-               tileX < ArenaConfig.Width &&
-               tileY < ArenaConfig.Height;
     }
 
     private static bool IsTileInForwardCone(StoredActor mob, int tileX, int tileY)
@@ -5424,6 +4088,10 @@ public sealed class InMemoryBattleStore : IBattleStore
         public int NextCardChoiceSequence { get; set; }
     }
 
+    private sealed record SpawnPacingDirector(
+        int MaxAliveMobs,
+        int EliteSpawnChancePercent);
+
     private sealed record ScalingDirectorV2(
         double NormalHpMult,
         double NormalDmgMult,
@@ -5721,7 +4389,7 @@ public sealed class InMemoryBattleStore : IBattleStore
             string actorId,
             string kind,
             MobArchetype archetype,
-            bool isElite,
+            bool isEliteSlot,
             int respawnRemainingMs,
             int attackCooldownRemainingMs,
             int abilityCooldownRemainingMs,
@@ -5732,7 +4400,7 @@ public sealed class InMemoryBattleStore : IBattleStore
             ActorId = actorId;
             Kind = kind;
             Archetype = archetype;
-            IsElite = isElite;
+            IsEliteSlot = isEliteSlot;
             RespawnRemainingMs = respawnRemainingMs;
             AttackCooldownRemainingMs = attackCooldownRemainingMs;
             AbilityCooldownRemainingMs = abilityCooldownRemainingMs;
@@ -5748,7 +4416,7 @@ public sealed class InMemoryBattleStore : IBattleStore
 
         public MobArchetype Archetype { get; }
 
-        public bool IsElite { get; }
+        public bool IsEliteSlot { get; }
 
         public int RespawnRemainingMs { get; set; }
 
