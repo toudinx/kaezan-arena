@@ -211,12 +211,23 @@ export class AccountApiService {
     accountId: string,
     characterId: string,
     battleId: string,
-    sources: DropSource[]
+    sources: DropSource[],
+    runId: string | null = null
   ): Promise<AwardDropsResponse> {
     return this.postJson<
-      { accountId: string; characterId: string; battleId: string; sources: DropSource[] },
+      { accountId: string; characterId: string; battleId: string; runId?: string; sources: DropSource[] },
       AwardDropsResponse
-    >("/api/v1/account/award-drops", { accountId, characterId, battleId, sources }, "Award drops");
+    >(
+      "/api/v1/account/award-drops",
+      {
+        accountId,
+        characterId,
+        battleId,
+        ...(runId && runId.trim().length > 0 ? { runId: runId.trim() } : {}),
+        sources
+      },
+      "Award drops"
+    );
   }
 
   private async getJson<TResponse>(url: string, operationName: string): Promise<TResponse> {

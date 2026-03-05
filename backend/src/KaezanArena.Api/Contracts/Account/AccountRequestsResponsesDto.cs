@@ -24,7 +24,8 @@ public sealed record AwardDropsRequestDto(
     string AccountId,
     string CharacterId,
     string BattleId,
-    IReadOnlyList<DropSourceDto> Sources);
+    IReadOnlyList<DropSourceDto> Sources,
+    string? RunId = null);
 
 public sealed record AwardDropsResponseDto(
     IReadOnlyList<DropEventDto> Awarded,

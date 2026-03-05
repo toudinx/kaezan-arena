@@ -27,6 +27,10 @@ export interface ArenaActorState {
   actorId: string;
   kind: string;
   mobType?: MobArchetypeValue;
+  isElite?: boolean;
+  isBuffedByElite?: boolean;
+  buffSourceEliteId?: string | null;
+  currentTargetId?: string | null;
   tileX: number;
   tileY: number;
   hp: number;
@@ -269,6 +273,8 @@ export interface ArenaScene {
   decals: DecalInstance[];
   activeBuffs: ArenaBuffState[];
   activePois: ArenaPoiState[];
+  hoveredMobEntityId?: string | null;
+  threatMobEntityId?: string | null;
   fxInstances: FxInstance[];
   attackFxInstances: AttackFxInstance[];
   damageNumbers: DamageNumberInstance[];

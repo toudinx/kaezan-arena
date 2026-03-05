@@ -25,9 +25,11 @@ public sealed class InMemoryBattleStoreDeterminismTests
     private const double RunLevelHpSeasoningPerLevel = 0.015d;
     private const double ScalingTolerance = 0.000001d;
     private const int MaxDeterminismDamageSteps = 120;
+    private const int MaxCommandDeterminismSteps = 220;
     private const int MaxStepsToFindCardChoice = 1800;
     private const int MaxStepsToKillElite = 2500;
     private const int EliteDeterminismSteps = 180;
+    private const int MaxGlobalCooldownReductionPercent = 60;
 
     [Fact]
     public void StartBattle_MobInitialAutoAttackCooldowns_AreNonZero_Deterministic_AndDesynchronized()
@@ -84,6 +86,53 @@ public sealed class InMemoryBattleStoreDeterminismTests
 
         Assert.NotEmpty(firstDamageSequence);
         Assert.Equal(firstDamageSequence, secondDamageSequence);
+    }
+
+    [Fact]
+    public void StepBattle_SameSeedAndCommands_ProducesIdenticalKeySnapshotFields()
+    {
+        const int seed = 4242;
+        var store = new InMemoryBattleStore();
+
+        var first = store.StartBattle("arena-commands-det-a", "player-commands-det", seed);
+        var second = store.StartBattle("arena-commands-det-b", "player-commands-det", seed);
+        var firstTick = first.Tick;
+        var secondTick = second.Tick;
+
+        AssertDeterministicKeySnapshotFields(first, second);
+
+        for (var stepIndex = 0; stepIndex < MaxCommandDeterminismSteps; stepIndex += 1)
+        {
+            var commands = BuildDeterministicCommandBatch(stepIndex);
+            first = store.StepBattle(first.BattleId, firstTick, commands);
+            second = store.StepBattle(second.BattleId, secondTick, commands);
+            firstTick = first.Tick;
+            secondTick = second.Tick;
+            AssertDeterministicKeySnapshotFields(first, second);
+
+            if (first.IsAwaitingCardChoice || second.IsAwaitingCardChoice)
+            {
+                Assert.True(first.IsAwaitingCardChoice);
+                Assert.True(second.IsAwaitingCardChoice);
+                Assert.Equal(first.PendingChoiceId, second.PendingChoiceId);
+                Assert.Equal(
+                    first.OfferedCards.Select(card => card.Id).ToList(),
+                    second.OfferedCards.Select(card => card.Id).ToList());
+
+                var selectedCardId = first.OfferedCards[0].Id;
+                first = store.ChooseCard(first.BattleId, first.PendingChoiceId!, selectedCardId);
+                second = store.ChooseCard(second.BattleId, second.PendingChoiceId!, selectedCardId);
+                firstTick = first.Tick;
+                secondTick = second.Tick;
+                AssertDeterministicKeySnapshotFields(first, second);
+            }
+
+            if (first.IsRunEnded || second.IsRunEnded)
+            {
+                Assert.Equal(first.IsRunEnded, second.IsRunEnded);
+                break;
+            }
+        }
     }
 
     [Fact]
@@ -316,6 +365,36 @@ public sealed class InMemoryBattleStoreDeterminismTests
     }
 
     [Fact]
+    public void CardOffers_AreDeterministicAcrossMultipleChoices_WithSameSeedAndHistory()
+    {
+        const int seed = 8080;
+        var store = new InMemoryBattleStore();
+        var first = store.StartBattle("arena-card-offer-multi-a", "player-card-offer-multi", seed);
+        var second = store.StartBattle("arena-card-offer-multi-b", "player-card-offer-multi", seed);
+        var firstTick = first.Tick;
+        var secondTick = second.Tick;
+
+        for (var offerIndex = 0; offerIndex < 6; offerIndex += 1)
+        {
+            var firstOffer = WaitForCardChoiceStep(store, first.BattleId, firstTick);
+            var secondOffer = WaitForCardChoiceStep(store, second.BattleId, secondTick);
+
+            Assert.Equal(
+                firstOffer.OfferedCards.Select(card => card.Id).ToList(),
+                secondOffer.OfferedCards.Select(card => card.Id).ToList());
+
+            var firstSelected = firstOffer.OfferedCards[0].Id;
+            var secondSelected = secondOffer.OfferedCards[0].Id;
+            Assert.Equal(firstSelected, secondSelected);
+
+            first = store.ChooseCard(firstOffer.BattleId, firstOffer.PendingChoiceId!, firstSelected);
+            second = store.ChooseCard(secondOffer.BattleId, secondOffer.PendingChoiceId!, secondSelected);
+            firstTick = first.Tick;
+            secondTick = second.Tick;
+        }
+    }
+
+    [Fact]
     public void StepBattle_WhenAwaitingCardChoice_FreezesTickUntilChooseCard()
     {
         const int seed = 1337;
@@ -360,18 +439,70 @@ public sealed class InMemoryBattleStoreDeterminismTests
     }
 
     [Fact]
-    public void CardOffers_DoNotRepeatPreviouslyChosenCards()
+    public void CardStacking_RespectsMaxStacks_AndStopsOfferingCappedCards()
     {
-        const int seed = 4242;
+        const int seed = 2026;
+        const string cardId = "butcher_mark";
+        const int maxStacks = 3;
         var store = new InMemoryBattleStore();
-        var start = store.StartBattle("arena-card-no-repeat", "player-card-no-repeat", seed);
+        var start = store.StartBattle("arena-card-stack-cap", "player-card-stack-cap", seed);
+        var tick = start.Tick;
 
-        var firstOffer = WaitForCardChoiceStep(store, start.BattleId, start.Tick);
-        var firstSelected = firstOffer.OfferedCards[0].Id;
-        var afterFirstChoice = store.ChooseCard(firstOffer.BattleId, firstOffer.PendingChoiceId!, firstSelected);
+        for (var stack = 1; stack <= maxStacks; stack += 1)
+        {
+            var choiceId = $"forced-stack-choice-{stack:D2}";
+            ForcePendingCardChoice(store, start.BattleId, choiceId, [cardId]);
+            var chosen = store.ChooseCard(start.BattleId, choiceId, cardId);
+            tick = chosen.Tick;
 
-        var secondOffer = WaitForCardChoiceStep(store, afterFirstChoice.BattleId, afterFirstChoice.Tick);
-        Assert.DoesNotContain(secondOffer.OfferedCards, card => card.Id == firstSelected);
+            Assert.Equal(stack, GetSelectedCardStackCount(store, start.BattleId, cardId));
+            Assert.Equal(stack, chosen.SelectedCards.Count(card => string.Equals(card.Id, cardId, StringComparison.Ordinal)));
+        }
+
+        ForcePendingCardChoice(store, start.BattleId, "forced-stack-choice-overcap", [cardId]);
+        Assert.Throws<InvalidOperationException>(() =>
+            store.ChooseCard(start.BattleId, "forced-stack-choice-overcap", cardId));
+        ClearPendingCardChoice(store, start.BattleId);
+        Assert.Equal(maxStacks, GetSelectedCardStackCount(store, start.BattleId, cardId));
+
+        var postCapOffer = WaitForCardChoiceStep(store, start.BattleId, tick);
+        Assert.DoesNotContain(postCapOffer.OfferedCards, card => string.Equals(card.Id, cardId, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ChooseCard_ApplyingCard_ChangesExpectedPlayerStats()
+    {
+        const int seed = 9090;
+        var store = new InMemoryBattleStore();
+        var start = store.StartBattle("arena-card-apply-stats", "player-card-apply-stats", seed);
+        var offer = WaitForCardChoiceStep(store, start.BattleId, start.Tick);
+        var selectedCard = offer.OfferedCards[0];
+
+        var beforeModifiers = ReadPlayerModifiers(store, offer.BattleId);
+        var beforePlayer = Assert.Single(offer.Actors, actor => actor.Kind == "player");
+        var expectedCardEffects = ReadCardEffectsForStack(store, selectedCard.Id, stackCount: 1);
+
+        var chosen = store.ChooseCard(offer.BattleId, offer.PendingChoiceId!, selectedCard.Id);
+        var afterModifiers = ReadPlayerModifiers(store, chosen.BattleId);
+        var afterPlayer = Assert.Single(chosen.Actors, actor => actor.Kind == "player");
+
+        Assert.Equal(beforeModifiers.FlatDamageBonus + expectedCardEffects.FlatDamageBonus, afterModifiers.FlatDamageBonus);
+        Assert.Equal(beforeModifiers.PercentDamageBonus + expectedCardEffects.PercentDamageBonus, afterModifiers.PercentDamageBonus);
+        Assert.Equal(
+            beforeModifiers.PercentAttackSpeedBonus + expectedCardEffects.PercentAttackSpeedBonus,
+            afterModifiers.PercentAttackSpeedBonus);
+        Assert.Equal(beforeModifiers.PercentMaxHpBonus + expectedCardEffects.PercentMaxHpBonus, afterModifiers.PercentMaxHpBonus);
+        Assert.Equal(beforeModifiers.FlatHpOnHit + expectedCardEffects.FlatHpOnHit, afterModifiers.FlatHpOnHit);
+        Assert.Equal(
+            Math.Clamp(
+                beforeModifiers.GlobalCooldownReductionPercent + expectedCardEffects.GlobalCooldownReductionPercent,
+                0,
+                MaxGlobalCooldownReductionPercent),
+            afterModifiers.GlobalCooldownReductionPercent);
+
+        var expectedMaxHp = ResolvePlayerMaxHpForPercentBonus(beforePlayer.MaxHp, expectedCardEffects.PercentMaxHpBonus);
+        Assert.Equal(expectedMaxHp, afterPlayer.MaxHp);
+        Assert.Equal(selectedCard.Id, Assert.Single(chosen.Events.OfType<CardChosenEventDto>()).Card.Id);
     }
 
     [Fact]
@@ -673,6 +804,125 @@ public sealed class InMemoryBattleStoreDeterminismTests
         throw new Xunit.Sdk.XunitException("Expected a pending card choice but none was offered within the step budget.");
     }
 
+    private static IReadOnlyList<BattleCommandDto> BuildDeterministicCommandBatch(int stepIndex)
+    {
+        var directions = new[]
+        {
+            "up",
+            "up_right",
+            "right",
+            "down_right",
+            "down",
+            "down_left",
+            "left",
+            "up_left"
+        };
+        var direction = directions[stepIndex % directions.Length];
+        var commands = new List<BattleCommandDto>
+        {
+            new BattleCommandDto("set_facing", Dir: direction)
+        };
+
+        if (stepIndex % 2 == 0)
+        {
+            commands.Add(new BattleCommandDto("move_player", Dir: direction));
+        }
+
+        if (stepIndex % 3 == 0)
+        {
+            commands.Add(new BattleCommandDto("cast_skill", SkillId: "exori_min"));
+        }
+
+        if (stepIndex % 4 == 0)
+        {
+            commands.Add(new BattleCommandDto(
+                "set_ground_target",
+                GroundTileX: ArenaConfig.PlayerTileX,
+                GroundTileY: ArenaConfig.PlayerTileY));
+        }
+
+        if (stepIndex % 7 == 0)
+        {
+            commands.Add(new BattleCommandDto("set_target", TargetEntityId: null));
+        }
+
+        if (stepIndex % 11 == 0)
+        {
+            commands.Add(new BattleCommandDto(
+                "set_assist_config",
+                AssistConfig: new AssistConfigDto(
+                    Enabled: true,
+                    AutoHealEnabled: true,
+                    HealAtHpPercent: 40,
+                    AutoGuardEnabled: true,
+                    GuardAtHpPercent: 60,
+                    AutoOffenseEnabled: true,
+                    OffenseMode: "cooldown_spam",
+                    AutoSkills: new Dictionary<string, bool>(StringComparer.Ordinal)
+                    {
+                        ["exori"] = true,
+                        ["exori_min"] = true,
+                        ["exori_mas"] = true,
+                        ["avalanche"] = true
+                    },
+                    MaxAutoCastsPerTick: 1)));
+        }
+
+        return commands;
+    }
+
+    private static void AssertDeterministicKeySnapshotFields(BattleSnapshot first, BattleSnapshot second)
+    {
+        Assert.Equal(first.Tick, second.Tick);
+        Assert.Equal(first.BattleStatus, second.BattleStatus);
+        Assert.Equal(first.IsRunEnded, second.IsRunEnded);
+        Assert.Equal(first.RunEndReason, second.RunEndReason);
+        Assert.Equal(first.RunEndedAtMs, second.RunEndedAtMs);
+        Assert.Equal(first.RunXp, second.RunXp);
+        Assert.Equal(first.RunLevel, second.RunLevel);
+        Assert.Equal(first.XpToNextLevel, second.XpToNextLevel);
+        Assert.Equal(first.TotalKills, second.TotalKills);
+        Assert.Equal(first.EliteKills, second.EliteKills);
+        Assert.Equal(first.ChestsOpened, second.ChestsOpened);
+        Assert.Equal(first.RunTimeMs, second.RunTimeMs);
+        Assert.Equal(first.TimeSurvivedMs, second.TimeSurvivedMs);
+        Assert.Equal(first.GlobalCooldownRemainingMs, second.GlobalCooldownRemainingMs);
+        Assert.Equal(first.GlobalCooldownTotalMs, second.GlobalCooldownTotalMs);
+        Assert.Equal(first.AltarCooldownRemainingMs, second.AltarCooldownRemainingMs);
+        Assert.Equal(first.FacingDirection, second.FacingDirection);
+        Assert.Equal(first.EffectiveTargetEntityId, second.EffectiveTargetEntityId);
+        Assert.Equal(first.LockedTargetEntityId, second.LockedTargetEntityId);
+        Assert.Equal(first.IsAwaitingCardChoice, second.IsAwaitingCardChoice);
+        Assert.Equal(first.PendingChoiceId, second.PendingChoiceId);
+        Assert.Equal(
+            first.OfferedCards.Select(card => card.Id).ToList(),
+            second.OfferedCards.Select(card => card.Id).ToList());
+        Assert.Equal(
+            first.SelectedCards.Select(card => card.Id).ToList(),
+            second.SelectedCards.Select(card => card.Id).ToList());
+        Assert.Equal(
+            first.Actors
+                .OrderBy(actor => actor.ActorId, StringComparer.Ordinal)
+                .Select(actor => $"{actor.ActorId}:{actor.Kind}:{actor.TileX}:{actor.TileY}:{actor.Hp}:{actor.Shield}:{actor.MaxHp}:{actor.MaxShield}:{actor.IsElite}:{actor.BuffSourceEliteId}")
+                .ToList(),
+            second.Actors
+                .OrderBy(actor => actor.ActorId, StringComparer.Ordinal)
+                .Select(actor => $"{actor.ActorId}:{actor.Kind}:{actor.TileX}:{actor.TileY}:{actor.Hp}:{actor.Shield}:{actor.MaxHp}:{actor.MaxShield}:{actor.IsElite}:{actor.BuffSourceEliteId}")
+                .ToList());
+        Assert.Equal(
+            first.Skills
+                .OrderBy(skill => skill.SkillId, StringComparer.Ordinal)
+                .Select(skill => $"{skill.SkillId}:{skill.CooldownRemainingMs}:{skill.CooldownTotalMs}")
+                .ToList(),
+            second.Skills
+                .OrderBy(skill => skill.SkillId, StringComparer.Ordinal)
+                .Select(skill => $"{skill.SkillId}:{skill.CooldownRemainingMs}:{skill.CooldownTotalMs}")
+                .ToList());
+        Assert.Equal(
+            first.CommandResults.Select(result => $"{result.Index}:{result.Type}:{result.Ok}:{result.Reason}").ToList(),
+            second.CommandResults.Select(result => $"{result.Index}:{result.Type}:{result.Ok}:{result.Reason}").ToList());
+    }
+
     private static IReadOnlyList<BattleCommandDto> BuildAggressiveCommands()
     {
         return
@@ -918,6 +1168,139 @@ public sealed class InMemoryBattleStoreDeterminismTests
         Assert.NotNull(actor);
         return actor!;
     }
+
+    private static void ForcePendingCardChoice(
+        InMemoryBattleStore store,
+        string battleId,
+        string choiceId,
+        IReadOnlyList<string> offeredCardIds)
+    {
+        var state = GetStoredBattle(store, battleId);
+        var pendingChoiceType = typeof(InMemoryBattleStore).GetNestedType("PendingCardChoiceState", BindingFlags.NonPublic);
+        Assert.NotNull(pendingChoiceType);
+        var pendingChoiceCtor = pendingChoiceType!.GetConstructor(
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+            binder: null,
+            [typeof(string), typeof(IReadOnlyList<string>)],
+            modifiers: null);
+        Assert.NotNull(pendingChoiceCtor);
+        var pendingChoice = pendingChoiceCtor!.Invoke([choiceId, offeredCardIds.ToList()]);
+
+        var pendingChoiceProperty = state.GetType().GetProperty("PendingCardChoice");
+        Assert.NotNull(pendingChoiceProperty);
+        pendingChoiceProperty.SetValue(state, pendingChoice);
+    }
+
+    private static void ClearPendingCardChoice(InMemoryBattleStore store, string battleId)
+    {
+        var state = GetStoredBattle(store, battleId);
+        var pendingChoiceProperty = state.GetType().GetProperty("PendingCardChoice");
+        Assert.NotNull(pendingChoiceProperty);
+        pendingChoiceProperty.SetValue(state, null);
+    }
+
+    private static int GetSelectedCardStackCount(InMemoryBattleStore store, string battleId, string cardId)
+    {
+        var state = GetStoredBattle(store, battleId);
+        var selectedCardStacksProperty = state.GetType().GetProperty("SelectedCardStacks");
+        Assert.NotNull(selectedCardStacksProperty);
+        var selectedCardStacks = selectedCardStacksProperty.GetValue(state) as IDictionary;
+        Assert.NotNull(selectedCardStacks);
+
+        return selectedCardStacks.Contains(cardId)
+            ? Assert.IsType<int>(selectedCardStacks[cardId])
+            : 0;
+    }
+
+    private static PlayerModifierSnapshot ReadPlayerModifiers(InMemoryBattleStore store, string battleId)
+    {
+        var state = GetStoredBattle(store, battleId);
+        var playerModifiersProperty = state.GetType().GetProperty("PlayerModifiers");
+        Assert.NotNull(playerModifiersProperty);
+        var playerModifiers = playerModifiersProperty.GetValue(state);
+        Assert.NotNull(playerModifiers);
+
+        return new PlayerModifierSnapshot(
+            FlatDamageBonus: ReadIntProperty(playerModifiers, "FlatDamageBonus"),
+            PercentDamageBonus: ReadIntProperty(playerModifiers, "PercentDamageBonus"),
+            PercentAttackSpeedBonus: ReadIntProperty(playerModifiers, "PercentAttackSpeedBonus"),
+            PercentMaxHpBonus: ReadIntProperty(playerModifiers, "PercentMaxHpBonus"),
+            FlatHpOnHit: ReadIntProperty(playerModifiers, "FlatHpOnHit"),
+            GlobalCooldownReductionPercent: ReadIntProperty(playerModifiers, "GlobalCooldownReductionPercent"));
+    }
+
+    private static CardEffectSnapshot ReadCardEffectsForStack(InMemoryBattleStore store, string cardId, int stackCount)
+    {
+        _ = store;
+        var cardByIdField = typeof(InMemoryBattleStore).GetField("CardById", BindingFlags.Static | BindingFlags.NonPublic);
+        Assert.NotNull(cardByIdField);
+        var cardById = cardByIdField.GetValue(null) as IDictionary;
+        Assert.NotNull(cardById);
+        var cardDefinition = cardById[cardId];
+        Assert.NotNull(cardDefinition);
+
+        var effectsProperty = cardDefinition.GetType().GetProperty("Effects");
+        Assert.NotNull(effectsProperty);
+        var effects = effectsProperty.GetValue(cardDefinition);
+        Assert.NotNull(effects);
+
+        var scalingParamsProperty = cardDefinition.GetType().GetProperty("ScalingParams");
+        Assert.NotNull(scalingParamsProperty);
+        var scalingParams = scalingParamsProperty.GetValue(cardDefinition);
+        Assert.NotNull(scalingParams);
+
+        var baseMultiplier = ReadIntProperty(scalingParams, "BaseStackMultiplierPercent");
+        var additionalMultiplier = ReadIntProperty(scalingParams, "AdditionalStackMultiplierPercent");
+        var scalePercent = stackCount <= 1 ? baseMultiplier : additionalMultiplier;
+
+        return new CardEffectSnapshot(
+            FlatDamageBonus: ScaleStat(ReadIntProperty(effects, "FlatDamageBonus"), scalePercent),
+            PercentDamageBonus: ScaleStat(ReadIntProperty(effects, "PercentDamageBonus"), scalePercent),
+            PercentAttackSpeedBonus: ScaleStat(ReadIntProperty(effects, "PercentAttackSpeedBonus"), scalePercent),
+            PercentMaxHpBonus: ScaleStat(ReadIntProperty(effects, "PercentMaxHpBonus"), scalePercent),
+            FlatHpOnHit: ScaleStat(ReadIntProperty(effects, "FlatHpOnHit"), scalePercent),
+            GlobalCooldownReductionPercent: ScaleStat(ReadIntProperty(effects, "GlobalCooldownReductionPercent"), scalePercent));
+    }
+
+    private static int ResolvePlayerMaxHpForPercentBonus(int baseMaxHp, int percentBonus)
+    {
+        return (int)Math.Floor(baseMaxHp * (1d + (Math.Max(0, percentBonus) / 100d)));
+    }
+
+    private static int ReadIntProperty(object instance, string propertyName)
+    {
+        var property = instance.GetType().GetProperty(propertyName);
+        Assert.NotNull(property);
+        var value = property.GetValue(instance);
+        Assert.NotNull(value);
+        return Assert.IsType<int>(value);
+    }
+
+    private static int ScaleStat(int baseValue, int scalePercent)
+    {
+        if (baseValue <= 0 || scalePercent <= 0)
+        {
+            return 0;
+        }
+
+        return (int)Math.Floor(baseValue * (scalePercent / 100.0d));
+    }
+
+    private sealed record PlayerModifierSnapshot(
+        int FlatDamageBonus,
+        int PercentDamageBonus,
+        int PercentAttackSpeedBonus,
+        int PercentMaxHpBonus,
+        int FlatHpOnHit,
+        int GlobalCooldownReductionPercent);
+
+    private sealed record CardEffectSnapshot(
+        int FlatDamageBonus,
+        int PercentDamageBonus,
+        int PercentAttackSpeedBonus,
+        int PercentMaxHpBonus,
+        int FlatHpOnHit,
+        int GlobalCooldownReductionPercent);
 
     private static Dictionary<string, int> ReadMobAttackCooldownByActorId(object storedBattle)
     {

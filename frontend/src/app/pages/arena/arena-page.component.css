@@ -310,6 +310,111 @@
   color: #cbd5e1;
 }
 
+.analyzer-empty {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 0.62rem;
+}
+
+.analyzer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.28rem;
+}
+
+.analyzer-chart {
+  display: grid;
+  gap: 0.28rem;
+}
+
+.analyzer-chart__series {
+  display: grid;
+  gap: 0.14rem;
+}
+
+.analyzer-chart__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.34rem;
+  color: #dbe4f0;
+  font-size: 0.6rem;
+}
+
+.analyzer-chart__header strong {
+  color: #fde68a;
+  font-size: 0.62rem;
+}
+
+.analyzer-chart__bars {
+  display: grid;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  align-items: end;
+  gap: 0.12rem;
+  min-height: 2rem;
+  border: 1px solid #334155;
+  border-radius: 0.24rem;
+  background: #172132;
+  padding: 0.14rem;
+}
+
+.analyzer-chart__bar {
+  display: block;
+  border-radius: 0.12rem 0.12rem 0 0;
+  min-height: 2px;
+}
+
+.analyzer-chart__bar[data-kind="dps"] {
+  background: #f97316;
+}
+
+.analyzer-chart__bar[data-kind="dtps"] {
+  background: #ef4444;
+}
+
+.analyzer-chart__bar[data-kind="hps"] {
+  background: #22c55e;
+}
+
+.analyzer-chart__bar[data-kind="shield_gain_per_second"] {
+  background: #60a5fa;
+}
+
+.analyzer-chart__bar[data-kind="shield_loss_per_second"] {
+  background: #1d4ed8;
+}
+
+.analyzer-table-wrap {
+  overflow-x: auto;
+}
+
+.analyzer-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 360px;
+  font-size: 0.58rem;
+  color: #dbe4f0;
+}
+
+.analyzer-table th,
+.analyzer-table td {
+  border-bottom: 1px solid #334155;
+  padding: 0.18rem 0.22rem;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.analyzer-table th {
+  color: #93c5fd;
+  font-weight: 600;
+}
+
+.analyzer-note {
+  margin: 0;
+  color: #a9bbd2;
+  font-size: 0.58rem;
+}
+
 .combat-details__body {
   border: 1px solid #334155;
   border-radius: 0.28rem;
@@ -552,6 +657,34 @@ canvas {
   height: 100%;
   background: transparent;
   image-rendering: pixelated;
+}
+
+.arena-hints-overlay {
+  position: absolute;
+  left: 0.45rem;
+  bottom: 0.45rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  max-width: min(92%, 28rem);
+  pointer-events: none;
+}
+
+.arena-hints-overlay__hint {
+  margin: 0;
+  width: fit-content;
+  border: 1px solid rgba(71, 85, 105, 0.9);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.88);
+  color: #e2e8f0;
+  font-size: 0.58rem;
+  letter-spacing: 0.01em;
+  padding: 0.1rem 0.42rem;
+}
+
+.arena-hints-overlay__hint--poi {
+  border-color: rgba(251, 191, 36, 0.95);
+  color: #fef3c7;
 }
 
 .loading-overlay {
@@ -846,6 +979,13 @@ canvas {
   border-radius: 0.34rem;
   background: #111827;
   padding: 0.28rem;
+}
+
+.run-complete__stats h3 {
+  margin: 0 0 0.24rem;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  color: #cbd5e1;
 }
 
 .run-complete__stat-row {

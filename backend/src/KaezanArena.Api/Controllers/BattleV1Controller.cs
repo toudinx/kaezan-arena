@@ -19,7 +19,8 @@ public sealed class BattleV1Controller : ControllerBase
     [HttpPost("start")]
     public ActionResult<BattleStartResponseDto> Start([FromBody] BattleStartRequestDto request)
     {
-        var snapshot = _battleStore.StartBattle(request.ArenaId, request.PlayerId, request.Seed);
+        var resolvedSeed = request.SeedOverride ?? request.Seed;
+        var snapshot = _battleStore.StartBattle(request.ArenaId, request.PlayerId, resolvedSeed);
         return Ok(ToStartResponse(snapshot));
     }
 

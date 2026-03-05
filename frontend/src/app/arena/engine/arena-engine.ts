@@ -66,6 +66,8 @@ export class ArenaEngine {
       effectiveTargetEntityId: null,
       lockedTargetEntityId: null,
       groundTargetPos: null,
+      hoveredMobEntityId: null,
+      threatMobEntityId: null,
       actorsById: {},
       actorVisualsById: {},
       skillsById: {},
@@ -131,6 +133,7 @@ export class ArenaEngine {
     const stackIndexByTile = new Map<string, number>();
     let spawnOrder = 0;
     const playerActorId = this.resolvePlayerActorId(nextScene, scene);
+    let threatMobEntityId = scene.threatMobEntityId ?? null;
 
     for (const event of events) {
       if (event.type === "fx_spawn") {
@@ -150,6 +153,11 @@ export class ArenaEngine {
       }
 
       if (event.type === "damage_number") {
+        const threatSourceMobId = this.resolveThreatSourceMobEntityId(event, playerActorId, nextScene);
+        if (threatSourceMobId) {
+          threatMobEntityId = threatSourceMobId;
+        }
+
         const entries = this.toDamageNumberInstances(event, playerActorId);
         for (const entry of entries) {
           spawnedDamageNumbers.push({
@@ -201,8 +209,16 @@ export class ArenaEngine {
       }
     }
 
+    if (threatMobEntityId) {
+      const threatActor = nextScene.actorsById[threatMobEntityId];
+      if (!threatActor || threatActor.kind !== "mob") {
+        threatMobEntityId = null;
+      }
+    }
+
     nextScene = {
       ...nextScene,
+      threatMobEntityId,
       attackFxInstances: [...nextScene.attackFxInstances, ...spawnedAttackFx],
       damageNumbers: [...nextScene.damageNumbers, ...spawnedDamageNumbers],
       floatingTexts: [...nextScene.floatingTexts, ...spawnedFloatingTexts]
@@ -571,6 +587,28 @@ export class ArenaEngine {
     }
 
     return targetEntityId === playerActorId && sourceEntityId !== playerActorId;
+  }
+
+  private resolveThreatSourceMobEntityId(
+    event: Extract<ArenaBattleEvent, { type: "damage_number" }>,
+    playerActorId: string | null,
+    scene: ArenaScene
+  ): string | null {
+    if (!playerActorId || event.targetEntityId !== playerActorId) {
+      return null;
+    }
+
+    const sourceEntityId = event.sourceEntityId ?? event.attackerEntityId ?? null;
+    if (!sourceEntityId) {
+      return null;
+    }
+
+    const sourceActor = scene.actorsById[sourceEntityId];
+    if (!sourceActor || sourceActor.kind !== "mob") {
+      return null;
+    }
+
+    return sourceEntityId;
   }
 
   private toAttackFxInstance(event: Extract<ArenaBattleEvent, { type: "attack_fx" }>): AttackFxInstance {

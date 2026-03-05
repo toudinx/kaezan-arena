@@ -81,6 +81,11 @@ public sealed partial class InMemoryBattleStore : IBattleStore
     private const int MaxCardOfferCount = 3;
     private const int MaxCardSelectionsPerRun = 12;
     private const int MaxGlobalCooldownReductionPercent = 60;
+    private const string CardTagOffense = "offense";
+    private const string CardTagDefense = "defense";
+    private const string CardTagUtility = "utility";
+    private const string CardTagSustain = "sustain";
+    private const string CardTagMobility = "mobility";
     private const double MobHpMultStart = 1.0d;
     private const double MobHpMultEnd = 3.2d;
     private const double MobDmgMultStart = 1.0d;
@@ -199,77 +204,138 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             [MobArchetype.MeleeDemon] = "melee_demon",
             [MobArchetype.RangedDragon] = "ranged_dragon"
         };
+    private static readonly IReadOnlySet<string> IncompatibleCardPairs =
+        new HashSet<string>(StringComparer.Ordinal)
+        {
+            BuildCardPairKey("arcane_tempo", "overclocked_reflex")
+        };
     private static readonly IReadOnlyList<CardDefinition> CardPool =
     [
         new(
             Id: "colossus_heart",
             Name: "Colossus Heart",
             Description: "+40% max HP and +6 damage.",
+            Tags: [CardTagDefense, CardTagSustain],
+            RarityWeight: 40,
+            MaxStacks: 2,
+            ScalingParams: new CardScalingParams(BaseStackMultiplierPercent: 100, AdditionalStackMultiplierPercent: 80),
             Effects: new CardEffectBundle(FlatDamageBonus: 6, PercentMaxHpBonus: 40)),
         new(
             Id: "bloodletter_edge",
             Name: "Bloodletter Edge",
             Description: "+22% damage and +2 HP on hit.",
+            Tags: [CardTagOffense, CardTagSustain],
+            RarityWeight: 90,
+            MaxStacks: 3,
+            ScalingParams: new CardScalingParams(BaseStackMultiplierPercent: 100, AdditionalStackMultiplierPercent: 90),
             Effects: new CardEffectBundle(PercentDamageBonus: 22, FlatHpOnHit: 2)),
         new(
             Id: "frenzy_clockwork",
             Name: "Frenzy Clockwork",
             Description: "+35% attack speed and +8% damage.",
+            Tags: [CardTagOffense, CardTagMobility],
+            RarityWeight: 80,
+            MaxStacks: 3,
+            ScalingParams: new CardScalingParams(BaseStackMultiplierPercent: 100, AdditionalStackMultiplierPercent: 85),
             Effects: new CardEffectBundle(PercentDamageBonus: 8, PercentAttackSpeedBonus: 35)),
         new(
             Id: "butcher_mark",
             Name: "Butcher Mark",
             Description: "+12 flat damage.",
+            Tags: [CardTagOffense],
+            RarityWeight: 110,
+            MaxStacks: 3,
+            ScalingParams: new CardScalingParams(BaseStackMultiplierPercent: 100, AdditionalStackMultiplierPercent: 100),
             Effects: new CardEffectBundle(FlatDamageBonus: 12)),
         new(
             Id: "vampiric_spikes",
             Name: "Vampiric Spikes",
             Description: "+4 HP on hit and +10% max HP.",
+            Tags: [CardTagSustain, CardTagDefense],
+            RarityWeight: 70,
+            MaxStacks: 3,
+            ScalingParams: new CardScalingParams(BaseStackMultiplierPercent: 100, AdditionalStackMultiplierPercent: 85),
             Effects: new CardEffectBundle(PercentMaxHpBonus: 10, FlatHpOnHit: 4)),
         new(
             Id: "overclocked_reflex",
             Name: "Overclocked Reflex",
             Description: "+25% global cooldown reduction and +20% attack speed.",
+            Tags: [CardTagUtility, CardTagMobility],
+            RarityWeight: 35,
+            MaxStacks: 2,
+            ScalingParams: new CardScalingParams(BaseStackMultiplierPercent: 100, AdditionalStackMultiplierPercent: 75),
             Effects: new CardEffectBundle(PercentAttackSpeedBonus: 20, GlobalCooldownReductionPercent: 25)),
         new(
             Id: "warlord_banner",
             Name: "Warlord Banner",
             Description: "+18% damage and +20% max HP.",
+            Tags: [CardTagOffense, CardTagDefense],
+            RarityWeight: 45,
+            MaxStacks: 2,
+            ScalingParams: new CardScalingParams(BaseStackMultiplierPercent: 100, AdditionalStackMultiplierPercent: 80),
             Effects: new CardEffectBundle(PercentDamageBonus: 18, PercentMaxHpBonus: 20)),
         new(
             Id: "titan_grip",
             Name: "Titan Grip",
             Description: "+10 flat damage and +20% attack speed.",
+            Tags: [CardTagOffense],
+            RarityWeight: 85,
+            MaxStacks: 3,
+            ScalingParams: new CardScalingParams(BaseStackMultiplierPercent: 100, AdditionalStackMultiplierPercent: 90),
             Effects: new CardEffectBundle(FlatDamageBonus: 10, PercentAttackSpeedBonus: 20)),
         new(
             Id: "arcane_tempo",
             Name: "Arcane Tempo",
             Description: "+30% global cooldown reduction.",
+            Tags: [CardTagUtility, CardTagMobility],
+            RarityWeight: 30,
+            MaxStacks: 2,
+            ScalingParams: new CardScalingParams(BaseStackMultiplierPercent: 100, AdditionalStackMultiplierPercent: 70),
             Effects: new CardEffectBundle(GlobalCooldownReductionPercent: 30)),
         new(
             Id: "crushing_momentum",
             Name: "Crushing Momentum",
             Description: "+16% damage and +16% attack speed.",
+            Tags: [CardTagOffense, CardTagMobility],
+            RarityWeight: 75,
+            MaxStacks: 3,
+            ScalingParams: new CardScalingParams(BaseStackMultiplierPercent: 100, AdditionalStackMultiplierPercent: 90),
             Effects: new CardEffectBundle(PercentDamageBonus: 16, PercentAttackSpeedBonus: 16)),
         new(
             Id: "iron_fortress",
             Name: "Iron Fortress",
             Description: "+55% max HP.",
+            Tags: [CardTagDefense],
+            RarityWeight: 40,
+            MaxStacks: 2,
+            ScalingParams: new CardScalingParams(BaseStackMultiplierPercent: 100, AdditionalStackMultiplierPercent: 80),
             Effects: new CardEffectBundle(PercentMaxHpBonus: 55)),
         new(
             Id: "executioner_oath",
             Name: "Executioner Oath",
             Description: "+30% damage.",
+            Tags: [CardTagOffense],
+            RarityWeight: 45,
+            MaxStacks: 2,
+            ScalingParams: new CardScalingParams(BaseStackMultiplierPercent: 100, AdditionalStackMultiplierPercent: 80),
             Effects: new CardEffectBundle(PercentDamageBonus: 30)),
         new(
             Id: "sanguine_engine",
             Name: "Sanguine Engine",
             Description: "+3 HP on hit and +15% attack speed.",
+            Tags: [CardTagSustain, CardTagOffense],
+            RarityWeight: 80,
+            MaxStacks: 3,
+            ScalingParams: new CardScalingParams(BaseStackMultiplierPercent: 100, AdditionalStackMultiplierPercent: 90),
             Effects: new CardEffectBundle(FlatHpOnHit: 3, PercentAttackSpeedBonus: 15)),
         new(
             Id: "battle_hymn",
             Name: "Battle Hymn",
             Description: "+8 flat damage and +20% global cooldown reduction.",
+            Tags: [CardTagOffense, CardTagUtility],
+            RarityWeight: 50,
+            MaxStacks: 2,
+            ScalingParams: new CardScalingParams(BaseStackMultiplierPercent: 100, AdditionalStackMultiplierPercent: 85),
             Effects: new CardEffectBundle(FlatDamageBonus: 8, GlobalCooldownReductionPercent: 20))
     ];
     private static readonly IReadOnlyDictionary<string, CardDefinition> CardById =
@@ -413,6 +479,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             playerModifiers: new PlayerModifiers(),
             pendingCardChoice: null,
             selectedCardIds: [],
+            selectedCardStacks: new Dictionary<string, int>(StringComparer.Ordinal),
             cardSelectionsGranted: 0,
             nextCardChoiceSequence: 1);
 
@@ -587,9 +654,16 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                 throw new InvalidOperationException($"Card '{normalizedSelectedCardId}' was not found in the card pool.");
             }
 
-            if (state.SelectedCardIds.Contains(selectedCard.Id, StringComparer.Ordinal))
+            var currentStacks = GetCardStackCount(state, selectedCard.Id);
+            if (currentStacks >= selectedCard.MaxStacks)
             {
-                throw new InvalidOperationException($"Card '{selectedCard.Id}' has already been selected in this run.");
+                throw new InvalidOperationException(
+                    $"Card '{selectedCard.Id}' is already at max stacks ({selectedCard.MaxStacks}).");
+            }
+
+            if (IsCardBannedByCurrentLoadout(state, selectedCard.Id))
+            {
+                throw new InvalidOperationException($"Card '{selectedCard.Id}' is incompatible with the current loadout.");
             }
 
             var player = GetPlayerActor(state);
@@ -598,15 +672,17 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                 throw new InvalidOperationException("Player actor is missing.");
             }
 
-            ApplyCardEffects(state, player, selectedCard);
+            var nextStack = currentStacks + 1;
+            ApplyCardEffects(state, player, selectedCard, nextStack);
             state.SelectedCardIds.Add(selectedCard.Id);
+            state.SelectedCardStacks[selectedCard.Id] = nextStack;
             state.PendingCardChoice = null;
 
             var events = new List<BattleEventDto>
             {
                 new CardChosenEventDto(
                     ChoiceId: pendingChoice.ChoiceId,
-                    Card: ToCardOfferDto(selectedCard))
+                    Card: ToCardOfferDto(state, selectedCard))
             };
 
             return ToSnapshot(state, events, []);
@@ -2842,15 +2918,15 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         events.Add(new CardChoiceOfferedEventDto(
             ChoiceId: choiceId,
             OfferedCards: offeredCards
-                .Select(ToCardOfferDto)
+                .Select(card => ToCardOfferDto(state, card))
                 .ToList()));
     }
 
     private static IReadOnlyList<CardDefinition> RollCardOffer(StoredBattle state)
     {
         var availableCards = CardPool
-            .Where(card => !state.SelectedCardIds.Contains(card.Id, StringComparer.Ordinal))
             .OrderBy(card => card.Id, StringComparer.Ordinal)
+            .Where(card => CanOfferCard(state, card))
             .ToList();
         if (availableCards.Count == 0)
         {
@@ -2861,7 +2937,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         var offeredCards = new List<CardDefinition>(offerCount);
         for (var index = 0; index < offerCount; index += 1)
         {
-            var rolledIndex = state.Rng.Next(availableCards.Count);
+            var rolledIndex = RollWeightedCardIndex(state.Rng, availableCards);
             offeredCards.Add(availableCards[rolledIndex]);
             availableCards.RemoveAt(rolledIndex);
         }
@@ -2869,17 +2945,115 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         return offeredCards;
     }
 
-    private static void ApplyCardEffects(StoredBattle state, StoredActor player, CardDefinition card)
+    private static bool CanOfferCard(StoredBattle state, CardDefinition card)
+    {
+        var currentStacks = GetCardStackCount(state, card.Id);
+        if (currentStacks >= card.MaxStacks)
+        {
+            return false;
+        }
+
+        return !IsCardBannedByCurrentLoadout(state, card.Id);
+    }
+
+    private static int RollWeightedCardIndex(Random rng, IReadOnlyList<CardDefinition> availableCards)
+    {
+        var totalWeight = 0;
+        foreach (var card in availableCards)
+        {
+            totalWeight += Math.Max(1, card.RarityWeight);
+        }
+
+        var roll = rng.Next(totalWeight);
+        var runningWeight = 0;
+        for (var index = 0; index < availableCards.Count; index += 1)
+        {
+            runningWeight += Math.Max(1, availableCards[index].RarityWeight);
+            if (roll < runningWeight)
+            {
+                return index;
+            }
+        }
+
+        return availableCards.Count - 1;
+    }
+
+    private static int GetCardStackCount(StoredBattle state, string cardId)
+    {
+        return state.SelectedCardStacks.TryGetValue(cardId, out var stacks)
+            ? Math.Max(0, stacks)
+            : 0;
+    }
+
+    private static bool IsCardBannedByCurrentLoadout(StoredBattle state, string cardId)
+    {
+        foreach (var (selectedCardId, stackCount) in state.SelectedCardStacks)
+        {
+            if (stackCount <= 0)
+            {
+                continue;
+            }
+
+            if (string.Equals(selectedCardId, cardId, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (IncompatibleCardPairs.Contains(BuildCardPairKey(selectedCardId, cardId)))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static string BuildCardPairKey(string leftCardId, string rightCardId)
+    {
+        return StringComparer.Ordinal.Compare(leftCardId, rightCardId) <= 0
+            ? $"{leftCardId}|{rightCardId}"
+            : $"{rightCardId}|{leftCardId}";
+    }
+
+    private static CardEffectBundle ScaleCardEffectsForStack(CardDefinition card, int stackCount)
+    {
+        var safeStackCount = Math.Max(1, stackCount);
+        var scalePercent = safeStackCount <= 1
+            ? card.ScalingParams.BaseStackMultiplierPercent
+            : card.ScalingParams.AdditionalStackMultiplierPercent;
+        scalePercent = Math.Max(0, scalePercent);
+
+        return new CardEffectBundle(
+            FlatDamageBonus: ScaleStat(card.Effects.FlatDamageBonus, scalePercent),
+            PercentDamageBonus: ScaleStat(card.Effects.PercentDamageBonus, scalePercent),
+            PercentAttackSpeedBonus: ScaleStat(card.Effects.PercentAttackSpeedBonus, scalePercent),
+            PercentMaxHpBonus: ScaleStat(card.Effects.PercentMaxHpBonus, scalePercent),
+            FlatHpOnHit: ScaleStat(card.Effects.FlatHpOnHit, scalePercent),
+            GlobalCooldownReductionPercent: ScaleStat(card.Effects.GlobalCooldownReductionPercent, scalePercent));
+    }
+
+    private static int ScaleStat(int baseValue, int scalePercent)
+    {
+        if (baseValue <= 0 || scalePercent <= 0)
+        {
+            return 0;
+        }
+
+        return (int)Math.Floor(baseValue * (scalePercent / 100.0d));
+    }
+
+    private static void ApplyCardEffects(StoredBattle state, StoredActor player, CardDefinition card, int nextStack)
     {
         var previousMaxHp = player.MaxHp;
+        var scaledEffects = ScaleCardEffectsForStack(card, nextStack);
 
-        state.PlayerModifiers.FlatDamageBonus += Math.Max(0, card.Effects.FlatDamageBonus);
-        state.PlayerModifiers.PercentDamageBonus += Math.Max(0, card.Effects.PercentDamageBonus);
-        state.PlayerModifiers.PercentAttackSpeedBonus += Math.Max(0, card.Effects.PercentAttackSpeedBonus);
-        state.PlayerModifiers.PercentMaxHpBonus += Math.Max(0, card.Effects.PercentMaxHpBonus);
-        state.PlayerModifiers.FlatHpOnHit += Math.Max(0, card.Effects.FlatHpOnHit);
+        state.PlayerModifiers.FlatDamageBonus += Math.Max(0, scaledEffects.FlatDamageBonus);
+        state.PlayerModifiers.PercentDamageBonus += Math.Max(0, scaledEffects.PercentDamageBonus);
+        state.PlayerModifiers.PercentAttackSpeedBonus += Math.Max(0, scaledEffects.PercentAttackSpeedBonus);
+        state.PlayerModifiers.PercentMaxHpBonus += Math.Max(0, scaledEffects.PercentMaxHpBonus);
+        state.PlayerModifiers.FlatHpOnHit += Math.Max(0, scaledEffects.FlatHpOnHit);
         state.PlayerModifiers.GlobalCooldownReductionPercent = Math.Clamp(
-            state.PlayerModifiers.GlobalCooldownReductionPercent + Math.Max(0, card.Effects.GlobalCooldownReductionPercent),
+            state.PlayerModifiers.GlobalCooldownReductionPercent + Math.Max(0, scaledEffects.GlobalCooldownReductionPercent),
             0,
             MaxGlobalCooldownReductionPercent);
 
@@ -3232,12 +3406,20 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         return archetype.ToString();
     }
 
-    private static BattleCardOfferDto ToCardOfferDto(CardDefinition card)
+    private static BattleCardOfferDto ToCardOfferDto(StoredBattle state, CardDefinition card)
     {
+        var scaling = card.ScalingParams;
         return new BattleCardOfferDto(
             Id: card.Id,
             Name: card.Name,
-            Description: card.Description);
+            Description: card.Description,
+            Tags: card.Tags.ToArray(),
+            RarityWeight: card.RarityWeight,
+            MaxStacks: card.MaxStacks,
+            CurrentStacks: GetCardStackCount(state, card.Id),
+            ScalingParams: new BattleCardScalingParamsDto(
+                BaseStackMultiplierPercent: scaling.BaseStackMultiplierPercent,
+                AdditionalStackMultiplierPercent: scaling.AdditionalStackMultiplierPercent));
     }
 
     private static string BuildMobActorId(int slotIndex)
@@ -3700,16 +3882,61 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         }
 
         var selectedCardIds = state.SelectedCardIds.ToList();
-        if (selectedCardIds.Count != selectedCardIds.Distinct(StringComparer.Ordinal).Count())
-        {
-            throw new InvalidOperationException("Selected cards contain duplicates.");
-        }
-
         foreach (var selectedCardId in selectedCardIds)
         {
             if (!CardById.ContainsKey(selectedCardId))
             {
                 throw new InvalidOperationException($"Selected card id is invalid: '{selectedCardId}'.");
+            }
+        }
+
+        foreach (var (selectedCardId, stackCount) in state.SelectedCardStacks)
+        {
+            if (!CardById.TryGetValue(selectedCardId, out var definition))
+            {
+                throw new InvalidOperationException($"Selected card stack id is invalid: '{selectedCardId}'.");
+            }
+
+            if (stackCount < 1 || stackCount > definition.MaxStacks)
+            {
+                throw new InvalidOperationException(
+                    $"Selected card stack count is invalid for '{selectedCardId}': {stackCount}.");
+            }
+
+            var historyCount = selectedCardIds.Count(cardId =>
+                string.Equals(cardId, selectedCardId, StringComparison.Ordinal));
+            if (historyCount != stackCount)
+            {
+                throw new InvalidOperationException(
+                    $"Selected card stack count does not match history for '{selectedCardId}': history={historyCount}, stacks={stackCount}.");
+            }
+        }
+
+        var selectedCountByCard = selectedCardIds
+            .GroupBy(cardId => cardId, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
+        foreach (var (selectedCardId, selectedCount) in selectedCountByCard)
+        {
+            if (!CardById.TryGetValue(selectedCardId, out var definition))
+            {
+                throw new InvalidOperationException($"Selected card count id is invalid: '{selectedCardId}'.");
+            }
+
+            if (!state.SelectedCardStacks.TryGetValue(selectedCardId, out var stackCount))
+            {
+                throw new InvalidOperationException($"Missing selected card stack entry for '{selectedCardId}'.");
+            }
+
+            if (stackCount != selectedCount)
+            {
+                throw new InvalidOperationException(
+                    $"Selected card history count does not match stack count for '{selectedCardId}': history={selectedCount}, stacks={stackCount}.");
+            }
+
+            if (selectedCount > definition.MaxStacks)
+            {
+                throw new InvalidOperationException(
+                    $"Selected card history exceeds max stacks for '{selectedCardId}': history={selectedCount}, max={definition.MaxStacks}.");
             }
         }
 
@@ -3727,17 +3954,30 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                     $"Pending card offer count is invalid: {state.PendingCardChoice.OfferedCardIds.Count}.");
             }
 
+            if (state.PendingCardChoice.OfferedCardIds.Count !=
+                state.PendingCardChoice.OfferedCardIds.Distinct(StringComparer.Ordinal).Count())
+            {
+                throw new InvalidOperationException("Pending card offer contains duplicate ids.");
+            }
+
             foreach (var offeredCardId in state.PendingCardChoice.OfferedCardIds)
             {
-                if (!CardById.ContainsKey(offeredCardId))
+                if (!CardById.TryGetValue(offeredCardId, out var offeredDefinition))
                 {
                     throw new InvalidOperationException($"Pending offered card id is invalid: '{offeredCardId}'.");
                 }
 
-                if (state.SelectedCardIds.Contains(offeredCardId, StringComparer.Ordinal))
+                var stackCount = GetCardStackCount(state, offeredCardId);
+                if (stackCount >= offeredDefinition.MaxStacks)
                 {
                     throw new InvalidOperationException(
-                        $"Pending card offer contains an already selected card: '{offeredCardId}'.");
+                        $"Pending card offer contains a max-stacked card: '{offeredCardId}'.");
+                }
+
+                if (IsCardBannedByCurrentLoadout(state, offeredCardId))
+                {
+                    throw new InvalidOperationException(
+                        $"Pending card offer contains an incompatible card: '{offeredCardId}'.");
                 }
             }
         }
@@ -3939,6 +4179,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             PlayerModifiers playerModifiers,
             PendingCardChoiceState? pendingCardChoice,
             List<string> selectedCardIds,
+            Dictionary<string, int> selectedCardStacks,
             int cardSelectionsGranted,
             int nextCardChoiceSequence)
         {
@@ -3987,6 +4228,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             PlayerModifiers = playerModifiers;
             PendingCardChoice = pendingCardChoice;
             SelectedCardIds = selectedCardIds;
+            SelectedCardStacks = selectedCardStacks;
             CardSelectionsGranted = cardSelectionsGranted;
             NextCardChoiceSequence = nextCardChoiceSequence;
         }
@@ -4083,6 +4325,8 @@ public sealed partial class InMemoryBattleStore : IBattleStore
 
         public List<string> SelectedCardIds { get; }
 
+        public Dictionary<string, int> SelectedCardStacks { get; }
+
         public int CardSelectionsGranted { get; set; }
 
         public int NextCardChoiceSequence { get; set; }
@@ -4132,7 +4376,15 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         string Id,
         string Name,
         string Description,
+        IReadOnlyList<string> Tags,
+        int RarityWeight,
+        int MaxStacks,
+        CardScalingParams ScalingParams,
         CardEffectBundle Effects);
+
+    private sealed record CardScalingParams(
+        int BaseStackMultiplierPercent = 100,
+        int AdditionalStackMultiplierPercent = 100);
 
     private sealed record CardEffectBundle(
         int FlatDamageBonus = 0,

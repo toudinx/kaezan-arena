@@ -128,6 +128,8 @@ export class CanvasLayeredRenderer {
         this.drawAimDirectionGuides(scene, viewport);
         this.drawGroundTargetReticle(scene, viewport);
         this.drawLockedTargetMarker(scene, viewport);
+        this.drawMobReadabilityMarkers(scene, viewport);
+        this.drawThreatTargetMarker(scene, viewport);
         this.drawDamageNumbers(scene, viewport);
         this.drawFloatingTexts(scene, viewport);
       }
@@ -679,9 +681,29 @@ export class CanvasLayeredRenderer {
         this.context.beginPath();
         this.context.arc(centerX, centerY, scene.tileSize * 0.33, 0, Math.PI * 2);
         this.context.stroke();
+        this.drawPoiKeyHint(scene.tileSize, centerX, centerY);
       }
       this.context.restore();
     }
+  }
+
+  private drawPoiKeyHint(tileSize: number, centerX: number, centerY: number): void {
+    const hintWidth = tileSize * 0.32;
+    const hintHeight = tileSize * 0.22;
+    const x = centerX - hintWidth / 2;
+    const y = centerY - tileSize * 0.54;
+
+    this.context.fillStyle = "rgba(15, 23, 42, 0.9)";
+    this.context.fillRect(x, y, hintWidth, hintHeight);
+    this.context.strokeStyle = "rgba(251, 191, 36, 0.95)";
+    this.context.lineWidth = Math.max(1.5, tileSize * 0.03);
+    this.context.strokeRect(x, y, hintWidth, hintHeight);
+
+    this.context.fillStyle = "rgba(254, 243, 199, 0.95)";
+    this.context.font = `bold ${Math.max(9, Math.floor(tileSize * 0.18))}px monospace`;
+    this.context.textAlign = "center";
+    this.context.textBaseline = "middle";
+    this.context.fillText("F", centerX, y + hintHeight / 2);
   }
 
   private drawChestPoiMarker(tileSize: number, centerX: number, centerY: number, isSpeciesChest: boolean): void {
@@ -829,6 +851,169 @@ export class CanvasLayeredRenderer {
     this.context.lineTo(centerX - markerSize * 0.72, centerY - radius - markerSize * 2);
     this.context.lineTo(centerX + markerSize * 0.72, centerY - radius - markerSize * 2);
     this.context.closePath();
+    this.context.fill();
+    this.context.restore();
+  }
+
+  private drawMobReadabilityMarkers(scene: ArenaScene, viewport: RenderViewport): void {
+    const mobs = Object.values(scene.actorsById).filter((actor) => actor.kind === "mob");
+    if (mobs.length === 0) {
+      return;
+    }
+
+    this.drawEliteBuffLinkHints(scene, viewport, mobs);
+
+    for (const mob of mobs) {
+      const centerX = viewport.originX + (mob.tileX + 0.5) * scene.tileSize;
+      const centerY = viewport.originY + (mob.tileY + 0.5) * scene.tileSize;
+
+      if (mob.isElite === true) {
+        this.drawEliteMarker(scene.tileSize, centerX, centerY);
+        continue;
+      }
+
+      const isBuffedByElite = mob.isBuffedByElite === true || !!mob.buffSourceEliteId;
+      if (isBuffedByElite) {
+        this.drawEliteBuffedMarker(scene.tileSize, centerX, centerY);
+      }
+    }
+  }
+
+  private drawEliteBuffLinkHints(
+    scene: ArenaScene,
+    viewport: RenderViewport,
+    mobs: ReadonlyArray<ArenaScene["actorsById"][string]>
+  ): void {
+    const focusedMobId = scene.hoveredMobEntityId ?? scene.lockedTargetEntityId;
+    if (!focusedMobId) {
+      return;
+    }
+
+    const focusedMob = scene.actorsById[focusedMobId];
+    if (!focusedMob || focusedMob.kind !== "mob") {
+      return;
+    }
+
+    const links: Array<{ buffed: ArenaScene["actorsById"][string]; elite: ArenaScene["actorsById"][string] }> = [];
+    if (focusedMob.isElite === true) {
+      for (const mob of mobs) {
+        if (mob.actorId === focusedMob.actorId || mob.kind !== "mob") {
+          continue;
+        }
+
+        if (mob.buffSourceEliteId === focusedMob.actorId) {
+          links.push({ buffed: mob, elite: focusedMob });
+        }
+      }
+    } else if (focusedMob.buffSourceEliteId) {
+      const elite = scene.actorsById[focusedMob.buffSourceEliteId];
+      if (elite && elite.kind === "mob") {
+        links.push({ buffed: focusedMob, elite });
+      }
+    }
+
+    if (links.length === 0) {
+      return;
+    }
+
+    this.context.save();
+    this.context.strokeStyle = "rgba(253, 224, 71, 0.82)";
+    this.context.fillStyle = "rgba(253, 224, 71, 0.9)";
+    this.context.lineWidth = Math.max(1.5, scene.tileSize * 0.04);
+    this.context.setLineDash([scene.tileSize * 0.12, scene.tileSize * 0.08]);
+    for (const link of links) {
+      const buffedCenterX = viewport.originX + (link.buffed.tileX + 0.5) * scene.tileSize;
+      const buffedCenterY = viewport.originY + (link.buffed.tileY + 0.5) * scene.tileSize;
+      const eliteCenterX = viewport.originX + (link.elite.tileX + 0.5) * scene.tileSize;
+      const eliteCenterY = viewport.originY + (link.elite.tileY + 0.5) * scene.tileSize;
+
+      this.context.beginPath();
+      this.context.moveTo(buffedCenterX, buffedCenterY);
+      this.context.lineTo(eliteCenterX, eliteCenterY);
+      this.context.stroke();
+
+      this.context.beginPath();
+      this.context.arc(buffedCenterX, buffedCenterY, Math.max(1.5, scene.tileSize * 0.055), 0, Math.PI * 2);
+      this.context.fill();
+      this.context.beginPath();
+      this.context.arc(eliteCenterX, eliteCenterY, Math.max(2, scene.tileSize * 0.065), 0, Math.PI * 2);
+      this.context.fill();
+    }
+    this.context.setLineDash([]);
+    this.context.restore();
+  }
+
+  private drawEliteMarker(tileSize: number, centerX: number, centerY: number): void {
+    const radius = tileSize * 0.46;
+    const iconRadius = tileSize * 0.09;
+    const iconCenterY = centerY - radius - tileSize * 0.12;
+
+    this.context.save();
+    this.context.fillStyle = "rgba(245, 158, 11, 0.14)";
+    this.context.beginPath();
+    this.context.arc(centerX, centerY, radius, 0, Math.PI * 2);
+    this.context.fill();
+
+    this.context.strokeStyle = "rgba(245, 158, 11, 0.95)";
+    this.context.lineWidth = Math.max(2, tileSize * 0.05);
+    this.context.beginPath();
+    this.context.arc(centerX, centerY, radius, 0, Math.PI * 2);
+    this.context.stroke();
+
+    this.context.fillStyle = "rgba(254, 243, 199, 0.95)";
+    this.context.beginPath();
+    this.context.moveTo(centerX, iconCenterY - iconRadius);
+    this.context.lineTo(centerX + iconRadius, iconCenterY);
+    this.context.lineTo(centerX, iconCenterY + iconRadius);
+    this.context.lineTo(centerX - iconRadius, iconCenterY);
+    this.context.closePath();
+    this.context.fill();
+    this.context.restore();
+  }
+
+  private drawEliteBuffedMarker(tileSize: number, centerX: number, centerY: number): void {
+    const ringRadius = tileSize * 0.42;
+    const dotRadius = tileSize * 0.08;
+
+    this.context.save();
+    this.context.strokeStyle = "rgba(253, 224, 71, 0.72)";
+    this.context.lineWidth = Math.max(1.5, tileSize * 0.04);
+    this.context.beginPath();
+    this.context.arc(centerX, centerY, ringRadius, 0, Math.PI * 2);
+    this.context.stroke();
+
+    this.context.fillStyle = "rgba(253, 224, 71, 0.95)";
+    this.context.beginPath();
+    this.context.arc(centerX + ringRadius * 0.7, centerY - ringRadius * 0.35, dotRadius, 0, Math.PI * 2);
+    this.context.fill();
+    this.context.restore();
+  }
+
+  private drawThreatTargetMarker(scene: ArenaScene, viewport: RenderViewport): void {
+    if (!scene.threatMobEntityId) {
+      return;
+    }
+
+    const threatMob = scene.actorsById[scene.threatMobEntityId];
+    if (!threatMob || threatMob.kind !== "mob") {
+      return;
+    }
+
+    const centerX = viewport.originX + (threatMob.tileX + 0.5) * scene.tileSize;
+    const centerY = viewport.originY + (threatMob.tileY + 0.5) * scene.tileSize;
+    const markerY = centerY - scene.tileSize * 0.45;
+    const radius = scene.tileSize * 0.1;
+
+    this.context.save();
+    this.context.strokeStyle = "rgba(248, 113, 113, 0.92)";
+    this.context.lineWidth = Math.max(1.5, scene.tileSize * 0.04);
+    this.context.beginPath();
+    this.context.arc(centerX, markerY, radius * 1.35, 0, Math.PI * 2);
+    this.context.stroke();
+
+    this.context.fillStyle = "rgba(248, 113, 113, 0.92)";
+    this.context.beginPath();
+    this.context.arc(centerX, markerY, radius, 0, Math.PI * 2);
     this.context.fill();
     this.context.restore();
   }

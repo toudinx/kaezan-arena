@@ -109,7 +109,13 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
         return EquipItem(accountId, characterId, EquipmentSlot.Weapon, weaponInstanceId);
     }
 
-    public AwardDropsResult AwardDrops(string accountId, string characterId, string battleId, IReadOnlyList<DropSource> sources, int? battleSeed = null)
+    public AwardDropsResult AwardDrops(
+        string accountId,
+        string characterId,
+        string battleId,
+        IReadOnlyList<DropSource> sources,
+        string? runId = null,
+        int? battleSeed = null)
     {
         var account = GetOrCreateAccount(accountId);
         lock (account.Sync)
@@ -128,9 +134,10 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
             }
 
             var changed = false;
+            var normalizedRunId = string.IsNullOrWhiteSpace(runId) ? battleId : runId.Trim();
             foreach (var source in sources)
             {
-                var sourceKey = BuildSourceKey(battleId, source.Tick, source.SourceType, source.SourceId);
+                var sourceKey = BuildSourceKey(normalizedRunId, source.Tick, source.SourceType, source.SourceId);
                 if (alreadyAwardedBySourceKey.TryGetValue(sourceKey, out var existingEvents))
                 {
                     awarded.AddRange(existingEvents);
@@ -704,9 +711,9 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
         return species.Trim().ToLowerInvariant();
     }
 
-    private static string BuildSourceKey(string battleId, int tick, string sourceType, string sourceId)
+    private static string BuildSourceKey(string runId, int tick, string sourceType, string sourceId)
     {
-        return $"{battleId}:{tick}:{NormalizeSourceType(sourceType)}:{sourceId}";
+        return $"{runId}:{tick}:{NormalizeSourceType(sourceType)}:{sourceId}";
     }
 
     private static string NormalizeSourceType(string sourceType)

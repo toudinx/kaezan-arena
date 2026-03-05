@@ -34,6 +34,52 @@ describe("CanvasLayeredRenderer effective target marker", () => {
   });
 });
 
+describe("CanvasLayeredRenderer readability markers", () => {
+  it("draws elite buff-link hints when a buffed mob is hovered and marks last threat", () => {
+    const context = createContextStub();
+    const renderer = new CanvasLayeredRenderer(context.context as unknown as CanvasRenderingContext2D);
+    const viewport = {
+      canvasWidth: 480,
+      canvasHeight: 420,
+      originX: 0,
+      originY: 0
+    };
+    const scene = createScene();
+    scene.hoveredMobEntityId = "mob.99";
+    scene.threatMobEntityId = "mob.99";
+
+    (renderer as any).drawMobReadabilityMarkers(scene, viewport);
+    expect(context.setLineDashCallCount).toBeGreaterThan(0);
+
+    context.reset();
+    (renderer as any).drawThreatTargetMarker(scene, viewport);
+    expect(context.arcCallCount).toBeGreaterThan(0);
+  });
+
+  it("renders POI key hint for interactable POIs in range", () => {
+    const context = createContextStub();
+    const renderer = new CanvasLayeredRenderer(context.context as unknown as CanvasRenderingContext2D);
+    const viewport = {
+      canvasWidth: 480,
+      canvasHeight: 420,
+      originX: 0,
+      originY: 0
+    };
+    const scene = createScene();
+    scene.activePois = [
+      {
+        poiId: "poi.chest.1",
+        type: "chest",
+        pos: { x: 3, y: 4 },
+        remainingMs: 30_000
+      }
+    ];
+
+    (renderer as any).drawPoiMarkers(scene, viewport);
+    expect(context.fillTextValues).toContain("F");
+  });
+});
+
 describe("CanvasLayeredRenderer floating number palette", () => {
   it("resolves Tibia-style colors by damage context and element", () => {
     const context = createContextStub();
@@ -117,6 +163,8 @@ function createContextStub(): ContextStub {
 
   const stub: ContextStub = {
     arcCallCount: 0,
+    setLineDashCallCount: 0,
+    lineToCallCount: 0,
     fillTextCallCount: 0,
     fillTextValues: [],
     context: {
@@ -127,14 +175,20 @@ function createContextStub(): ContextStub {
       restore: () => undefined,
       beginPath: () => undefined,
       moveTo: () => undefined,
-      lineTo: () => undefined,
+      lineTo: () => {
+        stub.lineToCallCount += 1;
+      },
       closePath: () => undefined,
       arc: () => {
         stub.arcCallCount += 1;
       },
       stroke: () => undefined,
       fill: () => undefined,
-      setLineDash: () => undefined,
+      setLineDash: () => {
+        stub.setLineDashCallCount += 1;
+      },
+      fillRect: () => undefined,
+      strokeRect: () => undefined,
       drawImage: () => undefined,
       strokeText: () => undefined,
       fillText: (value: unknown) => {
@@ -144,6 +198,8 @@ function createContextStub(): ContextStub {
     },
     reset: () => {
       stub.arcCallCount = 0;
+      stub.setLineDashCallCount = 0;
+      stub.lineToCallCount = 0;
       stub.fillTextCallCount = 0;
       stub.fillTextValues = [];
     }
@@ -174,6 +230,7 @@ function createScene(): ArenaScene {
         actorId: "mob.42",
         kind: "mob",
         mobType: 4,
+        isElite: true,
         tileX: 4,
         tileY: 3,
         hp: 10,
@@ -183,6 +240,8 @@ function createScene(): ArenaScene {
         actorId: "mob.99",
         kind: "mob",
         mobType: 4,
+        isBuffedByElite: true,
+        buffSourceEliteId: "mob.42",
         tileX: 5,
         tileY: 3,
         hp: 10,
@@ -205,6 +264,8 @@ function createScene(): ArenaScene {
 
 interface ContextStub {
   arcCallCount: number;
+  setLineDashCallCount: number;
+  lineToCallCount: number;
   fillTextCallCount: number;
   fillTextValues: string[];
   context: {
@@ -221,6 +282,8 @@ interface ContextStub {
     stroke: (...args: unknown[]) => void;
     fill: (...args: unknown[]) => void;
     setLineDash: (...args: unknown[]) => void;
+    fillRect: (...args: unknown[]) => void;
+    strokeRect: (...args: unknown[]) => void;
     drawImage: (...args: unknown[]) => void;
     strokeText: (...args: unknown[]) => void;
     fillText: (...args: unknown[]) => void;

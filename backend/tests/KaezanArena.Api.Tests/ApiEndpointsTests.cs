@@ -564,6 +564,58 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
     }
 
     [Fact]
+    public async Task PostAwardDrops_IsIdempotentAcrossBattlesWhenRunIdMatches()
+    {
+        var state = await GetAccountStateAsync("dev_account_award_run_idempotent");
+        var character = state.Account.Characters[state.Account.ActiveCharacterId];
+        var initialEchoFragments = state.Account.EchoFragmentsBalance;
+        var initialKills = character.BestiaryKillsBySpecies.GetValueOrDefault("melee_brute", 0);
+        var initialPrimalCore = character.PrimalCoreBySpecies.GetValueOrDefault("melee_brute", 0);
+
+        const string runId = "run-idempotent-replay-01";
+        var firstRequest = new AwardDropsRequestDto(
+            AccountId: state.Account.AccountId,
+            CharacterId: character.CharacterId,
+            BattleId: "battle-run-idempotent-a",
+            Sources:
+            [
+                new DropSourceDto(
+                    Tick: 11,
+                    SourceType: "mob",
+                    SourceId: "mob.0011",
+                    Species: "melee_brute")
+            ],
+            RunId: runId);
+
+        var firstResponse = await _client.PostAsJsonAsync("/api/v1/account/award-drops", firstRequest);
+        var firstPayload = await firstResponse.Content.ReadFromJsonAsync<AwardDropsResponseDto>();
+        Assert.Equal(HttpStatusCode.OK, firstResponse.StatusCode);
+        Assert.NotNull(firstPayload);
+
+        var replayRequest = firstRequest with { BattleId = "battle-run-idempotent-b" };
+        var replayResponse = await _client.PostAsJsonAsync("/api/v1/account/award-drops", replayRequest);
+        var replayPayload = await replayResponse.Content.ReadFromJsonAsync<AwardDropsResponseDto>();
+        Assert.Equal(HttpStatusCode.OK, replayResponse.StatusCode);
+        Assert.NotNull(replayPayload);
+
+        var firstSignatures = firstPayload.Awarded
+            .Select(drop => $"{drop.DropEventId}|{drop.ItemId}|{drop.Quantity}|{drop.SourceId}|{drop.Tick}")
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToList();
+        var replaySignatures = replayPayload.Awarded
+            .Select(drop => $"{drop.DropEventId}|{drop.ItemId}|{drop.Quantity}|{drop.SourceId}|{drop.Tick}")
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToList();
+        Assert.Equal(firstSignatures, replaySignatures);
+
+        var finalState = await GetAccountStateAsync(state.Account.AccountId);
+        var finalCharacter = finalState.Account.Characters[character.CharacterId];
+        Assert.Equal(initialEchoFragments + 1, finalState.Account.EchoFragmentsBalance);
+        Assert.Equal(initialKills + 1, finalCharacter.BestiaryKillsBySpecies.GetValueOrDefault("melee_brute", 0));
+        Assert.Equal(initialPrimalCore + 1, finalCharacter.PrimalCoreBySpecies.GetValueOrDefault("melee_brute", 0));
+    }
+
+    [Fact]
     public async Task PostAwardDrops_MobKillAscendantDrop_WithControlledSeed_IsDeterministic()
     {
         const string accountId = "dev_account_ascendant_cap_deterministic";
@@ -679,6 +731,31 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
         Assert.Null(second.WeaponElement);
         AssertArenaInvariants(first.Actors, "player-seed-a");
         AssertArenaInvariants(second.Actors, "player-seed-b");
+
+        var firstMobTiles = first.Actors
+            .Where(actor => actor.Kind == "mob")
+            .OrderBy(actor => actor.ActorId, StringComparer.Ordinal)
+            .Select(actor => (actor.ActorId, actor.TileX, actor.TileY))
+            .ToList();
+        var secondMobTiles = second.Actors
+            .Where(actor => actor.Kind == "mob")
+            .OrderBy(actor => actor.ActorId, StringComparer.Ordinal)
+            .Select(actor => (actor.ActorId, actor.TileX, actor.TileY))
+            .ToList();
+
+        Assert.Equal(firstMobTiles, secondMobTiles);
+    }
+
+    [Fact]
+    public async Task PostBattleStart_WithSeedOverride_PrefersOverrideOverSeed()
+    {
+        const int seed = 11;
+        const int seedOverride = 1337;
+        var first = await StartBattleAsync("arena-seed-override-a", "player-seed-override-a", seed, seedOverride);
+        var second = await StartBattleAsync("arena-seed-override-b", "player-seed-override-b", seed, seedOverride);
+
+        Assert.Equal(seedOverride, first.Seed);
+        Assert.Equal(seedOverride, second.Seed);
 
         var firstMobTiles = first.Actors
             .Where(actor => actor.Kind == "mob")
@@ -4758,11 +4835,15 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
             string.Equals(itemId, "rel.ascendant_forged_emblem", StringComparison.Ordinal);
     }
 
-    private async Task<BattleStartResponseDto> StartBattleAsync(string arenaId, string playerId, int? seed)
+    private async Task<BattleStartResponseDto> StartBattleAsync(
+        string arenaId,
+        string playerId,
+        int? seed,
+        int? seedOverride = null)
     {
         var response = await _client.PostAsJsonAsync(
             "/api/v1/battle/start",
-            new BattleStartRequestDto(arenaId, playerId, seed));
+            new BattleStartRequestDto(arenaId, playerId, seed, seedOverride));
         var payload = await response.Content.ReadFromJsonAsync<BattleStartResponseDto>();
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);

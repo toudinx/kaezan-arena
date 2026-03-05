@@ -222,6 +222,9 @@ public sealed class AccountV1Controller : ControllerBase
         try
         {
             var normalizedBattleId = request.BattleId.Trim();
+            var normalizedRunId = string.IsNullOrWhiteSpace(request.RunId)
+                ? normalizedBattleId
+                : request.RunId.Trim();
             int? battleSeed = null;
             if (_battleStore.TryGetBattleSeed(normalizedBattleId, out var resolvedBattleSeed))
             {
@@ -233,6 +236,7 @@ public sealed class AccountV1Controller : ControllerBase
                 characterId: request.CharacterId.Trim(),
                 battleId: normalizedBattleId,
                 sources: parsedSources,
+                runId: normalizedRunId,
                 battleSeed: battleSeed);
 
             return Ok(new AwardDropsResponseDto(

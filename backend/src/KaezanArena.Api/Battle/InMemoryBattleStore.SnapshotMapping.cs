@@ -98,12 +98,12 @@ public sealed partial class InMemoryBattleStore
             : state.PendingCardChoice.OfferedCardIds
                 .Select(cardId => CardById.TryGetValue(cardId, out var definition) ? definition : null)
                 .Where(definition => definition is not null)
-                .Select(definition => ToCardOfferDto(definition!))
+                .Select(definition => ToCardOfferDto(state, definition!))
                 .ToList();
         var selectedCards = state.SelectedCardIds
             .Select(cardId => CardById.TryGetValue(cardId, out var definition) ? definition : null)
             .Where(definition => definition is not null)
-            .Select(definition => ToCardOfferDto(definition!))
+            .Select(definition => ToCardOfferDto(state, definition!))
             .ToList();
         var playerGlobalCooldownTotalMs = ResolvePlayerGlobalCooldownMs(state);
 

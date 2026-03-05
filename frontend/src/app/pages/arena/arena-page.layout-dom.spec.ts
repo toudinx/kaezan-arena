@@ -104,6 +104,12 @@ describe("ArenaPageComponent layout DOM", () => {
     fixture.componentInstance.runTotalKills = 143;
     fixture.componentInstance.runEliteKills = 17;
     fixture.componentInstance.runChestsOpened = 5;
+    fixture.componentInstance.economyTotalEchoFragments = 42;
+    fixture.componentInstance.economyTotalPrimalCore = 7;
+    fixture.componentInstance.runLootSourceMobCount = 12;
+    fixture.componentInstance.runLootSourceChestCount = 3;
+    fixture.componentInstance.runAwardedDropEventsCount = 15;
+    fixture.componentInstance.runAwardedItemDropCount = 4;
     fixture.componentInstance.selectedCards = [
       { id: "colossus_heart", name: "Colossus Heart", description: "" },
       { id: "avenger_instinct", name: "Avenger Instinct", description: "" }
@@ -118,6 +124,9 @@ describe("ArenaPageComponent layout DOM", () => {
     expect(overlay?.textContent).toContain("Total kills");
     expect(overlay?.textContent).toContain("Elite kills");
     expect(overlay?.textContent).toContain("Chests opened");
+    expect(overlay?.textContent).toContain("Run payout");
+    expect(overlay?.textContent).toContain("Echo Fragments from drops");
+    expect(overlay?.textContent).toContain("Primal Core from drops");
     expect(overlay?.textContent).toContain("Colossus Heart");
     expect(overlay?.textContent).toContain("Avenger Instinct");
   });

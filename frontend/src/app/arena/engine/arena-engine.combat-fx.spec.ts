@@ -124,6 +124,30 @@ describe("ArenaEngine combat fx mapping", () => {
     expect(applied.scene.damageNumbers[1]?.spawnOrder).toBe(1);
   });
 
+  it("tracks last mob attacker as threat marker candidate", () => {
+    const engine = new ArenaEngine();
+    const scene = engine.createTestScene(7, 7, 32);
+    const actors = createActors();
+    const skills: ArenaSkillState[] = [];
+    const events: ArenaBattleEvent[] = [
+      {
+        type: "damage_number",
+        sourceEntityId: "mob.test.01",
+        targetEntityId: "player.test",
+        targetTileX: 3,
+        targetTileY: 3,
+        damageAmount: 7,
+        isKill: false,
+        isCrit: false,
+        hitId: 92,
+        elementType: 6
+      }
+    ];
+
+    const applied = engine.applyBattleStep(scene, actors, skills, [], events);
+    expect(applied.scene.threatMobEntityId).toBe("mob.test.01");
+  });
+
   it("maps crit_text events and expires them by duration", () => {
     const engine = new ArenaEngine();
     const scene = engine.createTestScene(7, 7, 32);

@@ -62,6 +62,60 @@
                     </div>
                   }
                 </div>
+                <section class="analyzer-panel">
+                  <h4>Rolling Graph</h4>
+                  <div class="analyzer-chart">
+                    @for (series of combatRateSeriesViewModels; track series.kind) {
+                      <div class="analyzer-chart__series">
+                        <div class="analyzer-chart__header">
+                          <span>{{ series.label }}</span>
+                          <strong>{{ series.value }}</strong>
+                        </div>
+                        <div class="analyzer-chart__bars">
+                          @for (bar of series.bars; track bar.id) {
+                            <span
+                              class="analyzer-chart__bar"
+                              [attr.data-kind]="series.kind"
+                              [style.height.%]="bar.heightPercent"
+                              [title]="bar.tooltip"
+                            ></span>
+                          }
+                        </div>
+                      </div>
+                    }
+                  </div>
+                </section>
+                <section class="analyzer-panel">
+                  <h4>Elite Encounters</h4>
+                  @if (combatEliteTableRows.length === 0) {
+                    <p class="analyzer-empty">No elite encounters yet.</p>
+                  } @else {
+                    <div class="analyzer-table-wrap">
+                      <table class="analyzer-table">
+                        <thead>
+                          <tr>
+                            <th>Elite</th>
+                            <th>Status</th>
+                            <th>Spawn</th>
+                            <th>Uptime</th>
+                            <th>TTK</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          @for (row of combatEliteTableRows; track row.encounterId) {
+                            <tr>
+                              <td>{{ row.eliteLabel }}</td>
+                              <td>{{ row.status }}</td>
+                              <td>{{ row.spawnLabel }}</td>
+                              <td>{{ row.uptimeLabel }}</td>
+                              <td>{{ row.ttkLabel }}</td>
+                            </tr>
+                          }
+                        </tbody>
+                      </table>
+                    </div>
+                  }
+                </section>
                 <section class="analyzer-panel analyzer-panel--scaling">
                   <h4>Scaling Director</h4>
                   <div class="analyzer-grid">
@@ -73,9 +127,14 @@
                     }
                   </div>
                 </section>
-                <button type="button" class="analyzer-toggle" (click)="toggleCombatDetails()">
-                  {{ showCombatDetails ? "Hide Details" : "Show Details" }}
-                </button>
+                <div class="analyzer-actions">
+                  <button type="button" class="analyzer-toggle" (click)="exportCombatAnalyzerJson()">
+                    Export JSON
+                  </button>
+                  <button type="button" class="analyzer-toggle" (click)="toggleCombatDetails()">
+                    {{ showCombatDetails ? "Hide Details" : "Show Details" }}
+                  </button>
+                </div>
                 @if (showCombatDetails) {
                   <div class="combat-details__body">
                     @if (combatDetailLines.length === 0) {
@@ -109,6 +168,36 @@
                       </div>
                     }
                   </div>
+                </section>
+                <section class="analyzer-panel">
+                  <h4>Loot Sources (Run)</h4>
+                  <div class="analyzer-grid">
+                    @for (row of economySourceSummaryRows; track row.label) {
+                      <div class="analyzer-row">
+                        <span>{{ row.label }}</span>
+                        <strong>{{ row.value }}</strong>
+                      </div>
+                    }
+                  </div>
+                </section>
+                <section class="analyzer-panel">
+                  <h4>Craft / Refine Summary</h4>
+                  <div class="analyzer-grid">
+                    <div class="analyzer-row">
+                      <span>Crafted this run</span>
+                      <strong>{{ runCraftedItemsSummary.count }}</strong>
+                    </div>
+                    <div class="analyzer-row">
+                      <span>Refined this run</span>
+                      <strong>{{ runRefinedItemsSummary.count }}</strong>
+                    </div>
+                  </div>
+                  @if (runCraftedItemsSummary.preview) {
+                    <p class="analyzer-note">Crafted: {{ runCraftedItemsSummary.preview }}</p>
+                  }
+                  @if (runRefinedItemsSummary.preview) {
+                    <p class="analyzer-note">Refined: {{ runRefinedItemsSummary.preview }}</p>
+                  }
                 </section>
                 @if (economyLootPreview.length > 0) {
                   <section class="economy-loot">
@@ -243,7 +332,26 @@
 
       <div class="canvas-container">
         <div class="canvas-wrap" #canvasViewport>
-          <canvas #arenaCanvas (click)="onArenaCanvasClick($event)" (contextmenu)="onArenaCanvasContextMenu($event)"></canvas>
+          <canvas
+            #arenaCanvas
+            (click)="onArenaCanvasClick($event)"
+            (contextmenu)="onArenaCanvasContextMenu($event)"
+            (mousemove)="onArenaCanvasMouseMove($event)"
+            (mouseleave)="onArenaCanvasMouseLeave()"
+          ></canvas>
+          @if (interactPoiHint || healingAmplifierHint || altarCooldownHint) {
+            <div class="arena-hints-overlay">
+              @if (interactPoiHint) {
+                <p class="arena-hints-overlay__hint arena-hints-overlay__hint--poi">{{ interactPoiHint }}</p>
+              }
+              @if (healingAmplifierHint) {
+                <p class="arena-hints-overlay__hint">{{ healingAmplifierHint }}</p>
+              }
+              @if (altarCooldownHint) {
+                <p class="arena-hints-overlay__hint">{{ altarCooldownHint }}</p>
+              }
+            </div>
+          }
           @if (showBootOverlay) {
             <div class="loading-overlay">
               <p>{{ bootOverlayText }}</p>
@@ -401,6 +509,14 @@
             >
               Start Run
             </button>
+            <button
+              type="button"
+              class="pre-run-card__start"
+              (click)="replayLastRun()"
+              [disabled]="!canReplayLastRun"
+            >
+              {{ replayLastRunLabel }}
+            </button>
           </div>
         }
 
@@ -423,7 +539,7 @@
             <button
               type="button"
               (click)="onCardChoiceSelected(card.id)"
-              [disabled]="cardChoiceRequestInFlight"
+              [disabled]="cardChoiceRequestInFlight || isReplayInProgress"
             >
               {{ card.name }}: {{ card.description }}
             </button>
@@ -443,6 +559,15 @@
         <p class="run-complete__reason">{{ runCompleteReasonText }}</p>
         <section class="run-complete__stats run-complete__stats--summary">
           @for (row of runCompleteSummaryRows; track row.label) {
+            <div class="run-complete__stat-row">
+              <span>{{ row.label }}</span>
+              <strong>{{ row.value }}</strong>
+            </div>
+          }
+        </section>
+        <section class="run-complete__stats run-complete__stats--summary">
+          <h3>Run payout</h3>
+          @for (row of runPayoutRows; track row.label) {
             <div class="run-complete__stat-row">
               <span>{{ row.label }}</span>
               <strong>{{ row.value }}</strong>

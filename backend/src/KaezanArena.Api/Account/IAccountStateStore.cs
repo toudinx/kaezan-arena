@@ -10,7 +10,13 @@ public interface IAccountStateStore
 
     CharacterState EquipWeapon(string accountId, string characterId, string weaponInstanceId);
 
-    AwardDropsResult AwardDrops(string accountId, string characterId, string battleId, IReadOnlyList<DropSource> sources, int? battleSeed = null);
+    AwardDropsResult AwardDrops(
+        string accountId,
+        string characterId,
+        string battleId,
+        IReadOnlyList<DropSource> sources,
+        string? runId = null,
+        int? battleSeed = null);
 
     BestiaryCraftResult CraftBestiaryItem(string accountId, string speciesId, EquipmentSlot slot);
 

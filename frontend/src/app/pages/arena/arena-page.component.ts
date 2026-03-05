@@ -40,6 +40,7 @@ import {
 import {
   BattleApiService,
   ChooseCardRequest,
+  StartBattleRequest,
   StartBattleResponse,
   StepBattleRequest,
   StepBattleResponse
@@ -52,6 +53,7 @@ import {
   isReadyButBlockedByGcd
 } from "./skill-cooldown.helpers";
 import {
+  hitTestMobAtTile,
   resolvePointerCommand,
   screenToTile,
   type PointerActionKind
@@ -80,6 +82,18 @@ import {
   mapDamageNumbersToConsoleEntries,
   mergeDamageConsoleEntries
 } from "./damage-console.helpers";
+import {
+  buildCombatRateSeries,
+  computeCombatRollingRates,
+  computeCombatRollingTotals,
+  computeEliteTimelineSummary,
+  resolveRollingWindowSeconds,
+  type CombatMetricKind,
+  type CombatMetricSample,
+  type CombatRateSeries,
+  type EliteTimelineEvent,
+  type EliteTimelineSummary
+} from "./combat-analyzer.helpers";
 import { computeExpProgressPercent, computeUnifiedVitalsPercent, formatRunTimer } from "./arena-hud.helpers";
 
 type ApiActorState = NonNullable<StartBattleResponse["actors"]>[number];
@@ -131,12 +145,33 @@ type NarrativeEventType =
   | "elite_buff_applied"
   | "elite_buff_removed"
   | "run_ended";
-type CombatMetricKind = "damage_dealt" | "damage_taken" | "healing" | "shield_gained";
 type EconomyMetricKind = "xp" | "echo_fragments" | "primal_core";
 type TimedMetricSample<TKind extends string> = Readonly<{
   kind: TKind;
   amount: number;
   runTimeMs: number;
+}>;
+type CombatRateSeriesViewModel = Readonly<{
+  kind: CombatRateSeries["kind"];
+  label: string;
+  value: string;
+  bars: ReadonlyArray<Readonly<{ id: string; heightPercent: number; tooltip: string }>>;
+}>;
+type CombatEliteTableRow = Readonly<{
+  encounterId: string;
+  eliteLabel: string;
+  status: string;
+  spawnLabel: string;
+  uptimeLabel: string;
+  ttkLabel: string;
+}>;
+type EconomySourceSummaryRow = Readonly<{
+  label: string;
+  value: string;
+}>;
+type RunEquipmentSnapshot = Readonly<{
+  definitionId: string;
+  rarity: string | null;
 }>;
 type EventFeedEntry = Readonly<{
   id: string;
@@ -164,6 +199,27 @@ type ArenaCardOffer = Readonly<{
   name: string;
   description: string;
 }>;
+type RunRecordingBatch = Readonly<{
+  tick: number;
+  commands: StepCommand[];
+}>;
+type RunRecordingChoice = Readonly<{
+  tick: number;
+  choiceId: string;
+  selectedCardId: string;
+}>;
+type RunRecording = Readonly<{
+  runId: string;
+  battleSeed: number;
+  playerId: string;
+  commandBatches: RunRecordingBatch[];
+  cardChoices: RunRecordingChoice[];
+  awardedDropEventIds: string[];
+}>;
+type BeginRunOptions = Readonly<{
+  seedOverride: number | null;
+  replayRecording: RunRecording | null;
+}>;
 export const TOOLS_TAB_STORAGE_KEY = "kaezan_arena_tools_tab_v1";
 export const RIGHT_INFO_TAB_STORAGE_KEY = TOOLS_TAB_STORAGE_KEY;
 const AVALANCHE_SKILL_ID = "avalanche";
@@ -180,6 +236,11 @@ const COMBAT_DETAILS_MAX_LINES = 200;
 const ANALYZER_WINDOW_MS = 10_000;
 const ANALYZER_SAMPLE_RETENTION_MS = 45_000;
 const ECONOMY_LOOT_PREVIEW_MAX_ENTRIES = 8;
+const CRAFTED_EQUIPMENT_ITEM_IDS = new Set<string>([
+  "wpn.primal_forged_blade",
+  "arm.primal_forged_mail",
+  "rel.primal_forged_emblem"
+]);
 const EARLY_MOB_CONCURRENT_CAP = 6;
 const MAX_MOB_CONCURRENT_CAP = 10;
 const EARLY_MOB_CAP_DURATION_MS = 75_000;
@@ -318,13 +379,27 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   highlightedLogPanel: "damage" | "loot" | "exp" | null = null;
   eventFeedEntries: EventFeedEntry[] = [];
   combatDetailLines: string[] = [];
-  combatMetricSamples: TimedMetricSample<CombatMetricKind>[] = [];
+  combatMetricSamples: CombatMetricSample[] = [];
+  combatEliteEvents: EliteTimelineEvent[] = [];
   economyMetricSamples: TimedMetricSample<EconomyMetricKind>[] = [];
+  combatTotalDamageDealt = 0;
+  combatTotalDamageTaken = 0;
+  combatTotalHealingDone = 0;
+  combatTotalShieldGained = 0;
+  combatTotalShieldLost = 0;
   combatPeakHitDealt = 0;
   combatPeakHitTaken = 0;
   economyTotalXpGained = 0;
   economyTotalEchoFragments = 0;
   economyTotalPrimalCore = 0;
+  runLootSourceMobCount = 0;
+  runLootSourceChestCount = 0;
+  runAwardedDropEventsCount = 0;
+  runAwardedItemDropCount = 0;
+  runEchoFragmentsBalanceStart = 0;
+  runEchoFragmentsBalanceCurrent = 0;
+  runEchoFragmentsSpend = 0;
+  runEchoFragmentsIncome = 0;
   isHotkeysModalOpen = false;
   isPauseModalOpen = false;
   isDeathModalOpen = false;
@@ -356,6 +431,8 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   runLevel = RUN_INITIAL_LEVEL;
   runXp = RUN_INITIAL_XP;
   xpToNextLevel = this.computeRunXpToNextLevel(RUN_INITIAL_LEVEL);
+  lastRunRecording: RunRecording | null = null;
+  isReplayInProgress = false;
   private expLogSequence = 0;
   private eventFeedSequence = 0;
   private runEndedNarrativeLogged = false;
@@ -400,10 +477,19 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   private autoStepWasEnabledBeforePause = false;
   private autoStepWasEnabledBeforeCardChoice = false;
   private autoStepLoopRunId = 0;
+  private activeRunRecording: RunRecording | null = null;
+  private replayCommandBatches: RunRecordingBatch[] = [];
+  private replayCommandBatchIndex = 0;
+  private replayCardChoices: RunRecordingChoice[] = [];
+  private replayCardChoiceIndex = 0;
   private lastKnownViewportWidthCss = 0;
   private lastKnownViewportHeightCss = 0;
   private readyPulseSkillIds = new Set<string>();
   private readonly sentLootSourceKeys = new Set<string>();
+  private readonly seenAwardedDropEventIds = new Set<string>();
+  private readonly runAwardedSourceKeys = new Set<string>();
+  private runAwardScopeId = "";
+  private runStartCraftedSnapshotByInstanceId = new Map<string, RunEquipmentSnapshot>();
   assistConfig: ArenaAssistConfig = this.buildDefaultAssistConfig();
   readonly hotkeyGroups: ReadonlyArray<Readonly<{ title: string; entries: ReadonlyArray<string> }>> = [
     { title: "Movement", entries: ["W/A/S/D move", "Q/E/Z/C diagonal move", "Last input direction wins"] },
@@ -532,6 +618,24 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     ];
   }
 
+  get runPayoutRows(): ReadonlyArray<Readonly<{ label: string; value: string }>> {
+    const refinedSummary = this.runRefinedItemsSummary;
+    const craftedSummary = this.runCraftedItemsSummary;
+    return [
+      { label: "Loot sources (mob/chest)", value: `${this.runLootSourceMobCount} / ${this.runLootSourceChestCount}` },
+      { label: "Awarded drop events", value: String(this.runAwardedDropEventsCount) },
+      { label: "Equipment drops", value: String(this.runAwardedItemDropCount) },
+      {
+        label: "Echo Fragments flow",
+        value: `+${this.runEchoFragmentsIncome} / -${this.runEchoFragmentsSpend} (net ${this.runEchoFragmentsNet >= 0 ? "+" : ""}${this.runEchoFragmentsNet})`
+      },
+      { label: "Echo Fragments from drops", value: String(this.economyTotalEchoFragments) },
+      { label: "Primal Core from drops", value: String(this.economyTotalPrimalCore) },
+      { label: "Crafted items", value: `${craftedSummary.count}${craftedSummary.preview ? ` (${craftedSummary.preview})` : ""}` },
+      { label: "Refined items", value: `${refinedSummary.count}${refinedSummary.preview ? ` (${refinedSummary.preview})` : ""}` }
+    ];
+  }
+
   get itemCatalogByIdForUi(): Readonly<Record<string, ItemDefinition>> {
     return this.itemCatalogById;
   }
@@ -607,6 +711,23 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     return this.accountLoaded && !this.accountStateRequestInFlight && this.preRunCharacters.length === 0;
   }
 
+  get canReplayLastRun(): boolean {
+    return this.lastRunRecording !== null &&
+      this.bootPhase === "ready_to_start" &&
+      !this.accountStateRequestInFlight &&
+      !this.accountRequestInFlight &&
+      !this.battleRequestInFlight;
+  }
+
+  get replayLastRunLabel(): string {
+    const recording = this.lastRunRecording;
+    if (!recording) {
+      return "Replay Last Run";
+    }
+
+    return `Replay Last Run (seed ${recording.battleSeed}, ${recording.commandBatches.length} ticks)`;
+  }
+
   get statusTabRows(): ReadonlyArray<Readonly<{ label: string; value: string }>> {
     return [
       { label: "Run level", value: String(this.runLevel) },
@@ -624,21 +745,79 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     return Math.round(ANALYZER_WINDOW_MS / 1000);
   }
 
+  get combatRollingTotals() {
+    return computeCombatRollingTotals(this.combatMetricSamples, this.runTimeMs, ANALYZER_WINDOW_MS);
+  }
+
+  get combatRollingRates() {
+    const windowSeconds = resolveRollingWindowSeconds(this.runTimeMs, ANALYZER_WINDOW_MS);
+    return computeCombatRollingRates(this.combatRollingTotals, windowSeconds);
+  }
+
+  get combatEliteSummary(): EliteTimelineSummary {
+    return computeEliteTimelineSummary(this.combatEliteEvents, this.runTimeMs);
+  }
+
   get combatAnalyzerRows(): ReadonlyArray<Readonly<{ label: string; value: string }>> {
-    const windowSeconds = this.resolveRollingWindowSeconds();
-    const sums = this.computeCombatRollingSums();
-    const dps = sums.damageDealt / windowSeconds;
-    const dtps = sums.damageTaken / windowSeconds;
-    const hps = sums.healing / windowSeconds;
-    const shieldPerSecond = sums.shieldGained / windowSeconds;
+    const rates = this.combatRollingRates;
+    const eliteSummary = this.combatEliteSummary;
+    const averageTtkLabel = eliteSummary.averageTimeToKillMs === null
+      ? "--"
+      : formatRunTimer(Math.round(eliteSummary.averageTimeToKillMs));
     return [
-      { label: "DPS", value: this.formatPerSecond(dps) },
-      { label: "DTPS", value: this.formatPerSecond(dtps) },
-      { label: "HPS", value: this.formatPerSecond(hps) },
-      { label: "Shield/s", value: this.formatPerSecond(shieldPerSecond) },
+      { label: `DPS (${this.analyzerWindowSeconds}s)`, value: this.formatPerSecond(rates.dps) },
+      { label: `DTPS (${this.analyzerWindowSeconds}s)`, value: this.formatPerSecond(rates.dtps) },
+      { label: `HPS (${this.analyzerWindowSeconds}s)`, value: this.formatPerSecond(rates.hps) },
+      { label: `Shield+/s (${this.analyzerWindowSeconds}s)`, value: this.formatPerSecond(rates.shieldGainPerSecond) },
+      { label: `Shield-/s (${this.analyzerWindowSeconds}s)`, value: this.formatPerSecond(rates.shieldLossPerSecond) },
+      { label: "Total damage dealt", value: String(this.combatTotalDamageDealt) },
+      { label: "Total damage taken", value: String(this.combatTotalDamageTaken) },
+      { label: "Healing done", value: String(this.combatTotalHealingDone) },
+      { label: "Shields gained", value: String(this.combatTotalShieldGained) },
+      { label: "Shields lost", value: String(this.combatTotalShieldLost) },
+      { label: "Elite uptime", value: `${eliteSummary.uptimePercent.toFixed(1)}% (${formatRunTimer(eliteSummary.uptimeMs)})` },
+      { label: "Elite avg TTK", value: averageTtkLabel },
+      { label: "Elite active", value: String(eliteSummary.activeCount) },
       { label: "Peak hit dealt", value: String(this.combatPeakHitDealt) },
       { label: "Peak hit taken", value: String(this.combatPeakHitTaken) }
     ];
+  }
+
+  get combatRateSeriesViewModels(): ReadonlyArray<CombatRateSeriesViewModel> {
+    const series = buildCombatRateSeries(this.combatMetricSamples, this.runTimeMs, ANALYZER_WINDOW_MS, 10);
+    return series.map((entry) => {
+      const maxValue = Math.max(1, entry.maxValue);
+      return {
+        kind: entry.kind,
+        label: entry.label,
+        value: this.formatPerSecond(entry.latestValue),
+        bars: entry.points.map((point) => {
+          const normalized = point.value <= 0 ? 6 : (point.value / maxValue) * 100;
+          return {
+            id: `${entry.kind}:${point.index}`,
+            heightPercent: Math.max(6, Math.min(100, normalized)),
+            tooltip: `${entry.label}: ${point.value.toFixed(1)} (${formatRunTimer(point.startMs)} - ${formatRunTimer(point.endMs)})`
+          };
+        })
+      };
+    });
+  }
+
+  get combatEliteTableRows(): ReadonlyArray<CombatEliteTableRow> {
+    const rows = this.combatEliteSummary.rows.slice(-8).reverse();
+    return rows.map((row) => {
+      const species = mapMobTypeToSpecies(row.mobType);
+      const speciesLabel = species ? this.formatSpeciesLabel(species) : "Elite";
+      const ttkLabel = row.timeToKillMs === null ? "--" : formatRunTimer(row.timeToKillMs);
+      return {
+        encounterId: row.encounterId,
+        eliteLabel: `${speciesLabel} (${row.eliteEntityId})`,
+        status: row.isAlive ? "Alive" : "Defeated",
+        spawnLabel: formatRunTimer(row.spawnMs),
+        uptimeLabel: formatRunTimer(row.uptimeMs),
+        ttkLabel
+      };
+    });
   }
 
   get economyAnalyzerRows(): ReadonlyArray<Readonly<{ label: string; value: string }>> {
@@ -655,6 +834,54 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       { label: "Primal Core total", value: String(this.economyTotalPrimalCore) },
       { label: "Primal Core/s", value: this.formatPerSecond(primalPerSecond) }
     ];
+  }
+
+  get economySourceSummaryRows(): ReadonlyArray<EconomySourceSummaryRow> {
+    return [
+      { label: "Mob loot sources", value: String(this.runLootSourceMobCount) },
+      { label: "Chest loot sources", value: String(this.runLootSourceChestCount) },
+      { label: "Awarded events", value: String(this.runAwardedDropEventsCount) },
+      { label: "Equipment item drops", value: String(this.runAwardedItemDropCount) },
+      {
+        label: "Echo flow (+/-/net)",
+        value: `+${this.runEchoFragmentsIncome} / -${this.runEchoFragmentsSpend} / ${this.runEchoFragmentsNet >= 0 ? "+" : ""}${this.runEchoFragmentsNet}`
+      }
+    ];
+  }
+
+  get runEchoFragmentsNet(): number {
+    return this.runEchoFragmentsBalanceCurrent - this.runEchoFragmentsBalanceStart;
+  }
+
+  get runCraftedItemsSummary(): Readonly<{ count: number; preview: string }> {
+    const current = this.captureCurrentCraftedSnapshot();
+    const addedIds = [...current.keys()].filter((instanceId) => !this.runStartCraftedSnapshotByInstanceId.has(instanceId));
+    const preview = this.buildCraftedSummaryPreview(addedIds, current);
+    return {
+      count: addedIds.length,
+      preview
+    };
+  }
+
+  get runRefinedItemsSummary(): Readonly<{ count: number; preview: string }> {
+    const current = this.captureCurrentCraftedSnapshot();
+    const refinedIds: string[] = [];
+    for (const [instanceId, startSnapshot] of this.runStartCraftedSnapshotByInstanceId) {
+      const currentSnapshot = current.get(instanceId);
+      if (!currentSnapshot) {
+        continue;
+      }
+
+      if (this.resolveRarityRank(currentSnapshot.rarity) > this.resolveRarityRank(startSnapshot.rarity)) {
+        refinedIds.push(instanceId);
+      }
+    }
+
+    const preview = this.buildCraftedSummaryPreview(refinedIds, current);
+    return {
+      count: refinedIds.length,
+      preview
+    };
   }
 
   get scalingAnalyzerRows(): ReadonlyArray<Readonly<{ label: string; value: string }>> {
@@ -1183,17 +1410,56 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.enqueueCommand(command);
   }
 
+  onArenaCanvasMouseMove(event: MouseEvent): void {
+    if (!this.scene) {
+      return;
+    }
+
+    const tile = this.resolveTileFromMouseEvent(event);
+    const hoveredMobEntityId = tile
+      ? hitTestMobAtTile(Object.values(this.scene.actorsById), tile)
+      : null;
+    this.setHoveredMobEntityId(hoveredMobEntityId);
+  }
+
+  onArenaCanvasMouseLeave(): void {
+    this.setHoveredMobEntityId(null);
+  }
+
   stepOnce(): void {
     void this.stepBattleSafe();
   }
 
   async startRun(): Promise<void> {
     this.isInRun = true;
-    await this.beginNewRun();
+    await this.beginNewRun({
+      seedOverride: null,
+      replayRecording: null
+    });
   }
 
   async restartBattle(): Promise<void> {
-    await this.beginNewRun();
+    await this.beginNewRun({
+      seedOverride: null,
+      replayRecording: null
+    });
+  }
+
+  async replayLastRun(): Promise<void> {
+    const recording = this.lastRunRecording;
+    if (!recording || !this.canReplayLastRun) {
+      return;
+    }
+
+    if (this.accountState?.characters[recording.playerId]) {
+      this.selectedCharacterId = recording.playerId;
+    }
+
+    this.isInRun = true;
+    await this.beginNewRun({
+      seedOverride: recording.battleSeed,
+      replayRecording: this.cloneRunRecording(recording)
+    });
   }
 
   openPauseModal(): void {
@@ -1254,10 +1520,12 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.returnToPreRun();
   }
 
-  private async beginNewRun(): Promise<void> {
+  private async beginNewRun(options: BeginRunOptions): Promise<void> {
     this.stopAutoStepLoop();
     this.clearAssistConfigDebounce();
     this.clearMovementInputState();
+    this.clearReplaySessionState();
+    this.activeRunRecording = null;
     this.autoStepEnabled = false;
     this.queuedCommands = [];
     this.queuedCommandCount = 0;
@@ -1265,6 +1533,12 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.damageConsoleEntries = [];
     this.combatDetailLines = [];
     this.combatMetricSamples = [];
+    this.combatEliteEvents = [];
+    this.combatTotalDamageDealt = 0;
+    this.combatTotalDamageTaken = 0;
+    this.combatTotalHealingDone = 0;
+    this.combatTotalShieldGained = 0;
+    this.combatTotalShieldLost = 0;
     this.combatPeakHitDealt = 0;
     this.combatPeakHitTaken = 0;
     this.expConsoleEntries = [];
@@ -1275,6 +1549,18 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.economyTotalXpGained = 0;
     this.economyTotalEchoFragments = 0;
     this.economyTotalPrimalCore = 0;
+    this.runLootSourceMobCount = 0;
+    this.runLootSourceChestCount = 0;
+    this.runAwardedDropEventsCount = 0;
+    this.runAwardedItemDropCount = 0;
+    this.runEchoFragmentsIncome = 0;
+    this.runEchoFragmentsSpend = 0;
+    this.runEchoFragmentsBalanceStart = Math.max(0, this.accountState?.echoFragmentsBalance ?? 0);
+    this.runEchoFragmentsBalanceCurrent = this.runEchoFragmentsBalanceStart;
+    this.runAwardScopeId = "";
+    this.seenAwardedDropEventIds.clear();
+    this.runAwardedSourceKeys.clear();
+    this.runStartCraftedSnapshotByInstanceId = this.captureCurrentCraftedSnapshot();
     this.recentCommandResults = [];
     this.assistConfig = this.buildDefaultAssistConfig();
     this.bestiaryEntries = [];
@@ -1339,7 +1625,8 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
 
     try {
       this.bootPhase = "starting_battle";
-      await this.startBattle();
+      await this.startBattle(options.seedOverride);
+      this.configureRunRecordingMode(options.replayRecording);
       this.bootPhase = "running";
       this.renderEnabled = true;
       this.autoStepEnabled = true;
@@ -1355,6 +1642,211 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       this.battleLog = this.bootErrorMessage;
       console.error("[ArenaPage] beginNewRun failed", error);
     }
+  }
+
+  private configureRunRecordingMode(replayRecording: RunRecording | null): void {
+    this.activeRunRecording = null;
+    if (replayRecording) {
+      this.isReplayInProgress = true;
+      const replayRunId = typeof replayRecording.runId === "string" ? replayRecording.runId.trim() : "";
+      this.runAwardScopeId = replayRunId.length > 0
+        ? replayRunId
+        : `${replayRecording.playerId}:${replayRecording.battleSeed}`;
+      this.replayCommandBatches = replayRecording.commandBatches.map((batch) => ({
+        tick: batch.tick,
+        commands: this.cloneStepCommands(batch.commands)
+      }));
+      this.replayCardChoices = replayRecording.cardChoices.map((choice) => ({ ...choice }));
+      this.replayCommandBatchIndex = 0;
+      this.replayCardChoiceIndex = 0;
+      this.seenAwardedDropEventIds.clear();
+      for (const dropEventId of replayRecording.awardedDropEventIds) {
+        if (dropEventId.trim().length > 0) {
+          this.seenAwardedDropEventIds.add(dropEventId.trim());
+        }
+      }
+      this.battleLog = `Replay started: seed=${replayRecording.battleSeed}, ticks=${replayRecording.commandBatches.length}`;
+      return;
+    }
+
+    const playerId =
+      this.selectedCharacterId ||
+      this.accountState?.activeCharacterId ||
+      "player_demo";
+    const recording: RunRecording = {
+      runId: this.currentBattleId.trim().length > 0 ? this.currentBattleId.trim() : `run-${Date.now()}`,
+      battleSeed: this.currentSeed,
+      playerId,
+      commandBatches: [],
+      cardChoices: [],
+      awardedDropEventIds: []
+    };
+    this.runAwardScopeId = recording.runId;
+    this.activeRunRecording = recording;
+    this.lastRunRecording = this.cloneRunRecording(recording);
+  }
+
+  private clearReplaySessionState(): void {
+    this.isReplayInProgress = false;
+    this.replayCommandBatches = [];
+    this.replayCommandBatchIndex = 0;
+    this.replayCardChoices = [];
+    this.replayCardChoiceIndex = 0;
+  }
+
+  private cloneRunRecording(recording: RunRecording): RunRecording {
+    return {
+      runId: recording.runId,
+      battleSeed: recording.battleSeed,
+      playerId: recording.playerId,
+      commandBatches: recording.commandBatches.map((batch) => ({
+        tick: batch.tick,
+        commands: this.cloneStepCommands(batch.commands)
+      })),
+      cardChoices: recording.cardChoices.map((choice) => ({ ...choice })),
+      awardedDropEventIds: [...recording.awardedDropEventIds]
+    };
+  }
+
+  private cloneStepCommands(commands: ReadonlyArray<StepCommand>): StepCommand[] {
+    return commands.map((command) => this.cloneStepCommand(command));
+  }
+
+  private cloneStepCommand(command: StepCommand): StepCommand {
+    return {
+      ...command,
+      assistConfig: command.assistConfig
+        ? {
+            ...command.assistConfig,
+            autoSkills: command.assistConfig.autoSkills
+              ? { ...command.assistConfig.autoSkills }
+              : command.assistConfig.autoSkills
+          }
+        : command.assistConfig
+    };
+  }
+
+  private appendStepBatchToRecording(tick: number, commands: ReadonlyArray<StepCommand>): void {
+    if (!this.activeRunRecording) {
+      return;
+    }
+
+    const nextRecording: RunRecording = {
+      ...this.activeRunRecording,
+      commandBatches: [
+        ...this.activeRunRecording.commandBatches,
+        {
+          tick,
+          commands: this.cloneStepCommands(commands)
+        }
+      ]
+    };
+    this.activeRunRecording = nextRecording;
+    this.lastRunRecording = this.cloneRunRecording(nextRecording);
+  }
+
+  private appendCardChoiceToRecording(tick: number, choiceId: string, selectedCardId: string): void {
+    if (!this.activeRunRecording) {
+      return;
+    }
+
+    const nextRecording: RunRecording = {
+      ...this.activeRunRecording,
+      cardChoices: [
+        ...this.activeRunRecording.cardChoices,
+        { tick, choiceId, selectedCardId }
+      ]
+    };
+    this.activeRunRecording = nextRecording;
+    this.lastRunRecording = this.cloneRunRecording(nextRecording);
+  }
+
+  private appendAwardedDropIdsToRecording(dropEventIds: ReadonlyArray<string>): void {
+    if (!this.activeRunRecording || dropEventIds.length === 0) {
+      return;
+    }
+
+    const existing = new Set(this.activeRunRecording.awardedDropEventIds);
+    let changed = false;
+    for (const dropEventId of dropEventIds) {
+      const normalized = dropEventId.trim();
+      if (normalized.length === 0 || existing.has(normalized)) {
+        continue;
+      }
+
+      existing.add(normalized);
+      changed = true;
+    }
+
+    if (!changed) {
+      return;
+    }
+
+    const nextRecording: RunRecording = {
+      ...this.activeRunRecording,
+      awardedDropEventIds: [...existing]
+    };
+    this.activeRunRecording = nextRecording;
+    this.lastRunRecording = this.cloneRunRecording(nextRecording);
+  }
+
+  private resolveCommandsForNextStepRequest(): StepCommand[] {
+    if (!this.isReplayInProgress) {
+      this.pumpMovementBuffer();
+      return this.dequeuePendingCommands();
+    }
+
+    const nextBatch = this.replayCommandBatches[this.replayCommandBatchIndex];
+    if (!nextBatch) {
+      return [];
+    }
+
+    if (nextBatch.tick !== this.currentBattleTick) {
+      this.stopReplayWithError(
+        `Replay diverged at tick ${this.currentBattleTick}: expected recorded tick ${nextBatch.tick}.`
+      );
+      return [];
+    }
+
+    this.replayCommandBatchIndex += 1;
+    return this.cloneStepCommands(nextBatch.commands);
+  }
+
+  private async replayPendingCardChoiceIfNeeded(): Promise<void> {
+    if (!this.isReplayInProgress || !this.isAwaitingCardChoice || !this.pendingCardChoiceId) {
+      return;
+    }
+
+    const nextChoice = this.replayCardChoices[this.replayCardChoiceIndex];
+    if (!nextChoice) {
+      this.stopReplayWithError(`Replay diverged at tick ${this.currentBattleTick}: missing recorded card choice.`);
+      return;
+    }
+
+    if (nextChoice.tick !== this.currentBattleTick || nextChoice.choiceId !== this.pendingCardChoiceId) {
+      this.stopReplayWithError(
+        `Replay diverged at tick ${this.currentBattleTick}: expected choice ${nextChoice.choiceId} for ${nextChoice.tick}.`
+      );
+      return;
+    }
+
+    const offeredCardIds = new Set(this.offeredCards.map((card) => card.id));
+    if (!offeredCardIds.has(nextChoice.selectedCardId)) {
+      this.stopReplayWithError(
+        `Replay diverged at tick ${this.currentBattleTick}: card '${nextChoice.selectedCardId}' is not offered.`
+      );
+      return;
+    }
+
+    this.replayCardChoiceIndex += 1;
+    await this.chooseCard(nextChoice.selectedCardId, { recordChoice: false });
+  }
+
+  private stopReplayWithError(message: string): void {
+    this.clearReplaySessionState();
+    this.autoStepEnabled = false;
+    this.stopAutoStepLoop();
+    this.battleLog = message;
   }
 
   exitBattle(): void {
@@ -1942,14 +2434,32 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       this.battleRequestInFlight ||
       this.cardChoiceRequestInFlight ||
       !this.currentBattleId ||
-      this.isAwaitingCardChoice ||
       this.isTerminalBattleStatus(this.battleStatus)
     ) {
       return;
     }
 
-    this.pumpMovementBuffer();
-    const commandsToSend = this.dequeuePendingCommands();
+    if (this.isAwaitingCardChoice) {
+      await this.replayPendingCardChoiceIfNeeded();
+      return;
+    }
+
+    if (this.isReplayInProgress && this.replayCommandBatchIndex >= this.replayCommandBatches.length) {
+      const replayedTicks = this.replayCommandBatchIndex;
+      this.clearReplaySessionState();
+      this.autoStepEnabled = false;
+      this.stopAutoStepLoop();
+      this.battleLog = `Replay finished: ${replayedTicks} recorded ticks applied.`;
+      return;
+    }
+
+    const requestTick = this.currentBattleTick;
+    const commandsToSend = this.resolveCommandsForNextStepRequest();
+    if (!this.isReplayInProgress) {
+      this.appendStepBatchToRecording(requestTick, commandsToSend);
+    }
+
+    let shouldReplayCardChoice = false;
     this.runInAngularZone(() => {
       this.battleRequestInFlight = true;
     });
@@ -1974,10 +2484,14 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         this.appendCommandResultLogs(response.commandResults, commandsToSend);
         this.syncUiMetaState();
         this.battleLog = JSON.stringify(response, null, 2);
-        if (this.isAwaitingCardChoice) {
+        if (this.isAwaitingCardChoice && !this.isReplayInProgress) {
           this.autoStepWasEnabledBeforeCardChoice = this.autoStepEnabled;
           this.autoStepEnabled = false;
           this.stopAutoStepLoop();
+        }
+
+        if (this.isAwaitingCardChoice && this.isReplayInProgress) {
+          shouldReplayCardChoice = true;
         }
 
         if (this.isTerminalBattleStatus(this.battleStatus)) {
@@ -1991,7 +2505,9 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       }
     } catch (error) {
       this.runInAngularZone(() => {
-        this.requeueCommands(commandsToSend);
+        if (!this.isReplayInProgress) {
+          this.requeueCommands(commandsToSend);
+        }
         this.battleStatus = "error";
         this.syncUiMetaState();
         this.battleLog = `stepBattle failed: ${String(error)}`;
@@ -2004,9 +2520,16 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         this.battleRequestInFlight = false;
       });
     }
+
+    if (shouldReplayCardChoice) {
+      await this.replayPendingCardChoiceIfNeeded();
+    }
   }
 
-  private async chooseCard(selectedCardId: string): Promise<void> {
+  private async chooseCard(
+    selectedCardId: string,
+    options: Readonly<{ recordChoice: boolean }> = { recordChoice: true }
+  ): Promise<void> {
     if (
       this.cardChoiceRequestInFlight ||
       this.battleRequestInFlight ||
@@ -2030,6 +2553,14 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
 
     let shouldResumeAutoStep = false;
     try {
+      if (options.recordChoice) {
+        this.appendCardChoiceToRecording(
+          this.currentBattleTick,
+          request.choiceId,
+          selectedCardId
+        );
+      }
+
       const response = await this.battleApi.chooseCard(request);
       this.runInAngularZone(() => {
         this.currentBattleId = response.battleId ?? this.currentBattleId;
@@ -2069,7 +2600,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     }
   }
 
-  private async startBattle(): Promise<void> {
+  private async startBattle(seedOverride: number | null): Promise<void> {
     if (this.battleRequestInFlight) {
       return;
     }
@@ -2082,10 +2613,16 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         this.selectedCharacterId ||
         this.accountState?.activeCharacterId ||
         "player_demo";
-      const response = await this.battleApi.startBattle({
+      const request: StartBattleRequest & { seedOverride?: number | null } = {
         arenaId: "arena_demo",
         playerId
-      });
+      };
+      if (typeof seedOverride === "number") {
+        request.seed = seedOverride;
+        request.seedOverride = seedOverride;
+      }
+
+      const response = await this.battleApi.startBattle(request);
 
       this.runInAngularZone(() => {
         this.currentBattleId = response.battleId ?? "";
@@ -2168,6 +2705,8 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     if (!this.selectedCharacterId || !account.characters[this.selectedCharacterId]) {
       this.selectedCharacterId = this.resolvePreferredCharacterId(account);
     }
+
+    this.syncRunEchoBalance(account.echoFragmentsBalance);
   }
 
   private updateCharacterSnapshot(character: CharacterState): void {
@@ -2201,10 +2740,109 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       echoFragmentsBalance: salvaged.echoFragmentsBalance,
       characters: nextCharacters
     };
+    this.syncRunEchoBalance(salvaged.echoFragmentsBalance);
   }
 
   private resolveItemDisplayName(itemId: string): string {
     return this.itemCatalogById[itemId]?.displayName ?? itemId;
+  }
+
+  private captureCurrentCraftedSnapshot(): Map<string, RunEquipmentSnapshot> {
+    const snapshot = new Map<string, RunEquipmentSnapshot>();
+    const character = this.selectedCharacter;
+    if (!character) {
+      return snapshot;
+    }
+
+    for (const [instanceId, equipment] of Object.entries(character.inventory.equipmentInstances)) {
+      if (!CRAFTED_EQUIPMENT_ITEM_IDS.has(equipment.definitionId)) {
+        continue;
+      }
+
+      snapshot.set(instanceId, {
+        definitionId: equipment.definitionId,
+        rarity: this.normalizeEquipmentRarity(equipment.rarity)
+      });
+    }
+
+    return snapshot;
+  }
+
+  private buildCraftedSummaryPreview(
+    instanceIds: ReadonlyArray<string>,
+    snapshot: ReadonlyMap<string, RunEquipmentSnapshot>
+  ): string {
+    if (instanceIds.length === 0) {
+      return "";
+    }
+
+    const labels = instanceIds
+      .slice(0, 2)
+      .map((instanceId) => {
+        const entry = snapshot.get(instanceId);
+        if (!entry) {
+          return instanceId;
+        }
+
+        const rarityLabel = entry.rarity ? ` (${entry.rarity})` : "";
+        return `${this.resolveItemDisplayName(entry.definitionId)}${rarityLabel}`;
+      });
+
+    const suffix = instanceIds.length > labels.length ? ` +${instanceIds.length - labels.length} more` : "";
+    return `${labels.join(", ")}${suffix}`;
+  }
+
+  private normalizeEquipmentRarity(rarity: string | null | undefined): string | null {
+    if (!rarity || rarity.trim().length === 0) {
+      return null;
+    }
+
+    return rarity.trim().toLowerCase();
+  }
+
+  private resolveRarityRank(rarity: string | null): number {
+    if (!rarity) {
+      return 0;
+    }
+
+    if (rarity === "common") {
+      return 1;
+    }
+
+    if (rarity === "rare") {
+      return 2;
+    }
+
+    if (rarity === "epic") {
+      return 3;
+    }
+
+    if (rarity === "legendary") {
+      return 4;
+    }
+
+    if (rarity === "ascendant") {
+      return 5;
+    }
+
+    return 0;
+  }
+
+  private syncRunEchoBalance(nextBalance: number): void {
+    const safeNextBalance = Math.max(0, Math.floor(nextBalance));
+    if (!this.isInRun) {
+      this.runEchoFragmentsBalanceCurrent = safeNextBalance;
+      return;
+    }
+
+    const delta = safeNextBalance - this.runEchoFragmentsBalanceCurrent;
+    if (delta > 0) {
+      this.runEchoFragmentsIncome += delta;
+    } else if (delta < 0) {
+      this.runEchoFragmentsSpend += Math.abs(delta);
+    }
+
+    this.runEchoFragmentsBalanceCurrent = safeNextBalance;
   }
 
   private resolvePreferredCharacterId(account: AccountState): string {
@@ -2398,24 +3036,38 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       return;
     }
 
-    const dedupedSources = dedupeDropSources(battleId, sources, this.sentLootSourceKeys);
+    const awardScopeId = this.runAwardScopeId.trim().length > 0 ? this.runAwardScopeId : battleId;
+    const dedupedSources = dedupeDropSources(awardScopeId, sources, this.sentLootSourceKeys);
     if (dedupedSources.length === 0) {
       return;
     }
 
-    const dedupedKeys = dedupedSources.map((source) => buildDropSourceKey(battleId, source));
+    const dedupedKeys = dedupedSources.map((source) => buildDropSourceKey(awardScopeId, source));
     try {
       const response = await this.accountApi.awardDrops(
         this.accountId,
         character.characterId,
         battleId,
-        dedupedSources
+        dedupedSources,
+        awardScopeId
       );
 
+      const newlyAwarded = response.awarded.filter((drop) => {
+        if (this.seenAwardedDropEventIds.has(drop.dropEventId)) {
+          return false;
+        }
+
+        this.seenAwardedDropEventIds.add(drop.dropEventId);
+        return true;
+      });
       this.runInAngularZone(() => {
         this.updateCharacterSnapshot(response.character);
-        this.lootFeed = [...response.awarded, ...this.lootFeed].slice(0, 50);
-        this.recordEconomyMetricsFromDrops(response.awarded);
+        this.recordRunLootSourcesFromRequest(dedupedSources);
+        if (newlyAwarded.length > 0) {
+          this.lootFeed = [...newlyAwarded, ...this.lootFeed].slice(0, 50);
+          this.recordEconomyMetricsFromDrops(newlyAwarded);
+          this.recordRunPayoutFromAwardedDrops(newlyAwarded);
+        }
       });
     } catch (error) {
       for (const key of dedupedKeys) {
@@ -2425,6 +3077,44 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       this.runInAngularZone(() => {
         this.battleLog = `awardDrops failed: ${String(error)}`;
       });
+    }
+  }
+
+  private recordRunPayoutFromAwardedDrops(awarded: ReadonlyArray<DropEvent>): void {
+    if (awarded.length === 0) {
+      return;
+    }
+
+    if (!this.isReplayInProgress) {
+      this.appendAwardedDropIdsToRecording(awarded.map((drop) => drop.dropEventId));
+    }
+
+    this.runAwardedDropEventsCount += awarded.length;
+    this.runAwardedItemDropCount += awarded.filter((drop) => drop.rewardKind === "item").length;
+
+    for (const drop of awarded) {
+      if (drop.rewardKind === "echo_fragments") {
+        const quantity = Math.max(0, Math.floor(drop.quantity ?? 0));
+        this.runEchoFragmentsIncome += quantity;
+        this.runEchoFragmentsBalanceCurrent += quantity;
+      }
+    }
+  }
+
+  private recordRunLootSourcesFromRequest(sources: ReadonlyArray<DropSource>): void {
+    for (const source of sources) {
+      const sourceType = source.sourceType === "chest" ? "chest" : "mob";
+      const sourceKey = `${sourceType}:${source.tick}:${source.sourceId}`;
+      if (this.runAwardedSourceKeys.has(sourceKey)) {
+        continue;
+      }
+
+      this.runAwardedSourceKeys.add(sourceKey);
+      if (sourceType === "chest") {
+        this.runLootSourceChestCount += 1;
+      } else {
+        this.runLootSourceMobCount += 1;
+      }
     }
   }
 
@@ -2684,6 +3374,10 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         actorId: typedActor.actorId,
         kind: typedActor.kind,
         mobType: this.readMobArchetypeValue((typedActor as Record<string, unknown>)["mobType"]) ?? undefined,
+        isElite: this.readBoolean((typedActor as Record<string, unknown>)["isElite"]) ?? false,
+        isBuffedByElite: this.readBoolean((typedActor as Record<string, unknown>)["isBuffedByElite"]) ?? false,
+        buffSourceEliteId: this.readString((typedActor as Record<string, unknown>)["buffSourceEliteId"]) ?? null,
+        currentTargetId: this.readString((typedActor as Record<string, unknown>)["currentTargetId"]) ?? null,
         tileX: typedActor.tileX ?? 0,
         tileY: typedActor.tileY ?? 0,
         hp: typedActor.hp ?? 0,
@@ -3256,6 +3950,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.runTotalKills = Math.max(0, Math.floor(parsedTotalKills ?? this.runTotalKills));
     this.runEliteKills = Math.max(0, Math.floor(parsedEliteKills ?? this.runEliteKills));
     this.runChestsOpened = Math.max(0, Math.floor(parsedChestsOpened ?? this.runChestsOpened));
+    this.recordEliteTimelineEventsFromSnapshot(snapshot);
     this.appendExpLogsFromSnapshot(snapshot);
     this.appendEventFeedFromSnapshot(snapshot);
   }
@@ -3455,6 +4150,14 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.showCombatDetails = !this.showCombatDetails;
   }
 
+  exportCombatAnalyzerJson(): void {
+    const payload = this.buildCombatAnalyzerExportPayload();
+    const battleId = this.currentBattleId.trim().length > 0 ? this.currentBattleId : "run";
+    const safeBattleId = battleId.replace(/[^a-zA-Z0-9._-]+/g, "_");
+    const filename = `combat-analyzer-${safeBattleId}-t${this.currentBattleTick}.json`;
+    this.downloadJsonFile(filename, payload);
+  }
+
   private appendEventFeedFromSnapshot(snapshot: StartBattleResponse | StepBattleResponse): void {
     const tick = Math.max(0, this.readNumber((snapshot as Record<string, unknown>)["tick"]) ?? this.currentBattleTick);
     const runTimeMs = this.runTimeMs;
@@ -3512,6 +4215,139 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     if (this.selectedTopLeftTab === "events") {
       this.scrollConsoleToBottom(this.topLeftPanelRef, ".events-feed");
     }
+  }
+
+  private buildCombatAnalyzerExportPayload() {
+    const rollingTotals = this.combatRollingTotals;
+    const rollingWindowSeconds = resolveRollingWindowSeconds(this.runTimeMs, ANALYZER_WINDOW_MS);
+    const rollingRates = computeCombatRollingRates(rollingTotals, rollingWindowSeconds);
+    const eliteSummary = this.combatEliteSummary;
+    const series = buildCombatRateSeries(this.combatMetricSamples, this.runTimeMs, ANALYZER_WINDOW_MS, 10);
+
+    return {
+      version: 1,
+      exportedAtIso: new Date().toISOString(),
+      battleId: this.currentBattleId || null,
+      tick: this.currentBattleTick,
+      runTimeMs: this.runTimeMs,
+      analyzerWindowMs: ANALYZER_WINDOW_MS,
+      rolling: {
+        totals: rollingTotals,
+        rates: {
+          dps: Number(rollingRates.dps.toFixed(2)),
+          dtps: Number(rollingRates.dtps.toFixed(2)),
+          hps: Number(rollingRates.hps.toFixed(2)),
+          shieldGainPerSecond: Number(rollingRates.shieldGainPerSecond.toFixed(2)),
+          shieldLossPerSecond: Number(rollingRates.shieldLossPerSecond.toFixed(2))
+        }
+      },
+      totals: {
+        damageDealt: this.combatTotalDamageDealt,
+        damageTaken: this.combatTotalDamageTaken,
+        healingDone: this.combatTotalHealingDone,
+        shieldsGained: this.combatTotalShieldGained,
+        shieldsLost: this.combatTotalShieldLost
+      },
+      peaks: {
+        hitDealt: this.combatPeakHitDealt,
+        hitTaken: this.combatPeakHitTaken
+      },
+      elite: {
+        encounters: eliteSummary.encounters,
+        kills: eliteSummary.kills,
+        activeCount: eliteSummary.activeCount,
+        uptimeMs: eliteSummary.uptimeMs,
+        uptimePercent: Number(eliteSummary.uptimePercent.toFixed(2)),
+        averageTimeToKillMs: eliteSummary.averageTimeToKillMs === null ? null : Math.round(eliteSummary.averageTimeToKillMs),
+        fastestTimeToKillMs: eliteSummary.fastestTimeToKillMs,
+        slowestTimeToKillMs: eliteSummary.slowestTimeToKillMs,
+        rows: eliteSummary.rows.map((row) => ({
+          encounterId: row.encounterId,
+          eliteEntityId: row.eliteEntityId,
+          species: mapMobTypeToSpecies(row.mobType),
+          spawnMs: row.spawnMs,
+          despawnMs: row.despawnMs,
+          uptimeMs: row.uptimeMs,
+          timeToKillMs: row.timeToKillMs,
+          isAlive: row.isAlive
+        }))
+      },
+      graphSeries: series.map((entry) => ({
+        kind: entry.kind,
+        label: entry.label,
+        latestValue: Number(entry.latestValue.toFixed(2)),
+        maxValue: Number(entry.maxValue.toFixed(2)),
+        points: entry.points.map((point) => ({
+          startMs: point.startMs,
+          endMs: point.endMs,
+          value: Number(point.value.toFixed(2))
+        }))
+      }))
+    };
+  }
+
+  private downloadJsonFile(fileName: string, payload: unknown): void {
+    const jsonText = JSON.stringify(payload, null, 2);
+    if (
+      typeof document === "undefined" ||
+      typeof Blob === "undefined" ||
+      typeof URL === "undefined" ||
+      typeof URL.createObjectURL !== "function"
+    ) {
+      this.battleLog = jsonText;
+      return;
+    }
+
+    try {
+      const blob = new Blob([jsonText], { type: "application/json" });
+      const objectUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = objectUrl;
+      anchor.download = fileName;
+      anchor.style.display = "none";
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      URL.revokeObjectURL(objectUrl);
+      this.battleLog = `Combat analyzer export downloaded (${fileName}).`;
+    } catch (error) {
+      this.battleLog = `Combat analyzer export failed: ${String(error)}`;
+    }
+  }
+
+  private recordEliteTimelineEventsFromSnapshot(snapshot: StartBattleResponse | StepBattleResponse): void {
+    const eventsValue = (snapshot as Record<string, unknown>)["events"];
+    if (!Array.isArray(eventsValue) || eventsValue.length === 0) {
+      return;
+    }
+
+    const timelineEvents: EliteTimelineEvent[] = [];
+    for (const event of eventsValue) {
+      const eventRecord = event as Record<string, unknown>;
+      const type = this.readString(eventRecord["type"]);
+      if (type !== "elite_spawned" && type !== "elite_died") {
+        continue;
+      }
+
+      const eliteEntityId = this.readString(eventRecord["eliteEntityId"]);
+      if (!eliteEntityId) {
+        continue;
+      }
+
+      const mobTypeValue = this.readNumber(eventRecord["mobType"]);
+      timelineEvents.push({
+        kind: type === "elite_spawned" ? "spawned" : "died",
+        eliteEntityId,
+        runTimeMs: this.runTimeMs,
+        mobType: mobTypeValue === null ? null : Math.floor(mobTypeValue)
+      });
+    }
+
+    if (timelineEvents.length === 0) {
+      return;
+    }
+
+    this.combatEliteEvents = [...this.combatEliteEvents, ...timelineEvents];
   }
 
   private toNarrativeEventType(rawType: string): NarrativeEventType | null {
@@ -3645,6 +4481,10 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         continue;
       }
 
+      if (event.isShieldChange && event.shieldChangeDirection === "loss") {
+        this.recordCombatMetricSample("shield_lost", amount, runtimeMs);
+      }
+
       if (event.isDamageReceived) {
         this.recordCombatMetricSample("damage_taken", amount, runtimeMs);
         this.combatPeakHitTaken = Math.max(this.combatPeakHitTaken, amount);
@@ -3678,7 +4518,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   private parseCombatMetricSampleFromLegacyLogLine(
     line: string,
     runTimeMs: number
-  ): TimedMetricSample<CombatMetricKind> | null {
+  ): CombatMetricSample | null {
     const match = /(?:^|\s)([+-])(\d+)(?:\s|$)/.exec(line);
     if (!match) {
       return null;
@@ -3699,6 +4539,18 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   }
 
   private recordCombatMetricSample(kind: CombatMetricKind, amount: number, runTimeMs: number): void {
+    if (kind === "damage_dealt") {
+      this.combatTotalDamageDealt += amount;
+    } else if (kind === "damage_taken") {
+      this.combatTotalDamageTaken += amount;
+    } else if (kind === "healing") {
+      this.combatTotalHealingDone += amount;
+    } else if (kind === "shield_gained") {
+      this.combatTotalShieldGained += amount;
+    } else if (kind === "shield_lost") {
+      this.combatTotalShieldLost += amount;
+    }
+
     this.combatMetricSamples = [
       ...this.combatMetricSamples,
       { kind, amount, runTimeMs }
@@ -3741,37 +4593,6 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     }
   }
 
-  private computeCombatRollingSums(): Readonly<{
-    damageDealt: number;
-    damageTaken: number;
-    healing: number;
-    shieldGained: number;
-  }> {
-    const windowStartMs = Math.max(0, this.runTimeMs - ANALYZER_WINDOW_MS);
-    let damageDealt = 0;
-    let damageTaken = 0;
-    let healing = 0;
-    let shieldGained = 0;
-
-    for (const sample of this.combatMetricSamples) {
-      if (sample.runTimeMs < windowStartMs) {
-        continue;
-      }
-
-      if (sample.kind === "damage_dealt") {
-        damageDealt += sample.amount;
-      } else if (sample.kind === "damage_taken") {
-        damageTaken += sample.amount;
-      } else if (sample.kind === "healing") {
-        healing += sample.amount;
-      } else if (sample.kind === "shield_gained") {
-        shieldGained += sample.amount;
-      }
-    }
-
-    return { damageDealt, damageTaken, healing, shieldGained };
-  }
-
   private computeEconomyRollingSums(): Readonly<{
     xp: number;
     echoFragments: number;
@@ -3800,8 +4621,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   }
 
   private resolveRollingWindowSeconds(): number {
-    const elapsedInWindowMs = Math.max(1000, Math.min(ANALYZER_WINDOW_MS, this.runTimeMs));
-    return elapsedInWindowMs / 1000;
+    return resolveRollingWindowSeconds(this.runTimeMs, ANALYZER_WINDOW_MS);
   }
 
   private formatPerSecond(value: number): string {
@@ -4147,6 +4967,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     return !!this.currentBattleId &&
       this.battleStatus === "started" &&
       !this.isRunEnded &&
+      !this.isReplayInProgress &&
       !this.isAwaitingCardChoice &&
       !this.cardChoiceRequestInFlight &&
       !this.isPauseModalOpen &&
@@ -4241,6 +5062,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     return this.isInRun &&
       !!this.currentBattleId &&
       this.battleStatus === "started" &&
+      !this.isReplayInProgress &&
       !this.isDeathModalOpen &&
       !this.isAwaitingCardChoice;
   }
@@ -4271,6 +5093,10 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     });
 
     try {
+      if (!this.isReplayInProgress) {
+        this.appendStepBatchToRecording(this.currentBattleTick, [pauseCommand]);
+      }
+
       const response = await battleApi.stepBattle({
         battleId: this.currentBattleId,
         clientTick: this.currentBattleTick,
@@ -4305,6 +5131,8 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.stopAutoStepLoop();
     this.clearAssistConfigDebounce();
     this.clearMovementInputState();
+    this.clearReplaySessionState();
+    this.activeRunRecording = null;
     this.autoStepEnabled = false;
     this.battleRequestInFlight = false;
     this.queuedCommands = [];
@@ -4336,12 +5164,30 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.runEndedNarrativeLogged = false;
     this.combatDetailLines = [];
     this.combatMetricSamples = [];
+    this.combatEliteEvents = [];
+    this.combatTotalDamageDealt = 0;
+    this.combatTotalDamageTaken = 0;
+    this.combatTotalHealingDone = 0;
+    this.combatTotalShieldGained = 0;
+    this.combatTotalShieldLost = 0;
     this.combatPeakHitDealt = 0;
     this.combatPeakHitTaken = 0;
     this.economyMetricSamples = [];
     this.economyTotalXpGained = 0;
     this.economyTotalEchoFragments = 0;
     this.economyTotalPrimalCore = 0;
+    this.runLootSourceMobCount = 0;
+    this.runLootSourceChestCount = 0;
+    this.runAwardedDropEventsCount = 0;
+    this.runAwardedItemDropCount = 0;
+    this.runEchoFragmentsIncome = 0;
+    this.runEchoFragmentsSpend = 0;
+    this.runEchoFragmentsBalanceStart = 0;
+    this.runEchoFragmentsBalanceCurrent = 0;
+    this.runAwardScopeId = "";
+    this.seenAwardedDropEventIds.clear();
+    this.runAwardedSourceKeys.clear();
+    this.runStartCraftedSnapshotByInstanceId = new Map<string, RunEquipmentSnapshot>();
     this.expConsoleEntries = [];
     this.runLevel = RUN_INITIAL_LEVEL;
     this.runXp = RUN_INITIAL_XP;
@@ -4356,6 +5202,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       !this.cardChoiceRequestInFlight &&
       !!this.currentBattleId &&
       this.battleStatus === "started" &&
+      !this.isReplayInProgress &&
       !this.isRunEnded &&
       !this.isAwaitingCardChoice &&
       !this.isPauseModalOpen &&
@@ -4364,13 +5211,28 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
 
   private resolvePointerCommandFromMouse(action: PointerActionKind, event: MouseEvent): StepCommand | null {
     const scene = this.scene;
+    if (!scene) {
+      return null;
+    }
+
+    const tile = this.resolveTileFromMouseEvent(event);
+    const command = resolvePointerCommand(action, tile, Object.values(scene.actorsById));
+    if (!command) {
+      return null;
+    }
+
+    return command as StepCommand;
+  }
+
+  private resolveTileFromMouseEvent(event: MouseEvent): { x: number; y: number } | null {
+    const scene = this.scene;
     const canvas = this.canvasRef?.nativeElement;
     if (!scene || !canvas) {
       return null;
     }
 
     const rect = canvas.getBoundingClientRect();
-    const tile = screenToTile(
+    return screenToTile(
       event.clientX,
       event.clientY,
       rect,
@@ -4382,12 +5244,22 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         canvasHeight: rect.height
       }
     );
-    const command = resolvePointerCommand(action, tile, Object.values(scene.actorsById));
-    if (!command) {
-      return null;
+  }
+
+  private setHoveredMobEntityId(actorId: string | null): void {
+    if (!this.scene) {
+      return;
     }
 
-    return command as StepCommand;
+    const nextHoveredId = actorId ?? null;
+    if ((this.scene.hoveredMobEntityId ?? null) === nextHoveredId) {
+      return;
+    }
+
+    this.scene = {
+      ...this.scene,
+      hoveredMobEntityId: nextHoveredId
+    };
   }
 
   private syncUiMetaState(): void {
