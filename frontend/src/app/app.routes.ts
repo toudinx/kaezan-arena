@@ -1,20 +1,36 @@
 import { Routes } from '@angular/router';
 import { ArenaPageComponent } from './pages/arena/arena-page.component';
 import { BestiaryPageComponent } from './pages/bestiary/bestiary-page.component';
+import { CharactersPageComponent } from './pages/characters/characters-page.component';
 import { HomePageComponent } from './pages/home/home-page.component';
+import { AppShellComponent } from './shell/app-shell.component';
 
 export const routes: Routes = [
-  {
-    path: '',
-    component: HomePageComponent
-  },
   {
     path: 'arena',
     component: ArenaPageComponent
   },
   {
-    path: 'bestiary',
-    component: BestiaryPageComponent
+    path: '',
+    component: AppShellComponent,
+    children: [
+      {
+        path: '',
+        component: HomePageComponent
+      },
+      {
+        path: 'characters',
+        component: CharactersPageComponent
+      },
+      {
+        path: 'characters/:id',
+        component: CharactersPageComponent
+      },
+      {
+        path: 'bestiary',
+        component: BestiaryPageComponent
+      }
+    ]
   },
   {
     path: '**',

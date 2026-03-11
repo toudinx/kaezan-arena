@@ -37,6 +37,8 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+.dotnet_home/
+**/.dotnet/
 
 # Env / local config
 .env
@@ -53,3 +55,7 @@ pnpm-debug.log*
 # General output
 logs/
 reports/
+
+# Local tool/cache folders
+.dotnet-tools/
+.artifacts/

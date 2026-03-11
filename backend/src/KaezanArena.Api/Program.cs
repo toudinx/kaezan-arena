@@ -5,6 +5,8 @@ using KaezanArena.Api.Middleware;
 using KaezanArena.Application.Effects;
 
 var builder = WebApplication.CreateBuilder(args);
+var configuredStepDeltaMs = builder.Configuration.GetValue<int?>("Battle:StepDeltaMs");
+var resolvedStepDeltaMs = ArenaConfig.NormalizeStepDeltaMs(configuredStepDeltaMs);
 
 builder.Logging.ClearProviders();
 builder.Logging.AddJsonConsole();
@@ -171,7 +173,7 @@ builder.Services.AddSwaggerGen(options =>
         return null;
     });
 });
-builder.Services.AddSingleton<IBattleStore, InMemoryBattleStore>();
+builder.Services.AddSingleton<IBattleStore>(_ => new InMemoryBattleStore(resolvedStepDeltaMs));
 builder.Services.AddSingleton<IAccountStateStore, InMemoryAccountStateStore>();
 builder.Services.AddScoped<ITileAoeFxPlanner, TileAoeFxPlanner>();
 

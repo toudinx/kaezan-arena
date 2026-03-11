@@ -176,7 +176,7 @@ describe("ArenaPageComponent movement input", () => {
     expect(queued[0]["dir"]).toBe("left");
   });
 
-  it("sends only the latest move_player command per step", () => {
+  it("keeps all queued move_player commands in a step without collapsing", () => {
     const component = createComponent();
     enableCommandIssuing(component);
 
@@ -186,9 +186,53 @@ describe("ArenaPageComponent movement input", () => {
 
     const drained = (component as any).dequeuePendingCommands() as Array<Record<string, unknown>>;
     expect(drained).toEqual([
+      { type: "move_player", dir: "up" },
       { type: "cast_skill", skillId: "exori" },
       { type: "move_player", dir: "right" }
     ]);
+  });
+
+  it("re-sends move_player every step while the same key is held", () => {
+    const component = createComponent();
+    enableCommandIssuing(component);
+
+    component.onKeyDown(new KeyboardEvent("keydown", { key: "w" }));
+    const firstSend = (component as any).dequeuePendingCommands() as Array<Record<string, unknown>>;
+    expect(firstSend).toEqual([{ type: "move_player", dir: "up" }]);
+
+    (component as any).pumpMovementBuffer();
+    const secondSend = (component as any).dequeuePendingCommands() as Array<Record<string, unknown>>;
+    expect(secondSend).toEqual([{ type: "move_player", dir: "up" }]);
+
+    component.onKeyUp(new KeyboardEvent("keyup", { key: "w" }));
+  });
+
+  it("records movement block status and reason from command results", () => {
+    const component = createComponent();
+    enableCommandIssuing(component);
+    (component as any).currentBattleTick = 14;
+
+    const sentCommands = [{ type: "move_player", dir: "right" }];
+    (component as any).updateMovementBufferFromCommandResults(
+      [
+        {
+          index: 0,
+          type: "move_player",
+          ok: false,
+          reason: "move_blocked",
+          status: "Blocked",
+          movementReason: "Occupied",
+          blockedTileX: 7,
+          blockedTileY: 6,
+          blockedByActorId: "mob.001"
+        }
+      ],
+      sentCommands
+    );
+
+    expect((component as any).lastMoveResultDebug).toContain("Move right: Blocked (Occupied)");
+    expect((component as any).lastMoveResultDebug).toContain("tile=(7,6)");
+    expect((component as any).lastMoveResultDebug).toContain("by=mob.001");
   });
 
   it("pressing F selects chest over altar when both are in melee range", () => {

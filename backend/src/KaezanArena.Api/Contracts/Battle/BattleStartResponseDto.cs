@@ -25,6 +25,7 @@ public sealed record BattleStartResponseDto(
     long TimeSurvivedMs,
     long RunTimeMs,
     long RunDurationMs,
+    int StepDeltaMs,
     double CurrentMobHpMult,
     double CurrentMobDmgMult,
     BattleScalingDto Scaling,

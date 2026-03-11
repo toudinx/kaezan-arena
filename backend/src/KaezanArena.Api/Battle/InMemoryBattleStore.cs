@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Threading;
 using KaezanArena.Api.Contracts.Battle;
 
@@ -7,7 +8,7 @@ namespace KaezanArena.Api.Battle;
 public sealed partial class InMemoryBattleStore : IBattleStore
 {
     // Deterministic simulation delta per battle step.
-    private const int StepDeltaMs = 250;
+    private static int StepDeltaMs = ArenaConfig.DefaultStepDeltaMs;
     private const int MobRespawnDelayMs = 750;
     private const int PlayerMoveCooldownMs = 300;
     private const int PlayerAutoAttackCooldownMs = 800;
@@ -146,6 +147,13 @@ public sealed partial class InMemoryBattleStore : IBattleStore
     private const string DefeatReason = "defeat";
     private const string PausedReason = "paused";
     private const string AwaitingCardChoiceReason = "awaiting_card_choice";
+    private const string MoveStatusAccepted = "Accepted";
+    private const string MoveStatusBlocked = "Blocked";
+    private const string MoveReasonNone = "None";
+    private const string MoveReasonOccupied = "Occupied";
+    private const string MoveReasonCornerBlock = "CornerBlock";
+    private const string MoveReasonCooldown = "Cooldown";
+    private const string MoveReasonOutOfBounds = "OutOfBounds";
     private const string EndReasonDeath = "death";
     private const string EndReasonTime = "time";
     private const string PoiTypeChest = "chest";
@@ -396,6 +404,11 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             [MobArchetype.RangedDragon] = new RangedDragonBehavior()
         };
 
+    public InMemoryBattleStore(int? stepDeltaMs = null)
+    {
+        StepDeltaMs = ArenaConfig.NormalizeStepDeltaMs(stepDeltaMs);
+    }
+
     public BattleSnapshot StartBattle(string arenaId, string playerId, int? seed)
     {
         var normalizedArena = string.IsNullOrWhiteSpace(arenaId) ? "arena" : arenaId.Trim();
@@ -494,6 +507,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             TrySpawnMobInSlot(state, slot);
         }
 
+        ValidateInvariants(state);
         _battles[battleId] = state;
         return ToSnapshot(state, [], []);
     }
@@ -507,9 +521,13 @@ public sealed partial class InMemoryBattleStore : IBattleStore
 
         lock (state.Sync)
         {
+            var tickBeforeStep = state.Tick;
+            var nowMsBeforeStep = GetElapsedMsForTick(tickBeforeStep);
+
             if (state.IsRunEnded)
             {
                 state.TickEventCounter = 0;
+                ValidateInvariants(state);
                 return ToSnapshot(state, [], []);
             }
 
@@ -518,6 +536,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                 state.Tick += 1;
                 state.TickEventCounter = 0;
                 var rejectedCommandResults = BuildStatusRejectedCommandResults(state, commands);
+                ValidateInvariants(state);
                 return ToSnapshot(state, [], rejectedCommandResults);
             }
 
@@ -525,12 +544,14 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             if (state.IsPaused)
             {
                 var pausedCommandResults = BuildPausedCommandResults(commands, preAppliedPauseResults);
+                ValidateInvariants(state, expectedTick: tickBeforeStep, expectedNowMs: nowMsBeforeStep);
                 return ToSnapshot(state, [], pausedCommandResults);
             }
 
             if (state.PendingCardChoice is not null)
             {
                 var awaitingCardChoiceResults = BuildAwaitingCardChoiceCommandResults(commands, preAppliedPauseResults);
+                ValidateInvariants(state, expectedTick: tickBeforeStep, expectedNowMs: nowMsBeforeStep);
                 return ToSnapshot(state, [], awaitingCardChoiceResults);
             }
 
@@ -542,6 +563,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                 var preAppliedOnlyResults = preAppliedPauseResults.Values
                     .OrderBy(result => result.Index)
                     .ToList();
+                ValidateInvariants(state);
                 return ToSnapshot(state, events, preAppliedOnlyResults);
             }
 
@@ -603,6 +625,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                 TickMobRespawns(state, events);
             }
 
+            ValidateInvariants(state);
             return ToSnapshot(state, events, commandResults);
         }
     }
@@ -1082,21 +1105,6 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             return new Dictionary<int, CommandResultDto>();
         }
 
-        var latestMoveCommandIndex = -1;
-        for (var index = 0; index < commands.Count; index += 1)
-        {
-            var commandType = NormalizeCommandType(commands[index].Type);
-            if (string.Equals(commandType, MovePlayerCommandType, StringComparison.Ordinal))
-            {
-                latestMoveCommandIndex = index;
-            }
-        }
-
-        if (latestMoveCommandIndex < 0)
-        {
-            return new Dictionary<int, CommandResultDto>();
-        }
-
         var commandResults = new Dictionary<int, CommandResultDto>();
         for (var index = 0; index < commands.Count; index += 1)
         {
@@ -1107,20 +1115,29 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                 continue;
             }
 
-            if (index != latestMoveCommandIndex)
-            {
-                // Deterministic rule: keep only the latest move command for the tick.
-                commandResults[index] = new CommandResultDto(index, commandType, true, null);
-                continue;
-            }
-
-            var moved = TryExecutePlayerMoveCommand(state, command.Dir, out var failReason);
+            var moved = TryExecutePlayerMoveCommand(
+                state,
+                command.Dir,
+                out var failReason,
+                out var movementReason,
+                out var blockedTileX,
+                out var blockedTileY,
+                out var blockedByActorId);
             if (moved)
             {
                 hasExplicitFacingCommand = true;
             }
 
-            commandResults[index] = new CommandResultDto(index, commandType, moved, failReason);
+            commandResults[index] = new CommandResultDto(
+                Index: index,
+                Type: commandType,
+                Ok: moved,
+                Reason: failReason,
+                Status: moved ? MoveStatusAccepted : MoveStatusBlocked,
+                MovementReason: moved ? MoveReasonNone : movementReason,
+                BlockedTileX: blockedTileX,
+                BlockedTileY: blockedTileY,
+                BlockedByActorId: blockedByActorId);
         }
 
         return commandResults;
@@ -1129,9 +1146,17 @@ public sealed partial class InMemoryBattleStore : IBattleStore
     private static bool TryExecutePlayerMoveCommand(
         StoredBattle state,
         string? rawDirection,
-        out string? failReason)
+        out string? failReason,
+        out string movementReason,
+        out int? blockedTileX,
+        out int? blockedTileY,
+        out string? blockedByActorId)
     {
         failReason = null;
+        movementReason = MoveReasonNone;
+        blockedTileX = null;
+        blockedTileY = null;
+        blockedByActorId = null;
         var direction = NormalizeDirection(rawDirection);
         if (direction is null)
         {
@@ -1142,6 +1167,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         if (state.PlayerMoveCooldownRemainingMs > 0)
         {
             failReason = CooldownReason;
+            movementReason = MoveReasonCooldown;
             return false;
         }
 
@@ -1160,9 +1186,17 @@ public sealed partial class InMemoryBattleStore : IBattleStore
 
         var destinationX = player.TileX + deltaX;
         var destinationY = player.TileY + deltaY;
-        if (!IsTileOpenForPlayerMovement(state, player.ActorId, destinationX, destinationY))
+        if (TryGetPlayerMovementBlocker(
+            state,
+            player.ActorId,
+            destinationX,
+            destinationY,
+            out movementReason,
+            out blockedByActorId))
         {
             failReason = MoveBlockedReason;
+            blockedTileX = destinationX;
+            blockedTileY = destinationY;
             return false;
         }
 
@@ -1212,21 +1246,35 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         }
     }
 
-    private static bool IsTileOpenForPlayerMovement(
+    private static bool TryGetPlayerMovementBlocker(
         StoredBattle state,
         string playerActorId,
         int tileX,
-        int tileY)
+        int tileY,
+        out string movementReason,
+        out string? blockedByActorId)
     {
+        movementReason = MoveReasonNone;
+        blockedByActorId = null;
+
         if (!IsInBounds(tileX, tileY))
+        {
+            movementReason = MoveReasonOutOfBounds;
+            return true;
+        }
+
+        var blockingActor = state.Actors.Values.FirstOrDefault(actor =>
+            !string.Equals(actor.ActorId, playerActorId, StringComparison.Ordinal) &&
+            actor.TileX == tileX &&
+            actor.TileY == tileY);
+        if (blockingActor is null)
         {
             return false;
         }
 
-        return !state.Actors.Values.Any(actor =>
-            !string.Equals(actor.ActorId, playerActorId, StringComparison.Ordinal) &&
-            actor.TileX == tileX &&
-            actor.TileY == tileY);
+        movementReason = MoveReasonOccupied;
+        blockedByActorId = blockingActor.ActorId;
+        return true;
     }
 
     private static IReadOnlyList<CommandResultDto> ApplyCommands(
@@ -3747,8 +3795,38 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         }
     }
 
+    [Conditional("DEBUG")]
     private static void AssertBattleInvariants(StoredBattle state)
     {
+        ValidateInvariants(state);
+    }
+
+    [Conditional("DEBUG")]
+    private static void ValidateInvariants(
+        StoredBattle state,
+        int? expectedTick = null,
+        long? expectedNowMs = null)
+    {
+        if (expectedTick.HasValue && state.Tick != expectedTick.Value)
+        {
+            throw new InvalidOperationException(
+                $"Step invariant failed: tick advanced unexpectedly from {expectedTick.Value} to {state.Tick}.");
+        }
+
+        var expectedElapsedMs = checked((long)state.Tick * StepDeltaMs);
+        var nowMs = GetElapsedMsForTick(state.Tick);
+        if (nowMs != expectedElapsedMs)
+        {
+            throw new InvalidOperationException(
+                $"Simulation time is inconsistent: nowMs={nowMs}, tick={state.Tick}, expected={expectedElapsedMs}.");
+        }
+
+        if (expectedNowMs.HasValue && nowMs != expectedNowMs.Value)
+        {
+            throw new InvalidOperationException(
+                $"Step invariant failed: time advanced unexpectedly from {expectedNowMs.Value} to {nowMs}.");
+        }
+
         var occupiedTiles = new HashSet<(int TileX, int TileY)>();
         foreach (var actor in state.Actors.Values)
         {
@@ -3794,6 +3872,30 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             {
                 throw new InvalidOperationException(
                     $"Multiple actors occupy tile ({actor.TileX},{actor.TileY}).");
+            }
+
+            if (actor.Hp < 0)
+            {
+                throw new InvalidOperationException(
+                    $"Actor '{actor.ActorId}' has invalid HP: {actor.Hp}.");
+            }
+
+            if (actor.Shield < 0)
+            {
+                throw new InvalidOperationException(
+                    $"Actor '{actor.ActorId}' has invalid shield: {actor.Shield}.");
+            }
+
+            if (actor.MaxHp < 0)
+            {
+                throw new InvalidOperationException(
+                    $"Actor '{actor.ActorId}' has invalid max HP: {actor.MaxHp}.");
+            }
+
+            if (actor.Hp > actor.MaxHp)
+            {
+                throw new InvalidOperationException(
+                    $"Actor '{actor.ActorId}' has HP above max: hp={actor.Hp}, maxHp={actor.MaxHp}.");
             }
         }
 
@@ -4056,7 +4158,6 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             throw new InvalidOperationException($"Pending species chest archetype is invalid: {pendingArchetype}.");
         }
 
-        var nowMs = GetElapsedMsForTick(state.Tick);
         foreach (var buff in state.ActiveBuffs.Values)
         {
             if (string.IsNullOrWhiteSpace(buff.BuffId))

@@ -20,8 +20,12 @@ Long-term repository for Kaezan Arena with backend, frontend, docs, and tooling.
 
 ```powershell
 cd backend/src/KaezanArena.Api
-dotnet run --urls http://localhost:5158
+dotnet run --launch-profile https
 ```
+
+This profile exposes both:
+- `https://localhost:7174`
+- `http://localhost:5158`
 
 Health check:
 
@@ -46,6 +50,7 @@ npm run start
 
 Frontend includes routing (`/`, `/arena`), Tailwind setup, and Arena module boundaries (`assets`, `engine`, `render`, `ui`).
 If you change `frontend/proxy.conf.json`, restart the frontend dev server (`npm run start`) so proxy updates take effect.
+The frontend dev proxy forwards `/api/*` to `https://localhost:7174` (self-signed cert allowed via `secure: false` in dev proxy config).
 
 `api:generate` requires backend running. The generator script first checks `OPENAPI_URL` (if set), then defaults to `http://localhost:5158/swagger/v1/swagger.json`.
 

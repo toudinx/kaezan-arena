@@ -892,6 +892,17 @@ canvas {
   padding: 0.24rem 0.32rem;
 }
 
+.status-details__movement-debug {
+  margin-top: 0.4rem;
+  padding: 0.2rem 0.28rem;
+  border: 1px solid #334155;
+  border-radius: 0.24rem;
+  background: #111b2c;
+  color: #9fb3c8;
+  font-size: 0.68rem;
+  line-height: 1.35;
+}
+
 .bestiary-v1-list {
   display: grid;
   gap: 0.2rem;
@@ -1039,6 +1050,82 @@ canvas {
 .run-complete__actions button:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+.run-complete__copy-status {
+  margin: 0;
+  color: #a5f3fc;
+  font-size: 0.7rem;
+}
+
+.run-complete__copy-status--error {
+  color: #fca5a5;
+}
+
+.replay-import-modal {
+  width: min(680px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  border: 1px solid #4b5f7a;
+  border-radius: 0.5rem;
+  background: #0f172a;
+  color: #f8fafc;
+  padding: 0.8rem;
+}
+
+.replay-import-modal__header h2 {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #e2e8f0;
+}
+
+.replay-import-modal__textarea {
+  width: 100%;
+  min-height: 220px;
+  resize: vertical;
+  border: 1px solid #475569;
+  border-radius: 0.3rem;
+  background: #111827;
+  color: #e2e8f0;
+  padding: 0.5rem;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 0.72rem;
+}
+
+.replay-import-modal__file {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  color: #cbd5e1;
+  font-size: 0.72rem;
+}
+
+.replay-import-modal__status {
+  margin: 0;
+  color: #a5f3fc;
+  font-size: 0.72rem;
+}
+
+.replay-import-modal__status--error {
+  color: #fca5a5;
+}
+
+.replay-import-modal__actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.replay-import-modal__actions button {
+  border: 1px solid #4b5f7a;
+  border-radius: 0.3rem;
+  background: #243345;
+  color: #f8fafc;
+  font-size: 0.67rem;
+  padding: 0.32rem 0.5rem;
+  cursor: pointer;
 }
 
 .pause-modal__backdrop {

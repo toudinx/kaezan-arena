@@ -33,10 +33,10 @@ import {
   type DropEvent,
   type DropSource,
   type EquipmentDefinition,
-  type ItemSalvageResponse,
   type ItemDefinition,
   type OwnedEquipmentInstance
 } from "../../api/account-api.service";
+import { AccountStore } from "../../account/account-store.service";
 import {
   BattleApiService,
   ChooseCardRequest,
@@ -77,6 +77,8 @@ import { EquipmentPaperdollWindowComponent } from "./equipment-paperdoll-window.
 import type { BackpackFilter } from "./backpack-inventory.helpers";
 import { DockLayoutService, type DockModuleId, type DockModuleState } from "./dock-layout.service";
 import { HelperAssistWindowComponent, type AssistSkillToggleChangedEvent } from "./helper-assist-window.component";
+import { RunResultLogger, type RunResultFinalizeMetrics } from "../../shared/run-results/run-result-logger";
+import { ReplayIoService } from "../../shared/replay/replay-io.service";
 import {
   type DamageConsoleEntry,
   mapDamageNumbersToConsoleEntries,
@@ -224,7 +226,6 @@ export const TOOLS_TAB_STORAGE_KEY = "kaezan_arena_tools_tab_v1";
 export const RIGHT_INFO_TAB_STORAGE_KEY = TOOLS_TAB_STORAGE_KEY;
 const AVALANCHE_SKILL_ID = "avalanche";
 const ASSIST_CONFIG_DEBOUNCE_MS = 200;
-const MOVEMENT_BUFFER_TTL_MS = 250;
 const RUN_INITIAL_LEVEL = 1;
 const RUN_INITIAL_XP = 0;
 const RUN_LEVEL_XP_BASE = 25;
@@ -347,6 +348,12 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   battleRequestInFlight = false;
   recentDamageNumbers: string[] = [];
   recentCommandResults: string[] = [];
+  lastMoveResultDebug = "No move command result yet.";
+  runResultCopyMessage = "";
+  replayIoMessage = "";
+  replayIoErrorMessage = "";
+  isReplayImportModalOpen = false;
+  replayImportJsonText = "";
   autoStepEnabled = false;
   stepIntervalMs = 250;
   queuedCommandCount = 0;
@@ -358,7 +365,6 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   bestiaryEntries: ArenaBestiaryEntry[] = [];
   pendingSpeciesChest: string | null = null;
   lastFocusedSpecies: string | null = null;
-  readonly accountId = "dev_account";
   accountState: AccountState | null = null;
   selectedCharacterId = "";
   lootFeed: DropEvent[] = [];
@@ -470,8 +476,6 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   private readonly pressedMovementKeys = new Map<MovementInputKey, PressedMovementKeyState>();
   private movementKeySequence = 0;
   private bufferedMovementDirection: FacingDirection | null = null;
-  private bufferedMovementExpiresAtMs = 0;
-  private bufferedMovementAwaitingResult = false;
   private autoStepTimerId: ReturnType<typeof setTimeout> | null = null;
   private assistConfigDebounceTimerId: ReturnType<typeof setTimeout> | null = null;
   private autoStepWasEnabledBeforePause = false;
@@ -490,6 +494,10 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   private readonly runAwardedSourceKeys = new Set<string>();
   private runAwardScopeId = "";
   private runStartCraftedSnapshotByInstanceId = new Map<string, RunEquipmentSnapshot>();
+  private readonly runResultLogger = new RunResultLogger();
+  private readonly replayIoService = new ReplayIoService();
+  private importedReplayRecording: RunRecording | null = null;
+  private importedReplaySeedOverride: number | null = null;
   assistConfig: ArenaAssistConfig = this.buildDefaultAssistConfig();
   readonly hotkeyGroups: ReadonlyArray<Readonly<{ title: string; entries: ReadonlyArray<string> }>> = [
     { title: "Movement", entries: ["W/A/S/D move", "Q/E/Z/C diagonal move", "Last input direction wins"] },
@@ -521,9 +529,10 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     private readonly router: Router,
     private readonly ngZone: NgZone,
     private readonly cdr: ChangeDetectorRef,
-    private readonly accountApi: AccountApiService = new AccountApiService(),
+    accountApi: AccountApiService = new AccountApiService(),
     private readonly uiLayoutService: UiLayoutService = new UiLayoutService(),
-    private readonly dockLayoutService: DockLayoutService = new DockLayoutService()
+    private readonly dockLayoutService: DockLayoutService = new DockLayoutService(),
+    private readonly accountStore: AccountStore = new AccountStore(accountApi)
   ) {}
 
   get uiWindows(): ReadonlyArray<UiWindowLayout> {
@@ -1462,6 +1471,123 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     });
   }
 
+  get canPlayImportedReplay(): boolean {
+    return this.importedReplayRecording !== null &&
+      this.bootPhase === "ready_to_start" &&
+      !this.accountStateRequestInFlight &&
+      !this.accountRequestInFlight &&
+      !this.battleRequestInFlight;
+  }
+
+  get importedReplaySummaryLabel(): string {
+    const recording = this.importedReplayRecording;
+    if (!recording) {
+      return "No replay imported.";
+    }
+
+    const seedLabel = this.importedReplaySeedOverride ?? recording.battleSeed;
+    return `Imported replay ready: seed ${seedLabel}, ${recording.commandBatches.length} ticks.`;
+  }
+
+  async exportReplayJson(): Promise<void> {
+    const recording = this.lastRunRecording;
+    if (!recording || recording.commandBatches.length === 0) {
+      this.replayIoErrorMessage = "No recorded run with commands available to export.";
+      this.replayIoMessage = "";
+      return;
+    }
+
+    const replay = this.replayIoService.buildReplay({
+      battleSeed: recording.battleSeed,
+      difficultyPresetId: null,
+      startOptions: {
+        seedOverride: recording.battleSeed
+      },
+      commands: recording.commandBatches.map((batch) => ({
+        tick: batch.tick,
+        commands: this.cloneStepCommands(batch.commands)
+      })),
+      cardChoices: recording.cardChoices.map((choice) => ({ ...choice })),
+      configFingerprint: {
+        stepDeltaMs: this.stepIntervalMs,
+        gridW: this.scene?.columns ?? 7,
+        gridH: this.scene?.rows ?? 7
+      }
+    });
+
+    const jsonText = this.replayIoService.serializePrettyJson(replay);
+    const copied = await copyTextBestEffort(jsonText);
+    const replayId = (this.currentBattleId || recording.runId || "replay")
+      .replace(/[^a-zA-Z0-9._-]+/g, "_");
+    this.downloadJsonFile(`replay-${replayId}.json`, replay);
+
+    this.replayIoErrorMessage = "";
+    this.replayIoMessage = copied
+      ? "Replay exported. JSON copied to clipboard and downloaded."
+      : "Replay exported and downloaded. Clipboard copy failed.";
+  }
+
+  openReplayImportModal(): void {
+    this.isReplayImportModalOpen = true;
+    this.replayIoErrorMessage = "";
+    this.replayIoMessage = "";
+  }
+
+  closeReplayImportModal(): void {
+    this.isReplayImportModalOpen = false;
+  }
+
+  onReplayImportTextChanged(event: Event): void {
+    const target = event.target as HTMLTextAreaElement | null;
+    this.replayImportJsonText = target?.value ?? "";
+    this.replayIoErrorMessage = "";
+    this.replayIoMessage = "";
+  }
+
+  async onReplayImportFileSelected(event: Event): Promise<void> {
+    const target = event.target as HTMLInputElement | null;
+    const file = target?.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    try {
+      this.replayImportJsonText = await this.replayIoService.readFileText(file);
+      this.replayIoErrorMessage = "";
+      this.replayIoMessage = `Loaded replay file: ${file.name}`;
+    } catch (error) {
+      this.replayIoMessage = "";
+      this.replayIoErrorMessage = `Failed to read replay file: ${String(error)}`;
+    } finally {
+      if (target) {
+        target.value = "";
+      }
+    }
+  }
+
+  validateImportedReplayJson(): void {
+    this.resolveImportedReplayFromInput();
+  }
+
+  async playImportedReplay(): Promise<void> {
+    const resolved = this.resolveImportedReplayFromInput();
+    if (!resolved) {
+      return;
+    }
+
+    const { recording, seedOverride } = resolved;
+    if (this.accountState?.characters[recording.playerId]) {
+      this.selectedCharacterId = recording.playerId;
+    }
+
+    this.isReplayImportModalOpen = false;
+    this.isInRun = true;
+    await this.beginNewRun({
+      seedOverride,
+      replayRecording: this.cloneRunRecording(recording)
+    });
+  }
+
   openPauseModal(): void {
     if (!this.canTogglePauseModal()) {
       return;
@@ -1562,6 +1688,11 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.runAwardedSourceKeys.clear();
     this.runStartCraftedSnapshotByInstanceId = this.captureCurrentCraftedSnapshot();
     this.recentCommandResults = [];
+    this.lastMoveResultDebug = "No move command result yet.";
+    this.runResultCopyMessage = "";
+    this.replayIoMessage = "";
+    this.replayIoErrorMessage = "";
+    this.isReplayImportModalOpen = false;
     this.assistConfig = this.buildDefaultAssistConfig();
     this.bestiaryEntries = [];
     this.pendingSpeciesChest = null;
@@ -1706,6 +1837,45 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       cardChoices: recording.cardChoices.map((choice) => ({ ...choice })),
       awardedDropEventIds: [...recording.awardedDropEventIds]
     };
+  }
+
+  private resolveImportedReplayFromInput(): { recording: RunRecording; seedOverride: number } | null {
+    const validation = this.replayIoService.tryParseAndValidate(this.replayImportJsonText);
+    if (!validation.ok) {
+      this.replayIoMessage = "";
+      this.replayIoErrorMessage = validation.error;
+      return null;
+    }
+
+    const replay = validation.replay;
+    const playerId =
+      this.selectedCharacterId ||
+      this.accountState?.activeCharacterId ||
+      "player_demo";
+    const runId = `imported-${Date.now()}`;
+    const recording: RunRecording = {
+      runId,
+      battleSeed: replay.battleSeed,
+      playerId,
+      commandBatches: replay.commands.map((batch) => ({
+        tick: batch.tick,
+        commands: this.cloneStepCommands(batch.commands)
+      })),
+      cardChoices: (replay.cardChoices ?? []).map((choice) => ({ ...choice })),
+      awardedDropEventIds: []
+    };
+
+    const configuredSeedOverride = replay.startOptions?.seedOverride;
+    const seedOverride = typeof configuredSeedOverride === "number"
+      ? Math.floor(configuredSeedOverride)
+      : replay.battleSeed;
+
+    this.importedReplayRecording = recording;
+    this.importedReplaySeedOverride = seedOverride;
+    this.replayIoErrorMessage = "";
+    this.replayIoMessage =
+      `Replay valid: seed=${replay.battleSeed}, batches=${replay.commands.length}, step=${replay.configFingerprint.stepDeltaMs}ms.`;
+    return { recording, seedOverride };
   }
 
   private cloneStepCommands(commands: ReadonlyArray<StepCommand>): StepCommand[] {
@@ -2001,7 +2171,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
 
     this.accountRequestInFlight = true;
     try {
-      const updated = await this.accountApi.setActiveCharacter(this.accountId, this.selectedCharacterId);
+      const updated = await this.accountStore.setActiveCharacter(this.selectedCharacterId);
       this.applyAccountState(updated);
     } catch (error) {
       this.battleLog = `setActiveCharacter failed: ${String(error)}`;
@@ -2011,7 +2181,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   }
 
   async reloadAccountState(): Promise<void> {
-    await this.loadAccountState();
+    await this.loadAccountState(true);
   }
 
   async equipItemFromInventory(equipmentInstanceId: string, slot: "weapon" | "armor" | "relic"): Promise<boolean> {
@@ -2022,13 +2192,9 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
 
     this.accountRequestInFlight = true;
     try {
-      const updatedCharacter = await this.accountApi.equipItem(
-        this.accountId,
-        character.characterId,
-        slot,
-        equipmentInstanceId
-      );
-      this.updateCharacterSnapshot(updatedCharacter);
+      const updatedCharacter = await this.accountStore.equipItem(character.characterId, slot, equipmentInstanceId);
+      this.mergeCharacterIntoAccountState(updatedCharacter);
+      this.syncAccountStateFromStore();
       return true;
     } catch (error) {
       this.battleLog = `equipItem failed: ${String(error)}`;
@@ -2046,8 +2212,9 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
 
     this.accountRequestInFlight = true;
     try {
-      const salvaged = await this.accountApi.salvageItem(this.accountId, itemInstanceId);
-      this.applySalvageResult(salvaged);
+      const salvaged = await this.accountStore.salvageItem(itemInstanceId);
+      this.mergeCharacterIntoAccountState(salvaged.character, salvaged.echoFragmentsBalance);
+      this.syncAccountStateFromStore();
       this.battleLog = `salvageItem success: item=${salvaged.salvagedItemInstanceId}; species=${salvaged.speciesId}; primalCoreAwarded=${salvaged.primalCoreAwarded}`;
       return true;
     } catch (error) {
@@ -2076,6 +2243,28 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     }
 
     await copyTextBestEffort(text);
+  }
+
+  async copyLastRunResultJson(): Promise<void> {
+    const payload = this.runResultLogger.serializeLastResult();
+    if (!payload) {
+      this.runResultCopyMessage = "No run result available.";
+      return;
+    }
+
+    const copied = await copyTextBestEffort(payload);
+    this.runResultCopyMessage = copied ? "Last run result copied." : "Failed to copy last run result.";
+  }
+
+  async copyAllRunResultsJson(): Promise<void> {
+    const payload = this.runResultLogger.serializeAllResults();
+    if (!payload) {
+      this.runResultCopyMessage = "No stored run results.";
+      return;
+    }
+
+    const copied = await copyTextBestEffort(payload);
+    this.runResultCopyMessage = copied ? "All run results copied." : "Failed to copy stored run results.";
   }
 
   trackExpEntryById(_index: number, entry: ExpConsoleEntry): string {
@@ -2460,6 +2649,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     }
 
     let shouldReplayCardChoice = false;
+    let responseForFinalize: StepBattleResponse | null = null;
     this.runInAngularZone(() => {
       this.battleRequestInFlight = true;
     });
@@ -2469,6 +2659,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         clientTick: this.currentBattleTick,
         commands: commandsToSend
       });
+      responseForFinalize = response;
       const battleIdForLoot = response.battleId ?? this.currentBattleId;
       const lootSources = this.extractLootSourcesFromSnapshot(response);
 
@@ -2476,10 +2667,12 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         this.currentBattleId = response.battleId ?? this.currentBattleId;
         this.currentBattleTick = response.tick ?? this.currentBattleTick + 1;
         this.currentSeed = response.seed ?? this.currentSeed;
+        this.applyStepDeltaFromSnapshot(response);
         this.battleStatus = response.battleStatus ?? this.battleStatus;
         this.currentFacingDirection = this.toFacingDirection(response.facingDirection) ?? this.currentFacingDirection;
         this.applyGameOverStateFromSnapshot(response);
         this.applyBattlePayload(response);
+        this.runResultLogger.recordStep(response);
         this.updateMovementBufferFromCommandResults(response.commandResults, commandsToSend);
         this.appendCommandResultLogs(response.commandResults, commandsToSend);
         this.syncUiMetaState();
@@ -2500,8 +2693,14 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         }
       });
 
-      if (battleIdForLoot && lootSources.length > 0) {
+      if (!this.isReplayInProgress && battleIdForLoot && lootSources.length > 0) {
         await this.awardLootSources(battleIdForLoot, lootSources);
+      }
+      if (responseForFinalize) {
+        const finalizedSnapshot = responseForFinalize;
+        this.runInAngularZone(() => {
+          this.tryFinalizeRunResult(finalizedSnapshot);
+        });
       }
     } catch (error) {
       this.runInAngularZone(() => {
@@ -2566,10 +2765,14 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         this.currentBattleId = response.battleId ?? this.currentBattleId;
         this.currentBattleTick = response.tick ?? this.currentBattleTick;
         this.currentSeed = response.seed ?? this.currentSeed;
+        this.applyStepDeltaFromSnapshot(response);
         this.battleStatus = response.battleStatus ?? this.battleStatus;
         this.currentFacingDirection = this.toFacingDirection(response.facingDirection) ?? this.currentFacingDirection;
         this.applyGameOverStateFromSnapshot(response);
         this.applyBattlePayload(response);
+        this.runResultLogger.recordStep(response);
+        this.runResultLogger.recordCardChosen(selectedCardId);
+        this.tryFinalizeRunResult(response);
         this.syncUiMetaState();
         this.battleLog = JSON.stringify(response, null, 2);
       });
@@ -2628,6 +2831,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         this.currentBattleId = response.battleId ?? "";
         this.currentBattleTick = response.tick ?? 0;
         this.currentSeed = response.seed ?? 0;
+        this.applyStepDeltaFromSnapshot(response);
         this.battleStatus = response.battleStatus ?? "started";
         this.currentFacingDirection = this.toFacingDirection(response.facingDirection) ?? "up";
         this.applyGameOverStateFromSnapshot(response);
@@ -2647,6 +2851,12 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         this.applyRunProgressFromSnapshot(response);
         this.applyScalingTelemetryFromSnapshot(response);
         this.applyCardChoiceStateFromSnapshot(response);
+        this.runResultLogger.startRun({
+          battleSeed: this.currentSeed,
+          stepDeltaMs: this.stepIntervalMs,
+          snapshot: response
+        });
+        this.tryFinalizeRunResult(response);
         this.syncUiMetaState();
         this.battleLog = JSON.stringify(response, null, 2);
         this.activeFxCount = this.getActiveFxCount(this.scene);
@@ -2666,26 +2876,41 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     }
   }
 
-  private async loadAccountState(): Promise<void> {
+  private async loadAccountState(forceRefresh = false): Promise<void> {
     this.accountStateRequestInFlight = true;
     this.accountLoadErrorMessage = "";
     try {
-      const response = await this.accountApi.getState(this.accountId);
-      this.applyAccountState(response.account, response.itemCatalog, response.equipmentCatalog);
+      if (forceRefresh) {
+        await this.accountStore.refresh();
+      } else {
+        await this.accountStore.load();
+      }
+      this.syncAccountStateFromStore();
       this.accountLoaded = true;
     } catch (error) {
       this.accountLoaded = false;
-      this.accountLoadErrorMessage = `Failed to load account: ${String(error)}`;
+      const storeError = this.accountStore.error();
+      this.accountLoadErrorMessage = `Failed to load account: ${storeError ?? String(error)}`;
       this.battleLog = this.accountLoadErrorMessage;
     } finally {
       this.accountStateRequestInFlight = false;
     }
   }
 
+  private syncAccountStateFromStore(): void {
+    const account = this.accountStore.state();
+    if (!account) {
+      return;
+    }
+
+    const catalogs = this.accountStore.catalogs();
+    this.applyAccountState(account, catalogs.itemCatalog, catalogs.equipmentCatalog);
+  }
+
   private applyAccountState(
     account: AccountState,
-    itemCatalog: ItemDefinition[] | null = null,
-    equipmentCatalog: EquipmentDefinition[] | null = null
+    itemCatalog: ReadonlyArray<ItemDefinition> | null = null,
+    equipmentCatalog: ReadonlyArray<EquipmentDefinition> | null = null
   ): void {
     this.accountState = account;
     if (itemCatalog) {
@@ -2709,7 +2934,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.syncRunEchoBalance(account.echoFragmentsBalance);
   }
 
-  private updateCharacterSnapshot(character: CharacterState): void {
+  private mergeCharacterIntoAccountState(character: CharacterState, echoFragmentsBalance?: number): void {
     if (!this.accountState) {
       return;
     }
@@ -2719,28 +2944,17 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       [character.characterId]: character
     };
 
-    this.accountState = {
-      ...this.accountState,
-      characters: nextCharacters
-    };
-  }
-
-  private applySalvageResult(salvaged: ItemSalvageResponse): void {
-    if (!this.accountState) {
-      return;
-    }
-
-    const nextCharacters = {
-      ...this.accountState.characters,
-      [salvaged.character.characterId]: salvaged.character
-    };
+    const nextEchoBalance =
+      typeof echoFragmentsBalance === "number"
+        ? Math.max(0, Math.floor(echoFragmentsBalance))
+        : this.accountState.echoFragmentsBalance;
 
     this.accountState = {
       ...this.accountState,
-      echoFragmentsBalance: salvaged.echoFragmentsBalance,
+      echoFragmentsBalance: nextEchoBalance,
       characters: nextCharacters
     };
-    this.syncRunEchoBalance(salvaged.echoFragmentsBalance);
+    this.syncRunEchoBalance(nextEchoBalance);
   }
 
   private resolveItemDisplayName(itemId: string): string {
@@ -3031,6 +3245,10 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   }
 
   private async awardLootSources(battleId: string, sources: DropSource[]): Promise<void> {
+    if (this.isReplayInProgress) {
+      return;
+    }
+
     const character = this.selectedCharacter;
     if (!character || sources.length === 0) {
       return;
@@ -3044,13 +3262,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
 
     const dedupedKeys = dedupedSources.map((source) => buildDropSourceKey(awardScopeId, source));
     try {
-      const response = await this.accountApi.awardDrops(
-        this.accountId,
-        character.characterId,
-        battleId,
-        dedupedSources,
-        awardScopeId
-      );
+      const response = await this.accountStore.awardDrops(character.characterId, battleId, dedupedSources, awardScopeId);
 
       const newlyAwarded = response.awarded.filter((drop) => {
         if (this.seenAwardedDropEventIds.has(drop.dropEventId)) {
@@ -3061,7 +3273,9 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         return true;
       });
       this.runInAngularZone(() => {
-        this.updateCharacterSnapshot(response.character);
+        this.mergeCharacterIntoAccountState(response.character);
+        this.syncAccountStateFromStore();
+        this.runResultLogger.recordAwardDrops(newlyAwarded, response.character);
         this.recordRunLootSourcesFromRequest(dedupedSources);
         if (newlyAwarded.length > 0) {
           this.lootFeed = [...newlyAwarded, ...this.lootFeed].slice(0, 50);
@@ -3296,10 +3510,18 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
 
       if (commandType === "move_player") {
         const direction = this.readString(command?.dir) ?? "unknown_direction";
+        const moveResult = typedResult as Record<string, unknown>;
+        const moveStatus = this.readString(moveResult["status"]) ?? (isOk ? "Accepted" : "Blocked");
+        const moveReason = this.readString(moveResult["movementReason"]) ?? (isOk ? "None" : reason);
+        const blockedTileX = this.readNumber(moveResult["blockedTileX"]);
+        const blockedTileY = this.readNumber(moveResult["blockedTileY"]);
+        const blockedByActorId = this.readString(moveResult["blockedByActorId"]);
+        const blockedTileLabel = blockedTileX === null || blockedTileY === null ? "" : ` tile=(${blockedTileX},${blockedTileY})`;
+        const blockedByLabel = blockedByActorId ? ` by=${blockedByActorId}` : "";
         lines.push(
           isOk
-            ? `${tickPrefix} Move ${direction} ok`
-            : `${tickPrefix} Move ${direction} failed: ${reason}`
+            ? `${tickPrefix} Move ${direction} ok (${moveStatus}/${moveReason})`
+            : `${tickPrefix} Move ${direction} failed: ${moveStatus}/${moveReason}${blockedTileLabel}${blockedByLabel}`
         );
         continue;
       }
@@ -4824,32 +5046,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     const drained = [...this.queuedCommands];
     this.queuedCommands = [];
     this.queuedCommandCount = 0;
-    return this.collapseMoveCommands(drained);
-  }
-
-  private collapseMoveCommands(commands: ReadonlyArray<StepCommand>): StepCommand[] {
-    let latestMoveIndex = -1;
-    for (let index = 0; index < commands.length; index += 1) {
-      if (commands[index].type === "move_player") {
-        latestMoveIndex = index;
-      }
-    }
-
-    if (latestMoveIndex < 0) {
-      return [...commands];
-    }
-
-    const collapsed: StepCommand[] = [];
-    for (let index = 0; index < commands.length; index += 1) {
-      const command = commands[index];
-      if (command.type === "move_player" && index !== latestMoveIndex) {
-        continue;
-      }
-
-      collapsed.push(command);
-    }
-
-    return collapsed;
+    return drained;
   }
 
   private requeueCommands(commands: ReadonlyArray<StepCommand>): void {
@@ -4880,16 +5077,15 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       return;
     }
 
-    if (!this.canIssueBattleCommand() || !this.isPlayerAliveForInput() || this.bufferedMovementAwaitingResult) {
+    if (!this.canIssueBattleCommand() || !this.isPlayerAliveForInput()) {
       return;
     }
 
-    if (Date.now() > this.bufferedMovementExpiresAtMs || this.hasQueuedMoveCommand()) {
+    if (this.hasQueuedMoveCommand()) {
       return;
     }
 
     this.enqueueMovePlayer(this.bufferedMovementDirection);
-    this.bufferedMovementAwaitingResult = true;
   }
 
   private isPlayerAliveForInput(): boolean {
@@ -4916,24 +5112,27 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         return this.readString(result.type) === "move_player";
       });
 
-    this.bufferedMovementAwaitingResult = false;
-
-    const desired = this.syncBufferedMovementFromPressedKeys();
-    if (!desired) {
+    const moveCommand = sentCommands[moveCommandIndex];
+    const direction = this.readString(moveCommand?.dir) ?? "unknown_direction";
+    if (!moveResult) {
+      this.lastMoveResultDebug = `t${this.currentBattleTick} Move ${direction}: no server result`;
       return;
     }
 
-    const wasSuccessful = moveResult?.ok === true;
-    const reason = this.readString(moveResult?.reason);
-    if (wasSuccessful || reason === "cooldown" || reason === "move_blocked") {
-      this.bufferedMovementExpiresAtMs = Date.now() + MOVEMENT_BUFFER_TTL_MS;
-      return;
-    }
-
-    this.clearBufferedMovement();
+    const typedResult = moveResult as Record<string, unknown>;
+    const status = this.readString(typedResult["status"]) ?? (moveResult.ok === true ? "Accepted" : "Blocked");
+    const reason = this.readString(typedResult["movementReason"]) ??
+      (moveResult.ok === true ? "None" : this.readString(moveResult.reason) ?? "Unknown");
+    const blockedTileX = this.readNumber(typedResult["blockedTileX"]);
+    const blockedTileY = this.readNumber(typedResult["blockedTileY"]);
+    const blockedByActorId = this.readString(typedResult["blockedByActorId"]);
+    const blockedTileLabel = blockedTileX === null || blockedTileY === null ? "" : ` tile=(${blockedTileX},${blockedTileY})`;
+    const blockedByLabel = blockedByActorId ? ` by=${blockedByActorId}` : "";
+    const reasonLabel = status === "Blocked" ? ` (${reason})${blockedTileLabel}${blockedByLabel}` : "";
+    this.lastMoveResultDebug = `t${this.currentBattleTick} Move ${direction}: ${status}${reasonLabel}`;
   }
 
-  private syncBufferedMovementFromPressedKeys(nowMs: number = Date.now()): FacingDirection | null {
+  private syncBufferedMovementFromPressedKeys(): FacingDirection | null {
     const desired = this.resolveMovementDirectionFromPressedKeys();
     if (!desired) {
       this.clearBufferedMovement();
@@ -4942,12 +5141,10 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     }
 
     if (this.bufferedMovementDirection !== desired) {
-      this.bufferedMovementAwaitingResult = false;
       this.removeQueuedMoveCommands();
     }
 
     this.bufferedMovementDirection = desired;
-    this.bufferedMovementExpiresAtMs = nowMs + MOVEMENT_BUFFER_TTL_MS;
     return desired;
   }
 
@@ -4959,8 +5156,6 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
 
   private clearBufferedMovement(): void {
     this.bufferedMovementDirection = null;
-    this.bufferedMovementExpiresAtMs = 0;
-    this.bufferedMovementAwaitingResult = false;
   }
 
   private isMovementInputContextActive(): boolean {
@@ -5189,6 +5384,10 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.runAwardedSourceKeys.clear();
     this.runStartCraftedSnapshotByInstanceId = new Map<string, RunEquipmentSnapshot>();
     this.expConsoleEntries = [];
+    this.runResultCopyMessage = "";
+    this.replayIoMessage = "";
+    this.replayIoErrorMessage = "";
+    this.isReplayImportModalOpen = false;
     this.runLevel = RUN_INITIAL_LEVEL;
     this.runXp = RUN_INITIAL_XP;
     this.xpToNextLevel = this.computeRunXpToNextLevel(RUN_INITIAL_LEVEL);
@@ -5269,6 +5468,43 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       status: this.battleStatus,
       facing: this.currentFacingDirection
     };
+  }
+
+  private applyStepDeltaFromSnapshot(snapshot: StartBattleResponse | StepBattleResponse): void {
+    const stepDeltaMs = this.readStepDeltaMsFromSnapshot(snapshot);
+    if (stepDeltaMs === null) {
+      return;
+    }
+
+    this.stepIntervalMs = stepDeltaMs;
+  }
+
+  private readStepDeltaMsFromSnapshot(snapshot: StartBattleResponse | StepBattleResponse): number | null {
+    const value = this.readNumber((snapshot as Record<string, unknown>)["stepDeltaMs"]);
+    if (value === null) {
+      return null;
+    }
+
+    return Math.max(50, Math.floor(value));
+  }
+
+  private buildRunResultFinalizeMetrics(): RunResultFinalizeMetrics {
+    return {
+      xpTotalGained: this.economyTotalXpGained,
+      damageDealtTotal: this.combatTotalDamageDealt,
+      damageTakenTotal: this.combatTotalDamageTaken,
+      healingDoneTotal: this.combatTotalHealingDone,
+      echoFragmentsDelta: this.runEchoFragmentsNet
+    };
+  }
+
+  private tryFinalizeRunResult(snapshot: StartBattleResponse | StepBattleResponse): void {
+    const finalized = this.runResultLogger.finalizeIfEnded(snapshot, this.buildRunResultFinalizeMetrics());
+    if (!finalized) {
+      return;
+    }
+
+    this.runResultCopyMessage = "Run result logged and stored.";
   }
 
   private applyGameOverStateFromSnapshot(

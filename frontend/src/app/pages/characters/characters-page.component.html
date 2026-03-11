@@ -1,0 +1,96 @@
+<section class="characters-shell">
+  <header class="characters-shell__header">
+    <div>
+      <h1>Characters</h1>
+      <p>Manage active character and review equipped gear outside the arena.</p>
+    </div>
+    @if (isCharacterRoute) {
+      <button type="button" class="characters-shell__back" (click)="clearCharacterRoute()">Back to list</button>
+    }
+  </header>
+
+  @if (actionMessage) {
+    <p class="characters-shell__message">{{ actionMessage }}</p>
+  }
+  @if (actionError) {
+    <p class="characters-shell__message characters-shell__message--error">{{ actionError }}</p>
+  }
+
+  @if (isLoading) {
+    <p class="characters-shell__state">Loading characters...</p>
+  } @else if (loadError) {
+    <p class="characters-shell__state characters-shell__state--error">{{ loadError }}</p>
+  } @else if (characterRows.length === 0) {
+    <p class="characters-shell__state">No characters found for this account.</p>
+  } @else {
+    <div class="characters-shell__layout">
+      <aside class="characters-list">
+        <h2>Character List</h2>
+        <ul>
+          @for (row of characterRows; track row.characterId) {
+            <li class="character-card" [class.character-card--selected]="selectedCharacterId === row.characterId">
+              <button type="button" class="character-card__main" (click)="viewCharacter(row.characterId)">
+                <div class="character-card__title">
+                  <strong>{{ row.name }}</strong>
+                  <span>{{ row.characterId }}</span>
+                </div>
+                <div class="character-card__stats">
+                  <span>Level {{ row.level }}</span>
+                  <span>XP {{ row.xp }}</span>
+                </div>
+                <div class="character-card__equipment">
+                  <span><strong>Weapon:</strong> {{ row.equippedWeaponName }}</span>
+                  <span><strong>Armor:</strong> {{ row.equippedArmorName }}</span>
+                  <span><strong>Relic:</strong> {{ row.equippedRelicName }}</span>
+                </div>
+              </button>
+              <div class="character-card__actions">
+                <button
+                  type="button"
+                  [disabled]="row.isActive || isSetActiveInFlight(row.characterId)"
+                  (click)="setActiveCharacter(row.characterId, $event)">
+                  {{
+                    row.isActive
+                      ? "Active"
+                      : isSetActiveInFlight(row.characterId)
+                        ? "Setting..."
+                        : "Set Active"
+                  }}
+                </button>
+                <a [routerLink]="['/characters', row.characterId]">Details</a>
+              </div>
+            </li>
+          }
+        </ul>
+      </aside>
+
+      <section class="character-details">
+        @if (selectedCharacter) {
+          <header class="character-details__header">
+            <h2>{{ selectedCharacter.name }}</h2>
+            <p>{{ selectedCharacter.characterId }} • Level {{ selectedCharacter.level }} • XP {{ selectedCharacter.xp }}</p>
+          </header>
+
+          <div class="character-details__paperdoll">
+            <h3>Paperdoll Summary</h3>
+            <p><span>Status</span><strong>{{ selectedCharacter.isActive ? "Active" : "Inactive" }}</strong></p>
+            <p><span>Weapon Slot</span><strong>{{ selectedCharacter.equippedWeaponName }}</strong></p>
+            <p><span>Armor Slot</span><strong>{{ selectedCharacter.equippedArmorName }}</strong></p>
+            <p><span>Relic Slot</span><strong>{{ selectedCharacter.equippedRelicName }}</strong></p>
+          </div>
+
+          <div class="character-details__actions">
+            <h3>Quick Actions</h3>
+            <div>
+              <button type="button" (click)="openBackpack()">Open Backpack</button>
+              <a routerLink="/arena">Enter Arena</a>
+            </div>
+          </div>
+        } @else {
+          <p class="characters-shell__state">Select a character to inspect details.</p>
+        }
+      </section>
+    </div>
+  }
+</section>
+

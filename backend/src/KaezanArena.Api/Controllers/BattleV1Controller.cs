@@ -10,10 +10,12 @@ namespace KaezanArena.Api.Controllers;
 public sealed class BattleV1Controller : ControllerBase
 {
     private readonly IBattleStore _battleStore;
+    private readonly int _stepDeltaMs;
 
-    public BattleV1Controller(IBattleStore battleStore)
+    public BattleV1Controller(IBattleStore battleStore, IConfiguration configuration)
     {
         _battleStore = battleStore;
+        _stepDeltaMs = ArenaConfig.NormalizeStepDeltaMs(configuration.GetValue<int?>("Battle:StepDeltaMs"));
     }
 
     [HttpPost("start")]
@@ -69,7 +71,7 @@ public sealed class BattleV1Controller : ControllerBase
         }
     }
 
-    private static BattleStartResponseDto ToStartResponse(BattleSnapshot snapshot)
+    private BattleStartResponseDto ToStartResponse(BattleSnapshot snapshot)
     {
         return new BattleStartResponseDto(
             BattleId: snapshot.BattleId,
@@ -96,6 +98,7 @@ public sealed class BattleV1Controller : ControllerBase
             TimeSurvivedMs: snapshot.TimeSurvivedMs,
             RunTimeMs: snapshot.RunTimeMs,
             RunDurationMs: snapshot.RunDurationMs,
+            StepDeltaMs: _stepDeltaMs,
             CurrentMobHpMult: snapshot.CurrentMobHpMult,
             CurrentMobDmgMult: snapshot.CurrentMobDmgMult,
             Scaling: snapshot.Scaling,
@@ -116,7 +119,7 @@ public sealed class BattleV1Controller : ControllerBase
             SelectedCards: snapshot.SelectedCards);
     }
 
-    private static BattleStepResponseDto ToStepResponse(BattleSnapshot snapshot)
+    private BattleStepResponseDto ToStepResponse(BattleSnapshot snapshot)
     {
         return new BattleStepResponseDto(
             BattleId: snapshot.BattleId,
@@ -143,6 +146,7 @@ public sealed class BattleV1Controller : ControllerBase
             TimeSurvivedMs: snapshot.TimeSurvivedMs,
             RunTimeMs: snapshot.RunTimeMs,
             RunDurationMs: snapshot.RunDurationMs,
+            StepDeltaMs: _stepDeltaMs,
             CurrentMobHpMult: snapshot.CurrentMobHpMult,
             CurrentMobDmgMult: snapshot.CurrentMobDmgMult,
             Scaling: snapshot.Scaling,

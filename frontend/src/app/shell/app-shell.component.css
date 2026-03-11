@@ -1,0 +1,79 @@
+:host {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.shell {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  background: #f3f6fb;
+}
+
+.shell__topbar {
+  flex: 0 0 auto;
+  height: 56px;
+  border-bottom: 1px solid #d3dbe7;
+  background: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 0.9rem;
+}
+
+.shell__brand {
+  color: #0f172a;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  font-size: 0.96rem;
+}
+
+.shell__nav {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.shell__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.shell__nav a {
+  text-decoration: none;
+  color: #334155;
+  font-size: 0.86rem;
+  font-weight: 600;
+  padding: 0.3rem 0.55rem;
+  border-radius: 0.35rem;
+}
+
+.shell__nav a.active {
+  background: #0f172a;
+  color: #f8fafc;
+}
+
+.shell__backpack-button {
+  border: 1px solid #334155;
+  border-radius: 0.35rem;
+  background: #f8fafc;
+  color: #0f172a;
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 0.3rem 0.58rem;
+  cursor: pointer;
+}
+
+.shell__content {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+}
+
+.shell__content > * {
+  flex: 1 1 auto;
+  min-height: 0;
+}

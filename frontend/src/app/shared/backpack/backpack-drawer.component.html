@@ -1,0 +1,32 @@
+<div class="backpack-drawer__overlay" *ngIf="isOpen" (click)="requestClose()">
+  <aside class="backpack-drawer" role="dialog" aria-modal="true" aria-label="Backpack drawer" (click)="onPanelClick($event)">
+    <header class="backpack-drawer__header">
+      <h2>Backpack</h2>
+      <button type="button" (click)="requestClose()">Close</button>
+    </header>
+    <div class="backpack-drawer__body">
+      <h3 class="backpack-drawer__character">{{ activeCharacterName }}</h3>
+      @if (equipFeedbackMessage) {
+        <p class="backpack-drawer__status" [class.backpack-drawer__status--error]="equipFeedbackIsError">{{ equipFeedbackMessage }}</p>
+      }
+
+      @if (isLoading) {
+        <p class="backpack-drawer__status">Loading inventory...</p>
+      } @else if (errorMessage) {
+        <p class="backpack-drawer__status backpack-drawer__status--error">{{ errorMessage }}</p>
+      } @else if (!activeCharacter) {
+        <p class="backpack-drawer__status">No active character found.</p>
+      } @else {
+        <app-backpack-window
+          class="backpack-drawer__backpack"
+          [character]="activeCharacter"
+          [itemCatalogById]="itemCatalogById"
+          [equipmentCatalogByItemId]="equipmentCatalogByItemId"
+          [equipInFlight]="equipInFlight"
+          [salvageInFlight]="false"
+          (equipRequested)="onEquipRequested($event)"
+        ></app-backpack-window>
+      }
+    </div>
+  </aside>
+</div>

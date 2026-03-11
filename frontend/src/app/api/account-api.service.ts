@@ -340,7 +340,7 @@ export class AccountApiService {
     }
 
     console.warn(
-      "[AccountApiService] Relative /api request failed. Check Angular dev server proxy (--proxy-config proxy.conf.json) and backend at http://localhost:5158."
+      "[AccountApiService] Relative /api request failed. Check Angular dev server proxy (--proxy-config proxy.conf.json) and backend at https://localhost:7174."
     );
   }
 

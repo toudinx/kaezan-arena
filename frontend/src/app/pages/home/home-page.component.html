@@ -1,8 +1,86 @@
 <section class="home-shell">
-  <h1>Kaezan Arena</h1>
-  <p>Monorepo frontend scaffold with semantic asset resolution and canvas arena rendering.</p>
-  <div class="home-shell__actions">
+  <header class="home-shell__header">
+    <div>
+      <h1>Kaezan Arena</h1>
+      <p>Dashboard hub for character progression, economy, and your latest run.</p>
+    </div>
+    <div class="home-shell__account">
+      <span>Account</span>
+      <strong>{{ accountId }}</strong>
+    </div>
+  </header>
+
+  <nav class="home-shell__actions" aria-label="Main navigation">
     <a routerLink="/arena">Enter Arena</a>
-    <a routerLink="/bestiary">Open Bestiary</a>
-  </div>
+    <a routerLink="/characters">Characters</a>
+    <a routerLink="/bestiary">Bestiary</a>
+  </nav>
+
+  @if (isLoading) {
+    <p class="home-shell__state">Loading account session...</p>
+  } @else if (loadError) {
+    <p class="home-shell__state home-shell__state--error">{{ loadError }}</p>
+  } @else {
+    <div class="home-shell__grid">
+      <article class="home-card">
+        <h2>Active Character</h2>
+        @if (hasActiveCharacter) {
+          <div class="home-card__character-head">
+            <strong>{{ activeCharacterName }}</strong>
+            <span>{{ activeCharacterId }}</span>
+          </div>
+
+          <div class="home-card__stats">
+            @for (stat of keyStats; track stat.label) {
+              <p><span>{{ stat.label }}</span><strong>{{ stat.value }}</strong></p>
+            }
+          </div>
+
+          <div class="home-card__paperdoll">
+            <h3>Paperdoll Summary</h3>
+            <p><span>Weapon</span><strong>{{ equippedWeaponName }}</strong></p>
+            <p><span>Armor</span><strong>{{ equippedArmorName }}</strong></p>
+            <p><span>Relic</span><strong>{{ equippedRelicName }}</strong></p>
+          </div>
+        } @else {
+          <p class="home-card__empty">No active character selected.</p>
+          <a class="home-card__link" routerLink="/characters">Choose Character</a>
+        }
+      </article>
+
+      <article class="home-card">
+        <h2>Currencies</h2>
+        <div class="home-card__stats">
+          @for (currency of currencyRows; track currency.label) {
+            <p><span>{{ currency.label }}</span><strong>{{ currency.amount }}</strong></p>
+          }
+        </div>
+        @if (materialCurrencyRows.length === 0) {
+          <p class="home-card__empty">No additional currency balances yet.</p>
+        }
+      </article>
+
+      <article class="home-card">
+        <h2>Last Run</h2>
+        @if (hasLastRunSummary && lastRunSummary) {
+          <div class="home-card__run-head">
+            <strong>{{ lastRunSummary.endReason }}</strong>
+            <span>{{ lastRunRecordedAtLabel }}</span>
+          </div>
+          <div class="home-card__stats">
+            <p><span>Seed</span><strong>{{ lastRunSummary.battleSeed }}</strong></p>
+            <p><span>Duration</span><strong>{{ lastRunSummary.durationMs }} ms</strong></p>
+            <p><span>Run Level</span><strong>{{ lastRunSummary.runLevelFinal }}</strong></p>
+            <p><span>XP Gained</span><strong>{{ lastRunSummary.xpTotalGained }}</strong></p>
+            <p><span>Kills</span><strong>{{ lastRunSummary.killsTotal }}</strong></p>
+            <p><span>Elite Kills</span><strong>{{ lastRunSummary.eliteKills }}</strong></p>
+            <p><span>Chests</span><strong>{{ lastRunSummary.chestsOpened }}</strong></p>
+            <p><span>Echo Delta</span><strong>{{ lastRunSummary.echoFragmentsDelta }}</strong></p>
+          </div>
+        } @else {
+          <p class="home-card__empty">No runs yet.</p>
+        }
+      </article>
+    </div>
+  }
 </section>

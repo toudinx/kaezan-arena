@@ -1,15 +1,22 @@
-import type { AccountState, CharacterState, ItemDefinition, OwnedEquipmentInstance } from "../../api/account-api.service";
+import type {
+  AccountApiService,
+  AccountState,
+  CharacterState,
+  ItemDefinition,
+  OwnedEquipmentInstance
+} from "../../api/account-api.service";
 import { ArenaPageComponent } from "./arena-page.component";
 
 describe("ArenaPageComponent equipment flow", () => {
-  function createComponent(): ArenaPageComponent {
+  function createComponent(accountApi: Partial<AccountApiService> = {}): ArenaPageComponent {
     return new ArenaPageComponent(
       {} as never,
       {} as never,
       {} as never,
       {} as never,
       {} as never,
-      {} as never
+      {} as never,
+      accountApi as AccountApiService
     );
   }
 
@@ -85,9 +92,11 @@ describe("ArenaPageComponent equipment flow", () => {
   });
 
   it("equip request updates character weapon and exits matching equip mode", async () => {
-    const component = createComponent();
     const before = createCharacter({ weaponInstanceId: "wpn-old", armorInstanceId: "arm-old", relicInstanceId: "rel-old" });
     const after = createCharacter({ weaponInstanceId: "wpn-new", armorInstanceId: "arm-old", relicInstanceId: "rel-old" });
+    const component = createComponent({
+      equipItem: async () => after
+    });
 
     const accountState: AccountState = {
       accountId: "dev",
@@ -112,10 +121,6 @@ describe("ArenaPageComponent equipment flow", () => {
     component.backpackEquipMode = "weapon";
     component.backpackForcedFilter = "weapons";
 
-    (component as any).accountApi = {
-      equipItem: async () => after
-    };
-
     await component.onBackpackEquipRequested({ instanceId: "wpn-new", slot: "weapon" });
 
     expect(component.selectedCharacter?.equipment.weaponInstanceId).toBe("wpn-new");
@@ -125,10 +130,15 @@ describe("ArenaPageComponent equipment flow", () => {
   });
 
   it("equip request updates armor and relic slots via equip-item API", async () => {
-    const component = createComponent();
     const before = createCharacter({ weaponInstanceId: "wpn-old", armorInstanceId: "arm-old", relicInstanceId: "rel-old" });
     const afterArmor = createCharacter({ weaponInstanceId: "wpn-old", armorInstanceId: "arm-new", relicInstanceId: "rel-old" });
     const afterRelic = createCharacter({ weaponInstanceId: "wpn-old", armorInstanceId: "arm-new", relicInstanceId: "rel-new" });
+    const equipItemMock = vi.fn()
+      .mockResolvedValueOnce(afterArmor)
+      .mockResolvedValueOnce(afterRelic);
+    const component = createComponent({
+      equipItem: equipItemMock
+    });
 
     const accountState: AccountState = {
       accountId: "dev",
@@ -150,11 +160,6 @@ describe("ArenaPageComponent equipment flow", () => {
       old_relic: { itemId: "old_relic", displayName: "Old Rune Codex", kind: "equipment", stackable: false, rarity: "common" },
       new_relic: { itemId: "new_relic", displayName: "New Rune Codex", kind: "equipment", stackable: false, rarity: "rare" }
     } as Record<string, ItemDefinition>;
-
-    const equipItemMock = vi.fn()
-      .mockResolvedValueOnce(afterArmor)
-      .mockResolvedValueOnce(afterRelic);
-    (component as any).accountApi = { equipItem: equipItemMock };
 
     await component.onBackpackEquipRequested({ instanceId: "arm-new", slot: "armor" });
     await component.onBackpackEquipRequested({ instanceId: "rel-new", slot: "relic" });

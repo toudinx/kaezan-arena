@@ -443,6 +443,7 @@
                   </div>
                 }
               </div>
+              <p class="status-details__movement-debug">{{ lastMoveResultDebug }}</p>
               <h4>Cards</h4>
               @if (selectedCards.length === 0) {
                 <p>No cards selected yet.</p>
@@ -517,6 +518,22 @@
             >
               {{ replayLastRunLabel }}
             </button>
+            <button
+              type="button"
+              class="pre-run-card__start"
+              (click)="playImportedReplay()"
+              [disabled]="!canPlayImportedReplay"
+            >
+              Play Imported Replay
+            </button>
+            <button
+              type="button"
+              class="pre-run-card__start"
+              (click)="openReplayImportModal()"
+            >
+              Import Replay
+            </button>
+            <p class="pre-run-card__summary">{{ importedReplaySummaryLabel }}</p>
           </div>
         }
 
@@ -589,7 +606,21 @@
         <div class="run-complete__actions">
           <button type="button" (click)="onDeathModalRestartRun()" [disabled]="battleRequestInFlight">Restart Run</button>
           <button type="button" (click)="onDeathModalReturnToPreRun()" [disabled]="battleRequestInFlight">Exit</button>
+          <button type="button" (click)="exportReplayJson()">Export Replay</button>
+          <button type="button" (click)="openReplayImportModal()">Import Replay</button>
+          <button type="button" (click)="playImportedReplay()" [disabled]="!canPlayImportedReplay">Play Imported Replay</button>
+          <button type="button" (click)="copyLastRunResultJson()">Copy Last Run JSON</button>
+          <button type="button" (click)="copyAllRunResultsJson()">Copy All Run Results</button>
         </div>
+        @if (runResultCopyMessage) {
+          <p class="run-complete__copy-status">{{ runResultCopyMessage }}</p>
+        }
+        @if (replayIoMessage) {
+          <p class="run-complete__copy-status">{{ replayIoMessage }}</p>
+        }
+        @if (replayIoErrorMessage) {
+          <p class="run-complete__copy-status run-complete__copy-status--error">{{ replayIoErrorMessage }}</p>
+        }
       </section>
     </div>
   }
@@ -627,6 +658,37 @@
               </ul>
             </section>
           }
+        </div>
+      </section>
+    </div>
+  }
+
+  @if (isReplayImportModalOpen) {
+    <div class="pause-modal__backdrop">
+      <section class="replay-import-modal" role="dialog" aria-modal="true" aria-label="Import replay JSON">
+        <header class="replay-import-modal__header">
+          <h2>Import Replay JSON</h2>
+        </header>
+        <textarea
+          class="replay-import-modal__textarea"
+          [value]="replayImportJsonText"
+          (input)="onReplayImportTextChanged($event)"
+          placeholder="Paste replay JSON here..."
+        ></textarea>
+        <label class="replay-import-modal__file">
+          <span>or choose JSON file</span>
+          <input type="file" accept=".json,application/json" (change)="onReplayImportFileSelected($event)" />
+        </label>
+        @if (replayIoMessage) {
+          <p class="replay-import-modal__status">{{ replayIoMessage }}</p>
+        }
+        @if (replayIoErrorMessage) {
+          <p class="replay-import-modal__status replay-import-modal__status--error">{{ replayIoErrorMessage }}</p>
+        }
+        <div class="replay-import-modal__actions">
+          <button type="button" (click)="validateImportedReplayJson()">Validate</button>
+          <button type="button" (click)="playImportedReplay()" [disabled]="battleRequestInFlight">Play Imported Replay</button>
+          <button type="button" (click)="closeReplayImportModal()">Close</button>
         </div>
       </section>
     </div>

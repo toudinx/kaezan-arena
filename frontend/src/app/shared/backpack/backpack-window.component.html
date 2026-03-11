@@ -1,0 +1,118 @@
+<section class="backpack" (click)="closeContextMenu()">
+  <nav class="backpack__tabs">
+    @for (filter of filters; track filter) {
+      <button
+        type="button"
+        class="backpack__tab"
+        [class.backpack__tab--active]="isFilterActive(filter)"
+        [disabled]="!!equipMode"
+        (click)="setFilter(filter)"
+      >
+        {{
+          filter === "all"
+            ? "All"
+            : filter === "weapons"
+              ? "Weapons"
+              : filter === "armor"
+                ? "Armor"
+                : "Relics"
+        }}
+      </button>
+    }
+  </nav>
+  @if (equipMode) {
+    <p class="backpack__mode-hint">{{ equipModeHint }}</p>
+  }
+
+  <div class="backpack__grid" (contextmenu)="onGridContextMenu($event)">
+    @if (visibleSlots.length === 0) {
+      <p class="backpack__empty">No items in this filter.</p>
+    } @else {
+      @for (slot of visibleSlots; track trackSlotById($index, slot)) {
+        <button
+          type="button"
+          class="backpack__slot"
+          [class.backpack__slot--selected]="selectedSlotId === slot.slotId"
+          [class.backpack__slot--equipped]="slot.isEquipped"
+          [class.backpack__slot--pulse]="isSlotPulsing(slot.slotId)"
+          [class.backpack__slot--weapon]="slot.isWeapon"
+          [class.backpack__slot--common]="slot.rarity.toLowerCase() === 'common'"
+          [class.backpack__slot--rare]="slot.rarity.toLowerCase() === 'rare'"
+          [class.backpack__slot--epic]="slot.rarity.toLowerCase() === 'epic'"
+          [class.backpack__slot--legendary]="slot.rarity.toLowerCase() === 'legendary'"
+          [class.backpack__slot--ascendant]="slot.rarity.toLowerCase() === 'ascendant'"
+          (click)="selectSlot(slot.slotId)"
+          (contextmenu)="onSlotContextMenu(slot, $event)"
+          [title]="slot.displayName"
+        >
+          <span class="backpack__icon">{{ slot.displayName.slice(0, 1).toUpperCase() }}</span>
+          @if (slot.quantity > 1) {
+            <span class="backpack__count">{{ slot.quantity }}</span>
+          }
+          @if (slot.isEquipped) {
+            <span class="backpack__equipped-badge">E</span>
+          }
+        </button>
+      }
+    }
+  </div>
+
+  @if (selectedSlot) {
+    <div class="backpack__tooltip">
+      <strong>{{ selectedSlot.displayName }}</strong>
+      <span>
+        {{
+          selectedSlot.slot === "weapon"
+            ? "Weapon"
+            : selectedSlot.slot === "armor"
+              ? "Armor"
+              : selectedSlot.slot === "relic"
+                ? "Relic"
+                : "Equipment"
+        }}
+      </span>
+      <span>Rarity: {{ selectedSlot.rarity }}</span>
+      @if (selectedSlot.weaponClass) {
+        <span>Class: {{ selectedSlot.weaponClass }}</span>
+      }
+      @if (canSalvage(selectedSlot)) {
+        <span>Salvage return: {{ getSelectedSlotSalvagePrimalCoreReturn() }} Primal Core</span>
+      }
+      @if (canEquip(selectedSlot) || canSalvage(selectedSlot)) {
+        <div class="backpack__tooltip-actions">
+          @if (canEquip(selectedSlot)) {
+            <button
+              type="button"
+              [disabled]="equipInFlight"
+              (click)="onEquipSelectedSlot()">
+              Equip
+            </button>
+          }
+          @if (canSalvage(selectedSlot)) {
+          <button
+            type="button"
+            [disabled]="salvageInFlight"
+            (click)="onSalvageSelectedSlot()">
+            Salvage
+          </button>
+          }
+        </div>
+      }
+    </div>
+  }
+
+  @if (contextMenu && selectedSlot) {
+    <div class="backpack__context-menu" [style.left.px]="contextMenu.x" [style.top.px]="contextMenu.y" (click)="$event.stopPropagation()">
+      <button type="button" [disabled]="!canEquip(selectedSlot)" (click)="onContextMenuAction('equip')">Equip</button>
+      <button type="button" (click)="onContextMenuAction('inspect')">Inspect</button>
+    </div>
+  }
+
+  @if (inspectSlot) {
+    <div class="backpack__inspect" (click)="$event.stopPropagation()">
+      <p class="backpack__inspect-title">{{ inspectSlot.displayName }}</p>
+      <p>{{ inspectSlot.inspectLabel }}</p>
+      <button type="button" (click)="closeInspect()">Close</button>
+    </div>
+  }
+</section>

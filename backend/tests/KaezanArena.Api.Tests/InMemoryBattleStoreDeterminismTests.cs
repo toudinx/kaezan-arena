@@ -32,6 +32,72 @@ public sealed class InMemoryBattleStoreDeterminismTests
     private const int MaxGlobalCooldownReductionPercent = 60;
 
     [Fact]
+    public void StartAndStepBattle_NormalRun_DoesNotThrowInvariantValidation()
+    {
+        var store = new InMemoryBattleStore();
+
+        var exception = Record.Exception(() =>
+        {
+            var start = store.StartBattle("arena-invariants-normal", "player-invariants-normal", 1337);
+            _ = store.StepBattle(start.BattleId, start.Tick, []);
+        });
+
+        Assert.Null(exception);
+    }
+
+    [Fact]
+    public void StepBattle_RepeatedMoveCommandWhileBlocked_EmitsBlockedResultUntilPathIsFree()
+    {
+        var store = new InMemoryBattleStore();
+        var start = store.StartBattle("arena-move-repeat-blocked", "player-move-repeat-blocked", 1337);
+        var player = Assert.Single(start.Actors, actor => string.Equals(actor.Kind, "player", StringComparison.Ordinal));
+        var blocker = start.Actors.First(actor => string.Equals(actor.Kind, "mob", StringComparison.Ordinal));
+        var destinationX = player.TileX + 1;
+        var destinationY = player.TileY;
+        var moveRight = new[] { new BattleCommandDto("move_player", Dir: "right") };
+
+        SetActorTile(store, start.BattleId, blocker.ActorId, destinationX, destinationY);
+        var blockedFirst = store.StepBattle(start.BattleId, start.Tick, moveRight);
+        AssertMoveCommandResult(
+            blockedFirst,
+            expectedOk: false,
+            expectedStatus: "Blocked",
+            expectedMovementReason: "Occupied",
+            expectedLegacyReason: "move_blocked",
+            expectedBlockedTileX: destinationX,
+            expectedBlockedTileY: destinationY,
+            expectedBlockedByActorId: blocker.ActorId);
+        AssertActorTile(blockedFirst, player.ActorId, player.TileX, player.TileY);
+
+        SetActorTile(store, start.BattleId, blocker.ActorId, destinationX, destinationY);
+        var blockedSecond = store.StepBattle(start.BattleId, blockedFirst.Tick, moveRight);
+        AssertMoveCommandResult(
+            blockedSecond,
+            expectedOk: false,
+            expectedStatus: "Blocked",
+            expectedMovementReason: "Occupied",
+            expectedLegacyReason: "move_blocked",
+            expectedBlockedTileX: destinationX,
+            expectedBlockedTileY: destinationY,
+            expectedBlockedByActorId: blocker.ActorId);
+        AssertActorTile(blockedSecond, player.ActorId, player.TileX, player.TileY);
+
+        var freeTile = FindUnoccupiedTile(blockedSecond, (destinationX, destinationY), (player.TileX, player.TileY));
+        SetActorTile(store, start.BattleId, blocker.ActorId, freeTile.TileX, freeTile.TileY);
+        var accepted = store.StepBattle(start.BattleId, blockedSecond.Tick, moveRight);
+        AssertMoveCommandResult(
+            accepted,
+            expectedOk: true,
+            expectedStatus: "Accepted",
+            expectedMovementReason: "None",
+            expectedLegacyReason: null,
+            expectedBlockedTileX: null,
+            expectedBlockedTileY: null,
+            expectedBlockedByActorId: null);
+        AssertActorTile(accepted, player.ActorId, destinationX, destinationY);
+    }
+
+    [Fact]
     public void StartBattle_MobInitialAutoAttackCooldowns_AreNonZero_Deterministic_AndDesynchronized()
     {
         const int seed = 1337;
@@ -1082,6 +1148,72 @@ public sealed class InMemoryBattleStoreDeterminismTests
         var hpProperty = actor.GetType().GetProperty("Hp");
         Assert.NotNull(hpProperty);
         hpProperty.SetValue(actor, Math.Max(0, hp));
+    }
+
+    private static void SetActorTile(InMemoryBattleStore store, string battleId, string actorId, int tileX, int tileY)
+    {
+        var actor = GetStoredActor(store, battleId, actorId);
+        var tileXProperty = actor.GetType().GetProperty("TileX");
+        Assert.NotNull(tileXProperty);
+        tileXProperty.SetValue(actor, tileX);
+
+        var tileYProperty = actor.GetType().GetProperty("TileY");
+        Assert.NotNull(tileYProperty);
+        tileYProperty.SetValue(actor, tileY);
+    }
+
+    private static void AssertMoveCommandResult(
+        BattleSnapshot snapshot,
+        bool expectedOk,
+        string expectedStatus,
+        string expectedMovementReason,
+        string? expectedLegacyReason,
+        int? expectedBlockedTileX,
+        int? expectedBlockedTileY,
+        string? expectedBlockedByActorId)
+    {
+        var result = Assert.Single(snapshot.CommandResults, entry =>
+            string.Equals(entry.Type, "move_player", StringComparison.Ordinal));
+        Assert.Equal(expectedOk, result.Ok);
+        Assert.Equal(expectedStatus, result.Status);
+        Assert.Equal(expectedMovementReason, result.MovementReason);
+        Assert.Equal(expectedLegacyReason, result.Reason);
+        Assert.Equal(expectedBlockedTileX, result.BlockedTileX);
+        Assert.Equal(expectedBlockedTileY, result.BlockedTileY);
+        Assert.Equal(expectedBlockedByActorId, result.BlockedByActorId);
+    }
+
+    private static void AssertActorTile(BattleSnapshot snapshot, string actorId, int expectedTileX, int expectedTileY)
+    {
+        var actor = Assert.Single(snapshot.Actors, entry => string.Equals(entry.ActorId, actorId, StringComparison.Ordinal));
+        Assert.Equal(expectedTileX, actor.TileX);
+        Assert.Equal(expectedTileY, actor.TileY);
+    }
+
+    private static (int TileX, int TileY) FindUnoccupiedTile(
+        BattleSnapshot snapshot,
+        params (int TileX, int TileY)[] excludedTiles)
+    {
+        var occupiedTiles = snapshot.Actors
+            .Select(actor => (actor.TileX, actor.TileY))
+            .ToHashSet();
+        foreach (var excluded in excludedTiles)
+        {
+            occupiedTiles.Add((excluded.TileX, excluded.TileY));
+        }
+
+        for (var tileY = 0; tileY < ArenaConfig.Height; tileY += 1)
+        {
+            for (var tileX = 0; tileX < ArenaConfig.Width; tileX += 1)
+            {
+                if (!occupiedTiles.Contains((tileX, tileY)))
+                {
+                    return (tileX, tileY);
+                }
+            }
+        }
+
+        throw new Xunit.Sdk.XunitException("No unoccupied tile was available for test setup.");
     }
 
     private static void SetMobBuffSourceEliteId(InMemoryBattleStore store, string battleId, string actorId, string? buffSourceEliteId)
