@@ -189,20 +189,20 @@ public sealed partial class InMemoryBattleStore
             string.Equals(attacker.Kind, "player", StringComparison.Ordinal))
         {
             return RollDamage(
+                state,
                 baseDamage,
                 PlayerDamageVarianceMinMultiplier,
-                PlayerDamageVarianceMaxMultiplier,
-                state.Rng);
+                PlayerDamageVarianceMaxMultiplier);
         }
 
         return RollDamage(
+            state,
             baseDamage,
             MobDamageVarianceMinMultiplier,
-            MobDamageVarianceMaxMultiplier,
-            state.Rng);
+            MobDamageVarianceMaxMultiplier);
     }
 
-    private static int RollDamage(int baseDamage, double minMultiplier, double maxMultiplier, Random rng)
+    private static int RollDamage(StoredBattle state, int baseDamage, double minMultiplier, double maxMultiplier)
     {
         if (baseDamage <= 0)
         {
@@ -216,13 +216,13 @@ public sealed partial class InMemoryBattleStore
 
         var clampedMin = Math.Max(0d, minMultiplier);
         var clampedMax = Math.Max(clampedMin, maxMultiplier);
-        var multiplier = clampedMin + ((clampedMax - clampedMin) * rng.NextDouble());
+        var multiplier = clampedMin + ((clampedMax - clampedMin) * NextUnitDoubleFromBattleRng(state));
         var scaledDamage = baseDamage * multiplier;
         var flooredDamage = (int)Math.Floor(scaledDamage);
         var fractionalDamage = Math.Clamp(scaledDamage - flooredDamage, 0d, 1d);
 
         var rolledDamage = flooredDamage;
-        if (fractionalDamage > 0d && rng.NextDouble() < fractionalDamage)
+        if (fractionalDamage > 0d && NextUnitDoubleFromBattleRng(state) < fractionalDamage)
         {
             rolledDamage += 1;
         }

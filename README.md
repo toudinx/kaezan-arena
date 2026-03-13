@@ -25,19 +25,25 @@ dotnet run --launch-profile https
 
 This profile exposes both:
 - `https://localhost:7174`
-- `http://localhost:5158`
+- `http://localhost:5168`
 
 Health check:
 
 ```text
-GET http://localhost:5158/health
+GET http://localhost:5168/health
 ```
 
 OpenAPI (used for frontend client generation):
 
 ```text
-http://localhost:5158/swagger/v1/swagger.json
+http://localhost:5168/swagger/v1/swagger.json
 ```
+
+Account state persistence (backend):
+- Account state is persisted to JSON files on disk.
+- Default storage directory: `backend/src/KaezanArena.Api/.data/accounts` (relative to the API content root).
+- Configure a custom directory with `AccountState:StorageDirectory` in configuration/environment variables.
+- If the directory or files are missing, backend starts safely and seeds accounts in memory as before.
 
 ## Run Frontend
 
@@ -52,7 +58,7 @@ Frontend includes routing (`/`, `/arena`), Tailwind setup, and Arena module boun
 If you change `frontend/proxy.conf.json`, restart the frontend dev server (`npm run start`) so proxy updates take effect.
 The frontend dev proxy forwards `/api/*` to `https://localhost:7174` (self-signed cert allowed via `secure: false` in dev proxy config).
 
-`api:generate` requires backend running. The generator script first checks `OPENAPI_URL` (if set), then defaults to `http://localhost:5158/swagger/v1/swagger.json`.
+`api:generate` requires backend running. The generator script first checks `OPENAPI_URL` (if set), then defaults to `http://localhost:5168/swagger/v1/swagger.json`.
 
 Generator choice: `openapi-typescript` + `openapi-fetch` for a lightweight, framework-agnostic, type-safe client with minimal lock-in. Generated code is isolated under `frontend/src/app/api/generated`.
 
@@ -62,7 +68,7 @@ Generator choice: `openapi-typescript` + `openapi-fetch` for a lightweight, fram
 docker compose up --build
 ```
 
-Current `docker-compose.yml` is a development skeleton with backend (`5158`) and frontend (`4200`) services.
+Current `docker-compose.yml` is a development skeleton with backend (`5080`) and frontend (`4200`) services.
 
 ## Code Style
 

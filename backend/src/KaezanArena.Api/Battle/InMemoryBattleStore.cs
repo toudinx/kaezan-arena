@@ -66,6 +66,10 @@ public sealed partial class InMemoryBattleStore : IBattleStore
     private const int HealCooldownTotalMs = 7000;
     private const int GuardCooldownTotalMs = 10000;
     private const int AvalancheCooldownTotalMs = 2500;
+    private const int SkillInitialLevel = 1;
+    private const int SkillCooldownReductionPerLevelPercent = 4;
+    private const int SkillCooldownReductionMaxPercent = 32;
+    private const int SkillDefensivePercentBonusPerLevel = 2;
     private const int AvalancheDamage = 3;       
     private const int AvalancheRangeTilesManhattan = 3;
     private const int HealPercentOfMaxHp = 22;
@@ -181,6 +185,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
     private const int BestiaryChestIncrementBaseKills = 12;
     private const int BestiaryChestIncrementRandomInclusiveMax = 6;
     private const string InitialChestPoiId = "poi.chest.0000";
+    private static readonly int[] BestiaryRankKillThresholds = [0, 10, 30, 60, 100];
 
     private static readonly MobArchetype[] SpawnArchetypeCycle =
     [
@@ -195,6 +200,15 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         ExoriMasSkillId,
         ExoriSkillId,
         ExoriMinSkillId
+    ];
+    private static readonly string[] RunLevelSkillUpgradeOrder =
+    [
+        HealSkillId,
+        GuardSkillId,
+        ExoriSkillId,
+        ExoriMinSkillId,
+        ExoriMasSkillId,
+        AvalancheSkillId
     ];
     private static readonly IReadOnlyDictionary<string, bool> DefaultAssistAutoSkills =
         new Dictionary<string, bool>(StringComparer.Ordinal)
@@ -473,15 +487,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                     maxShield: ComputePlayerMaxShield(maxHp: PlayerBaseHp),
                     mobSlotIndex: null)
             },
-            skills: new Dictionary<string, StoredSkill>(StringComparer.Ordinal)
-            {
-                [ExoriSkillId] = new StoredSkill(ExoriSkillId, cooldownRemainingMs: 0, cooldownTotalMs: ExoriCooldownTotalMs),
-                [ExoriMasSkillId] = new StoredSkill(ExoriMasSkillId, cooldownRemainingMs: 0, cooldownTotalMs: ExoriMasCooldownTotalMs),
-                [ExoriMinSkillId] = new StoredSkill(ExoriMinSkillId, cooldownRemainingMs: 0, cooldownTotalMs: ExoriMinCooldownTotalMs),
-                [HealSkillId] = new StoredSkill(HealSkillId, cooldownRemainingMs: 0, cooldownTotalMs: HealCooldownTotalMs),
-                [GuardSkillId] = new StoredSkill(GuardSkillId, cooldownRemainingMs: 0, cooldownTotalMs: GuardCooldownTotalMs),
-                [AvalancheSkillId] = new StoredSkill(AvalancheSkillId, cooldownRemainingMs: 0, cooldownTotalMs: AvalancheCooldownTotalMs)
-            },
+            skills: BuildInitialSkills(),
             equippedWeaponElement: null,
             decals: [],
             activeBuffs: new Dictionary<string, StoredBuff>(StringComparer.Ordinal),
@@ -494,7 +500,8 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             selectedCardIds: [],
             selectedCardStacks: new Dictionary<string, int>(StringComparer.Ordinal),
             cardSelectionsGranted: 0,
-            nextCardChoiceSequence: 1);
+            nextCardChoiceSequence: 1,
+            replayActions: []);
 
         var initialMobCap = ResolveSpawnPacingDirector(state).MaxAliveMobs;
         foreach (var slot in state.MobSlots.Values.OrderBy(value => value.SlotIndex))
@@ -521,6 +528,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
 
         lock (state.Sync)
         {
+            AppendReplayStepAction(state, clientTick, commands);
             var tickBeforeStep = state.Tick;
             var nowMsBeforeStep = GetElapsedMsForTick(tickBeforeStep);
 
@@ -560,9 +568,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             var events = new List<BattleEventDto>();
             if (TryEndRunIfNeeded(state, events))
             {
-                var preAppliedOnlyResults = preAppliedPauseResults.Values
-                    .OrderBy(result => result.Index)
-                    .ToList();
+                var preAppliedOnlyResults = BuildOrderedCommandResults(preAppliedPauseResults);
                 ValidateInvariants(state);
                 return ToSnapshot(state, events, preAppliedOnlyResults);
             }
@@ -696,6 +702,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             }
 
             var nextStack = currentStacks + 1;
+            AppendReplayChooseCardAction(state, normalizedChoiceId, normalizedSelectedCardId);
             ApplyCardEffects(state, player, selectedCard, nextStack);
             state.SelectedCardIds.Add(selectedCard.Id);
             state.SelectedCardStacks[selectedCard.Id] = nextStack;
@@ -766,20 +773,43 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         return entries;
     }
 
-    private static int GetXpToNextLevel(int runLevel)
-    {
-        var clampedLevel = Math.Max(RunInitialLevel, runLevel);
-        return RunLevelXpBase + ((clampedLevel - RunInitialLevel) * RunLevelXpIncrementPerLevel);
-    }
-
     private static int ComputeInitialBestiaryThreshold(Random bestiaryRng)
     {
-        return BestiaryFirstChestBaseKills + bestiaryRng.Next(BestiaryFirstChestRandomInclusiveMax + 1);
+        return BestiaryFirstChestBaseKills + NextIntFromBestiaryRng(
+            bestiaryRng,
+            BestiaryFirstChestRandomInclusiveMax + 1);
     }
 
     private static int ComputeBestiaryThresholdIncrement(Random bestiaryRng)
     {
-        return BestiaryChestIncrementBaseKills + bestiaryRng.Next(BestiaryChestIncrementRandomInclusiveMax + 1);
+        return BestiaryChestIncrementBaseKills + NextIntFromBestiaryRng(
+            bestiaryRng,
+            BestiaryChestIncrementRandomInclusiveMax + 1);
+    }
+
+    private static int ComputeBestiaryThresholdIncrement(StoredBattle state)
+    {
+        return BestiaryChestIncrementBaseKills + NextIntFromBestiaryRng(
+            state,
+            BestiaryChestIncrementRandomInclusiveMax + 1);
+    }
+
+    private static int ResolveBestiaryRank(int killsTotal)
+    {
+        var clampedKills = Math.Max(0, killsTotal);
+        var rank = 1;
+        for (var index = BestiaryRankKillThresholds.Length - 1; index >= 0; index -= 1)
+        {
+            if (clampedKills < BestiaryRankKillThresholds[index])
+            {
+                continue;
+            }
+
+            rank = index + 1;
+            break;
+        }
+
+        return rank;
     }
 
     private static string ResolvePlayerClassId(string playerActorId)
@@ -920,20 +950,8 @@ public sealed partial class InMemoryBattleStore : IBattleStore
 
     private static int ResolvePlayerGlobalCooldownMs(StoredBattle state)
     {
-        var reductionPercent = Math.Clamp(
-            state.PlayerModifiers.GlobalCooldownReductionPercent,
-            0,
-            MaxGlobalCooldownReductionPercent);
+        var reductionPercent = ResolveCardGlobalCooldownReductionPercent(state);
         return Math.Max(1, ApplyPercentReduction(PlayerGlobalCooldownMs, reductionPercent));
-    }
-
-    private static int ResolveSkillCooldownTotalMs(StoredBattle state, StoredSkill skill)
-    {
-        var reductionPercent = Math.Clamp(
-            state.PlayerModifiers.GlobalCooldownReductionPercent,
-            0,
-            MaxGlobalCooldownReductionPercent);
-        return Math.Max(1, ApplyPercentReduction(skill.CooldownTotalMs, reductionPercent));
     }
 
     private static ElementType GetPlayerBaseElement(StoredBattle state)
@@ -959,322 +977,6 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         }
 
         throw new InvalidOperationException($"Mob behavior was not registered for archetype '{archetype}'.");
-    }
-
-    private static IReadOnlyList<CommandResultDto> BuildStatusRejectedCommandResults(
-        StoredBattle state,
-        IReadOnlyList<BattleCommandDto>? commands)
-    {
-        var commandResults = new List<CommandResultDto>();
-        if (commands is null || commands.Count == 0)
-        {
-            return commandResults;
-        }
-
-        var reason = string.Equals(state.BattleStatus, StatusDefeat, StringComparison.Ordinal)
-            ? DefeatReason
-            : NotStartedReason;
-
-        for (var index = 0; index < commands.Count; index += 1)
-        {
-            var command = commands[index];
-            var commandType = NormalizeCommandType(command.Type);
-            commandResults.Add(new CommandResultDto(index, commandType, false, reason));
-        }
-
-        return commandResults;
-    }
-
-    private static IReadOnlyDictionary<int, CommandResultDto> ApplyPauseCommands(
-        StoredBattle state,
-        IReadOnlyList<BattleCommandDto>? commands)
-    {
-        if (commands is null || commands.Count == 0)
-        {
-            return new Dictionary<int, CommandResultDto>();
-        }
-
-        var commandResults = new Dictionary<int, CommandResultDto>();
-        for (var index = 0; index < commands.Count; index += 1)
-        {
-            var command = commands[index];
-            var commandType = NormalizeCommandType(command.Type);
-            if (!string.Equals(commandType, SetPausedCommandType, StringComparison.Ordinal))
-            {
-                continue;
-            }
-
-            if (!command.Paused.HasValue)
-            {
-                commandResults[index] = new CommandResultDto(index, commandType, false, UnknownCommandReason);
-                continue;
-            }
-
-            state.IsPaused = command.Paused.Value;
-            commandResults[index] = new CommandResultDto(index, commandType, true, null);
-        }
-
-        return commandResults;
-    }
-
-    private static IReadOnlyList<CommandResultDto> BuildPausedCommandResults(
-        IReadOnlyList<BattleCommandDto>? commands,
-        IReadOnlyDictionary<int, CommandResultDto> preAppliedPauseResults)
-    {
-        var commandResults = new List<CommandResultDto>();
-        if (commands is null || commands.Count == 0)
-        {
-            return commandResults;
-        }
-
-        for (var index = 0; index < commands.Count; index += 1)
-        {
-            if (preAppliedPauseResults.TryGetValue(index, out var preAppliedResult))
-            {
-                commandResults.Add(preAppliedResult);
-                continue;
-            }
-
-            var commandType = NormalizeCommandType(commands[index].Type);
-            commandResults.Add(new CommandResultDto(index, commandType, false, PausedReason));
-        }
-
-        return commandResults;
-    }
-
-    private static IReadOnlyList<CommandResultDto> BuildAwaitingCardChoiceCommandResults(
-        IReadOnlyList<BattleCommandDto>? commands,
-        IReadOnlyDictionary<int, CommandResultDto> preAppliedPauseResults)
-    {
-        var commandResults = new List<CommandResultDto>();
-        if (commands is null || commands.Count == 0)
-        {
-            return commandResults;
-        }
-
-        for (var index = 0; index < commands.Count; index += 1)
-        {
-            if (preAppliedPauseResults.TryGetValue(index, out var preAppliedResult))
-            {
-                commandResults.Add(preAppliedResult);
-                continue;
-            }
-
-            var commandType = NormalizeCommandType(commands[index].Type);
-            commandResults.Add(new CommandResultDto(index, commandType, false, AwaitingCardChoiceReason));
-        }
-
-        return commandResults;
-    }
-
-    private static IReadOnlyDictionary<int, CommandResultDto> MergePreAppliedCommandResults(
-        IReadOnlyDictionary<int, CommandResultDto> left,
-        IReadOnlyDictionary<int, CommandResultDto> right)
-    {
-        if (left.Count == 0)
-        {
-            return right;
-        }
-
-        if (right.Count == 0)
-        {
-            return left;
-        }
-
-        var merged = new Dictionary<int, CommandResultDto>(left.Count + right.Count);
-        foreach (var entry in left)
-        {
-            merged[entry.Key] = entry.Value;
-        }
-
-        foreach (var entry in right)
-        {
-            merged[entry.Key] = entry.Value;
-        }
-
-        return merged;
-    }
-
-    private static IReadOnlyDictionary<int, CommandResultDto> ApplyMoveCommandsBeforeMobMovement(
-        StoredBattle state,
-        IReadOnlyList<BattleCommandDto>? commands,
-        ref bool hasExplicitFacingCommand)
-    {
-        if (commands is null || commands.Count == 0)
-        {
-            return new Dictionary<int, CommandResultDto>();
-        }
-
-        var commandResults = new Dictionary<int, CommandResultDto>();
-        for (var index = 0; index < commands.Count; index += 1)
-        {
-            var command = commands[index];
-            var commandType = NormalizeCommandType(command.Type);
-            if (!string.Equals(commandType, MovePlayerCommandType, StringComparison.Ordinal))
-            {
-                continue;
-            }
-
-            var moved = TryExecutePlayerMoveCommand(
-                state,
-                command.Dir,
-                out var failReason,
-                out var movementReason,
-                out var blockedTileX,
-                out var blockedTileY,
-                out var blockedByActorId);
-            if (moved)
-            {
-                hasExplicitFacingCommand = true;
-            }
-
-            commandResults[index] = new CommandResultDto(
-                Index: index,
-                Type: commandType,
-                Ok: moved,
-                Reason: failReason,
-                Status: moved ? MoveStatusAccepted : MoveStatusBlocked,
-                MovementReason: moved ? MoveReasonNone : movementReason,
-                BlockedTileX: blockedTileX,
-                BlockedTileY: blockedTileY,
-                BlockedByActorId: blockedByActorId);
-        }
-
-        return commandResults;
-    }
-
-    private static bool TryExecutePlayerMoveCommand(
-        StoredBattle state,
-        string? rawDirection,
-        out string? failReason,
-        out string movementReason,
-        out int? blockedTileX,
-        out int? blockedTileY,
-        out string? blockedByActorId)
-    {
-        failReason = null;
-        movementReason = MoveReasonNone;
-        blockedTileX = null;
-        blockedTileY = null;
-        blockedByActorId = null;
-        var direction = NormalizeDirection(rawDirection);
-        if (direction is null)
-        {
-            failReason = UnknownDirectionReason;
-            return false;
-        }
-
-        if (state.PlayerMoveCooldownRemainingMs > 0)
-        {
-            failReason = CooldownReason;
-            movementReason = MoveReasonCooldown;
-            return false;
-        }
-
-        var player = GetPlayerActor(state);
-        if (player is null)
-        {
-            failReason = NoTargetReason;
-            return false;
-        }
-
-        if (!TryGetDirectionDelta(direction, out var deltaX, out var deltaY))
-        {
-            failReason = UnknownDirectionReason;
-            return false;
-        }
-
-        var destinationX = player.TileX + deltaX;
-        var destinationY = player.TileY + deltaY;
-        if (TryGetPlayerMovementBlocker(
-            state,
-            player.ActorId,
-            destinationX,
-            destinationY,
-            out movementReason,
-            out blockedByActorId))
-        {
-            failReason = MoveBlockedReason;
-            blockedTileX = destinationX;
-            blockedTileY = destinationY;
-            return false;
-        }
-
-        player.TileX = destinationX;
-        player.TileY = destinationY;
-        state.PlayerFacingDirection = direction;
-        state.PlayerMoveCooldownRemainingMs = PlayerMoveCooldownMs;
-        return true;
-    }
-
-    private static bool TryGetDirectionDelta(string direction, out int deltaX, out int deltaY)
-    {
-        deltaX = 0;
-        deltaY = 0;
-        switch (direction)
-        {
-            case FacingUp:
-                deltaY = -1;
-                return true;
-            case FacingUpRight:
-                deltaX = 1;
-                deltaY = -1;
-                return true;
-            case FacingRight:
-                deltaX = 1;
-                return true;
-            case FacingDownRight:
-                deltaX = 1;
-                deltaY = 1;
-                return true;
-            case FacingDown:
-                deltaY = 1;
-                return true;
-            case FacingDownLeft:
-                deltaX = -1;
-                deltaY = 1;
-                return true;
-            case FacingLeft:
-                deltaX = -1;
-                return true;
-            case FacingUpLeft:
-                deltaX = -1;
-                deltaY = -1;
-                return true;
-            default:
-                return false;
-        }
-    }
-
-    private static bool TryGetPlayerMovementBlocker(
-        StoredBattle state,
-        string playerActorId,
-        int tileX,
-        int tileY,
-        out string movementReason,
-        out string? blockedByActorId)
-    {
-        movementReason = MoveReasonNone;
-        blockedByActorId = null;
-
-        if (!IsInBounds(tileX, tileY))
-        {
-            movementReason = MoveReasonOutOfBounds;
-            return true;
-        }
-
-        var blockingActor = state.Actors.Values.FirstOrDefault(actor =>
-            !string.Equals(actor.ActorId, playerActorId, StringComparison.Ordinal) &&
-            actor.TileX == tileX &&
-            actor.TileY == tileY);
-        if (blockingActor is null)
-        {
-            return false;
-        }
-
-        movementReason = MoveReasonOccupied;
-        blockedByActorId = blockingActor.ActorId;
-        return true;
     }
 
     private static IReadOnlyList<CommandResultDto> ApplyCommands(
@@ -1507,14 +1209,14 @@ public sealed partial class InMemoryBattleStore : IBattleStore
 
         if (string.Equals(normalizedSkillId, HealSkillId, StringComparison.Ordinal))
         {
-            ApplySelfHealSkill(state, events, player);
+            ApplySelfHealSkill(state, events, player, skill);
             ApplyPlayerCooldownsForCast(state, skill);
             return SkillCastResult.Ok(null);
         }
 
         if (string.Equals(normalizedSkillId, GuardSkillId, StringComparison.Ordinal))
         {
-            ApplyGuardSkill(events, player);
+            ApplyGuardSkill(events, player, skill);
             ApplyPlayerCooldownsForCast(state, skill);
             return SkillCastResult.Ok(null);
         }
@@ -1672,143 +1374,6 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         return true;
     }
 
-    private static void TickSkillCooldowns(StoredBattle state)
-    {
-        foreach (var skill in state.Skills.Values)
-        {
-            skill.CooldownRemainingMs = Math.Max(0, skill.CooldownRemainingMs - StepDeltaMs);
-        }
-    }
-
-    private static void TickPlayerAutoAttackCooldown(StoredBattle state)
-    {
-        state.PlayerAttackCooldownRemainingMs = Math.Max(0, state.PlayerAttackCooldownRemainingMs - StepDeltaMs);
-    }
-
-    private static void TickPlayerMoveCooldown(StoredBattle state)
-    {
-        state.PlayerMoveCooldownRemainingMs = Math.Max(0, state.PlayerMoveCooldownRemainingMs - StepDeltaMs);
-    }
-
-    private static void TickPlayerGlobalCooldown(StoredBattle state)
-    {
-        state.PlayerGlobalCooldownRemainingMs = Math.Max(0, state.PlayerGlobalCooldownRemainingMs - StepDeltaMs);
-    }
-
-    private static void TickMobCombatCooldowns(StoredBattle state)
-    {
-        foreach (var slot in state.MobSlots.Values)
-        {
-            slot.AttackCooldownRemainingMs = Math.Max(0, slot.AttackCooldownRemainingMs - StepDeltaMs);
-            slot.AbilityCooldownRemainingMs = Math.Max(0, slot.AbilityCooldownRemainingMs - StepDeltaMs);
-        }
-    }
-
-    private static void TickMobMovement(StoredBattle state)
-    {
-        var player = GetPlayerActor(state);
-        if (player is null)
-        {
-            return;
-        }
-
-        var mobs = state.Actors.Values
-            .Where(actor => actor.Kind == "mob")
-            .OrderBy(actor => actor.ActorId, StringComparer.Ordinal)
-            .ToList();
-
-        foreach (var mob in mobs)
-        {
-            if (!state.Actors.TryGetValue(mob.ActorId, out var liveMob))
-            {
-                continue;
-            }
-
-            if (liveMob.MobSlotIndex is not int slotIndex || !state.MobSlots.TryGetValue(slotIndex, out var slot))
-            {
-                continue;
-            }
-
-            var config = GetMobConfig(slot.Archetype);
-            slot.MoveCooldownRemainingMs -= StepDeltaMs;
-            while (slot.MoveCooldownRemainingMs <= 0)
-            {
-                slot.MoveCooldownRemainingMs += config.MoveCooldownMs;
-                if (slot.MoveCooldownRemainingMs <= 0)
-                {
-                    slot.MoveCooldownRemainingMs = config.MoveCooldownMs;
-                }
-
-                var behavior = GetMobBehavior(slot.Archetype);
-                if (!behavior.TryChooseMove(state, liveMob, player, slot, config, out var destination))
-                {
-                    break;
-                }
-
-                if (!TryMoveMobToTile(state, liveMob, destination))
-                {
-                    break;
-                }
-            }
-        }
-    }
-
-    private static void TickMobCommitWindows(StoredBattle state)
-    {
-        foreach (var slot in state.MobSlots.Values)
-        {
-            slot.CommitTicksRemaining = Math.Max(0, slot.CommitTicksRemaining - 1);
-        }
-    }
-
-    private static void TickMobRespawns(StoredBattle state, List<BattleEventDto> events)
-    {
-        var maxAliveMobs = ResolveSpawnPacingDirector(state).MaxAliveMobs;
-        foreach (var slot in state.MobSlots.Values.OrderBy(value => value.SlotIndex))
-        {
-            if (slot.SlotIndex > maxAliveMobs)
-            {
-                slot.RespawnRemainingMs = 0;
-                continue;
-            }
-
-            if (state.Actors.ContainsKey(slot.ActorId))
-            {
-                slot.RespawnRemainingMs = 0;
-                continue;
-            }
-
-            if (slot.RespawnRemainingMs > 0)
-            {
-                slot.RespawnRemainingMs = Math.Max(0, slot.RespawnRemainingMs - StepDeltaMs);
-            }
-
-            if (slot.RespawnRemainingMs == 0)
-            {
-                // If no free tile exists, spawn is skipped deterministically for this step.
-                TrySpawnMobInSlot(state, slot, events);
-            }
-        }
-    }
-
-    private static void TickDecals(StoredBattle state)
-    {
-        if (state.Decals.Count == 0)
-        {
-            return;
-        }
-
-        for (var index = state.Decals.Count - 1; index >= 0; index -= 1)
-        {
-            var decal = state.Decals[index];
-            decal.RemainingMs = Math.Max(0, decal.RemainingMs - StepDeltaMs);
-            if (decal.RemainingMs == 0)
-            {
-                state.Decals.RemoveAt(index);
-            }
-        }
-    }
-
     private static bool TrySpawnMobInSlot(StoredBattle state, MobSlotState slot, List<BattleEventDto>? events = null)
     {
         if (state.Actors.ContainsKey(slot.ActorId))
@@ -1834,7 +1399,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             .ToList();
 
         var candidateTiles = preferredRingTiles.Count > 0 ? preferredRingTiles : freeTiles;
-        var tileIndex = state.Rng.Next(candidateTiles.Count);
+        var tileIndex = NextIntFromBattleRng(state, candidateTiles.Count);
         var tile = candidateTiles[tileIndex];
         var config = GetMobConfig(slot.Archetype);
         var spawnAsElite = ShouldSpawnEliteForSlot(state, slot);
@@ -1883,7 +1448,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         }
 
         var eliteChancePercent = ResolveSpawnPacingDirector(state).EliteSpawnChancePercent;
-        return state.Rng.Next(100) < eliteChancePercent;
+        return NextIntFromBattleRng(state, 100) < eliteChancePercent;
     }
 
     private static int RollInitialAutoAttackCooldownMs(StoredBattle state, int autoAttackCooldownMs)
@@ -1898,7 +1463,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             return 1;
         }
 
-        return state.Rng.Next(1, autoAttackCooldownMs + 1);
+        return NextIntFromBattleRng(state, 1, autoAttackCooldownMs + 1);
     }
 
     private static List<(int TileX, int TileY)> BuildFreeTiles(StoredBattle state)
@@ -2473,7 +2038,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             return BattleHitKinds.Normal;
         }
 
-        return state.CritRng.Next(100) < CriticalHitChancePercent
+        return NextIntFromCritRng(state, 100) < CriticalHitChancePercent
             ? BattleHitKinds.Crit
             : BattleHitKinds.Normal;
     }
@@ -2888,7 +2453,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             return;
         }
 
-        entry.NextChestAtKills += ComputeBestiaryThresholdIncrement(state.BestiaryRng);
+        entry.NextChestAtKills += ComputeBestiaryThresholdIncrement(state);
         if (state.PendingSpeciesChestArchetype is null)
         {
             state.PendingSpeciesChestArchetype = mobArchetype;
@@ -2927,6 +2492,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             var previousThreshold = GetXpToNextLevel(previousLevel);
             state.RunXp -= previousThreshold;
             state.RunLevel += 1;
+            ApplyDeterministicSkillUpgradeForRunLevel(state);
 
             events.Add(new LevelUpEventDto(
                 PreviousLevel: previousLevel,
@@ -2985,7 +2551,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         var offeredCards = new List<CardDefinition>(offerCount);
         for (var index = 0; index < offerCount; index += 1)
         {
-            var rolledIndex = RollWeightedCardIndex(state.Rng, availableCards);
+            var rolledIndex = RollWeightedCardIndex(state, availableCards);
             offeredCards.Add(availableCards[rolledIndex]);
             availableCards.RemoveAt(rolledIndex);
         }
@@ -3004,7 +2570,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         return !IsCardBannedByCurrentLoadout(state, card.Id);
     }
 
-    private static int RollWeightedCardIndex(Random rng, IReadOnlyList<CardDefinition> availableCards)
+    private static int RollWeightedCardIndex(StoredBattle state, IReadOnlyList<CardDefinition> availableCards)
     {
         var totalWeight = 0;
         foreach (var card in availableCards)
@@ -3012,7 +2578,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             totalWeight += Math.Max(1, card.RarityWeight);
         }
 
-        var roll = rng.Next(totalWeight);
+        var roll = NextIntFromBattleRng(state, totalWeight);
         var runningWeight = 0;
         for (var index = 0; index < availableCards.Count; index += 1)
         {
@@ -3212,14 +2778,14 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         _ = ApplyPlayerHeal(state, events, player, pendingLifeLeechHeal, "life_leech");
     }
 
-    private static int ApplySelfHealSkill(StoredBattle state, List<BattleEventDto> events, StoredActor player)
+    private static int ApplySelfHealSkill(StoredBattle state, List<BattleEventDto> events, StoredActor player, StoredSkill skill)
     {
         if (player.Hp <= 0)
         {
             return 0;
         }
 
-        var maxHealAmount = ComputePercentValue(player.MaxHp, HealPercentOfMaxHp);
+        var maxHealAmount = ComputePercentValue(player.MaxHp, ResolveSkillHealPercent(skill));
 
         events.Add(new FxSpawnEventDto(
             FxId: HealFxId,
@@ -3232,14 +2798,14 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         return ApplyPlayerHeal(state, events, player, maxHealAmount, "skill_heal");
     }
 
-    private static int ApplyGuardSkill(List<BattleEventDto> events, StoredActor player)
+    private static int ApplyGuardSkill(List<BattleEventDto> events, StoredActor player, StoredSkill skill)
     {
         if (player.Hp <= 0 || player.MaxShield <= 0)
         {
             return 0;
         }
 
-        var guardAmount = ComputePercentValue(player.MaxHp, GuardPercentOfMaxHp);
+        var guardAmount = ComputePercentValue(player.MaxHp, ResolveSkillGuardPercent(skill));
         var previousShield = player.Shield;
         player.Shield = Math.Min(player.MaxShield, player.Shield + guardAmount);
         var appliedShield = Math.Max(0, player.Shield - previousShield);
@@ -3950,6 +3516,27 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                 $"Run XP must be below the current threshold: xp={state.RunXp}, threshold={xpToNextLevel}.");
         }
 
+        foreach (var skill in state.Skills.Values.OrderBy(value => value.SkillId, StringComparer.Ordinal))
+        {
+            if (skill.Level < SkillInitialLevel)
+            {
+                throw new InvalidOperationException($"Skill level is invalid for '{skill.SkillId}': {skill.Level}.");
+            }
+
+            if (skill.CooldownRemainingMs < 0)
+            {
+                throw new InvalidOperationException(
+                    $"Skill cooldown remaining is invalid for '{skill.SkillId}': {skill.CooldownRemainingMs}.");
+            }
+
+            var maxCooldown = ResolveSkillCooldownTotalMs(state, skill);
+            if (skill.CooldownRemainingMs > maxCooldown)
+            {
+                throw new InvalidOperationException(
+                    $"Skill cooldown remaining exceeds max for '{skill.SkillId}': remaining={skill.CooldownRemainingMs}, max={maxCooldown}.");
+            }
+        }
+
         if (state.TotalKills < 0 || state.EliteKills < 0 || state.ChestsOpened < 0)
         {
             throw new InvalidOperationException(
@@ -4282,7 +3869,8 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             List<string> selectedCardIds,
             Dictionary<string, int> selectedCardStacks,
             int cardSelectionsGranted,
-            int nextCardChoiceSequence)
+            int nextCardChoiceSequence,
+            List<BattleReplayActionDto> replayActions)
         {
             BattleId = battleId;
             ArenaId = arenaId;
@@ -4332,6 +3920,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             SelectedCardStacks = selectedCardStacks;
             CardSelectionsGranted = cardSelectionsGranted;
             NextCardChoiceSequence = nextCardChoiceSequence;
+            ReplayActions = replayActions;
         }
 
         public object Sync { get; } = new();
@@ -4431,6 +4020,8 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         public int CardSelectionsGranted { get; set; }
 
         public int NextCardChoiceSequence { get; set; }
+
+        public List<BattleReplayActionDto> ReplayActions { get; }
     }
 
     private sealed record SpawnPacingDirector(
@@ -4613,11 +4204,12 @@ public sealed partial class InMemoryBattleStore : IBattleStore
 
     private sealed class StoredSkill
     {
-        public StoredSkill(string skillId, int cooldownRemainingMs, int cooldownTotalMs)
+        public StoredSkill(string skillId, int cooldownRemainingMs, int cooldownTotalMs, int level)
         {
             SkillId = skillId;
             CooldownRemainingMs = cooldownRemainingMs;
             CooldownTotalMs = cooldownTotalMs;
+            Level = Math.Max(SkillInitialLevel, level);
         }
 
         public string SkillId { get; }
@@ -4625,6 +4217,8 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         public int CooldownRemainingMs { get; set; }
 
         public int CooldownTotalMs { get; }
+
+        public int Level { get; set; }
     }
 
     private sealed class StoredDecal

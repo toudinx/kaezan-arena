@@ -78,7 +78,8 @@ public sealed partial class InMemoryBattleStore
             .Select(entry => new BestiaryEntryDto(
                 Species: GetSpeciesId(entry.Key),
                 KillsTotal: entry.Value.KillsTotal,
-                NextChestAtKills: entry.Value.NextChestAtKills))
+                NextChestAtKills: entry.Value.NextChestAtKills,
+                Rank: ResolveBestiaryRank(entry.Value.KillsTotal)))
             .ToList();
         var activePois = state.Pois.Values
             .Where(poi => poi.ExpiresAtMs > nowMs)

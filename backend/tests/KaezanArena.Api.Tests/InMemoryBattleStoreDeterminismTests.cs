@@ -26,10 +26,20 @@ public sealed class InMemoryBattleStoreDeterminismTests
     private const double ScalingTolerance = 0.000001d;
     private const int MaxDeterminismDamageSteps = 120;
     private const int MaxCommandDeterminismSteps = 220;
+    private const int LongRunDeterminismStepBudget = RunDurationTargetTick + 600;
     private const int MaxStepsToFindCardChoice = 1800;
     private const int MaxStepsToKillElite = 2500;
     private const int EliteDeterminismSteps = 180;
     private const int MaxGlobalCooldownReductionPercent = 60;
+    private const int SkillInitialLevel = 1;
+    private const int SkillCooldownReductionPerLevelPercent = 4;
+    private const int SkillCooldownReductionMaxPercent = 32;
+    private const int ExoriBaseCooldownMs = 1200;
+    private const int ExoriMasBaseCooldownMs = 2000;
+    private const int ExoriMinBaseCooldownMs = 800;
+    private const int AvalancheBaseCooldownMs = 2500;
+    private const int HealBaseCooldownMs = 7000;
+    private const int GuardBaseCooldownMs = 10000;
 
     [Fact]
     public void StartAndStepBattle_NormalRun_DoesNotThrowInvariantValidation()
@@ -198,6 +208,118 @@ public sealed class InMemoryBattleStoreDeterminismTests
                 Assert.Equal(first.IsRunEnded, second.IsRunEnded);
                 break;
             }
+        }
+    }
+
+    [Fact]
+    public void StepBattle_PauseResumeTimeline_IsDeterministicAndFreezesClockUntilResume()
+    {
+        const int seed = 51515;
+        var store = new InMemoryBattleStore();
+        var first = store.StartBattle("arena-pause-det-a", "player-pause-det", seed);
+        var second = store.StartBattle("arena-pause-det-b", "player-pause-det", seed);
+        var firstTick = first.Tick;
+        var secondTick = second.Tick;
+
+        var pauseCommands = new[]
+        {
+            new BattleCommandDto("set_paused", Paused: true),
+            new BattleCommandDto("cast_skill", SkillId: "exori"),
+            new BattleCommandDto("move_player", Dir: "right")
+        };
+
+        first = store.StepBattle(first.BattleId, firstTick, pauseCommands);
+        second = store.StepBattle(second.BattleId, secondTick, pauseCommands);
+        AssertDeterministicKeySnapshotFields(first, second);
+        Assert.Equal(firstTick, first.Tick);
+        Assert.Equal(secondTick, second.Tick);
+        Assert.Equal(0L, first.RunTimeMs);
+        Assert.Equal(0L, second.RunTimeMs);
+        AssertCommandResult(first, index: 0, expectedType: "set_paused", expectedOk: true, expectedReason: null);
+        AssertCommandResult(first, index: 1, expectedType: "cast_skill", expectedOk: false, expectedReason: "paused");
+        AssertCommandResult(first, index: 2, expectedType: "move_player", expectedOk: false, expectedReason: "paused");
+        AssertCommandResult(second, index: 0, expectedType: "set_paused", expectedOk: true, expectedReason: null);
+        AssertCommandResult(second, index: 1, expectedType: "cast_skill", expectedOk: false, expectedReason: "paused");
+        AssertCommandResult(second, index: 2, expectedType: "move_player", expectedOk: false, expectedReason: "paused");
+
+        firstTick = first.Tick;
+        secondTick = second.Tick;
+        first = store.StepBattle(first.BattleId, firstTick, [new BattleCommandDto("cast_skill", SkillId: "exori_mas")]);
+        second = store.StepBattle(second.BattleId, secondTick, [new BattleCommandDto("cast_skill", SkillId: "exori_mas")]);
+        AssertDeterministicKeySnapshotFields(first, second);
+        Assert.Equal(firstTick, first.Tick);
+        Assert.Equal(secondTick, second.Tick);
+        AssertCommandResult(first, index: 0, expectedType: "cast_skill", expectedOk: false, expectedReason: "paused");
+        AssertCommandResult(second, index: 0, expectedType: "cast_skill", expectedOk: false, expectedReason: "paused");
+
+        firstTick = first.Tick;
+        secondTick = second.Tick;
+        var resumeCommands = new[]
+        {
+            new BattleCommandDto("set_paused", Paused: false),
+            new BattleCommandDto("cast_skill", SkillId: "exori_min")
+        };
+        first = store.StepBattle(first.BattleId, firstTick, resumeCommands);
+        second = store.StepBattle(second.BattleId, secondTick, resumeCommands);
+        AssertDeterministicKeySnapshotFields(first, second);
+        Assert.Equal(firstTick + 1, first.Tick);
+        Assert.Equal(secondTick + 1, second.Tick);
+        Assert.Equal(StepDeltaMs, first.RunTimeMs);
+        Assert.Equal(StepDeltaMs, second.RunTimeMs);
+        AssertCommandResult(first, index: 0, expectedType: "set_paused", expectedOk: true, expectedReason: null);
+        AssertCommandResult(second, index: 0, expectedType: "set_paused", expectedOk: true, expectedReason: null);
+        Assert.NotEqual("paused", Assert.Single(first.CommandResults, result => result.Index == 1).Reason);
+        Assert.NotEqual("paused", Assert.Single(second.CommandResults, result => result.Index == 1).Reason);
+    }
+
+    [Fact]
+    public void StepBattle_LongRunsWithFixedSeedAndCommands_RepeatedExecutionsProduceEquivalentTimelines()
+    {
+        const int seed = 112233;
+        const int runCount = 4;
+        var timelinesByRun = new List<IReadOnlyList<string>>();
+
+        for (var runIndex = 0; runIndex < runCount; runIndex += 1)
+        {
+            var store = new InMemoryBattleStore();
+            var step = store.StartBattle($"arena-long-det-repeat-{runIndex}", "player-long-det-repeat", seed);
+            var tick = step.Tick;
+            var timeline = new List<string> { BuildCoreDeterminismSignature(step) };
+
+            for (var stepIndex = 0; stepIndex < LongRunDeterminismStepBudget; stepIndex += 1)
+            {
+                var commands = BuildDeterministicCommandBatch(stepIndex);
+                step = store.StepBattle(step.BattleId, tick, commands);
+                tick = step.Tick;
+                timeline.Add(BuildCoreDeterminismSignature(step));
+
+                if (step.IsAwaitingCardChoice)
+                {
+                    var selectedCardId = step.OfferedCards[0].Id;
+                    step = store.ChooseCard(step.BattleId, step.PendingChoiceId!, selectedCardId);
+                    tick = step.Tick;
+                    timeline.Add(BuildCoreDeterminismSignature(step));
+                }
+
+                if (step.IsRunEnded)
+                {
+                    break;
+                }
+            }
+
+            Assert.True(
+                step.IsRunEnded,
+                $"Expected deterministic long run {runIndex} to reach end state within the configured step budget.");
+            Assert.True(
+                timeline.Count > (RunDurationTargetTick / 2),
+                "Expected a sufficiently long deterministic timeline before run end.");
+            timelinesByRun.Add(timeline);
+        }
+
+        var baseline = timelinesByRun[0];
+        foreach (var timeline in timelinesByRun.Skip(1))
+        {
+            Assert.Equal(baseline, timeline);
         }
     }
 
@@ -785,6 +907,74 @@ public sealed class InMemoryBattleStoreDeterminismTests
     }
 
     [Fact]
+    public void StepBattle_EliteDeathTransition_IsDeterministicAcrossRepeatedFixedSeedExecutions()
+    {
+        const int seed = 81818;
+        const int runCount = 4;
+        var transitionSignatures = new List<string>();
+
+        for (var runIndex = 0; runIndex < runCount; runIndex += 1)
+        {
+            var store = new InMemoryBattleStore();
+            var start = store.StartBattle($"arena-elite-death-repeat-{runIndex}", "player-elite-death-repeat", seed);
+            var step = WaitForSnapshot(
+                store,
+                start,
+                snapshot => snapshot.Actors.Any(actor => actor.Kind == "mob" && actor.IsElite),
+                maxSteps: 1400);
+            var tick = step.Tick;
+            var targetElite = step.Actors
+                .Where(actor => actor.Kind == "mob" && actor.IsElite)
+                .OrderBy(actor => actor.ActorId, StringComparer.Ordinal)
+                .FirstOrDefault();
+            Assert.NotNull(targetElite);
+            var targetEliteId = targetElite!.ActorId;
+
+            SetActorHp(store, step.BattleId, targetEliteId, hp: 1);
+
+            var foundTransition = false;
+            for (var stepIndex = 0; stepIndex < MaxStepsToKillElite; stepIndex += 1)
+            {
+                step = AdvanceBattleSelectingCards(
+                    store,
+                    step.BattleId,
+                    tick,
+                    BuildAggressiveCommandsTargeting(targetEliteId));
+                tick = step.Tick;
+
+                if (!step.Events.OfType<EliteDiedEventDto>().Any(evt =>
+                        string.Equals(evt.EliteEntityId, targetEliteId, StringComparison.Ordinal)))
+                {
+                    if (step.IsRunEnded)
+                    {
+                        break;
+                    }
+
+                    continue;
+                }
+
+                transitionSignatures.Add(BuildEliteDeathTransitionSignature(step, targetEliteId));
+                Assert.DoesNotContain(
+                    step.Actors,
+                    actor =>
+                        actor.Kind == "mob" &&
+                        !actor.IsElite &&
+                        string.Equals(actor.BuffSourceEliteId, targetEliteId, StringComparison.Ordinal));
+                foundTransition = true;
+                break;
+            }
+
+            Assert.True(foundTransition, $"Expected deterministic elite-death transition in run index {runIndex}.");
+        }
+
+        var baseline = transitionSignatures[0];
+        foreach (var signature in transitionSignatures.Skip(1))
+        {
+            Assert.Equal(baseline, signature);
+        }
+    }
+
+    [Fact]
     public void StepBattle_EliteBuffAssignments_AreDeterministicForSameSeed()
     {
         const int seed = 2468;
@@ -849,6 +1039,253 @@ public sealed class InMemoryBattleStoreDeterminismTests
 
         Assert.True(firstSignatures.Count > 50, "Expected to collect enough spawn timeline signatures before run end.");
         Assert.Equal(firstSignatures, secondSignatures);
+    }
+
+    [Fact]
+    public void StartBattle_SkillProgressionState_InitializesAtLevelOneWithBaseCooldowns()
+    {
+        const int seed = 6060;
+        var store = new InMemoryBattleStore();
+        var start = store.StartBattle("arena-skill-leveling-initial-state", "player-skill-leveling-initial-state", seed);
+
+        var expectedSkillIds = new[]
+        {
+            "exori",
+            "exori_mas",
+            "exori_min",
+            "avalanche",
+            "heal",
+            "guard"
+        };
+
+        foreach (var skillId in expectedSkillIds)
+        {
+            Assert.Equal(1, ReadStoredSkillLevel(store, start.BattleId, skillId));
+            AssertSkillCooldownTotal(
+                start,
+                skillId,
+                ResolveExpectedSkillCooldownTotal(GetBaseSkillCooldownTotal(skillId), skillLevel: 1));
+        }
+
+        Assert.All(start.Skills, skill => Assert.Equal(0, skill.CooldownRemainingMs));
+    }
+
+    [Fact]
+    public void RunLeveling_FirstLevelUp_AppliesDeterministicSkillUpgradeState()
+    {
+        const int seed = 6060;
+        var store = new InMemoryBattleStore();
+        var step = store.StartBattle("arena-skill-leveling-first-upgrade", "player-skill-leveling-first-upgrade", seed);
+        var tick = step.Tick;
+
+        for (var index = 0; index < 3000; index += 1)
+        {
+            step = store.StepBattle(step.BattleId, tick, BuildAggressiveCommands());
+            tick = step.Tick;
+
+            if (step.RunLevel < 2)
+            {
+                if (step.IsRunEnded)
+                {
+                    break;
+                }
+
+                continue;
+            }
+
+            Assert.Equal(2, step.RunLevel);
+            Assert.Equal(1, ReadStoredSkillLevel(store, step.BattleId, "exori"));
+            Assert.Equal(1, ReadStoredSkillLevel(store, step.BattleId, "exori_min"));
+            Assert.Equal(1, ReadStoredSkillLevel(store, step.BattleId, "exori_mas"));
+            Assert.Equal(1, ReadStoredSkillLevel(store, step.BattleId, "avalanche"));
+            Assert.Equal(2, ReadStoredSkillLevel(store, step.BattleId, "heal"));
+            Assert.Equal(1, ReadStoredSkillLevel(store, step.BattleId, "guard"));
+
+            AssertSkillCooldownTotal(step, "exori", ResolveExpectedSkillCooldownTotal(ExoriBaseCooldownMs, skillLevel: 1));
+            AssertSkillCooldownTotal(step, "exori_min", ResolveExpectedSkillCooldownTotal(ExoriMinBaseCooldownMs, skillLevel: 1));
+            AssertSkillCooldownTotal(step, "exori_mas", ResolveExpectedSkillCooldownTotal(ExoriMasBaseCooldownMs, skillLevel: 1));
+            AssertSkillCooldownTotal(step, "avalanche", ResolveExpectedSkillCooldownTotal(AvalancheBaseCooldownMs, skillLevel: 1));
+            AssertSkillCooldownTotal(step, "heal", ResolveExpectedSkillCooldownTotal(HealBaseCooldownMs, skillLevel: 2));
+            AssertSkillCooldownTotal(step, "guard", ResolveExpectedSkillCooldownTotal(GuardBaseCooldownMs, skillLevel: 1));
+            return;
+        }
+
+        throw new Xunit.Sdk.XunitException("Expected run level 2 skill upgrade state to be reached deterministically.");
+    }
+
+    [Fact]
+    public void RunLeveling_SequentialEarlyLevelUps_FollowDeterministicUpgradeOrderWithoutRegressingOtherSkills()
+    {
+        const int seed = 6060;
+        var store = new InMemoryBattleStore();
+        var step = store.StartBattle("arena-skill-leveling-sequential-upgrades", "player-skill-leveling-sequential-upgrades", seed);
+        var tick = step.Tick;
+
+        for (var index = 0; index < 4000 && step.RunLevel < 3 && !step.IsRunEnded; index += 1)
+        {
+            step = store.StepBattle(step.BattleId, tick, BuildAggressiveCommands());
+            tick = step.Tick;
+
+            if (step.IsAwaitingCardChoice)
+            {
+                ClearPendingCardChoice(store, step.BattleId);
+            }
+        }
+
+        Assert.True(step.RunLevel >= 3, "Expected deterministic progression to reach run level 3.");
+        Assert.Equal(2, ReadStoredSkillLevel(store, step.BattleId, "heal"));
+        Assert.Equal(2, ReadStoredSkillLevel(store, step.BattleId, "guard"));
+        Assert.Equal(1, ReadStoredSkillLevel(store, step.BattleId, "exori"));
+        Assert.Equal(1, ReadStoredSkillLevel(store, step.BattleId, "exori_min"));
+        Assert.Equal(1, ReadStoredSkillLevel(store, step.BattleId, "exori_mas"));
+        Assert.Equal(1, ReadStoredSkillLevel(store, step.BattleId, "avalanche"));
+
+        AssertSkillCooldownTotal(step, "heal", ResolveExpectedSkillCooldownTotal(HealBaseCooldownMs, skillLevel: 2));
+        AssertSkillCooldownTotal(step, "guard", ResolveExpectedSkillCooldownTotal(GuardBaseCooldownMs, skillLevel: 2));
+        AssertSkillCooldownTotal(step, "exori", ResolveExpectedSkillCooldownTotal(ExoriBaseCooldownMs, skillLevel: 1));
+        AssertSkillCooldownTotal(step, "exori_min", ResolveExpectedSkillCooldownTotal(ExoriMinBaseCooldownMs, skillLevel: 1));
+        AssertSkillCooldownTotal(step, "exori_mas", ResolveExpectedSkillCooldownTotal(ExoriMasBaseCooldownMs, skillLevel: 1));
+        AssertSkillCooldownTotal(step, "avalanche", ResolveExpectedSkillCooldownTotal(AvalancheBaseCooldownMs, skillLevel: 1));
+    }
+
+    [Fact]
+    public void RunLeveling_HealUpgrade_AppliesExpectedHealAmountAfterLevelUp()
+    {
+        const int seed = 6060;
+        var store = new InMemoryBattleStore();
+        var step = store.StartBattle("arena-skill-leveling-heal-apply", "player-skill-leveling-heal-apply", seed);
+        var tick = step.Tick;
+
+        for (var index = 0; index < 3000 && step.RunLevel < 2 && !step.IsRunEnded; index += 1)
+        {
+            step = store.StepBattle(step.BattleId, tick, BuildAggressiveCommands());
+            tick = step.Tick;
+
+            if (step.IsAwaitingCardChoice)
+            {
+                ClearPendingCardChoice(store, step.BattleId);
+            }
+        }
+
+        Assert.True(step.RunLevel >= 2, "Expected deterministic progression to reach run level 2.");
+        Assert.Equal(2, ReadStoredSkillLevel(store, step.BattleId, "heal"));
+
+        ClearPendingCardChoice(store, step.BattleId);
+        ClearActiveBuffs(store, step.BattleId);
+        SetPlayerGlobalCooldownRemaining(store, step.BattleId, 0);
+        SetSkillCooldownRemaining(store, step.BattleId, "heal", 0);
+
+        var player = Assert.Single(step.Actors, actor => string.Equals(actor.Kind, "player", StringComparison.Ordinal));
+        SetActorHp(store, step.BattleId, player.ActorId, hp: 1);
+
+        var cast = store.StepBattle(
+            step.BattleId,
+            tick,
+            [
+                BuildAssistDisableCommand(),
+                new BattleCommandDto("cast_skill", SkillId: "heal")
+            ]);
+        AssertCommandResult(cast, index: 1, expectedType: "cast_skill", expectedOk: true, expectedReason: null);
+
+        var healEvent = Assert.Single(cast.Events.OfType<HealNumberEventDto>(), evt => string.Equals(evt.Source, "skill_heal", StringComparison.Ordinal));
+        var castPlayer = Assert.Single(cast.Actors, actor => string.Equals(actor.Kind, "player", StringComparison.Ordinal));
+        var expectedPercent = 24; // base 22% + 2% from first deterministic heal level-up
+        var expectedHealAmount = Math.Max(1, (int)Math.Floor(castPlayer.MaxHp * (expectedPercent / 100.0d)));
+        Assert.Equal(expectedHealAmount, healEvent.Amount);
+    }
+
+    [Fact]
+    public void RunLeveling_SameSeedAndCommandTimeline_ProducesDeterministicSkillProgression()
+    {
+        const int seed = 42424;
+        var store = new InMemoryBattleStore();
+        var first = store.StartBattle("arena-skill-leveling-det-a", "player-skill-leveling-det", seed);
+        var second = store.StartBattle("arena-skill-leveling-det-b", "player-skill-leveling-det", seed);
+        var firstTick = first.Tick;
+        var secondTick = second.Tick;
+        var sawLevelUp = false;
+        var sawSkillCooldownUpgrade = false;
+
+        for (var stepIndex = 0; stepIndex < 750; stepIndex += 1)
+        {
+            var commands = BuildDeterministicCommandBatch(stepIndex);
+            first = store.StepBattle(first.BattleId, firstTick, commands);
+            second = store.StepBattle(second.BattleId, secondTick, commands);
+            firstTick = first.Tick;
+            secondTick = second.Tick;
+            AssertDeterministicKeySnapshotFields(first, second);
+
+            sawLevelUp |= first.RunLevel > RunInitialLevel;
+            sawSkillCooldownUpgrade |= first.Skills.Any(skill =>
+                skill.CooldownTotalMs < ResolveExpectedSkillCooldownTotal(GetBaseSkillCooldownTotal(skill.SkillId), skillLevel: 1));
+
+            if (first.IsAwaitingCardChoice || second.IsAwaitingCardChoice)
+            {
+                Assert.True(first.IsAwaitingCardChoice);
+                Assert.True(second.IsAwaitingCardChoice);
+                Assert.Equal(first.PendingChoiceId, second.PendingChoiceId);
+                Assert.Equal(
+                    first.OfferedCards.Select(card => card.Id).ToList(),
+                    second.OfferedCards.Select(card => card.Id).ToList());
+                ClearPendingCardChoice(store, first.BattleId);
+                ClearPendingCardChoice(store, second.BattleId);
+            }
+
+            if (first.IsRunEnded || second.IsRunEnded)
+            {
+                Assert.Equal(first.IsRunEnded, second.IsRunEnded);
+                break;
+            }
+        }
+
+        Assert.True(sawLevelUp, "Expected deterministic run-level progression to trigger at least one level-up.");
+        Assert.True(sawSkillCooldownUpgrade, "Expected deterministic skill progression to alter at least one skill cooldown total.");
+    }
+
+    [Fact]
+    public void RunLeveling_RepeatedRunsWithSameSeedAndCommands_ProduceEquivalentSignatures()
+    {
+        const int seed = 9001;
+        const int runCount = 4;
+        const int maxSteps = 750;
+        var store = new InMemoryBattleStore();
+        var timelineSignaturesByRun = new List<IReadOnlyList<string>>();
+
+        for (var runIndex = 0; runIndex < runCount; runIndex += 1)
+        {
+            var step = store.StartBattle($"arena-skill-leveling-repeat-{runIndex}", "player-skill-leveling-repeat", seed);
+            var tick = step.Tick;
+            var signatures = new List<string> { BuildSkillProgressSignature(step) };
+            var reachedLevelUp = step.RunLevel > RunInitialLevel;
+
+            for (var stepIndex = 0; stepIndex < maxSteps; stepIndex += 1)
+            {
+                var commands = BuildDeterministicCommandBatch(stepIndex);
+                step = store.StepBattle(step.BattleId, tick, commands);
+                tick = step.Tick;
+                signatures.Add(BuildSkillProgressSignature(step));
+                reachedLevelUp |= step.RunLevel > RunInitialLevel;
+
+                if (step.IsAwaitingCardChoice)
+                {
+                    ClearPendingCardChoice(store, step.BattleId);
+                }
+
+                if (step.IsRunEnded)
+                {
+                    break;
+                }
+            }
+
+            Assert.True(reachedLevelUp, "Expected each repeated deterministic run to include at least one level-up.");
+            timelineSignaturesByRun.Add(signatures);
+        }
+
+        var baseline = timelineSignaturesByRun[0];
+        foreach (var current in timelineSignaturesByRun.Skip(1))
+        {
+            Assert.Equal(baseline, current);
+        }
     }
 
     private static BattleSnapshot WaitForCardChoiceStep(InMemoryBattleStore store, string battleId, int initialTick)
@@ -1012,6 +1449,22 @@ public sealed class InMemoryBattleStoreDeterminismTests
         ];
     }
 
+    private static BattleCommandDto BuildAssistDisableCommand()
+    {
+        return new BattleCommandDto(
+            "set_assist_config",
+            AssistConfig: new AssistConfigDto(
+                Enabled: false,
+                AutoHealEnabled: false,
+                HealAtHpPercent: 40,
+                AutoGuardEnabled: false,
+                GuardAtHpPercent: 60,
+                AutoOffenseEnabled: false,
+                OffenseMode: "cooldown_spam",
+                AutoSkills: new Dictionary<string, bool>(StringComparer.Ordinal),
+                MaxAutoCastsPerTick: 1));
+    }
+
     private static BattleSnapshot AdvanceBattleSelectingCards(
         InMemoryBattleStore store,
         string battleId,
@@ -1072,6 +1525,73 @@ public sealed class InMemoryBattleStoreDeterminismTests
             $"eliteAlive={mobs.Count(actor => actor.IsElite)}",
             $"eliteSpawns={string.Join(",", eliteSpawnEvents)}",
             $"mobs={string.Join(",", mobIds)}");
+    }
+
+    private static string BuildCoreDeterminismSignature(BattleSnapshot snapshot)
+    {
+        var player = snapshot.Actors.FirstOrDefault(actor => string.Equals(actor.Kind, "player", StringComparison.Ordinal));
+        var mobActors = snapshot.Actors
+            .Where(actor => string.Equals(actor.Kind, "mob", StringComparison.Ordinal))
+            .ToList();
+        var eventTypes = snapshot.Events
+            .Select(evt => evt.GetType().Name)
+            .ToList();
+        var selectedCards = snapshot.SelectedCards
+            .Select(card => card.Id)
+            .ToList();
+
+        return string.Join(
+            "|",
+            snapshot.Tick,
+            snapshot.RunTimeMs,
+            snapshot.BattleStatus,
+            snapshot.IsRunEnded,
+            snapshot.RunEndReason,
+            snapshot.RunLevel,
+            snapshot.RunXp,
+            snapshot.TotalKills,
+            snapshot.EliteKills,
+            snapshot.IsAwaitingCardChoice,
+            $"choice={snapshot.PendingChoiceId}",
+            $"playerHp={player?.Hp ?? -1}",
+            $"playerShield={player?.Shield ?? -1}",
+            $"mobs={mobActors.Count}",
+            $"elites={mobActors.Count(actor => actor.IsElite)}",
+            $"events={string.Join(",", eventTypes)}",
+            $"cards={string.Join(",", selectedCards)}");
+    }
+
+    private static string BuildEliteDeathTransitionSignature(BattleSnapshot snapshot, string eliteEntityId)
+    {
+        var removedTargets = snapshot.Events
+            .OfType<EliteBuffRemovedEventDto>()
+            .Where(evt => string.Equals(evt.EliteEntityId, eliteEntityId, StringComparison.Ordinal))
+            .Select(evt => evt.TargetEntityId)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToList();
+        var lingeringTargets = snapshot.Actors
+            .Where(actor =>
+                actor.Kind == "mob" &&
+                !actor.IsElite &&
+                string.Equals(actor.BuffSourceEliteId, eliteEntityId, StringComparison.Ordinal))
+            .OrderBy(actor => actor.ActorId, StringComparer.Ordinal)
+            .Select(actor => actor.ActorId)
+            .ToList();
+        var eliteDeaths = snapshot.Events
+            .OfType<EliteDiedEventDto>()
+            .Count(evt => string.Equals(evt.EliteEntityId, eliteEntityId, StringComparison.Ordinal));
+
+        return string.Join(
+            "|",
+            snapshot.Tick,
+            snapshot.RunTimeMs,
+            snapshot.RunLevel,
+            snapshot.TotalKills,
+            snapshot.EliteKills,
+            $"elite={eliteEntityId}",
+            $"deaths={eliteDeaths}",
+            $"removed={string.Join(",", removedTargets)}",
+            $"lingering={string.Join(",", lingeringTargets)}");
     }
 
     private static BattleSnapshot WaitForSnapshot(
@@ -1162,6 +1682,19 @@ public sealed class InMemoryBattleStoreDeterminismTests
         tileYProperty.SetValue(actor, tileY);
     }
 
+    private static void AssertCommandResult(
+        BattleSnapshot snapshot,
+        int index,
+        string expectedType,
+        bool expectedOk,
+        string? expectedReason)
+    {
+        var result = Assert.Single(snapshot.CommandResults, entry => entry.Index == index);
+        Assert.Equal(expectedType, result.Type);
+        Assert.Equal(expectedOk, result.Ok);
+        Assert.Equal(expectedReason, result.Reason);
+    }
+
     private static void AssertMoveCommandResult(
         BattleSnapshot snapshot,
         bool expectedOk,
@@ -1230,6 +1763,43 @@ public sealed class InMemoryBattleStoreDeterminismTests
         var tickProperty = state.GetType().GetProperty("Tick");
         Assert.NotNull(tickProperty);
         tickProperty.SetValue(state, Math.Max(0, tick));
+    }
+
+    private static void SetPlayerGlobalCooldownRemaining(InMemoryBattleStore store, string battleId, int cooldownMs)
+    {
+        var state = GetStoredBattle(store, battleId);
+        var property = state.GetType().GetProperty("PlayerGlobalCooldownRemainingMs");
+        Assert.NotNull(property);
+        property.SetValue(state, Math.Max(0, cooldownMs));
+    }
+
+    private static void SetSkillCooldownRemaining(
+        InMemoryBattleStore store,
+        string battleId,
+        string skillId,
+        int cooldownMs)
+    {
+        var state = GetStoredBattle(store, battleId);
+        var skillsProperty = state.GetType().GetProperty("Skills");
+        Assert.NotNull(skillsProperty);
+        var skills = skillsProperty.GetValue(state) as IDictionary;
+        Assert.NotNull(skills);
+        var skill = skills[skillId];
+        Assert.NotNull(skill);
+
+        var cooldownProperty = skill.GetType().GetProperty("CooldownRemainingMs");
+        Assert.NotNull(cooldownProperty);
+        cooldownProperty.SetValue(skill, Math.Max(0, cooldownMs));
+    }
+
+    private static void ClearActiveBuffs(InMemoryBattleStore store, string battleId)
+    {
+        var state = GetStoredBattle(store, battleId);
+        var activeBuffsProperty = state.GetType().GetProperty("ActiveBuffs");
+        Assert.NotNull(activeBuffsProperty);
+        var activeBuffs = activeBuffsProperty.GetValue(state) as IDictionary;
+        Assert.NotNull(activeBuffs);
+        activeBuffs.Clear();
     }
 
     private static int ResolveMobOutgoingDamageViaReflection(
@@ -1509,6 +2079,71 @@ public sealed class InMemoryBattleStoreDeterminismTests
     private static double Lerp(double start, double end, double t)
     {
         return start + ((end - start) * t);
+    }
+
+    private static void AssertSkillCooldownTotal(BattleSnapshot snapshot, string skillId, int expectedCooldownTotalMs)
+    {
+        var skill = Assert.Single(snapshot.Skills, value => string.Equals(value.SkillId, skillId, StringComparison.Ordinal));
+        Assert.Equal(expectedCooldownTotalMs, skill.CooldownTotalMs);
+    }
+
+    private static int GetBaseSkillCooldownTotal(string skillId)
+    {
+        return skillId switch
+        {
+            "exori" => ExoriBaseCooldownMs,
+            "exori_mas" => ExoriMasBaseCooldownMs,
+            "exori_min" => ExoriMinBaseCooldownMs,
+            "avalanche" => AvalancheBaseCooldownMs,
+            "heal" => HealBaseCooldownMs,
+            "guard" => GuardBaseCooldownMs,
+            _ => throw new Xunit.Sdk.XunitException($"Unexpected skill id '{skillId}' in cooldown baseline resolver.")
+        };
+    }
+
+    private static string BuildSkillProgressSignature(BattleSnapshot snapshot)
+    {
+        var skillSignature = snapshot.Skills
+            .OrderBy(skill => skill.SkillId, StringComparer.Ordinal)
+            .Select(skill => $"{skill.SkillId}:{skill.CooldownTotalMs}:{skill.CooldownRemainingMs}")
+            .ToList();
+        return string.Join(
+            "|",
+            snapshot.Tick,
+            snapshot.RunLevel,
+            snapshot.RunXp,
+            snapshot.TotalKills,
+            snapshot.EliteKills,
+            snapshot.BattleStatus,
+            snapshot.RunEndReason,
+            $"skills={string.Join(",", skillSignature)}");
+    }
+
+    private static int ResolveExpectedSkillCooldownTotal(int baseCooldownMs, int skillLevel)
+    {
+        var bonusLevels = Math.Max(0, skillLevel - SkillInitialLevel);
+        var reductionPercent = Math.Clamp(
+            bonusLevels * SkillCooldownReductionPerLevelPercent,
+            0,
+            SkillCooldownReductionMaxPercent);
+        return Math.Max(1, (int)Math.Floor(baseCooldownMs * ((100 - reductionPercent) / 100.0d)));
+    }
+
+    private static int ReadStoredSkillLevel(InMemoryBattleStore store, string battleId, string skillId)
+    {
+        var state = GetStoredBattle(store, battleId);
+        var skillsProperty = state.GetType().GetProperty("Skills");
+        Assert.NotNull(skillsProperty);
+        var skills = skillsProperty.GetValue(state) as IDictionary;
+        Assert.NotNull(skills);
+        var skill = skills[skillId];
+        Assert.NotNull(skill);
+
+        var levelProperty = skill.GetType().GetProperty("Level");
+        Assert.NotNull(levelProperty);
+        var level = levelProperty.GetValue(skill);
+        Assert.NotNull(level);
+        return Assert.IsType<int>(level);
     }
 
     private static string ToDamageSignature(DamageNumberEventDto damage)

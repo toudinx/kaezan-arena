@@ -6,11 +6,10 @@ using KaezanArena.Api.Contracts.Battle;
 using KaezanArena.Api.Contracts.Common;
 using KaezanArena.Api.Contracts.Effects;
 using KaezanArena.Api.Contracts.Health;
-using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace KaezanArena.Api.Tests;
 
-public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Program>>
+public sealed class ApiEndpointsTests : IClassFixture<ApiTestWebApplicationFactory>
 {
     private const int ArenaWidth = 7;
     private const int ArenaHeight = 7;
@@ -30,9 +29,10 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
     private const int RunXpPerNormalMobKill = 10;
     private const int RunLevelXpBase = 25;
     private const int RunLevelXpIncrementPerLevel = 15;
+    private static readonly int[] BestiaryRankKillThresholds = [0, 10, 30, 60, 100];
     private readonly HttpClient _client;
 
-    public ApiEndpointsTests(WebApplicationFactory<Program> factory)
+    public ApiEndpointsTests(ApiTestWebApplicationFactory factory)
     {
         _client = factory.CreateClient();
     }
@@ -2231,6 +2231,68 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
         }
 
         Assert.True(sawMobDeath, "Expected at least one mob death to validate bestiary kill counters.");
+    }
+
+    [Fact]
+    public async Task PostBattleStart_BestiaryRanks_InitializeFromThresholds()
+    {
+        var playerId = "player-bestiary-rank-initial";
+        var start = await StartBattleAsync("arena-bestiary-rank-initial", playerId, 1337);
+        AssertArenaInvariants(start.Actors, playerId);
+        Assert.NotEmpty(start.Bestiary);
+        AssertBestiaryRanksMatchKills(start.Bestiary);
+        Assert.All(start.Bestiary, entry => Assert.Equal(1, entry.Rank));
+    }
+
+    [Fact]
+    public async Task PostBattleStep_BestiaryRanks_TransitionAtThresholds_AndTrackKills()
+    {
+        var playerId = "player-bestiary-rank-transition";
+        var start = await StartBattleAsync("arena-bestiary-rank-transition", playerId, 1337);
+        AssertArenaInvariants(start.Actors, playerId);
+        Assert.NotEmpty(start.Bestiary);
+        AssertBestiaryRanksMatchKills(start.Bestiary);
+
+        var currentTick = start.Tick;
+        IReadOnlyList<SkillStateDto> currentSkills = start.Skills;
+        IReadOnlyList<BestiaryEntryDto> currentBestiary = start.Bestiary;
+        var sawRankTransition = false;
+        for (var stepIndex = 0; stepIndex < 2600; stepIndex += 1)
+        {
+            var step = await StepBattleAsync(start.BattleId, currentTick, BuildSustainCommands(currentSkills));
+            step = await ChoosePendingCardIfAwaitingAsync(step, playerId);
+            AssertArenaInvariants(step.Actors, playerId);
+            AssertBestiaryRanksMatchKills(step.Bestiary);
+
+            var beforeBySpecies = ToBestiaryMap(currentBestiary);
+            var afterBySpecies = ToBestiaryMap(step.Bestiary);
+            foreach (var species in beforeBySpecies.Keys.OrderBy(value => value, StringComparer.Ordinal))
+            {
+                var previous = beforeBySpecies[species];
+                var next = afterBySpecies[species];
+                Assert.True(next.Rank >= previous.Rank);
+                if (next.Rank <= previous.Rank)
+                {
+                    continue;
+                }
+
+                var thresholdForNewRank = ResolveBestiaryRankKillThreshold(next.Rank);
+                Assert.True(previous.KillsTotal < thresholdForNewRank);
+                Assert.True(next.KillsTotal >= thresholdForNewRank);
+                sawRankTransition = true;
+            }
+
+            if (sawRankTransition)
+            {
+                break;
+            }
+
+            currentTick = step.Tick;
+            currentSkills = step.Skills;
+            currentBestiary = step.Bestiary;
+        }
+
+        Assert.True(sawRankTransition, "Expected at least one bestiary rank transition while kills accumulate.");
     }
 
     [Fact]
@@ -5306,7 +5368,42 @@ public sealed class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Prog
             "|",
             entries
                 .OrderBy(entry => entry.Species, StringComparer.Ordinal)
-                .Select(entry => $"{entry.Species}:{entry.KillsTotal}:{entry.NextChestAtKills}"));
+                .Select(entry => $"{entry.Species}:{entry.KillsTotal}:{entry.NextChestAtKills}:{entry.Rank}"));
+    }
+
+    private static void AssertBestiaryRanksMatchKills(IReadOnlyList<BestiaryEntryDto> entries)
+    {
+        foreach (var entry in entries)
+        {
+            Assert.Equal(ResolveExpectedBestiaryRank(entry.KillsTotal), entry.Rank);
+        }
+    }
+
+    private static int ResolveBestiaryRankKillThreshold(int rank)
+    {
+        if (rank < 1)
+        {
+            throw new Xunit.Sdk.XunitException($"Rank must be >= 1 but was {rank}.");
+        }
+
+        var clampedIndex = Math.Min(rank - 1, BestiaryRankKillThresholds.Length - 1);
+        return BestiaryRankKillThresholds[clampedIndex];
+    }
+
+    private static int ResolveExpectedBestiaryRank(int killsTotal)
+    {
+        var clampedKills = Math.Max(0, killsTotal);
+        for (var index = BestiaryRankKillThresholds.Length - 1; index >= 0; index -= 1)
+        {
+            if (clampedKills < BestiaryRankKillThresholds[index])
+            {
+                continue;
+            }
+
+            return index + 1;
+        }
+
+        return 1;
     }
 
     private static int ComputeXpToNextLevel(int runLevel)

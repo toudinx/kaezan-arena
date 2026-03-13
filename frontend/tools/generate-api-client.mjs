@@ -14,7 +14,7 @@ const outputDir = path.join(projectRoot, "src", "app", "api", "generated");
 const schemaOutputPath = path.join(outputDir, "schema.ts");
 const clientOutputPath = path.join(outputDir, "client.ts");
 const indexOutputPath = path.join(outputDir, "index.ts");
-const defaultSwaggerUrl = "http://localhost:5158/swagger/v1/swagger.json";
+const defaultSwaggerUrl = "http://localhost:5168/swagger/v1/swagger.json";
 
 const envSwaggerUrl = process.env.OPENAPI_URL?.trim();
 const candidateSwaggerUrls = envSwaggerUrl

@@ -11,4 +11,6 @@ public interface IBattleStore
     BattleSnapshot ChooseCard(string battleId, string choiceId, string selectedCardId);
 
     bool TryGetBattleSeed(string battleId, out int seed);
+
+    bool TryExportReplay(string battleId, out BattleReplayDto replay);
 }

@@ -196,7 +196,7 @@ public sealed partial class InMemoryBattleStore
             return;
         }
 
-        if (state.PoiRng.Next(100) >= ChestSpawnChancePercent)
+        if (NextIntFromPoiRng(state, 100) >= ChestSpawnChancePercent)
         {
             return;
         }
@@ -207,7 +207,7 @@ public sealed partial class InMemoryBattleStore
             return;
         }
 
-        var tileIndex = state.PoiRng.Next(freeTiles.Count);
+        var tileIndex = NextIntFromPoiRng(state, freeTiles.Count);
         var tile = freeTiles[tileIndex];
         var poiId = BuildChestPoiId(state.NextPoiSequence);
         state.NextPoiSequence += 1;
@@ -228,7 +228,7 @@ public sealed partial class InMemoryBattleStore
             return;
         }
 
-        if (state.Rng.Next(100) >= AltarSpawnChancePercent)
+        if (NextIntFromBattleRng(state, 100) >= AltarSpawnChancePercent)
         {
             return;
         }
@@ -239,7 +239,7 @@ public sealed partial class InMemoryBattleStore
             return;
         }
 
-        var tileIndex = state.Rng.Next(freeTiles.Count);
+        var tileIndex = NextIntFromBattleRng(state, freeTiles.Count);
         var tile = freeTiles[tileIndex];
         var poiId = BuildAltarPoiId(state.NextPoiSequence);
         state.NextPoiSequence += 1;
@@ -286,7 +286,7 @@ public sealed partial class InMemoryBattleStore
             return false;
         }
 
-        var tileIndex = state.PoiRng.Next(freeTiles.Count);
+        var tileIndex = NextIntFromPoiRng(state, freeTiles.Count);
         var tile = freeTiles[tileIndex];
         var poiId = BuildSpeciesChestPoiId(state.NextPoiSequence);
         state.NextPoiSequence += 1;

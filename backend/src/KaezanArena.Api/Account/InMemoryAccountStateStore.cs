@@ -29,6 +29,30 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
     private const string EchoFragmentsItemId = "currency.echo_fragments";
     private const string UnknownSpeciesId = "unknown_species";
     private readonly ConcurrentDictionary<string, StoredAccount> _accounts = new(StringComparer.Ordinal);
+    private readonly IAccountStatePersistence _persistence;
+
+    public InMemoryAccountStateStore(IAccountStatePersistence? persistence = null)
+    {
+        _persistence = persistence ?? NullAccountStatePersistence.Instance;
+        foreach (var (accountId, persistedAccount) in _persistence.LoadAll())
+        {
+            if (persistedAccount?.State is null)
+            {
+                continue;
+            }
+
+            var normalizedAccountId = string.IsNullOrWhiteSpace(accountId) ? persistedAccount.State.AccountId : accountId;
+            if (string.IsNullOrWhiteSpace(normalizedAccountId))
+            {
+                continue;
+            }
+
+            _accounts[normalizedAccountId] = new StoredAccount(
+                state: CloneAccountState(persistedAccount.State),
+                awardedBySourceKeyByCharacter: CloneAwardedBySourceKeyByCharacter(
+                    persistedAccount.AwardedBySourceKeyByCharacter));
+        }
+    }
 
     public AccountState GetAccountState(string accountId)
     {
@@ -56,6 +80,7 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
                     ActiveCharacterId = characterId,
                     Version = account.State.Version + 1
                 };
+                PersistAccount(account);
             }
 
             return CloneAccountState(account.State);
@@ -100,6 +125,7 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
             };
 
             account.State = UpdateCharacter(account.State, updatedCharacter, versionIncrement: 1);
+            PersistAccount(account);
             return CloneCharacterState(updatedCharacter);
         }
     }
@@ -187,6 +213,7 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
 
                 account.State = UpdateAccountAfterDropAward(account.State, updatedCharacter, echoFragmentsBalance);
                 character = updatedCharacter;
+                PersistAccount(account);
             }
 
             return new AwardDropsResult(
@@ -269,6 +296,7 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
 
             var updatedEchoFragmentsBalance = account.State.EchoFragmentsBalance - BestiaryCraftEchoFragmentsCost;
             account.State = UpdateAccountAfterDropAward(account.State, updatedCharacter, updatedEchoFragmentsBalance);
+            PersistAccount(account);
             return new BestiaryCraftResult(
                 Account: CloneAccountState(account.State),
                 Character: CloneCharacterState(updatedCharacter),
@@ -343,6 +371,7 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
 
             var updatedEchoFragmentsBalance = account.State.EchoFragmentsBalance - refineRule.EchoFragmentsCost;
             account.State = UpdateAccountAfterDropAward(account.State, updatedCharacter, updatedEchoFragmentsBalance);
+            PersistAccount(account);
             return new ItemRefineResult(
                 Account: CloneAccountState(account.State),
                 Character: CloneCharacterState(updatedCharacter),
@@ -406,6 +435,7 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
             };
 
             account.State = UpdateCharacter(account.State, updatedCharacter, versionIncrement: 1);
+            PersistAccount(account);
             return new ItemSalvageResult(
                 Account: CloneAccountState(account.State),
                 Character: CloneCharacterState(updatedCharacter),
@@ -755,10 +785,89 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
         };
     }
 
+    private void PersistAccount(StoredAccount account)
+    {
+        _persistence.Save(new PersistedAccountData(
+            State: CloneAccountState(account.State),
+            AwardedBySourceKeyByCharacter: CloneAwardedBySourceKeyByCharacterForPersistence(
+                account.AwardedBySourceKeyByCharacter)));
+    }
+
+    private static Dictionary<string, Dictionary<string, IReadOnlyList<DropEvent>>> CloneAwardedBySourceKeyByCharacter(
+        IReadOnlyDictionary<string, Dictionary<string, List<DropEvent>>>? source)
+    {
+        var clonedByCharacter = new Dictionary<string, Dictionary<string, IReadOnlyList<DropEvent>>>(StringComparer.Ordinal);
+        if (source is null)
+        {
+            return clonedByCharacter;
+        }
+
+        foreach (var (characterId, awardedBySource) in source)
+        {
+            if (string.IsNullOrWhiteSpace(characterId))
+            {
+                continue;
+            }
+
+            var clonedBySource = new Dictionary<string, IReadOnlyList<DropEvent>>(StringComparer.Ordinal);
+            foreach (var (sourceKey, events) in awardedBySource)
+            {
+                if (string.IsNullOrWhiteSpace(sourceKey))
+                {
+                    continue;
+                }
+
+                clonedBySource[sourceKey] = events?.ToList() ?? [];
+            }
+
+            clonedByCharacter[characterId] = clonedBySource;
+        }
+
+        return clonedByCharacter;
+    }
+
+    private static Dictionary<string, Dictionary<string, List<DropEvent>>> CloneAwardedBySourceKeyByCharacterForPersistence(
+        IReadOnlyDictionary<string, Dictionary<string, IReadOnlyList<DropEvent>>>? source)
+    {
+        var clonedByCharacter = new Dictionary<string, Dictionary<string, List<DropEvent>>>(StringComparer.Ordinal);
+        if (source is null)
+        {
+            return clonedByCharacter;
+        }
+
+        foreach (var (characterId, awardedBySource) in source)
+        {
+            if (string.IsNullOrWhiteSpace(characterId))
+            {
+                continue;
+            }
+
+            var clonedBySource = new Dictionary<string, List<DropEvent>>(StringComparer.Ordinal);
+            foreach (var (sourceKey, events) in awardedBySource)
+            {
+                if (string.IsNullOrWhiteSpace(sourceKey))
+                {
+                    continue;
+                }
+
+                clonedBySource[sourceKey] = events?.ToList() ?? [];
+            }
+
+            clonedByCharacter[characterId] = clonedBySource;
+        }
+
+        return clonedByCharacter;
+    }
+
     private StoredAccount GetOrCreateAccount(string accountId)
     {
         var normalizedAccountId = string.IsNullOrWhiteSpace(accountId) ? "dev_account" : accountId.Trim();
-        return _accounts.GetOrAdd(normalizedAccountId, static id => new StoredAccount(CreateSeededAccount(id)));
+        return _accounts.GetOrAdd(
+            normalizedAccountId,
+            static id => new StoredAccount(
+                state: CreateSeededAccount(id),
+                awardedBySourceKeyByCharacter: new Dictionary<string, Dictionary<string, IReadOnlyList<DropEvent>>>(
+                    StringComparer.Ordinal)));
     }
 
     private static AccountState CreateSeededAccount(string accountId)
@@ -953,17 +1062,34 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
 
     private sealed class StoredAccount
     {
-        public StoredAccount(AccountState state)
+        public StoredAccount(
+            AccountState state,
+            Dictionary<string, Dictionary<string, IReadOnlyList<DropEvent>>> awardedBySourceKeyByCharacter)
         {
             State = state;
+            AwardedBySourceKeyByCharacter = awardedBySourceKeyByCharacter;
         }
 
         public object Sync { get; } = new();
 
         public AccountState State { get; set; }
 
-        public Dictionary<string, Dictionary<string, IReadOnlyList<DropEvent>>> AwardedBySourceKeyByCharacter { get; } =
-            new(StringComparer.Ordinal);
+        public Dictionary<string, Dictionary<string, IReadOnlyList<DropEvent>>> AwardedBySourceKeyByCharacter { get; }
+    }
+
+    private sealed class NullAccountStatePersistence : IAccountStatePersistence
+    {
+        public static NullAccountStatePersistence Instance { get; } = new();
+
+        public IReadOnlyDictionary<string, PersistedAccountData> LoadAll()
+        {
+            return new Dictionary<string, PersistedAccountData>(StringComparer.Ordinal);
+        }
+
+        public void Save(PersistedAccountData persistedAccount)
+        {
+            _ = persistedAccount;
+        }
     }
 
     private readonly record struct RefineRule(

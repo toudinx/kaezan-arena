@@ -71,7 +71,7 @@ public sealed partial class InMemoryBattleStore
                     break;
                 }
 
-                var selectedIndex = state.Rng.Next(candidatePool.Count);
+                var selectedIndex = NextIntFromBattleRng(state, candidatePool.Count);
                 var selected = candidatePool[selectedIndex];
                 selected.BuffSourceEliteId = elite.ActorId;
                 events?.Add(new EliteBuffAppliedEventDto(

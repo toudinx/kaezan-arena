@@ -59,3 +59,6 @@ reports/
 # Local tool/cache folders
 .dotnet-tools/
 .artifacts/
+
+# Kaezan Arena local account persistence
+backend/src/KaezanArena.Api/.data/
