@@ -16,7 +16,7 @@ public sealed class ApiEndpointsTests : IClassFixture<ApiTestWebApplicationFacto
     private const int PlayerTileX = 3;
     private const int PlayerTileY = 3;
     private const int MaxAliveMobs = 10;
-    private const int EarlyMobConcurrentCap = 6;
+    private const int EarlyMobConcurrentCap = 2;
     private const int EarlyMobConcurrentCapDurationMs = 75000;
     private const int StepDeltaMs = 250;
     private const int GlobalCooldownMs = 400;
@@ -27,8 +27,8 @@ public sealed class ApiEndpointsTests : IClassFixture<ApiTestWebApplicationFacto
     private const int HealPercentOfMaxHp = 22;
     private const int RunInitialLevel = 1;
     private const int RunXpPerNormalMobKill = 10;
-    private const int RunLevelXpBase = 25;
-    private const int RunLevelXpIncrementPerLevel = 15;
+    private const int RunLevelXpBase = 60;
+    private const int RunLevelXpIncrementPerLevel = 40;
     private static readonly int[] BestiaryRankKillThresholds = [0, 10, 30, 60, 100];
     private readonly HttpClient _client;
 
@@ -1019,10 +1019,10 @@ public sealed class ApiEndpointsTests : IClassFixture<ApiTestWebApplicationFacto
             .OfType<DamageNumberEventDto>()
             .Where(evt => evt.TargetEntityId == playerId)
             .Sum(evt => evt.DamageAmount);
-        var guardGain = (int)Math.Floor(previousPlayer.MaxHp * 0.15d);
+        var guardGain = (int)Math.Floor(previousPlayer.MaxHp * 0.10d);
         var expectedShieldBeforeDamage = Math.Min(
             previousPlayer.MaxShield,
-            previousPlayer.Shield + guardGain + (playerAutoAttackTriggered ? 5 : 0));
+            previousPlayer.Shield + guardGain + (playerAutoAttackTriggered ? 2 : 0));
         var expectedShieldAfterDamage = Math.Max(0, expectedShieldBeforeDamage - incomingDamage);
 
         Assert.Equal(expectedShieldAfterDamage, currentPlayer.Shield);
@@ -1215,7 +1215,7 @@ public sealed class ApiEndpointsTests : IClassFixture<ApiTestWebApplicationFacto
                 .Any(evt => IsPlayerAutoAttackDamageEvent(step, playerId, evt));
             var shieldBeforeDamage = Math.Min(
                 previousPlayer.MaxShield,
-                previousPlayer.Shield + (autoAttackTriggered ? 5 : 0));
+                previousPlayer.Shield + (autoAttackTriggered ? 2 : 0));
             var incomingDamage = playerDamageEvents.Sum(evt => evt.DamageAmount);
             if (shieldBeforeDamage == 0 || incomingDamage == 0)
             {
@@ -1243,7 +1243,7 @@ public sealed class ApiEndpointsTests : IClassFixture<ApiTestWebApplicationFacto
         AssertArenaInvariants(start.Actors, playerId);
 
         var startPlayer = GetActor(start.Actors, playerId);
-        Assert.Equal((int)Math.Floor(startPlayer.MaxHp * 0.8d), startPlayer.MaxShield);
+        Assert.Equal((int)Math.Floor(startPlayer.MaxHp * 0.45d), startPlayer.MaxShield);
 
         var currentTick = start.Tick;
         var currentSkills = start.Skills;

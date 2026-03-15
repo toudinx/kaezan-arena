@@ -22,14 +22,17 @@ export interface PointerActorState {
   tileY: number;
 }
 
+export interface PoiPointerState {
+  poiId: string;
+  tileX: number;
+  tileY: number;
+}
+
 export type PointerActionKind = "left_click" | "right_click";
 
-export interface PointerBattleCommand {
-  type: "set_target" | "set_ground_target";
-  targetEntityId?: string | null;
-  groundTileX?: number | null;
-  groundTileY?: number | null;
-}
+export type PointerBattleCommand =
+  | { type: "set_target"; targetEntityId?: string | null }
+  | { type: "interact_poi"; poiId: string };
 
 export function screenToTile(screenX: number, screenY: number, rect: CanvasRectLike, layout: GridLayout): TilePos | null {
   if (rect.width <= 0 || rect.height <= 0 || layout.tileSize <= 0 || layout.columns <= 0 || layout.rows <= 0) {
@@ -73,23 +76,34 @@ export function hitTestMobAtTile(actors: ReadonlyArray<PointerActorState>, tile:
   return match;
 }
 
+export function hitTestPoiAtTile(pois: ReadonlyArray<PoiPointerState>, tile: TilePos): string | null {
+  for (const poi of pois) {
+    if (poi.tileX === tile.x && poi.tileY === tile.y) {
+      return poi.poiId;
+    }
+  }
+  return null;
+}
+
 export function resolvePointerCommand(
   action: PointerActionKind,
   tile: TilePos | null,
-  actors: ReadonlyArray<PointerActorState>
+  actors: ReadonlyArray<PointerActorState>,
+  pois: ReadonlyArray<PoiPointerState>
 ): PointerBattleCommand | null {
   if (!tile) {
     return null;
   }
 
   if (action === "left_click") {
-    return {
-      type: "set_ground_target",
-      groundTileX: tile.x,
-      groundTileY: tile.y
-    };
+    const poiId = hitTestPoiAtTile(pois, tile);
+    if (!poiId) {
+      return null;
+    }
+    return { type: "interact_poi", poiId };
   }
 
+  // right_click → lock target on mob
   return {
     type: "set_target",
     targetEntityId: hitTestMobAtTile(actors, tile)

@@ -339,11 +339,8 @@
             (mousemove)="onArenaCanvasMouseMove($event)"
             (mouseleave)="onArenaCanvasMouseLeave()"
           ></canvas>
-          @if (interactPoiHint || healingAmplifierHint || altarCooldownHint) {
+          @if (healingAmplifierHint || altarCooldownHint) {
             <div class="arena-hints-overlay">
-              @if (interactPoiHint) {
-                <p class="arena-hints-overlay__hint arena-hints-overlay__hint--poi">{{ interactPoiHint }}</p>
-              }
               @if (healingAmplifierHint) {
                 <p class="arena-hints-overlay__hint">{{ healingAmplifierHint }}</p>
               }
@@ -363,22 +360,6 @@
       <footer class="bottom-hotbar">
         <div class="bottom-hotbar__exp-track" aria-label="Experience bar">
           <div class="bottom-hotbar__exp-fill" [style.width.%]="playerExpPercent"></div>
-        </div>
-        <div class="top-hud__vitals-text">{{ runExpProgressLabel }}</div>
-        <div class="bottom-hotbar__skills-grid">
-          @for (slot of bottomBarSkillSlots; track trackSkillSlotBySkillId($index, slot)) {
-            <button
-              type="button"
-              class="bottom-hotbar__skill"
-              [class.bottom-hotbar__skill--disabled]="slot.disabled"
-              [disabled]="slot.disabled"
-              (click)="onStatusSkillActivated(slot.skillId)"
-            >
-              <span class="bottom-hotbar__skill-key">{{ slot.keyLabel }}</span>
-              <span class="bottom-hotbar__skill-name">{{ slot.label }}</span>
-              <span class="bottom-hotbar__skill-mask" [style.transform]="'scaleY(' + slot.cooldownFraction + ')'" ></span>
-            </button>
-          }
         </div>
       </footer>
     </section>
@@ -443,16 +424,35 @@
                   </div>
                 }
               </div>
-              <p class="status-details__movement-debug">{{ lastMoveResultDebug }}</p>
-              <h4>Cards</h4>
-              @if (selectedCards.length === 0) {
-                <p>No cards selected yet.</p>
-              } @else {
-                <ul>
-                  @for (card of selectedCards; track card.id) {
-                    <li title="{{ card.description }}">{{ card.name }}</li>
+              <h4>Skills</h4>
+              @for (slot of bottomBarSkillSlots; track slot.skillId) {
+                <div
+                  class="right-panel-skill-row"
+                  [class.right-panel-skill-row--locked]="slot.isLocked"
+                  [title]="slot.isLocked ? 'Locked' : slot.label"
+                >
+                  @if (!slot.isLocked) {
+                    <span class="right-panel-skill-row__name">{{ slot.label }}</span>
+                    @if (slot.cooldownText) {
+                      <span class="right-panel-skill-row__cd">{{ slot.cooldownText }}</span>
+                    } @else {
+                      <span class="right-panel-skill-row__ready">Ready</span>
+                    }
                   }
-                </ul>
+                </div>
+              }
+              <h4>Passives</h4>
+              @if (hudPassiveSlots.length === 0) {
+                <p>No passives yet.</p>
+              } @else {
+                @for (slot of hudPassiveSlots; track slot.id) {
+                  <div class="right-panel-passive-row" [title]="slot.description">
+                    <span class="right-panel-passive-row__name">{{ slot.name }}</span>
+                    @if (slot.currentStacks > 1) {
+                      <span class="right-panel-passive-row__stack">x{{ slot.currentStacks }}</span>
+                    }
+                  </div>
+                }
               }
             </div>
           </div>
@@ -533,6 +533,13 @@
             >
               Import Replay
             </button>
+            <button
+              type="button"
+              class="pre-run-card__start"
+              (click)="exportAllRunResultsJson()"
+            >
+              Export Runs
+            </button>
             <p class="pre-run-card__summary">{{ importedReplaySummaryLabel }}</p>
           </div>
         }
@@ -555,10 +562,15 @@
           @for (card of offeredCards; track card.id) {
             <button
               type="button"
+              class="card-offer"
+              [class.card-offer--skill]="card.isSkillCard"
+              [class.card-offer--passive]="!card.isSkillCard"
               (click)="onCardChoiceSelected(card.id)"
               [disabled]="cardChoiceRequestInFlight || isReplayInProgress"
             >
-              {{ card.name }}: {{ card.description }}
+              <span class="card-offer__tag">{{ card.isSkillCard ? "SKILL" : "PASSIVE" }}</span>
+              <span class="card-offer__name">{{ card.name }}</span>
+              <span class="card-offer__desc">{{ card.description }}</span>
             </button>
           }
         </div>
@@ -611,6 +623,7 @@
           <button type="button" (click)="playImportedReplay()" [disabled]="!canPlayImportedReplay">Play Imported Replay</button>
           <button type="button" (click)="copyLastRunResultJson()">Copy Last Run JSON</button>
           <button type="button" (click)="copyAllRunResultsJson()">Copy All Run Results</button>
+          <button type="button" (click)="exportAllRunResultsJson()">Export Runs</button>
         </div>
         @if (runResultCopyMessage) {
           <p class="run-complete__copy-status">{{ runResultCopyMessage }}</p>

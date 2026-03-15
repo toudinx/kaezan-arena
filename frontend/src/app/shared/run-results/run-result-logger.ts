@@ -240,6 +240,10 @@ export class RunResultLogger {
     return JSON.stringify(stored, null, 2);
   }
 
+  getAllResults(): RunResultV1[] {
+    return this.getStoredResults();
+  }
+
   private persistResult(result: RunResultV1): void {
     const existing = this.getStoredResults();
     const next = [...existing, result].slice(-RUN_RESULT_STORAGE_CAP);
@@ -275,7 +279,7 @@ export class RunResultLogger {
         .map((entry) => this.readRecord(entry))
         .filter((entry): entry is Record<string, unknown> => entry !== null)
         .filter((entry) => this.readNumber(entry["schemaVersion"]) === 1)
-        .map((entry) => entry as unknown as RunResultV1);
+        .map((entry) => this.normalizeStoredResult(entry));
     } catch {
       return [];
     }
@@ -321,6 +325,41 @@ export class RunResultLogger {
     }
 
     return normalized;
+  }
+
+  private normalizeStoredResult(entry: Record<string, unknown>): RunResultV1 {
+    const speciesCoresRaw = this.readRecord(entry["speciesCores"]);
+    return {
+      schemaVersion: 1,
+      recordedAtIso: this.readString(entry["recordedAtIso"]) ?? new Date(0).toISOString(),
+      battleSeed: Math.max(0, Math.floor(this.readNumber(entry["battleSeed"]) ?? 0)),
+      stepDeltaMs: Math.max(1, Math.floor(this.readNumber(entry["stepDeltaMs"]) ?? 250)),
+      durationMs: Math.max(0, Math.floor(this.readNumber(entry["durationMs"]) ?? 0)),
+      endReason: this.readString(entry["endReason"]) ?? "unknown",
+      runLevelFinal: Math.max(1, Math.floor(this.readNumber(entry["runLevelFinal"]) ?? 1)),
+      xpTotalGained: Math.max(0, Math.floor(this.readNumber(entry["xpTotalGained"]) ?? 0)),
+      killsTotal: Math.max(0, Math.floor(this.readNumber(entry["killsTotal"]) ?? 0)),
+      eliteKills: Math.max(0, Math.floor(this.readNumber(entry["eliteKills"]) ?? 0)),
+      chestsOpened: Math.max(0, Math.floor(this.readNumber(entry["chestsOpened"]) ?? 0)),
+      cardsChosen: Array.isArray(entry["cardsChosen"])
+        ? (entry["cardsChosen"] as unknown[]).filter((c): c is string => typeof c === "string")
+        : [],
+      playerMinHp: Math.max(0, Math.floor(this.readNumber(entry["playerMinHp"]) ?? 0)),
+      playerMaxHpObserved: Math.max(0, Math.floor(this.readNumber(entry["playerMaxHpObserved"]) ?? 0)),
+      playerMinShield: Math.max(0, Math.floor(this.readNumber(entry["playerMinShield"]) ?? 0)),
+      damageDealtTotal: Math.max(0, Math.floor(this.readNumber(entry["damageDealtTotal"]) ?? 0)),
+      damageTakenTotal: Math.max(0, Math.floor(this.readNumber(entry["damageTakenTotal"]) ?? 0)),
+      healingDoneTotal: Math.max(0, Math.floor(this.readNumber(entry["healingDoneTotal"]) ?? 0)),
+      drops: Array.isArray(entry["drops"]) ? (entry["drops"] as DropEvent[]) : [],
+      echoFragmentsDelta: Math.floor(this.readNumber(entry["echoFragmentsDelta"]) ?? 0),
+      itemsAwarded: Array.isArray(entry["itemsAwarded"])
+        ? (entry["itemsAwarded"] as Array<Readonly<{ itemId: string; quantity: number }>>)
+        : [],
+      speciesCores: {
+        dropsBySpecies: this.readRecord(speciesCoresRaw?.["dropsBySpecies"]) as Record<string, number> ?? {},
+        totalsBySpecies: this.readRecord(speciesCoresRaw?.["totalsBySpecies"]) as Record<string, number> ?? {}
+      }
+    };
   }
 
   private readString(value: unknown): string | null {

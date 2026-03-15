@@ -4,12 +4,9 @@ public sealed partial class InMemoryBattleStore
 {
     private static readonly string[] InitialSkillOrder =
     [
-        ExoriSkillId,
-        ExoriMasSkillId,
         ExoriMinSkillId,
         HealSkillId,
-        GuardSkillId,
-        AvalancheSkillId
+        GuardSkillId
     ];
 
     private static readonly IReadOnlyDictionary<string, int> SkillBaseCooldownTotalMsById =

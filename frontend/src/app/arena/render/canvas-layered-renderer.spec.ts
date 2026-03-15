@@ -56,7 +56,7 @@ describe("CanvasLayeredRenderer readability markers", () => {
     expect(context.arcCallCount).toBeGreaterThan(0);
   });
 
-  it("renders POI key hint for interactable POIs in range", () => {
+  it("renders interactable POI highlight arc without F key hint", () => {
     const context = createContextStub();
     const renderer = new CanvasLayeredRenderer(context.context as unknown as CanvasRenderingContext2D);
     const viewport = {
@@ -76,7 +76,8 @@ describe("CanvasLayeredRenderer readability markers", () => {
     ];
 
     (renderer as any).drawPoiMarkers(scene, viewport);
-    expect(context.fillTextValues).toContain("F");
+    expect(context.arcCallCount).toBeGreaterThan(0);
+    expect(context.fillTextValues).not.toContain("F");
   });
 });
 

@@ -26,6 +26,7 @@ export type StatusSkillSlotViewModel = Readonly<{
   cooldownText: string;
   blockedByGlobalCooldown: boolean;
   disabled: boolean;
+  isLocked: boolean;
 }>;
 
 export type StatusBuffViewModel = Readonly<{
@@ -50,9 +51,10 @@ export function mapStatusSkillSlots(
 
   return bindings.map((binding) => {
     const state = byId[binding.skillId];
+    const isLocked = state === undefined;
     const remainingMs = Math.max(0, state?.cooldownRemainingMs ?? 0);
     const totalMs = Math.max(0, state?.cooldownTotalMs ?? 0);
-    const blockedByGcd = isReadyButBlockedByGcd(remainingMs, gcdRemaining);
+    const blockedByGcd = !isLocked && isReadyButBlockedByGcd(remainingMs, gcdRemaining);
     const cooldownText = remainingMs > 0
       ? formatCooldownSeconds(remainingMs)
       : blockedByGcd
@@ -69,7 +71,8 @@ export function mapStatusSkillSlots(
       cooldownFraction: computeCooldownFraction(remainingMs, totalMs),
       cooldownText,
       blockedByGlobalCooldown: blockedByGcd,
-      disabled: remainingMs > 0 || blockedByGcd
+      disabled: isLocked || remainingMs > 0 || blockedByGcd,
+      isLocked
     };
   });
 }

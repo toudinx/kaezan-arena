@@ -70,8 +70,7 @@ import {
   type StatusBuffViewModel,
   type StatusSkillSlotViewModel,
   mapStatusBuffs,
-  mapStatusSkillSlots,
-  resolveSkillIdForHotkeyKey
+  mapStatusSkillSlots
 } from "./status-skills.helpers";
 import { EquipmentPaperdollWindowComponent } from "./equipment-paperdoll-window.component";
 import type { BackpackFilter } from "./backpack-inventory.helpers";
@@ -124,14 +123,12 @@ type ApiCardOffer = {
   id?: unknown;
   name?: unknown;
   description?: unknown;
+  isSkillCard?: unknown;
+  currentStacks?: unknown;
 };
 type StepCommand = NonNullable<StepBattleRequest["commands"]>[number];
 type FacingDirection = "up" | "up_right" | "right" | "down_right" | "down" | "down_left" | "left" | "up_left";
-type MovementInputKey = "w" | "a" | "s" | "d" | "q" | "e" | "z" | "c";
-type PressedMovementKeyState = Readonly<{
-  pressedAtMs: number;
-  sequence: number;
-}>;
+
 type AssistOffenseMode = "cooldown_spam" | "smart";
 type AssistSkillId = "exori" | "exori_min" | "exori_mas" | "avalanche";
 type LeftTopTabId = "events" | "combat" | "economy";
@@ -200,6 +197,8 @@ type ArenaCardOffer = Readonly<{
   id: string;
   name: string;
   description: string;
+  isSkillCard: boolean;
+  currentStacks: number;
 }>;
 type RunRecordingBatch = Readonly<{
   tick: number;
@@ -224,7 +223,6 @@ type BeginRunOptions = Readonly<{
 }>;
 export const TOOLS_TAB_STORAGE_KEY = "kaezan_arena_tools_tab_v1";
 export const RIGHT_INFO_TAB_STORAGE_KEY = TOOLS_TAB_STORAGE_KEY;
-const AVALANCHE_SKILL_ID = "avalanche";
 const ASSIST_CONFIG_DEBOUNCE_MS = 200;
 const RUN_INITIAL_LEVEL = 1;
 const RUN_INITIAL_XP = 0;
@@ -348,7 +346,6 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   battleRequestInFlight = false;
   recentDamageNumbers: string[] = [];
   recentCommandResults: string[] = [];
-  lastMoveResultDebug = "No move command result yet.";
   runResultCopyMessage = "";
   replayIoMessage = "";
   replayIoErrorMessage = "";
@@ -473,9 +470,6 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   private readonly maxCanvasMeasureAttempts = 20;
   private renderInProgress = false;
   private queuedCommands: StepCommand[] = [];
-  private readonly pressedMovementKeys = new Map<MovementInputKey, PressedMovementKeyState>();
-  private movementKeySequence = 0;
-  private bufferedMovementDirection: FacingDirection | null = null;
   private autoStepTimerId: ReturnType<typeof setTimeout> | null = null;
   private assistConfigDebounceTimerId: ReturnType<typeof setTimeout> | null = null;
   private autoStepWasEnabledBeforePause = false;
@@ -671,6 +665,10 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       this.ui.player.globalCooldownRemainingMs,
       this.ui.player.globalCooldownTotalMs
     );
+  }
+
+  get hudPassiveSlots(): ReadonlyArray<ArenaCardOffer> {
+    return this.selectedCards.filter((card) => !card.isSkillCard).slice(0, 4);
   }
 
   get preRunCharacters(): ReadonlyArray<PreRunCharacterViewModel> {
@@ -1015,7 +1013,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
 
     this.clearAssistConfigDebounce();
     this.stopAutoStepLoop();
-    this.clearMovementInputState();
+
   }
 
   @HostListener("window:keydown", ["$event"])
@@ -1101,16 +1099,14 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     }
 
     if (normalizedKey === "c") {
-      if (!this.isMovementInputContextActive()) {
-        event.preventDefault();
-        if (event.repeat) {
-          return;
-        }
-
-        this.focusEquipmentPanel();
-        this.focusRightInfoPane();
+      event.preventDefault();
+      if (event.repeat) {
         return;
       }
+
+      this.focusEquipmentPanel();
+      this.focusRightInfoPane();
+      return;
     }
 
     if (normalizedKey === "h") {
@@ -1146,23 +1142,6 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       return;
     }
 
-    if (event.key.toLowerCase() === "f") {
-      event.preventDefault();
-      if (event.repeat) {
-        return;
-      }
-
-      this.interactBestPoiInRange();
-      return;
-    }
-
-    const movementKey = this.toMovementKey(event.key);
-    if (movementKey) {
-      event.preventDefault();
-      this.onMovementKeyDown(movementKey, event.repeat);
-      return;
-    }
-
     if (event.repeat) {
       return;
     }
@@ -1174,36 +1153,6 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       return;
     }
 
-    const mappedSkillId = resolveSkillIdForHotkeyKey(event.key);
-    if (mappedSkillId) {
-      event.preventDefault();
-      this.onStatusSkillActivated(mappedSkillId);
-      return;
-    }
-
-    if (event.key === "5") {
-      if (!this.canCastSkill("guard")) {
-        return;
-      }
-
-      event.preventDefault();
-      this.castSkill("guard");
-    }
-  }
-
-  @HostListener("window:keyup", ["$event"])
-  onKeyUp(event: KeyboardEvent): void {
-    const movementKey = this.toMovementKey(event.key);
-    if (!movementKey) {
-      return;
-    }
-
-    this.onMovementKeyUp(movementKey);
-  }
-
-  @HostListener("window:blur")
-  onWindowBlur(): void {
-    this.clearMovementInputState();
   }
 
   @HostListener("window:resize")
@@ -1306,10 +1255,6 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.focusRightInfoPane();
   }
 
-  onStatusSkillActivated(skillId: string): void {
-    this.castSkill(skillId);
-  }
-
   onCardChoiceSelected(cardId: string): void {
     void this.chooseCard(cardId);
   }
@@ -1402,7 +1347,6 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     }
 
     this.enqueueCommand(command);
-    this.enqueueCastSkill(AVALANCHE_SKILL_ID);
   }
 
   onArenaCanvasContextMenu(event: MouseEvent): void {
@@ -1597,7 +1541,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.isPauseModalOpen = true;
     this.autoStepEnabled = false;
     this.stopAutoStepLoop();
-    this.clearMovementInputState();
+
     void this.syncBackendPauseState(true);
   }
 
@@ -1649,7 +1593,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   private async beginNewRun(options: BeginRunOptions): Promise<void> {
     this.stopAutoStepLoop();
     this.clearAssistConfigDebounce();
-    this.clearMovementInputState();
+
     this.clearReplaySessionState();
     this.activeRunRecording = null;
     this.autoStepEnabled = false;
@@ -1688,7 +1632,6 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.runAwardedSourceKeys.clear();
     this.runStartCraftedSnapshotByInstanceId = this.captureCurrentCraftedSnapshot();
     this.recentCommandResults = [];
-    this.lastMoveResultDebug = "No move command result yet.";
     this.runResultCopyMessage = "";
     this.replayIoMessage = "";
     this.replayIoErrorMessage = "";
@@ -1962,7 +1905,6 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
 
   private resolveCommandsForNextStepRequest(): StepCommand[] {
     if (!this.isReplayInProgress) {
-      this.pumpMovementBuffer();
       return this.dequeuePendingCommands();
     }
 
@@ -2021,26 +1963,6 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
 
   exitBattle(): void {
     this.returnToPreRun();
-  }
-
-  castExoriMin(): void {
-    this.castSkill("exori_min");
-  }
-
-  castExori(): void {
-    this.castSkill("exori");
-  }
-
-  castExoriMas(): void {
-    this.castSkill("exori_mas");
-  }
-
-  castHeal(): void {
-    this.castSkill("heal");
-  }
-
-  castGuard(): void {
-    this.castSkill("guard");
   }
 
   get characterOptions(): CharacterState[] {
@@ -2267,26 +2189,18 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.runResultCopyMessage = copied ? "All run results copied." : "Failed to copy stored run results.";
   }
 
-  trackExpEntryById(_index: number, entry: ExpConsoleEntry): string {
-    return entry.id;
+  exportAllRunResultsJson(): void {
+    const results = this.runResultLogger.getAllResults();
+    if (results.length === 0) {
+      this.runResultCopyMessage = "No stored run results to export.";
+      return;
+    }
+
+    this.downloadJsonFile("kaezan-runs-export.json", results);
   }
 
-  canCastSkill(skillId: string): boolean {
-    if (
-      this.battleRequestInFlight ||
-      this.cardChoiceRequestInFlight ||
-      this.isAwaitingCardChoice ||
-      !this.currentBattleId ||
-      this.ui.status !== "started"
-    ) {
-      return false;
-    }
-
-    if (this.getCooldownRemainingMs(skillId) > 0) {
-      return false;
-    }
-
-    return this.getGlobalCooldownRemainingMs() === 0;
+  trackExpEntryById(_index: number, entry: ExpConsoleEntry): string {
+    return entry.id;
   }
 
   get showBootOverlay(): boolean {
@@ -2378,19 +2292,6 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
 
   get isRunStarted(): boolean {
     return this.ui.status === "started" && !!this.currentBattleId;
-  }
-
-  get interactPoiHint(): string | null {
-    const bestPoi = this.selectBestInteractablePoi(this.scene);
-    if (!bestPoi) {
-      return null;
-    }
-
-    if (bestPoi.type === "species_chest") {
-      return "Press F to interact: Species Chest";
-    }
-
-    return `Press F to interact: ${bestPoi.type === "chest" ? "Chest" : "Altar"}`;
   }
 
   get healingAmplifierHint(): string | null {
@@ -2561,61 +2462,12 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.updateAssistConfig({ autoSkills: nextAutoSkills });
   }
 
-  private castSkill(skillId: string): void {
-    if (!this.canCastSkill(skillId)) {
-      return;
-    }
-
-    this.enqueueCastSkill(skillId);
-  }
-
   private setFacing(dir: FacingDirection): void {
     if (!this.canIssueBattleCommand()) {
       return;
     }
 
     this.enqueueSetFacing(dir);
-  }
-
-  private movePlayer(dir: FacingDirection): void {
-    if (!this.canIssueBattleCommand()) {
-      return;
-    }
-
-    this.enqueueMovePlayer(dir);
-  }
-
-  private onMovementKeyDown(key: MovementInputKey, isRepeat: boolean): void {
-    if (isRepeat) {
-      return;
-    }
-
-    this.pressedMovementKeys.set(key, {
-      pressedAtMs: Date.now(),
-      sequence: ++this.movementKeySequence
-    });
-
-    this.syncBufferedMovementFromPressedKeys();
-    this.tryQueueBufferedMovementCommand();
-  }
-
-  private onMovementKeyUp(key: MovementInputKey): void {
-    this.pressedMovementKeys.delete(key);
-    this.syncBufferedMovementFromPressedKeys();
-    this.tryQueueBufferedMovementCommand();
-  }
-
-  private interactBestPoiInRange(): void {
-    if (!this.canIssueBattleCommand()) {
-      return;
-    }
-
-    const bestPoi = this.selectBestInteractablePoi(this.scene);
-    if (!bestPoi) {
-      return;
-    }
-
-    this.enqueueInteractPoi(bestPoi.poiId);
   }
 
   private async stepBattleSafe(): Promise<void> {
@@ -2673,7 +2525,6 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         this.applyGameOverStateFromSnapshot(response);
         this.applyBattlePayload(response);
         this.runResultLogger.recordStep(response);
-        this.updateMovementBufferFromCommandResults(response.commandResults, commandsToSend);
         this.appendCommandResultLogs(response.commandResults, commandsToSend);
         this.syncUiMetaState();
         this.battleLog = JSON.stringify(response, null, 2);
@@ -4217,7 +4068,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     if (hasValidPendingChoice) {
       this.queuedCommands = [];
       this.queuedCommandCount = 0;
-      this.clearMovementInputState();
+  
     }
   }
 
@@ -4239,7 +4090,9 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         offers.push({
           id,
           name: this.formatCardNameFromId(id),
-          description: ""
+          description: "",
+          isSkillCard: false,
+          currentStacks: 0
         });
         continue;
       }
@@ -4256,8 +4109,10 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
 
       const name = this.readString(typedEntry.name) ?? this.formatCardNameFromId(id);
       const description = this.readString(typedEntry.description) ?? "";
+      const isSkillCard = typedEntry.isSkillCard === true;
+      const currentStacks = this.readNumber(typedEntry.currentStacks) ?? 0;
       seenIds.add(id);
-      offers.push({ id, name, description });
+      offers.push({ id, name, description, isSkillCard, currentStacks });
     }
 
     return offers;
@@ -5009,23 +4864,9 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     };
   }
 
-  private enqueueCastSkill(skillId: string): void {
-    this.enqueueCommand({
-      type: "cast_skill",
-      skillId
-    });
-  }
-
   private enqueueSetFacing(dir: FacingDirection): void {
     this.enqueueCommand({
       type: "set_facing",
-      dir
-    });
-  }
-
-  private enqueueMovePlayer(dir: FacingDirection): void {
-    this.enqueueCommand({
-      type: "move_player",
       dir
     });
   }
@@ -5056,141 +4897,6 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
 
     this.queuedCommands = [...commands, ...this.queuedCommands];
     this.queuedCommandCount = this.queuedCommands.length;
-  }
-
-  private pumpMovementBuffer(): void {
-    if (!this.isMovementInputContextActive()) {
-      this.clearBufferedMovement();
-      return;
-    }
-
-    const desired = this.syncBufferedMovementFromPressedKeys();
-    if (!desired) {
-      return;
-    }
-
-    this.tryQueueBufferedMovementCommand();
-  }
-
-  private tryQueueBufferedMovementCommand(): void {
-    if (!this.bufferedMovementDirection) {
-      return;
-    }
-
-    if (!this.canIssueBattleCommand() || !this.isPlayerAliveForInput()) {
-      return;
-    }
-
-    if (this.hasQueuedMoveCommand()) {
-      return;
-    }
-
-    this.enqueueMovePlayer(this.bufferedMovementDirection);
-  }
-
-  private isPlayerAliveForInput(): boolean {
-    return this.ui.player.hp > 0;
-  }
-
-  private updateMovementBufferFromCommandResults(
-    commandResults: StepBattleResponse["commandResults"],
-    sentCommands: ReadonlyArray<StepCommand>
-  ): void {
-    const moveCommandIndex = this.findLastMoveCommandIndex(sentCommands);
-    if (moveCommandIndex < 0) {
-      return;
-    }
-
-    const safeResults = commandResults ?? [];
-    const moveResult = safeResults
-      .map((entry) => entry as ApiCommandResult)
-      .find((result) => {
-        if (typeof result.index === "number") {
-          return result.index === moveCommandIndex;
-        }
-
-        return this.readString(result.type) === "move_player";
-      });
-
-    const moveCommand = sentCommands[moveCommandIndex];
-    const direction = this.readString(moveCommand?.dir) ?? "unknown_direction";
-    if (!moveResult) {
-      this.lastMoveResultDebug = `t${this.currentBattleTick} Move ${direction}: no server result`;
-      return;
-    }
-
-    const typedResult = moveResult as Record<string, unknown>;
-    const status = this.readString(typedResult["status"]) ?? (moveResult.ok === true ? "Accepted" : "Blocked");
-    const reason = this.readString(typedResult["movementReason"]) ??
-      (moveResult.ok === true ? "None" : this.readString(moveResult.reason) ?? "Unknown");
-    const blockedTileX = this.readNumber(typedResult["blockedTileX"]);
-    const blockedTileY = this.readNumber(typedResult["blockedTileY"]);
-    const blockedByActorId = this.readString(typedResult["blockedByActorId"]);
-    const blockedTileLabel = blockedTileX === null || blockedTileY === null ? "" : ` tile=(${blockedTileX},${blockedTileY})`;
-    const blockedByLabel = blockedByActorId ? ` by=${blockedByActorId}` : "";
-    const reasonLabel = status === "Blocked" ? ` (${reason})${blockedTileLabel}${blockedByLabel}` : "";
-    this.lastMoveResultDebug = `t${this.currentBattleTick} Move ${direction}: ${status}${reasonLabel}`;
-  }
-
-  private syncBufferedMovementFromPressedKeys(): FacingDirection | null {
-    const desired = this.resolveMovementDirectionFromPressedKeys();
-    if (!desired) {
-      this.clearBufferedMovement();
-      this.removeQueuedMoveCommands();
-      return null;
-    }
-
-    if (this.bufferedMovementDirection !== desired) {
-      this.removeQueuedMoveCommands();
-    }
-
-    this.bufferedMovementDirection = desired;
-    return desired;
-  }
-
-  private clearMovementInputState(): void {
-    this.pressedMovementKeys.clear();
-    this.clearBufferedMovement();
-    this.removeQueuedMoveCommands();
-  }
-
-  private clearBufferedMovement(): void {
-    this.bufferedMovementDirection = null;
-  }
-
-  private isMovementInputContextActive(): boolean {
-    return !!this.currentBattleId &&
-      this.battleStatus === "started" &&
-      !this.isRunEnded &&
-      !this.isReplayInProgress &&
-      !this.isAwaitingCardChoice &&
-      !this.cardChoiceRequestInFlight &&
-      !this.isPauseModalOpen &&
-      !this.isDeathModalOpen;
-  }
-
-  private hasQueuedMoveCommand(): boolean {
-    return this.queuedCommands.some((command) => command.type === "move_player");
-  }
-
-  private removeQueuedMoveCommands(): void {
-    const withoutMoves = this.queuedCommands.filter((command) => command.type !== "move_player");
-    if (withoutMoves.length === this.queuedCommands.length) {
-      return;
-    }
-
-    this.queuedCommands = withoutMoves;
-    this.queuedCommandCount = this.queuedCommands.length;
-  }
-
-  private findLastMoveCommandIndex(commands: ReadonlyArray<StepCommand>): number {
-    for (let index = commands.length - 1; index >= 0; index -= 1) {
-      if (commands[index].type === "move_player") {
-        return index;
-      }
-    }
-
-    return -1;
   }
 
   private startOrRestartAutoStepLoop(): void {
@@ -5325,7 +5031,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   private returnToPreRun(): void {
     this.stopAutoStepLoop();
     this.clearAssistConfigDebounce();
-    this.clearMovementInputState();
+
     this.clearReplaySessionState();
     this.activeRunRecording = null;
     this.autoStepEnabled = false;
@@ -5415,7 +5121,8 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     }
 
     const tile = this.resolveTileFromMouseEvent(event);
-    const command = resolvePointerCommand(action, tile, Object.values(scene.actorsById));
+    const poisForPointer = scene.activePois.map((p) => ({ poiId: p.poiId, tileX: p.pos.x, tileY: p.pos.y }));
+    const command = resolvePointerCommand(action, tile, Object.values(scene.actorsById), poisForPointer);
     if (!command) {
       return null;
     }
@@ -5821,16 +5528,6 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     return null;
   }
 
-  private toMovementKey(key: string): MovementInputKey | null {
-    const normalized = key.toLowerCase();
-    if (normalized === "w" || normalized === "a" || normalized === "s" || normalized === "d" ||
-      normalized === "q" || normalized === "e" || normalized === "z" || normalized === "c")
-    {
-      return normalized as MovementInputKey;
-    }
-
-    return null;
-  }
 
   private toArenaWindowHotkeyId(key: string): ArenaUiWindowId | null {
     const normalized = key.toLowerCase();
@@ -6042,59 +5739,6 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     }
   }
 
-  private resolveMovementDirectionFromPressedKeys(): FacingDirection | null {
-    let selectedKey: MovementInputKey | null = null;
-    let selectedSequence = -1;
-    let selectedPressedAtMs = -1;
-    for (const [key, state] of this.pressedMovementKeys.entries()) {
-      if (state.sequence > selectedSequence ||
-        (state.sequence === selectedSequence && state.pressedAtMs > selectedPressedAtMs))
-      {
-        selectedKey = key;
-        selectedSequence = state.sequence;
-        selectedPressedAtMs = state.pressedAtMs;
-      }
-    }
-
-    if (!selectedKey) {
-      return null;
-    }
-
-    return this.toFacingDirectionFromMovementKey(selectedKey);
-  }
-
-  private toFacingDirectionFromMovementKey(key: MovementInputKey): FacingDirection {
-    if (key === "w") {
-      return "up";
-    }
-
-    if (key === "a") {
-      return "left";
-    }
-
-    if (key === "s") {
-      return "down";
-    }
-
-    if (key === "d") {
-      return "right";
-    }
-
-    if (key === "q") {
-      return "up_left";
-    }
-
-    if (key === "e") {
-      return "up_right";
-    }
-
-    if (key === "z") {
-      return "down_left";
-    }
-
-    return "down_right";
-  }
-
   private updateBestiaryFocusSpecies(): void {
     const focused = this.resolveBestiaryFocusSpeciesFromScene();
     if (!focused) {
@@ -6157,53 +5801,6 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       .split("_")
       .map((token) => (token.length > 0 ? token[0].toUpperCase() + token.slice(1) : token))
       .join(" ");
-  }
-
-  private selectBestInteractablePoi(scene: ArenaScene | undefined): ArenaPoiState | null {
-    if (!scene || scene.activePois.length === 0) {
-      return null;
-    }
-
-    const playerActor = Object.values(scene.actorsById).find((actor) => actor.kind === "player");
-    const playerTileX = playerActor?.tileX ?? scene.playerTile.x;
-    const playerTileY = playerActor?.tileY ?? scene.playerTile.y;
-
-    const inRangePois = scene.activePois
-      .map((poi) => ({
-        poi,
-        distance: this.computeChebyshevDistance(playerTileX, playerTileY, poi.pos.x, poi.pos.y)
-      }))
-      .filter((entry) => entry.distance <= 1);
-    if (inRangePois.length === 0) {
-      return null;
-    }
-
-    inRangePois.sort((left, right) => {
-      const typePriorityDelta = this.getPoiTypePriority(left.poi.type) - this.getPoiTypePriority(right.poi.type);
-      if (typePriorityDelta !== 0) {
-        return typePriorityDelta;
-      }
-
-      if (left.distance !== right.distance) {
-        return left.distance - right.distance;
-      }
-
-      return left.poi.poiId.localeCompare(right.poi.poiId);
-    });
-
-    return inRangePois[0].poi;
-  }
-
-  private getPoiTypePriority(type: ArenaPoiState["type"]): number {
-    return type === "chest" || type === "species_chest"
-      ? 0
-      : type === "altar"
-        ? 1
-        : 2;
-  }
-
-  private computeChebyshevDistance(sourceTileX: number, sourceTileY: number, targetTileX: number, targetTileY: number): number {
-    return Math.max(Math.abs(sourceTileX - targetTileX), Math.abs(sourceTileY - targetTileY));
   }
 
   private logResolvedAssetPaths(): void {

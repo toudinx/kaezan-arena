@@ -8,4 +8,5 @@ public sealed record BattleCardOfferDto(
     int RarityWeight,
     int MaxStacks,
     int CurrentStacks,
-    BattleCardScalingParamsDto ScalingParams);
+    BattleCardScalingParamsDto ScalingParams,
+    bool IsSkillCard = false);

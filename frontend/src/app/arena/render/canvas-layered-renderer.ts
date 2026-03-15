@@ -681,7 +681,6 @@ export class CanvasLayeredRenderer {
         this.context.beginPath();
         this.context.arc(centerX, centerY, scene.tileSize * 0.33, 0, Math.PI * 2);
         this.context.stroke();
-        this.drawPoiKeyHint(scene.tileSize, centerX, centerY);
       }
       this.context.restore();
     }

@@ -17,7 +17,7 @@ public sealed class InMemoryBattleStoreDeterminismTests
     private const int RunInitialLevel = 1;
     private const double MobHpMultStart = 1.0d;
     private const double MobHpMultEnd = 3.2d;
-    private const double MobDmgMultStart = 1.0d;
+    private const double MobDmgMultStart = 0.70d;
     private const double MobDmgMultEnd = 2.6d;
     private const double EliteHpMultiplierFactor = 1.35d;
     private const double EliteDmgMultiplierFactor = 1.30d;
@@ -331,11 +331,11 @@ public sealed class InMemoryBattleStoreDeterminismTests
 
         Assert.Equal(0L, start.RunTimeMs);
         Assert.InRange(start.CurrentMobHpMult, 1.0d, 1.000001d);
-        Assert.InRange(start.CurrentMobDmgMult, 1.0d, 1.000001d);
+        Assert.InRange(start.CurrentMobDmgMult, 0.70d, 0.700001d);
         Assert.InRange(start.Scaling.NormalHpMult, 1.0d, 1.000001d);
-        Assert.InRange(start.Scaling.NormalDmgMult, 1.0d, 1.000001d);
+        Assert.InRange(start.Scaling.NormalDmgMult, 0.70d, 0.700001d);
         Assert.InRange(start.Scaling.EliteHpMult, 1.35d, 1.350001d);
-        Assert.InRange(start.Scaling.EliteDmgMult, 1.30d, 1.300001d);
+        Assert.InRange(start.Scaling.EliteDmgMult, 0.91d, 0.910001d);
         Assert.InRange(start.Scaling.LvlFactor, 1.0d, 1.000001d);
         Assert.True(start.Scaling.IsLvlFactorEnabled);
         AssertScalingMatchesExpected(start, expectedRunTimeMs: 0L, runLevel: RunInitialLevel);

@@ -6,17 +6,7 @@ public sealed partial class InMemoryBattleStore
 {
     private static Dictionary<string, StoredPoi> BuildInitialPois()
     {
-        return new Dictionary<string, StoredPoi>(StringComparer.Ordinal)
-        {
-            [InitialChestPoiId] = new StoredPoi(
-                poiId: InitialChestPoiId,
-                type: PoiTypeChest,
-                tileX: ArenaConfig.PlayerTileX + 1,
-                tileY: ArenaConfig.PlayerTileY,
-                expiresAtMs: ChestLifetimeMs,
-                species: null,
-                metadata: null)
-        };
+        return new Dictionary<string, StoredPoi>(StringComparer.Ordinal);
     }
 
     private static bool TryExecutePoiInteraction(
@@ -66,14 +56,6 @@ public sealed partial class InMemoryBattleStore
             return false;
         }
 
-        var distance = ComputeChebyshevDistance(player.TileX, player.TileY, poi.TileX, poi.TileY);
-        if (distance > 1)
-        {
-            failReason = OutOfRangeReason;
-            events.Add(new InteractFailedEventDto(normalizedPoiId, OutOfRangeReason));
-            return false;
-        }
-
         state.Pois.Remove(normalizedPoiId);
         events.Add(new PoiInteractedEventDto(
             PoiId: poi.PoiId,
@@ -85,7 +67,7 @@ public sealed partial class InMemoryBattleStore
             string.Equals(poi.Type, PoiTypeSpeciesChest, StringComparison.Ordinal))
         {
             state.ChestsOpened += 1;
-            TryOfferCardChoice(state, events);
+            TryOfferCardChoice(state, events, CardOfferSource.Chest);
         }
         else if (string.Equals(poi.Type, PoiTypeAltar, StringComparison.Ordinal))
         {
@@ -186,6 +168,11 @@ public sealed partial class InMemoryBattleStore
 
     private static void TrySpawnChestPoi(StoredBattle state, long checkAtMs)
     {
+        if (state.ChestsSpawned >= MaxChestsPerRun)
+        {
+            return;
+        }
+
         if (state.PendingSpeciesChestArchetype is not null)
         {
             return;
@@ -211,6 +198,7 @@ public sealed partial class InMemoryBattleStore
         var tile = freeTiles[tileIndex];
         var poiId = BuildChestPoiId(state.NextPoiSequence);
         state.NextPoiSequence += 1;
+        state.ChestsSpawned += 1;
         state.Pois[poiId] = new StoredPoi(
             poiId: poiId,
             type: PoiTypeChest,
@@ -280,6 +268,11 @@ public sealed partial class InMemoryBattleStore
         MobArchetype speciesArchetype,
         long spawnAtMs)
     {
+        if (state.ChestsSpawned >= MaxChestsPerRun)
+        {
+            return false;
+        }
+
         var freeTiles = BuildPoiSpawnTiles(state, spawnAtMs);
         if (freeTiles.Count == 0)
         {
@@ -290,6 +283,7 @@ public sealed partial class InMemoryBattleStore
         var tile = freeTiles[tileIndex];
         var poiId = BuildSpeciesChestPoiId(state.NextPoiSequence);
         state.NextPoiSequence += 1;
+        state.ChestsSpawned += 1;
         var species = GetSpeciesId(speciesArchetype);
         state.Pois[poiId] = new StoredPoi(
             poiId: poiId,
@@ -341,6 +335,11 @@ public sealed partial class InMemoryBattleStore
             for (var x = 0; x < ArenaConfig.Width; x += 1)
             {
                 if (occupiedActorTiles.Contains((x, y)) || occupiedPoiTiles.Contains((x, y)))
+                {
+                    continue;
+                }
+
+                if (ComputeChebyshevDistance(x, y, ArenaConfig.PlayerTileX, ArenaConfig.PlayerTileY) > PoiSpawnMaxChebyshev)
                 {
                     continue;
                 }

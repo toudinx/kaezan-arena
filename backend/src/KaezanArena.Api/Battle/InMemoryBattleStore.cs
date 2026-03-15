@@ -16,13 +16,13 @@ public sealed partial class InMemoryBattleStore : IBattleStore
     private const int PlayerBaseHp = 120;
     private const int MobSpawnRingMinDistance = 2;
     private const int MobSpawnRingMaxDistance = 4;
-    private const int EarlyMobConcurrentCap = 6;
+    private const int EarlyMobConcurrentCap = 2;
     private const int RangedPreferredDistanceMin = 2;
     private const int RangedPreferredDistanceMax = 3;
     private const int RangedApproachDistance = 4;
     private const int RangedCommitWindowTicks = 2;
-    private const int PlayerAutoAttackDamage = 3;
-    private const int PlayerShieldGainPerAction = 5;
+    private const int PlayerAutoAttackDamage = 8;
+    private const int PlayerShieldGainPerAction = 2;
     private const int PlayerLifeLeechPercent = 30;
     private const double PlayerDamageVarianceMinMultiplier = 0.90d;
     private const double PlayerDamageVarianceMaxMultiplier = 1.10d;
@@ -73,7 +73,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
     private const int AvalancheDamage = 3;       
     private const int AvalancheRangeTilesManhattan = 3;
     private const int HealPercentOfMaxHp = 22;
-    private const int GuardPercentOfMaxHp = 15;
+    private const int GuardPercentOfMaxHp = 10;
     private const int KinaReflectPercent = 20;
     private const int KinaRangedReflectMultiplier = 2;
     private const string PlayerClassKina = "kina";
@@ -81,19 +81,21 @@ public sealed partial class InMemoryBattleStore : IBattleStore
     private const int RunInitialXp = 0;
     private const int NormalMobKillXp = 10;
     private const int EliteMobKillXp = 10;
-    private const int RunLevelXpBase = 25;
-    private const int RunLevelXpIncrementPerLevel = 15;
+    private const int RunLevelXpBase = 60;
+    private const int RunLevelXpIncrementPerLevel = 40;
     private const int MaxCardOfferCount = 3;
     private const int MaxCardSelectionsPerRun = 12;
+    private const int MaxDistinctPassiveCards = 4;
     private const int MaxGlobalCooldownReductionPercent = 60;
     private const string CardTagOffense = "offense";
     private const string CardTagDefense = "defense";
     private const string CardTagUtility = "utility";
     private const string CardTagSustain = "sustain";
     private const string CardTagMobility = "mobility";
+    private const string CardTagSkill = "skill";
     private const double MobHpMultStart = 1.0d;
     private const double MobHpMultEnd = 3.2d;
-    private const double MobDmgMultStart = 1.0d;
+    private const double MobDmgMultStart = 0.70d;
     private const double MobDmgMultEnd = 2.6d;
     private const double EliteHpMultiplierFactor = 1.35d;
     private const double EliteDmgMultiplierFactor = 1.30d;
@@ -167,23 +169,25 @@ public sealed partial class InMemoryBattleStore : IBattleStore
     private const string AntiRangedPressureBuffId = "anti_ranged_pressure";
     private const string ThornsBoostBuffId = "thorns_boost";
     private const string DamageBoostBuffId = "damage_boost";
+    private const int PoiSpawnMaxChebyshev = 2;
     private const int AltarSpawnCheckMs = 9000;
     private const int AltarSpawnChancePercent = 35;
     private const int AltarLifetimeMs = 10000;
     private const int AltarCooldownMs = 12000;
     private const int AltarSummonSpawnCount = 2;
-    private const int ChestSpawnCheckMs = 7000;
-    private const int ChestSpawnChancePercent = 40;
+    private const int ChestSpawnCheckMs = 65_000;
+    private const int ChestSpawnChancePercent = 90;
+    private const int MaxChestsPerRun = 3;
     private const int ChestLifetimeMs = 10000;
     private const int SpeciesChestLifetimeMs = 10000;
     private const int HealAmplifierBonusPercent = 10;
     private const int AntiRangedPressureReductionPercent = 20;
     private const int ThornsBoostBonusPercent = 30;
     private const int DamageBoostBonusPercent = 25;
-    private const int BestiaryFirstChestBaseKills = 10;
-    private const int BestiaryFirstChestRandomInclusiveMax = 4;
-    private const int BestiaryChestIncrementBaseKills = 12;
-    private const int BestiaryChestIncrementRandomInclusiveMax = 6;
+    private const int BestiaryFirstChestBaseKills = 150;
+    private const int BestiaryFirstChestRandomInclusiveMax = 30;
+    private const int BestiaryChestIncrementBaseKills = 300;
+    private const int BestiaryChestIncrementRandomInclusiveMax = 50;
     private const string InitialChestPoiId = "poi.chest.0000";
     private static readonly int[] BestiaryRankKillThresholds = [0, 10, 30, 60, 100];
 
@@ -239,7 +243,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             Description: "+40% max HP and +6 damage.",
             Tags: [CardTagDefense, CardTagSustain],
             RarityWeight: 40,
-            MaxStacks: 2,
+            MaxStacks: 3,
             ScalingParams: new CardScalingParams(BaseStackMultiplierPercent: 100, AdditionalStackMultiplierPercent: 80),
             Effects: new CardEffectBundle(FlatDamageBonus: 6, PercentMaxHpBonus: 40)),
         new(
@@ -284,7 +288,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             Description: "+25% global cooldown reduction and +20% attack speed.",
             Tags: [CardTagUtility, CardTagMobility],
             RarityWeight: 35,
-            MaxStacks: 2,
+            MaxStacks: 3,
             ScalingParams: new CardScalingParams(BaseStackMultiplierPercent: 100, AdditionalStackMultiplierPercent: 75),
             Effects: new CardEffectBundle(PercentAttackSpeedBonus: 20, GlobalCooldownReductionPercent: 25)),
         new(
@@ -293,7 +297,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             Description: "+18% damage and +20% max HP.",
             Tags: [CardTagOffense, CardTagDefense],
             RarityWeight: 45,
-            MaxStacks: 2,
+            MaxStacks: 3,
             ScalingParams: new CardScalingParams(BaseStackMultiplierPercent: 100, AdditionalStackMultiplierPercent: 80),
             Effects: new CardEffectBundle(PercentDamageBonus: 18, PercentMaxHpBonus: 20)),
         new(
@@ -311,7 +315,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             Description: "+30% global cooldown reduction.",
             Tags: [CardTagUtility, CardTagMobility],
             RarityWeight: 30,
-            MaxStacks: 2,
+            MaxStacks: 3,
             ScalingParams: new CardScalingParams(BaseStackMultiplierPercent: 100, AdditionalStackMultiplierPercent: 70),
             Effects: new CardEffectBundle(GlobalCooldownReductionPercent: 30)),
         new(
@@ -329,7 +333,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             Description: "+55% max HP.",
             Tags: [CardTagDefense],
             RarityWeight: 40,
-            MaxStacks: 2,
+            MaxStacks: 3,
             ScalingParams: new CardScalingParams(BaseStackMultiplierPercent: 100, AdditionalStackMultiplierPercent: 80),
             Effects: new CardEffectBundle(PercentMaxHpBonus: 55)),
         new(
@@ -338,7 +342,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             Description: "+30% damage.",
             Tags: [CardTagOffense],
             RarityWeight: 45,
-            MaxStacks: 2,
+            MaxStacks: 3,
             ScalingParams: new CardScalingParams(BaseStackMultiplierPercent: 100, AdditionalStackMultiplierPercent: 80),
             Effects: new CardEffectBundle(PercentDamageBonus: 30)),
         new(
@@ -356,9 +360,42 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             Description: "+8 flat damage and +20% global cooldown reduction.",
             Tags: [CardTagOffense, CardTagUtility],
             RarityWeight: 50,
-            MaxStacks: 2,
+            MaxStacks: 3,
             ScalingParams: new CardScalingParams(BaseStackMultiplierPercent: 100, AdditionalStackMultiplierPercent: 85),
-            Effects: new CardEffectBundle(FlatDamageBonus: 8, GlobalCooldownReductionPercent: 20))
+            Effects: new CardEffectBundle(FlatDamageBonus: 8, GlobalCooldownReductionPercent: 20)),
+        new(
+            Id: "skill_exori",
+            Name: "Exori",
+            Description: "Unlock Exori: square AoE strike around you.",
+            Tags: [CardTagSkill, CardTagOffense],
+            RarityWeight: 80,
+            MaxStacks: 1,
+            ScalingParams: new CardScalingParams(BaseStackMultiplierPercent: 100, AdditionalStackMultiplierPercent: 100),
+            Effects: new CardEffectBundle(),
+            IsSkillCard: true,
+            SkillId: ExoriSkillId),
+        new(
+            Id: "skill_exori_mas",
+            Name: "Exori Mas",
+            Description: "Unlock Exori Mas: wide diamond AoE strike.",
+            Tags: [CardTagSkill, CardTagOffense],
+            RarityWeight: 50,
+            MaxStacks: 1,
+            ScalingParams: new CardScalingParams(BaseStackMultiplierPercent: 100, AdditionalStackMultiplierPercent: 100),
+            Effects: new CardEffectBundle(),
+            IsSkillCard: true,
+            SkillId: ExoriMasSkillId),
+        new(
+            Id: "skill_avalanche",
+            Name: "Avalanche",
+            Description: "Unlock Avalanche: place a ground AoE zone.",
+            Tags: [CardTagSkill, CardTagUtility],
+            RarityWeight: 40,
+            MaxStacks: 1,
+            ScalingParams: new CardScalingParams(BaseStackMultiplierPercent: 100, AdditionalStackMultiplierPercent: 100),
+            Effects: new CardEffectBundle(),
+            IsSkillCard: true,
+            SkillId: AvalancheSkillId)
     ];
     private static readonly IReadOnlyDictionary<string, CardDefinition> CardById =
         CardPool.ToDictionary(card => card.Id, StringComparer.Ordinal);
@@ -462,7 +499,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             playerMoveCooldownRemainingMs: 0,
             playerAttackCooldownRemainingMs: 0,
             playerGlobalCooldownRemainingMs: 0,
-            nextChestSpawnCheckAtMs: ChestSpawnCheckMs,
+            nextChestSpawnCheckAtMs: 45_000,
             nextAltarSpawnCheckAtMs: AltarSpawnCheckMs,
             nextAltarInteractAllowedAtMs: 0,
             nextPoiSequence: 1,
@@ -575,7 +612,6 @@ public sealed partial class InMemoryBattleStore : IBattleStore
 
             TickSkillCooldowns(state);
             TickPlayerGlobalCooldown(state);
-            TickPlayerMoveCooldown(state);
             TickPlayerAutoAttackCooldown(state);
             TickMobCombatCooldowns(state);
             TickPois(state, events);
@@ -584,12 +620,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
 
             var pendingLifeLeechHeal = 0;
             var hasExplicitFacingCommand = false;
-            var hasManualCastSkillCommand = false;
-            var preAppliedMovementResults = ApplyMoveCommandsBeforeMobMovement(
-                state,
-                commands,
-                ref hasExplicitFacingCommand);
-            var preAppliedCommandResults = MergePreAppliedCommandResults(preAppliedPauseResults, preAppliedMovementResults);
+            var preAppliedCommandResults = preAppliedPauseResults;
             TickMobMovement(state);
             TickMobCommitWindows(state);
             TickDecals(state);
@@ -599,9 +630,8 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                 events,
                 ref pendingLifeLeechHeal,
                 ref hasExplicitFacingCommand,
-                ref hasManualCastSkillCommand,
                 preAppliedCommandResults);
-            EvaluateCombatAssist(state, events, ref pendingLifeLeechHeal, hasManualCastSkillCommand);
+            EvaluateCombatAssist(state, events, ref pendingLifeLeechHeal);
             // Deterministic facing priority per tick:
             // 1) explicit facing updates from command processing (move_player / set_facing / set_ground_target)
             // 2) otherwise face the effective auto-attack target
@@ -693,6 +723,12 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             if (IsCardBannedByCurrentLoadout(state, selectedCard.Id))
             {
                 throw new InvalidOperationException($"Card '{selectedCard.Id}' is incompatible with the current loadout.");
+            }
+
+            if (ExceedsDistinctPassiveCap(state, selectedCard))
+            {
+                throw new InvalidOperationException(
+                    $"Cannot pick '{selectedCard.Id}': already at {MaxDistinctPassiveCards} distinct passive types.");
             }
 
             var player = GetPlayerActor(state);
@@ -927,7 +963,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
 
     private static int ComputePlayerMaxShield(int maxHp)
     {
-        return (int)Math.Floor(maxHp * 0.8d);
+        return (int)Math.Floor(maxHp * 0.45d);
     }
 
     private static int ResolvePlayerMaxHp(StoredBattle state)
@@ -985,7 +1021,6 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         List<BattleEventDto> events,
         ref int pendingLifeLeechHeal,
         ref bool hasExplicitFacingCommand,
-        ref bool hasManualCastSkillCommand,
         IReadOnlyDictionary<int, CommandResultDto> preAppliedCommandResults)
     {
         var commandResults = new List<CommandResultDto>();
@@ -1054,50 +1089,6 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                 continue;
             }
 
-            if (string.Equals(commandType, SetGroundTargetCommandType, StringComparison.Ordinal))
-            {
-                var hasGroundTileX = command.GroundTileX.HasValue;
-                var hasGroundTileY = command.GroundTileY.HasValue;
-                if (!hasGroundTileX && !hasGroundTileY)
-                {
-                    state.GroundTargetTileX = null;
-                    state.GroundTargetTileY = null;
-                    commandResults.Add(new CommandResultDto(index, commandType, true, null));
-                    continue;
-                }
-
-                if (!hasGroundTileX || !hasGroundTileY)
-                {
-                    commandResults.Add(new CommandResultDto(index, commandType, false, InvalidGroundTargetReason));
-                    continue;
-                }
-
-                var targetTileX = command.GroundTileX!.Value;
-                var targetTileY = command.GroundTileY!.Value;
-                if (!IsInBounds(targetTileX, targetTileY))
-                {
-                    commandResults.Add(new CommandResultDto(index, commandType, false, InvalidGroundTargetReason));
-                    continue;
-                }
-
-                state.GroundTargetTileX = targetTileX;
-                state.GroundTargetTileY = targetTileY;
-                var groundTargetPlayer = GetPlayerActor(state);
-                if (groundTargetPlayer is not null)
-                {
-                    state.PlayerFacingDirection = ResolveFacingDirectionTowardTile(
-                        groundTargetPlayer.TileX,
-                        groundTargetPlayer.TileY,
-                        targetTileX,
-                        targetTileY,
-                        state.PlayerFacingDirection);
-                    hasExplicitFacingCommand = true;
-                }
-
-                commandResults.Add(new CommandResultDto(index, commandType, true, null));
-                continue;
-            }
-
             if (string.Equals(commandType, SetAssistConfigCommandType, StringComparison.Ordinal))
             {
                 state.AssistConfig = SanitizeAssistConfig(command.AssistConfig, state.AssistConfig);
@@ -1118,7 +1109,6 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                 continue;
             }
 
-            hasManualCastSkillCommand = true;
             var normalizedSkillId = NormalizeSkillId(command.SkillId);
             if (string.IsNullOrEmpty(normalizedSkillId))
             {
@@ -1257,14 +1247,8 @@ public sealed partial class InMemoryBattleStore : IBattleStore
     private static void EvaluateCombatAssist(
         StoredBattle state,
         List<BattleEventDto> events,
-        ref int pendingLifeLeechHeal,
-        bool hasManualCastSkillCommand)
+        ref int pendingLifeLeechHeal)
     {
-        if (hasManualCastSkillCommand)
-        {
-            return;
-        }
-
         var assist = state.AssistConfig;
         if (!assist.Enabled)
         {
@@ -1929,30 +1913,40 @@ public sealed partial class InMemoryBattleStore : IBattleStore
 
     private static AvalancheCastTargetResolution TryResolveAvalancheCastTarget(StoredBattle state, StoredActor player)
     {
-        int targetTileX;
-        int targetTileY;
+        // Find the in-range tile whose 3x3 square (radius 1) would hit the most mobs.
+        // Scan row-major (Y then X) for a deterministic tie-break — first tile with max count wins.
+        int? bestX = null;
+        int? bestY = null;
+        var bestCount = 0;
 
-        if (state.GroundTargetTileX.HasValue && state.GroundTargetTileY.HasValue)
+        for (var cy = 0; cy < ArenaConfig.Height; cy++)
         {
-            targetTileX = state.GroundTargetTileX.Value;
-            targetTileY = state.GroundTargetTileY.Value;
+            for (var cx = 0; cx < ArenaConfig.Width; cx++)
+            {
+                if (ComputeManhattanDistance(player.TileX, player.TileY, cx, cy) > AvalancheRangeTilesManhattan)
+                {
+                    continue;
+                }
+
+                var affectedTiles = BuildSquareTiles(cx, cy, radius: 1, includeCenter: true)
+                    .Where(t => IsInBounds(t.TileX, t.TileY))
+                    .ToList();
+                var count = ResolveMobIdsOnTiles(state, affectedTiles).Count();
+                if (count > bestCount)
+                {
+                    bestCount = count;
+                    bestX = cx;
+                    bestY = cy;
+                }
+            }
         }
-        else if (ResolveEffectivePlayerAutoAttackTarget(state, player) is { } effectiveTargetMob)
-        {
-            targetTileX = effectiveTargetMob.TileX;
-            targetTileY = effectiveTargetMob.TileY;
-        }
-        else
+
+        if (bestX is null || bestCount == 0)
         {
             return AvalancheCastTargetResolution.Fail(NoTargetReason);
         }
 
-        if (ComputeManhattanDistance(player.TileX, player.TileY, targetTileX, targetTileY) > AvalancheRangeTilesManhattan)
-        {
-            return AvalancheCastTargetResolution.Fail(OutOfRangeReason);
-        }
-
-        return AvalancheCastTargetResolution.Success(targetTileX, targetTileY);
+        return AvalancheCastTargetResolution.Success(bestX.Value, bestY!.Value);
     }
 
     private static bool ApplyTileSkill(
@@ -2500,11 +2494,13 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                 RunXp: state.RunXp,
                 XpToNextLevel: GetXpToNextLevel(state.RunLevel)));
 
-            TryOfferCardChoice(state, events);
+            TryOfferCardChoice(state, events, CardOfferSource.LevelUp);
         }
     }
 
-    private static void TryOfferCardChoice(StoredBattle state, List<BattleEventDto> events)
+    private enum CardOfferSource { LevelUp, Chest }
+
+    private static void TryOfferCardChoice(StoredBattle state, List<BattleEventDto> events, CardOfferSource source)
     {
         if (state.PendingCardChoice is not null)
         {
@@ -2516,7 +2512,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             return;
         }
 
-        var offeredCards = RollCardOffer(state);
+        var offeredCards = RollCardOffer(state, source);
         if (offeredCards.Count == 0)
         {
             return;
@@ -2536,11 +2532,11 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                 .ToList()));
     }
 
-    private static IReadOnlyList<CardDefinition> RollCardOffer(StoredBattle state)
+    private static IReadOnlyList<CardDefinition> RollCardOffer(StoredBattle state, CardOfferSource source)
     {
         var availableCards = CardPool
             .OrderBy(card => card.Id, StringComparer.Ordinal)
-            .Where(card => CanOfferCard(state, card))
+            .Where(card => CanOfferCard(state, card, source))
             .ToList();
         if (availableCards.Count == 0)
         {
@@ -2559,10 +2555,25 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         return offeredCards;
     }
 
-    private static bool CanOfferCard(StoredBattle state, CardDefinition card)
+    private static bool CanOfferCard(StoredBattle state, CardDefinition card, CardOfferSource source)
     {
+        if (card.IsSkillCard)
+        {
+            if (source == CardOfferSource.Chest)
+            {
+                return false;
+            }
+
+            return card.SkillId is not null && !state.Skills.ContainsKey(card.SkillId);
+        }
+
         var currentStacks = GetCardStackCount(state, card.Id);
         if (currentStacks >= card.MaxStacks)
+        {
+            return false;
+        }
+
+        if (ExceedsDistinctPassiveCap(state, card))
         {
             return false;
         }
@@ -2597,6 +2608,15 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         return state.SelectedCardStacks.TryGetValue(cardId, out var stacks)
             ? Math.Max(0, stacks)
             : 0;
+    }
+
+    private static bool ExceedsDistinctPassiveCap(StoredBattle state, CardDefinition card)
+    {
+        if (card.IsSkillCard) return false;
+        if (GetCardStackCount(state, card.Id) > 0) return false; // already owned — stacking OK
+        var distinctPassiveCount = state.SelectedCardStacks
+            .Count(kvp => kvp.Value > 0 && CardById.TryGetValue(kvp.Key, out var def) && !def.IsSkillCard);
+        return distinctPassiveCount >= MaxDistinctPassiveCards;
     }
 
     private static bool IsCardBannedByCurrentLoadout(StoredBattle state, string cardId)
@@ -2658,6 +2678,20 @@ public sealed partial class InMemoryBattleStore : IBattleStore
 
     private static void ApplyCardEffects(StoredBattle state, StoredActor player, CardDefinition card, int nextStack)
     {
+        if (card.IsSkillCard && card.SkillId is not null)
+        {
+            if (!state.Skills.ContainsKey(card.SkillId))
+            {
+                state.Skills[card.SkillId] = new StoredSkill(
+                    skillId: card.SkillId,
+                    cooldownRemainingMs: 0,
+                    cooldownTotalMs: ResolveBaseSkillCooldownTotalMs(card.SkillId),
+                    level: SkillInitialLevel);
+            }
+
+            return;
+        }
+
         var previousMaxHp = player.MaxHp;
         var scaledEffects = ScaleCardEffectsForStack(card, nextStack);
 
@@ -3033,7 +3067,8 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             CurrentStacks: GetCardStackCount(state, card.Id),
             ScalingParams: new BattleCardScalingParamsDto(
                 BaseStackMultiplierPercent: scaling.BaseStackMultiplierPercent,
-                AdditionalStackMultiplierPercent: scaling.AdditionalStackMultiplierPercent));
+                AdditionalStackMultiplierPercent: scaling.AdditionalStackMultiplierPercent),
+            IsSkillCard: card.IsSkillCard);
     }
 
     private static string BuildMobActorId(int slotIndex)
@@ -3967,6 +4002,8 @@ public sealed partial class InMemoryBattleStore : IBattleStore
 
         public int ChestsOpened { get; set; }
 
+        public int ChestsSpawned { get; set; }
+
         public int PlayerMoveCooldownRemainingMs { get; set; }
 
         public int PlayerAttackCooldownRemainingMs { get; set; }
@@ -4072,7 +4109,9 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         int RarityWeight,
         int MaxStacks,
         CardScalingParams ScalingParams,
-        CardEffectBundle Effects);
+        CardEffectBundle Effects,
+        bool IsSkillCard = false,
+        string? SkillId = null);
 
     private sealed record CardScalingParams(
         int BaseStackMultiplierPercent = 100,

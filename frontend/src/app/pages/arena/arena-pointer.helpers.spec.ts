@@ -1,9 +1,11 @@
 import {
   hitTestMobAtTile,
+  hitTestPoiAtTile,
   resolvePointerCommand,
   screenToTile,
   type GridLayout,
-  type PointerActorState
+  type PointerActorState,
+  type PoiPointerState
 } from "./arena-pointer.helpers";
 
 describe("arena-pointer.helpers", () => {
@@ -33,22 +35,56 @@ describe("arena-pointer.helpers", () => {
     expect(hitTestMobAtTile(actors, { x: 1, y: 1 })).toBeNull();
   });
 
-  it("dispatches left/right clicks to ground-target and set-target commands", () => {
-    const actors: PointerActorState[] = [{ actorId: "mob.1", kind: "mob", tileX: 4, tileY: 3 }];
+  it("hit-tests POIs under a tile", () => {
+    const pois: PoiPointerState[] = [
+      { poiId: "poi.chest.0001", tileX: 1, tileY: 2 },
+      { poiId: "poi.altar.0002", tileX: 4, tileY: 5 }
+    ];
 
-    expect(resolvePointerCommand("left_click", { x: 1, y: 2 }, actors)).toEqual({
-      type: "set_ground_target",
-      groundTileX: 1,
-      groundTileY: 2
+    expect(hitTestPoiAtTile(pois, { x: 1, y: 2 })).toBe("poi.chest.0001");
+    expect(hitTestPoiAtTile(pois, { x: 4, y: 5 })).toBe("poi.altar.0002");
+    expect(hitTestPoiAtTile(pois, { x: 0, y: 0 })).toBeNull();
+  });
+
+  describe("resolvePointerCommand", () => {
+    const actors: PointerActorState[] = [{ actorId: "mob.1", kind: "mob", tileX: 4, tileY: 3 }];
+    const pois: PoiPointerState[] = [{ poiId: "poi.chest.0001", tileX: 1, tileY: 2 }];
+
+    it("left-click on a POI tile returns interact_poi", () => {
+      expect(resolvePointerCommand("left_click", { x: 1, y: 2 }, actors, pois)).toEqual({
+        type: "interact_poi",
+        poiId: "poi.chest.0001"
+      });
     });
-    expect(resolvePointerCommand("right_click", { x: 4, y: 3 }, actors)).toEqual({
-      type: "set_target",
-      targetEntityId: "mob.1"
+
+    it("left-click on empty tile returns null", () => {
+      expect(resolvePointerCommand("left_click", { x: 0, y: 0 }, actors, pois)).toBeNull();
     });
-    expect(resolvePointerCommand("right_click", { x: 0, y: 0 }, actors)).toEqual({
-      type: "set_target",
-      targetEntityId: null
+
+    it("left-click on a mob tile (no POI) returns null", () => {
+      expect(resolvePointerCommand("left_click", { x: 4, y: 3 }, actors, pois)).toBeNull();
     });
-    expect(resolvePointerCommand("left_click", null, actors)).toBeNull();
+
+    it("left-click with null tile returns null", () => {
+      expect(resolvePointerCommand("left_click", null, actors, pois)).toBeNull();
+    });
+
+    it("right-click on a mob tile returns set_target", () => {
+      expect(resolvePointerCommand("right_click", { x: 4, y: 3 }, actors, pois)).toEqual({
+        type: "set_target",
+        targetEntityId: "mob.1"
+      });
+    });
+
+    it("right-click on empty tile returns set_target with null", () => {
+      expect(resolvePointerCommand("right_click", { x: 0, y: 0 }, actors, pois)).toEqual({
+        type: "set_target",
+        targetEntityId: null
+      });
+    });
+
+    it("right-click with null tile returns null", () => {
+      expect(resolvePointerCommand("right_click", null, actors, pois)).toBeNull();
+    });
   });
 });

@@ -17,11 +17,6 @@ public sealed partial class InMemoryBattleStore
         state.PlayerAttackCooldownRemainingMs = Math.Max(0, state.PlayerAttackCooldownRemainingMs - StepDeltaMs);
     }
 
-    private static void TickPlayerMoveCooldown(StoredBattle state)
-    {
-        state.PlayerMoveCooldownRemainingMs = Math.Max(0, state.PlayerMoveCooldownRemainingMs - StepDeltaMs);
-    }
-
     private static void TickPlayerGlobalCooldown(StoredBattle state)
     {
         state.PlayerGlobalCooldownRemainingMs = Math.Max(0, state.PlayerGlobalCooldownRemainingMs - StepDeltaMs);
