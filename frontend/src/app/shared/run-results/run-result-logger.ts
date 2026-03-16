@@ -7,9 +7,6 @@ const RUN_RESULT_STORAGE_CAP = 30;
 type SnapshotLike = StartBattleResponse | StepBattleResponse;
 
 export type RunResultFinalizeMetrics = Readonly<{
-  xpTotalGained: number;
-  damageDealtTotal: number;
-  damageTakenTotal: number;
   healingDoneTotal: number;
   echoFragmentsDelta: number;
 }>;
@@ -53,6 +50,12 @@ type ActiveRunState = {
   itemQuantities: Map<string, number>;
   speciesCoreDrops: Map<string, number>;
   speciesCoreTotals: Record<string, number>;
+  killsTotal: number;
+  eliteKillsTotal: number;
+  chestsOpenedTotal: number;
+  xpGained: number;
+  damageDealtTotal: number;
+  damageTakenTotal: number;
 };
 
 export class RunResultLogger {
@@ -70,7 +73,13 @@ export class RunResultLogger {
       drops: [],
       itemQuantities: new Map<string, number>(),
       speciesCoreDrops: new Map<string, number>(),
-      speciesCoreTotals: {}
+      speciesCoreTotals: {},
+      killsTotal: 0,
+      eliteKillsTotal: 0,
+      chestsOpenedTotal: 0,
+      xpGained: 0,
+      damageDealtTotal: 0,
+      damageTakenTotal: 0
     };
 
     if (params.snapshot) {
@@ -118,6 +127,43 @@ export class RunResultLogger {
     const shield = this.readNumber(player["shield"]);
     if (shield !== null) {
       run.playerMinShield = Math.min(run.playerMinShield, Math.max(0, Math.floor(shield)));
+    }
+
+    const kills = this.readNumber(record["totalKills"]);
+    if (kills !== null) run.killsTotal = Math.max(0, Math.floor(kills));
+
+    const eliteKills = this.readNumber(record["eliteKills"]);
+    if (eliteKills !== null) run.eliteKillsTotal = Math.max(0, Math.floor(eliteKills));
+
+    const chestsOpened = this.readNumber(record["chestsOpened"]);
+    if (chestsOpened !== null) run.chestsOpenedTotal = Math.max(0, Math.floor(chestsOpened));
+
+    const playerActorId = this.readString(player["actorId"]);
+    const eventsValue = record["events"];
+    if (Array.isArray(eventsValue)) {
+      for (const rawEvent of eventsValue) {
+        const ev = this.readRecord(rawEvent);
+        if (!ev) continue;
+        const evType = this.readString(ev["type"]);
+
+        if (evType === "xp_gained") {
+          const amt = this.readNumber(ev["amount"]);
+          if (amt !== null && amt > 0) run.xpGained += Math.floor(amt);
+        }
+
+        if (evType === "damage_number") {
+          const dmg = this.readNumber(ev["damageAmount"]);
+          const targetId = this.readString(ev["targetEntityId"]);
+          const sourceId = this.readString(ev["sourceEntityId"]) ?? this.readString(ev["attackerEntityId"]);
+          if (dmg === null || dmg <= 0 || !targetId) continue;
+          const amount = Math.floor(dmg);
+          if (playerActorId && targetId === playerActorId && sourceId !== playerActorId) {
+            run.damageTakenTotal += amount;
+          } else if (playerActorId && targetId !== playerActorId) {
+            run.damageDealtTotal += amount;
+          }
+        }
+      }
     }
   }
 
@@ -178,7 +224,8 @@ export class RunResultLogger {
     const snapshotIsGameOver = this.readBoolean(record["isGameOver"]);
     const battleStatus = this.readString(record["battleStatus"]);
     const isTerminalStatus = battleStatus === "defeat" || battleStatus === "victory";
-    if (!(snapshotIsRunEnded ?? snapshotIsGameOver ?? isTerminalStatus)) {
+    const isTerminal = snapshotIsRunEnded === true || snapshotIsGameOver === true || isTerminalStatus;
+    if (!isTerminal) {
       return null;
     }
 
@@ -193,16 +240,16 @@ export class RunResultLogger {
         battleStatus ??
         "unknown",
       runLevelFinal: Math.max(1, Math.floor(this.readNumber(record["runLevel"]) ?? 1)),
-      xpTotalGained: Math.max(0, Math.floor(metrics.xpTotalGained)),
-      killsTotal: Math.max(0, Math.floor(this.readNumber(record["totalKills"]) ?? 0)),
-      eliteKills: Math.max(0, Math.floor(this.readNumber(record["eliteKills"]) ?? 0)),
-      chestsOpened: Math.max(0, Math.floor(this.readNumber(record["chestsOpened"]) ?? 0)),
+      xpTotalGained: Math.max(0, run.xpGained),
+      killsTotal: Math.max(0, run.killsTotal),
+      eliteKills: Math.max(0, run.eliteKillsTotal),
+      chestsOpened: Math.max(0, run.chestsOpenedTotal),
       cardsChosen: [...run.cardsChosen],
       playerMinHp: Number.isFinite(run.playerMinHp) ? Math.max(0, Math.floor(run.playerMinHp)) : 0,
       playerMaxHpObserved: Math.max(0, Math.floor(run.playerMaxHpObserved)),
       playerMinShield: Number.isFinite(run.playerMinShield) ? Math.max(0, Math.floor(run.playerMinShield)) : 0,
-      damageDealtTotal: Math.max(0, Math.floor(metrics.damageDealtTotal)),
-      damageTakenTotal: Math.max(0, Math.floor(metrics.damageTakenTotal)),
+      damageDealtTotal: Math.max(0, run.damageDealtTotal),
+      damageTakenTotal: Math.max(0, run.damageTakenTotal),
       healingDoneTotal: Math.max(0, Math.floor(metrics.healingDoneTotal)),
       drops: [...run.drops],
       echoFragmentsDelta: Math.floor(metrics.echoFragmentsDelta),

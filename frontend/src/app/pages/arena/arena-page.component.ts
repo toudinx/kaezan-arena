@@ -202,6 +202,7 @@ type ArenaCardOffer = Readonly<{
 }>;
 type RunRecordingBatch = Readonly<{
   tick: number;
+  stepCount: number;
   commands: StepCommand[];
 }>;
 type RunRecordingChoice = Readonly<{
@@ -241,6 +242,16 @@ const CRAFTED_EQUIPMENT_ITEM_IDS = new Set<string>([
   "rel.primal_forged_emblem"
 ]);
 const EARLY_MOB_CONCURRENT_CAP = 6;
+
+/*
+MAX_TICK_DEBT = 0 → comportamento original, request a cada 250ms, 100% fluido mas 4 req/s
+MAX_TICK_DEBT = 1 → request a cada 500ms, ~2 req/s
+MAX_TICK_DEBT = 2 → request a cada 750ms, ~1.3 req/s
+MAX_TICK_DEBT = 4 → request a cada 1.25s, ~0.8 req/s
+MAX_TICK_DEBT = 8 → request a cada 2s, ~0.5 req/s
+*/
+const MAX_TICK_DEBT = 0; 
+
 const MAX_MOB_CONCURRENT_CAP = 10;
 const EARLY_MOB_CAP_DURATION_MS = 75_000;
 const ASSIST_SKILL_IDS: readonly AssistSkillId[] = ["exori", "exori_min", "exori_mas", "avalanche"];
@@ -343,6 +354,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   renderEnabled = false;
   currentBattleId = "";
   currentBattleTick = 0;
+  private pendingTickDebt = 0;
   battleRequestInFlight = false;
   recentDamageNumbers: string[] = [];
   recentCommandResults: string[] = [];
@@ -494,9 +506,8 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   private importedReplaySeedOverride: number | null = null;
   assistConfig: ArenaAssistConfig = this.buildDefaultAssistConfig();
   readonly hotkeyGroups: ReadonlyArray<Readonly<{ title: string; entries: ReadonlyArray<string> }>> = [
-    { title: "Movement", entries: ["W/A/S/D move", "Q/E/Z/C diagonal move", "Last input direction wins"] },
     { title: "Facing", entries: ["Arrow keys set facing"] },
-    { title: "Targeting", entries: ["Left click ground target", "Right click lock target", "F interact POI"] },
+    { title: "Targeting", entries: ["Left click ground target", "Right click lock target"] },
     {
       title: "UI",
       entries: [
@@ -511,8 +522,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         "L open Economy analyzer",
         "X open Events feed"
       ]
-    },
-    { title: "Skills", entries: ["1-4 cast skills", "5 cast Guard"] }
+    }
   ];
   readonly arenaWindowIds = ARENA_UI_WINDOW_IDS;
 
@@ -1449,6 +1459,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       },
       commands: recording.commandBatches.map((batch) => ({
         tick: batch.tick,
+        stepCount: batch.stepCount,
         commands: this.cloneStepCommands(batch.commands)
       })),
       cardChoices: recording.cardChoices.map((choice) => ({ ...choice })),
@@ -1597,6 +1608,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.clearReplaySessionState();
     this.activeRunRecording = null;
     this.autoStepEnabled = false;
+    this.pendingTickDebt = 0;
     this.queuedCommands = [];
     this.queuedCommandCount = 0;
     this.recentDamageNumbers = [];
@@ -1728,6 +1740,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         : `${replayRecording.playerId}:${replayRecording.battleSeed}`;
       this.replayCommandBatches = replayRecording.commandBatches.map((batch) => ({
         tick: batch.tick,
+        stepCount: batch.stepCount ?? 1,
         commands: this.cloneStepCommands(batch.commands)
       }));
       this.replayCardChoices = replayRecording.cardChoices.map((choice) => ({ ...choice }));
@@ -1775,6 +1788,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       playerId: recording.playerId,
       commandBatches: recording.commandBatches.map((batch) => ({
         tick: batch.tick,
+        stepCount: batch.stepCount,
         commands: this.cloneStepCommands(batch.commands)
       })),
       cardChoices: recording.cardChoices.map((choice) => ({ ...choice })),
@@ -1802,6 +1816,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       playerId,
       commandBatches: replay.commands.map((batch) => ({
         tick: batch.tick,
+        stepCount: batch.stepCount ?? 1,
         commands: this.cloneStepCommands(batch.commands)
       })),
       cardChoices: (replay.cardChoices ?? []).map((choice) => ({ ...choice })),
@@ -1839,7 +1854,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     };
   }
 
-  private appendStepBatchToRecording(tick: number, commands: ReadonlyArray<StepCommand>): void {
+  private appendStepBatchToRecording(tick: number, commands: ReadonlyArray<StepCommand>, stepCount: number): void {
     if (!this.activeRunRecording) {
       return;
     }
@@ -1850,6 +1865,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         ...this.activeRunRecording.commandBatches,
         {
           tick,
+          stepCount,
           commands: this.cloneStepCommands(commands)
         }
       ]
@@ -1903,25 +1919,25 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.lastRunRecording = this.cloneRunRecording(nextRecording);
   }
 
-  private resolveCommandsForNextStepRequest(): StepCommand[] {
+  private resolveCommandsForNextStepRequest(): { commands: StepCommand[]; stepCount: number } {
     if (!this.isReplayInProgress) {
-      return this.dequeuePendingCommands();
+      return { commands: this.dequeuePendingCommands(), stepCount: 1 };
     }
 
     const nextBatch = this.replayCommandBatches[this.replayCommandBatchIndex];
     if (!nextBatch) {
-      return [];
+      return { commands: [], stepCount: 1 };
     }
 
     if (nextBatch.tick !== this.currentBattleTick) {
       this.stopReplayWithError(
         `Replay diverged at tick ${this.currentBattleTick}: expected recorded tick ${nextBatch.tick}.`
       );
-      return [];
+      return { commands: [], stepCount: 1 };
     }
 
     this.replayCommandBatchIndex += 1;
-    return this.cloneStepCommands(nextBatch.commands);
+    return { commands: this.cloneStepCommands(nextBatch.commands), stepCount: nextBatch.stepCount ?? 1 };
   }
 
   private async replayPendingCardChoiceIfNeeded(): Promise<void> {
@@ -2470,7 +2486,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.enqueueSetFacing(dir);
   }
 
-  private async stepBattleSafe(): Promise<void> {
+  private async stepBattleSafe(liveStepCount = 1): Promise<void> {
     if (
       this.battleRequestInFlight ||
       this.cardChoiceRequestInFlight ||
@@ -2495,13 +2511,13 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     }
 
     const requestTick = this.currentBattleTick;
-    const commandsToSend = this.resolveCommandsForNextStepRequest();
+    const { commands: commandsToSend, stepCount: replayStepCount } = this.resolveCommandsForNextStepRequest();
+    const effectiveStepCount = this.isReplayInProgress ? replayStepCount : liveStepCount;
     if (!this.isReplayInProgress) {
-      this.appendStepBatchToRecording(requestTick, commandsToSend);
+      this.appendStepBatchToRecording(requestTick, commandsToSend, effectiveStepCount);
     }
 
     let shouldReplayCardChoice = false;
-    let responseForFinalize: StepBattleResponse | null = null;
     this.runInAngularZone(() => {
       this.battleRequestInFlight = true;
     });
@@ -2509,9 +2525,9 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       const response = await this.battleApi.stepBattle({
         battleId: this.currentBattleId,
         clientTick: this.currentBattleTick,
+        stepCount: effectiveStepCount > 1 ? effectiveStepCount : undefined,
         commands: commandsToSend
       });
-      responseForFinalize = response;
       const battleIdForLoot = response.battleId ?? this.currentBattleId;
       const lootSources = this.extractLootSourcesFromSnapshot(response);
 
@@ -2525,6 +2541,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         this.applyGameOverStateFromSnapshot(response);
         this.applyBattlePayload(response);
         this.runResultLogger.recordStep(response);
+        this.tryFinalizeRunResult(response);
         this.appendCommandResultLogs(response.commandResults, commandsToSend);
         this.syncUiMetaState();
         this.battleLog = JSON.stringify(response, null, 2);
@@ -2547,17 +2564,12 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       if (!this.isReplayInProgress && battleIdForLoot && lootSources.length > 0) {
         await this.awardLootSources(battleIdForLoot, lootSources);
       }
-      if (responseForFinalize) {
-        const finalizedSnapshot = responseForFinalize;
-        this.runInAngularZone(() => {
-          this.tryFinalizeRunResult(finalizedSnapshot);
-        });
-      }
     } catch (error) {
       this.runInAngularZone(() => {
         if (!this.isReplayInProgress) {
           this.requeueCommands(commandsToSend);
         }
+        this.pendingTickDebt = 0;
         this.battleStatus = "error";
         this.syncUiMetaState();
         this.battleLog = `stepBattle failed: ${String(error)}`;
@@ -3343,36 +3355,12 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       const reason = this.toFriendlyCommandReason(rawReason);
       const isOk = typedResult.ok === true;
 
-      if (commandType === "cast_skill") {
-        const skillId = this.readString(command?.skillId) ?? "unknown_skill";
-        lines.push(isOk ? `${tickPrefix} Cast ${skillId} ok` : `${tickPrefix} Cast ${skillId} failed: ${reason}`);
-        continue;
-      }
-
       if (commandType === "set_facing") {
         const direction = this.readString(command?.dir) ?? "unknown_direction";
         lines.push(
           isOk
             ? `${tickPrefix} Facing set to ${direction}`
             : `${tickPrefix} Set facing ${direction} failed: ${reason}`
-        );
-        continue;
-      }
-
-      if (commandType === "move_player") {
-        const direction = this.readString(command?.dir) ?? "unknown_direction";
-        const moveResult = typedResult as Record<string, unknown>;
-        const moveStatus = this.readString(moveResult["status"]) ?? (isOk ? "Accepted" : "Blocked");
-        const moveReason = this.readString(moveResult["movementReason"]) ?? (isOk ? "None" : reason);
-        const blockedTileX = this.readNumber(moveResult["blockedTileX"]);
-        const blockedTileY = this.readNumber(moveResult["blockedTileY"]);
-        const blockedByActorId = this.readString(moveResult["blockedByActorId"]);
-        const blockedTileLabel = blockedTileX === null || blockedTileY === null ? "" : ` tile=(${blockedTileX},${blockedTileY})`;
-        const blockedByLabel = blockedByActorId ? ` by=${blockedByActorId}` : "";
-        lines.push(
-          isOk
-            ? `${tickPrefix} Move ${direction} ok (${moveStatus}/${moveReason})`
-            : `${tickPrefix} Move ${direction} failed: ${moveStatus}/${moveReason}${blockedTileLabel}${blockedByLabel}`
         );
         continue;
       }
@@ -3397,18 +3385,6 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
             ? `${tickPrefix} Set target ${targetEntityId} failed: ${reason}`
             : `${tickPrefix} Clear target failed: ${reason}`);
         }
-        continue;
-      }
-
-      if (commandType === "set_ground_target") {
-        const tileX = this.readNumber(command?.groundTileX);
-        const tileY = this.readNumber(command?.groundTileY);
-        const tileLabel = tileX === null || tileY === null ? "clear" : `(${tileX},${tileY})`;
-        lines.push(
-          isOk
-            ? `${tickPrefix} Ground target set ${tileLabel}`
-            : `${tickPrefix} Set ground target ${tileLabel} failed: ${reason}`
-        );
         continue;
       }
 
@@ -4881,6 +4857,17 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   private enqueueCommand(command: StepCommand): void {
     this.queuedCommands.push(command);
     this.queuedCommandCount = this.queuedCommands.length;
+    // If we've been skipping ticks, flush immediately so the command doesn't wait for the next timer.
+    if (
+      this.autoStepEnabled &&
+      this.pendingTickDebt > 0 &&
+      !this.battleRequestInFlight &&
+      !this.cardChoiceRequestInFlight &&
+      !this.isAwaitingCardChoice &&
+      this.battleStatus === "started"
+    ) {
+      this.startOrRestartAutoStepLoop();
+    }
   }
 
   private dequeuePendingCommands(): StepCommand[] {
@@ -4918,7 +4905,20 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         return;
       }
 
-      await this.stepBattleSafe();
+      // Skip the HTTP request when there are no commands and we haven't exceeded the debt cap.
+      // Only skip in live mode — replay always reads from the recorded batch sequence.
+      const canSkip = !this.isReplayInProgress
+        && this.queuedCommands.length === 0
+        && this.pendingTickDebt < MAX_TICK_DEBT;
+
+      if (canSkip) {
+        this.pendingTickDebt++;
+      } else {
+        const stepCount = this.isReplayInProgress ? 1 : this.pendingTickDebt + 1;
+        this.pendingTickDebt = 0;
+        await this.stepBattleSafe(stepCount);
+      }
+
       if (loopRunId !== this.autoStepLoopRunId) {
         return;
       }
@@ -4995,7 +4995,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
 
     try {
       if (!this.isReplayInProgress) {
-        this.appendStepBatchToRecording(this.currentBattleTick, [pauseCommand]);
+        this.appendStepBatchToRecording(this.currentBattleTick, [pauseCommand], 1);
       }
 
       const response = await battleApi.stepBattle({
@@ -5035,6 +5035,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.clearReplaySessionState();
     this.activeRunRecording = null;
     this.autoStepEnabled = false;
+    this.pendingTickDebt = 0;
     this.battleRequestInFlight = false;
     this.queuedCommands = [];
     this.queuedCommandCount = 0;
@@ -5197,9 +5198,6 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
 
   private buildRunResultFinalizeMetrics(): RunResultFinalizeMetrics {
     return {
-      xpTotalGained: this.economyTotalXpGained,
-      damageDealtTotal: this.combatTotalDamageDealt,
-      damageTakenTotal: this.combatTotalDamageTaken,
       healingDoneTotal: this.combatTotalHealingDone,
       echoFragmentsDelta: this.runEchoFragmentsNet
     };
@@ -5528,27 +5526,6 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     return null;
   }
 
-
-  private toArenaWindowHotkeyId(key: string): ArenaUiWindowId | null {
-    const normalized = key.toLowerCase();
-    if (normalized === "i") {
-      return ARENA_UI_WINDOW_IDS.backpack;
-    }
-
-    if (normalized === "c") {
-      return ARENA_UI_WINDOW_IDS.equipmentCharacter;
-    }
-
-    if (normalized === "l") {
-      return ARENA_UI_WINDOW_IDS.lootFeed;
-    }
-
-    if (normalized === "k") {
-      return ARENA_UI_WINDOW_IDS.statusSkills;
-    }
-
-    return null;
-  }
 
   private isArenaWindowId(value: string): value is ArenaUiWindowId {
     return value === ARENA_UI_WINDOW_IDS.backpack ||

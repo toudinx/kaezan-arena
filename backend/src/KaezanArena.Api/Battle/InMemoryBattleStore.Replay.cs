@@ -33,11 +33,13 @@ public sealed partial class InMemoryBattleStore
     private static void AppendReplayStepAction(
         StoredBattle state,
         int? clientTick,
+        int? stepCount,
         IReadOnlyList<BattleCommandDto>? commands)
     {
         state.ReplayActions.Add(new BattleReplayActionDto(
             Type: ReplayActionTypeStep,
             ClientTick: clientTick,
+            StepCount: stepCount,
             Commands: CloneReplayCommands(commands)));
     }
 
@@ -69,6 +71,7 @@ public sealed partial class InMemoryBattleStore
         return new BattleReplayActionDto(
             Type: action.Type,
             ClientTick: action.ClientTick,
+            StepCount: action.StepCount,
             Commands: CloneReplayCommands(action.Commands),
             ChoiceId: action.ChoiceId,
             SelectedCardId: action.SelectedCardId);

@@ -4920,7 +4920,7 @@ public sealed class ApiEndpointsTests : IClassFixture<ApiTestWebApplicationFacto
     {
         var response = await _client.PostAsJsonAsync(
             "/api/v1/battle/step",
-            new BattleStepRequestDto(battleId, clientTick, commands));
+            new BattleStepRequestDto(battleId, clientTick, Commands: commands));
         var payload = await response.Content.ReadFromJsonAsync<BattleStepResponseDto>();
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);

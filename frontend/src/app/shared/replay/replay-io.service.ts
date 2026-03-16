@@ -40,6 +40,7 @@ export class ReplayIoService {
         : undefined,
       commands: input.commands.map((batch) => ({
         tick: Math.max(0, Math.floor(batch.tick)),
+        ...(batch.stepCount && batch.stepCount > 1 ? { stepCount: Math.max(1, Math.floor(batch.stepCount)) } : {}),
         commands: batch.commands.map((command) => this.cloneCommand(command))
       })),
       configFingerprint: {
@@ -139,8 +140,12 @@ export class ReplayIoService {
         normalizedBatchCommands.push(this.cloneCommand(commandRecord as ReplayCommandV1));
       }
 
+      const rawStepCount = this.readNumber(batchRecord["stepCount"]);
+      const safeStepCount = rawStepCount !== null && rawStepCount > 1 ? Math.floor(rawStepCount) : undefined;
+
       normalizedCommands.push({
         tick: safeTick,
+        ...(safeStepCount ? { stepCount: safeStepCount } : {}),
         commands: normalizedBatchCommands
       });
     }

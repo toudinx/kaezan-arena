@@ -6,6 +6,7 @@ export type ReplayCommandV1 = NonNullable<StepBattleRequest["commands"]>[number]
 
 export type ReplayCommandBatchV1 = Readonly<{
   tick: number;
+  stepCount?: number;
   commands: ReplayCommandV1[];
 }>;
 

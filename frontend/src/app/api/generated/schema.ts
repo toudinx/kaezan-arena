@@ -1030,6 +1030,8 @@ export interface components {
             battleId?: string | null;
             /** Format: int32 */
             clientTick?: number | null;
+            /** Format: int32 */
+            stepCount?: number | null;
             commands?: components["schemas"]["BattleCommandDto"][] | null;
         };
         BattleStepResponseDto: {

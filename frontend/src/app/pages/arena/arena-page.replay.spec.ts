@@ -29,7 +29,7 @@ describe("ArenaPageComponent replay recording", () => {
     (component as any).appendStepBatchToRecording(8, [
       { type: "set_facing", dir: "left" },
       { type: "cast_skill", skillId: "exori_min" }
-    ]);
+    ], 1);
 
     expect(component.lastRunRecording).not.toBeNull();
     expect(component.lastRunRecording?.runId).toBe("run-001");
@@ -38,6 +38,7 @@ describe("ArenaPageComponent replay recording", () => {
     expect(component.lastRunRecording?.commandBatches).toEqual([
       {
         tick: 8,
+        stepCount: 1,
         commands: [
           { type: "set_facing", dir: "left" },
           { type: "cast_skill", skillId: "exori_min" }
@@ -52,7 +53,7 @@ describe("ArenaPageComponent replay recording", () => {
       runId: "run-2026",
       battleSeed: 2026,
       playerId: "char.replay",
-      commandBatches: [{ tick: 0, commands: [{ type: "set_facing", dir: "up" }] }],
+      commandBatches: [{ tick: 0, stepCount: 1, commands: [{ type: "set_facing", dir: "up" }] }],
       cardChoices: [],
       awardedDropEventIds: []
     };
@@ -73,7 +74,7 @@ describe("ArenaPageComponent replay recording", () => {
         runId: "run-2026",
         battleSeed: 2026,
         playerId: "char.replay",
-        commandBatches: [{ tick: 0, commands: [{ type: "set_facing", dir: "up" }] }],
+        commandBatches: [{ tick: 0, stepCount: 1, commands: [{ type: "set_facing", dir: "up" }] }],
         cardChoices: [],
         awardedDropEventIds: []
       }

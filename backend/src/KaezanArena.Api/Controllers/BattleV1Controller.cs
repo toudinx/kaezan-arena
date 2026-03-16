@@ -29,7 +29,7 @@ public sealed class BattleV1Controller : ControllerBase
     [HttpPost("step")]
     public ActionResult<BattleStepResponseDto> Step([FromBody] BattleStepRequestDto request)
     {
-        var snapshot = _battleStore.StepBattle(request.BattleId, request.ClientTick, request.Commands);
+        var snapshot = _battleStore.StepBattle(request.BattleId, request.ClientTick, request.Commands, request.StepCount);
         return Ok(ToStepResponse(snapshot));
     }
 
@@ -137,7 +137,7 @@ public sealed class BattleV1Controller : ControllerBase
 
             if (string.Equals(actionType, "step", StringComparison.Ordinal))
             {
-                snapshot = _battleStore.StepBattle(snapshot.BattleId, action.ClientTick, action.Commands);
+                snapshot = _battleStore.StepBattle(snapshot.BattleId, action.ClientTick, action.Commands, action.StepCount);
                 continue;
             }
 

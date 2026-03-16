@@ -6,7 +6,7 @@ public interface IBattleStore
 {
     BattleSnapshot StartBattle(string arenaId, string playerId, int? seed);
 
-    BattleSnapshot StepBattle(string battleId, int? clientTick, IReadOnlyList<BattleCommandDto>? commands);
+    BattleSnapshot StepBattle(string battleId, int? clientTick, IReadOnlyList<BattleCommandDto>? commands, int? stepCount = null);
 
     BattleSnapshot ChooseCard(string battleId, string choiceId, string selectedCardId);
 

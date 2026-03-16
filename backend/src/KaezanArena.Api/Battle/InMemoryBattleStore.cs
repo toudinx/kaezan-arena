@@ -556,7 +556,10 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         return ToSnapshot(state, [], []);
     }
 
-    public BattleSnapshot StepBattle(string battleId, int? clientTick, IReadOnlyList<BattleCommandDto>? commands)
+    // Maximum ticks processed in a single StepBattle call. Caps runaway batch requests (~4s at 250ms/tick).
+    private const int MaxBatchStepCount = 16;
+
+    public BattleSnapshot StepBattle(string battleId, int? clientTick, IReadOnlyList<BattleCommandDto>? commands, int? stepCount = null)
     {
         if (string.IsNullOrWhiteSpace(battleId) || !_battles.TryGetValue(battleId.Trim(), out var state))
         {
@@ -565,9 +568,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
 
         lock (state.Sync)
         {
-            AppendReplayStepAction(state, clientTick, commands);
-            var tickBeforeStep = state.Tick;
-            var nowMsBeforeStep = GetElapsedMsForTick(tickBeforeStep);
+            AppendReplayStepAction(state, clientTick, stepCount, commands);
 
             if (state.IsRunEnded)
             {
@@ -585,85 +586,118 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                 return ToSnapshot(state, [], rejectedCommandResults);
             }
 
-            var preAppliedPauseResults = ApplyPauseCommands(state, commands);
-            if (state.IsPaused)
-            {
-                var pausedCommandResults = BuildPausedCommandResults(commands, preAppliedPauseResults);
-                ValidateInvariants(state, expectedTick: tickBeforeStep, expectedNowMs: nowMsBeforeStep);
-                return ToSnapshot(state, [], pausedCommandResults);
-            }
+            var stepsToRun = Math.Max(1, Math.Min(stepCount ?? 1, MaxBatchStepCount));
+            var allEvents = new List<BattleEventDto>();
+            IReadOnlyList<CommandResultDto> finalCommandResults = [];
 
-            if (state.PendingCardChoice is not null)
+            for (var i = 0; i < stepsToRun; i++)
             {
-                var awaitingCardChoiceResults = BuildAwaitingCardChoiceCommandResults(commands, preAppliedPauseResults);
-                ValidateInvariants(state, expectedTick: tickBeforeStep, expectedNowMs: nowMsBeforeStep);
-                return ToSnapshot(state, [], awaitingCardChoiceResults);
-            }
+                var tickBeforeThisStep = state.Tick;
+                var nowMsBeforeThisStep = GetElapsedMsForTick(tickBeforeThisStep);
+                // Commands apply on the last sub-tick only; earlier ticks are the "skipped" empty ticks.
+                var tickCommands = (i == stepsToRun - 1) ? commands : null;
 
-            state.Tick += 1;
-            state.TickEventCounter = 0;
-            var events = new List<BattleEventDto>();
-            if (TryEndRunIfNeeded(state, events))
-            {
-                var preAppliedOnlyResults = BuildOrderedCommandResults(preAppliedPauseResults);
-                ValidateInvariants(state);
-                return ToSnapshot(state, events, preAppliedOnlyResults);
-            }
+                var preApplied = ApplyPauseCommands(state, tickCommands);
+                if (state.IsPaused)
+                {
+                    finalCommandResults = BuildPausedCommandResults(tickCommands, preApplied);
+                    ValidateInvariants(state, expectedTick: tickBeforeThisStep, expectedNowMs: nowMsBeforeThisStep);
+                    break;
+                }
 
-            TickSkillCooldowns(state);
-            TickPlayerGlobalCooldown(state);
-            TickPlayerAutoAttackCooldown(state);
-            TickMobCombatCooldowns(state);
-            TickPois(state, events);
-            TickBuffs(state);
-            MaintainEliteCommanderBuffs(state, events);
+                if (state.PendingCardChoice is not null)
+                {
+                    finalCommandResults = BuildAwaitingCardChoiceCommandResults(tickCommands, preApplied);
+                    ValidateInvariants(state, expectedTick: tickBeforeThisStep, expectedNowMs: nowMsBeforeThisStep);
+                    break;
+                }
 
-            var pendingLifeLeechHeal = 0;
-            var hasExplicitFacingCommand = false;
-            var preAppliedCommandResults = preAppliedPauseResults;
-            TickMobMovement(state);
-            TickMobCommitWindows(state);
-            TickDecals(state);
-            var commandResults = ApplyCommands(
-                state,
-                commands,
-                events,
-                ref pendingLifeLeechHeal,
-                ref hasExplicitFacingCommand,
-                preAppliedCommandResults);
-            EvaluateCombatAssist(state, events, ref pendingLifeLeechHeal);
-            // Deterministic facing priority per tick:
-            // 1) explicit facing updates from command processing (move_player / set_facing / set_ground_target)
-            // 2) otherwise face the effective auto-attack target
-            if (!hasExplicitFacingCommand)
-            {
-                UpdatePlayerFacingTowardEffectiveAutoAttackTarget(state);
-            }
-
-            if (!IsDefeat(state))
-            {
-                ApplyPlayerAutoAttack(state, events, ref pendingLifeLeechHeal);
-                ApplyPlayerLifeLeech(state, events, pendingLifeLeechHeal);
-            }
-
-            if (!IsDefeat(state))
-            {
-                ApplyMobAbilities(state, events);
-            }
-
-            if (!IsDefeat(state))
-            {
-                ApplyMobAutoAttacks(state, events);
-            }
-
-            if (!state.IsRunEnded)
-            {
-                TickMobRespawns(state, events);
+                var runEnded = ExecuteOneTick(state, tickCommands, preApplied, allEvents, out var tickResults);
+                finalCommandResults = tickResults;
+                if (runEnded)
+                {
+                    break;
+                }
             }
 
             ValidateInvariants(state);
-            return ToSnapshot(state, events, commandResults);
+            return ToSnapshot(state, allEvents, finalCommandResults);
         }
+    }
+
+    /// <summary>
+    /// Executes a single simulation tick. Caller must have already run ApplyPauseCommands and
+    /// verified the state is neither paused nor awaiting a card choice.
+    /// </summary>
+    /// <returns>True if the run ended during this tick (caller should stop the batch loop).</returns>
+    private static bool ExecuteOneTick(
+        StoredBattle state,
+        IReadOnlyList<BattleCommandDto>? commands,
+        IReadOnlyDictionary<int, CommandResultDto> preAppliedPauseResults,
+        List<BattleEventDto> events,
+        out IReadOnlyList<CommandResultDto> commandResults)
+    {
+        state.Tick += 1;
+        state.TickEventCounter = 0;
+
+        if (TryEndRunIfNeeded(state, events))
+        {
+            commandResults = BuildOrderedCommandResults(preAppliedPauseResults);
+            return true;
+        }
+
+        TickSkillCooldowns(state);
+        TickPlayerGlobalCooldown(state);
+        TickPlayerAutoAttackCooldown(state);
+        TickMobCombatCooldowns(state);
+        TickPois(state, events);
+        TickBuffs(state);
+        MaintainEliteCommanderBuffs(state, events);
+
+        var pendingLifeLeechHeal = 0;
+        var hasExplicitFacingCommand = false;
+        var preAppliedCommandResults = preAppliedPauseResults;
+        TickMobMovement(state);
+        TickMobCommitWindows(state);
+        TickDecals(state);
+        commandResults = ApplyCommands(
+            state,
+            commands,
+            events,
+            ref pendingLifeLeechHeal,
+            ref hasExplicitFacingCommand,
+            preAppliedCommandResults);
+        EvaluateCombatAssist(state, events, ref pendingLifeLeechHeal);
+        // Deterministic facing priority per tick:
+        // 1) explicit facing updates from command processing (move_player / set_facing / set_ground_target)
+        // 2) otherwise face the effective auto-attack target
+        if (!hasExplicitFacingCommand)
+        {
+            UpdatePlayerFacingTowardEffectiveAutoAttackTarget(state);
+        }
+
+        if (!IsDefeat(state))
+        {
+            ApplyPlayerAutoAttack(state, events, ref pendingLifeLeechHeal);
+            ApplyPlayerLifeLeech(state, events, pendingLifeLeechHeal);
+        }
+
+        if (!IsDefeat(state))
+        {
+            ApplyMobAbilities(state, events);
+        }
+
+        if (!IsDefeat(state))
+        {
+            ApplyMobAutoAttacks(state, events);
+        }
+
+        if (!state.IsRunEnded)
+        {
+            TickMobRespawns(state, events);
+        }
+
+        return false;
     }
 
     public BattleSnapshot ChooseCard(string battleId, string choiceId, string selectedCardId)
