@@ -45,23 +45,35 @@ meaningful progression
 At the current stage, the project already has a strong MVP foundation:
 
 deterministic backend battle loop
-7x7 arena combat
-enemy spawning
-elite system
-skill framework
-chest/card framework
+7x7 arena combat (player fixed at center tile 3,3)
+enemy spawning + progressive pacing
+elite commander system
+Vampire Survivors–style skill progression:
+  - character starts with Exori Min + Heal + Guard
+  - Exori, Exori Mas, Avalanche unlocked via level-up skill cards
+all skills fire automatically via assist system (no manual casting)
+card system fully implemented:
+  - level-up → skill cards + passive cards
+  - chest → passive cards only
+  - passive caps: max 4 distinct types, max 3 stacks per type
+left-click POI interaction (chests, altar)
+right-click target lock
+ArenaConfig.cs — all constants centralized
+HTTP batch step (MAX_TICK_DEBT = 0 currently)
 inventory/backpack
 characters page
 bestiary page
 home page
 replay system
-run telemetry
-movement reliability improvements
-configurable tick
+run telemetry (kills, damageDealt, damageTaken, minHpObserved, xpGained)
 simulation invariants
+Tibia-style UI with skills + passives in right panel
+configurable tick (50ms – 2000ms)
 
 This means the project is no longer in “prototype-only” stage.
 It is now moving from technical MVP into playable product shaping.
+The skill unlock system (Vampire Survivors model) is complete and working.
+The current focus should be on balance tuning using real telemetry data.
 
 3. Development Phases
 Phase 1 — Combat Baseline Stabilization
@@ -117,58 +129,48 @@ telemetry supports the balance decisions
 
 the base combat is already fun
 
-Phase 2 — Skill Upgrade Identity
+Phase 2 — Skill Identity & Build Depth  ✅ FOUNDATION COMPLETE
 Goal
 
-Turn run levels into a true build-defining system.
+Make skill unlock choices and passive card stacking feel build-defining.
 
-Direction
+Current state (implemented):
 
-Run Level should primarily improve skills.
-
-This phase defines:
-
-how skill upgrades work
-
-how many decisions happen per run
-
-how skill branches create build identity
-
-how different versions of the same character become possible
+Vampire Survivors skill unlock model is live.
+Character starts with Exori Min + Heal + Guard.
+Level-up cards offer skill unlocks (Exori, Exori Mas, Avalanche) + passive cards.
+All skills fire via the assist system automatically.
+Passive card caps: max 4 distinct types, max 3 stacks per type.
 
 Main design goal
 
 A player should finish a run thinking:
 
-“This became an Exori build.”
+“This became an Exori Mas build.”
 
-“This was a freeze/control run.”
+“I got Avalanche early and it changed the whole run.”
 
-“This character can be played in multiple ways.”
+“I stacked 3x Arcane Tempo — skills are firing constantly.”
 
-Key tasks
+Remaining tasks for this phase:
 
-define skill upgrade flow
+validate that skill unlock timing feels good (run level pacing)
 
-define skill branching rules
+ensure each combination of unlocked skills produces a different play experience
 
-define skill level count
+tune passive card power so stacking feels meaningful but not trivial
 
-create skill-upgrade data model
-
-connect skill progression to run level
-
-ensure skill upgrades fit 3-minute runs
+consider if any additional skill upgrade depth is needed (currently skill levels reduce cooldowns only)
 
 Exit criteria
 
 This phase is complete when:
 
-run level decisions feel meaningful
+skill unlock choices feel meaningful and different builds are recognizable
 
-the same character can support multiple builds
+passive card stacking creates clear power spikes
 
-skills scale in a satisfying way across the run
+the same run can feel dramatically different based on which skills were unlocked
 
 Phase 3 — Chest Cards / Run Modifiers
 Goal
@@ -569,27 +571,29 @@ Priority 1
 
 Combat baseline balance
 
-collect runs
+collect runs using working telemetry
 
-analyze telemetry
+analyze kills, damageDealt, damageTaken, minHpObserved, xpGained
 
-adjust pacing
+adjust spawn pacing, mob damage, player survivability
 
 Priority 2
 
-Skill-upgrade design
+Skill unlock pacing
 
-define run-level progression
+validate that skill card offers happen at the right run levels
 
-make skills the core build engine
+ensure players unlock at least 1–2 additional skills before the run ends
+
+tune assist system thresholds for the fixed-player combat model
 
 Priority 3
 
-Chest-card role clarity
+Passive card power curve
 
-define chest cards as run modifiers
+validate stacking feels meaningful (not too weak, not too dominant)
 
-avoid overlap with skill upgrades
+check the 4-distinct-type cap creates real trade-off decisions
 
 Priority 4
 

@@ -19,23 +19,23 @@ public sealed partial class InMemoryBattleStore
         var normalizedPoiId = NormalizePoiId(rawPoiId);
         if (normalizedPoiId is null)
         {
-            failReason = UnknownPoiReason;
-            events.Add(new InteractFailedEventDto(null, UnknownPoiReason));
+            failReason = ArenaConfig.UnknownPoiReason;
+            events.Add(new InteractFailedEventDto(null, ArenaConfig.UnknownPoiReason));
             return false;
         }
 
         var player = GetPlayerActor(state);
         if (player is null || player.Hp <= 0)
         {
-            failReason = PlayerDeadReason;
-            events.Add(new InteractFailedEventDto(normalizedPoiId, PlayerDeadReason));
+            failReason = ArenaConfig.PlayerDeadReason;
+            events.Add(new InteractFailedEventDto(normalizedPoiId, ArenaConfig.PlayerDeadReason));
             return false;
         }
 
         if (!state.Pois.TryGetValue(normalizedPoiId, out var poi))
         {
-            failReason = UnknownPoiReason;
-            events.Add(new InteractFailedEventDto(normalizedPoiId, UnknownPoiReason));
+            failReason = ArenaConfig.UnknownPoiReason;
+            events.Add(new InteractFailedEventDto(normalizedPoiId, ArenaConfig.UnknownPoiReason));
             return false;
         }
 
@@ -43,16 +43,16 @@ public sealed partial class InMemoryBattleStore
         if (poi.ExpiresAtMs <= nowMs)
         {
             state.Pois.Remove(normalizedPoiId);
-            failReason = UnknownPoiReason;
-            events.Add(new InteractFailedEventDto(normalizedPoiId, UnknownPoiReason));
+            failReason = ArenaConfig.UnknownPoiReason;
+            events.Add(new InteractFailedEventDto(normalizedPoiId, ArenaConfig.UnknownPoiReason));
             return false;
         }
 
-        if (string.Equals(poi.Type, PoiTypeAltar, StringComparison.Ordinal) &&
+        if (string.Equals(poi.Type, ArenaConfig.PoiTypeAltar, StringComparison.Ordinal) &&
             nowMs < state.NextAltarInteractAllowedAtMs)
         {
-            failReason = CooldownReason;
-            events.Add(new InteractFailedEventDto(normalizedPoiId, CooldownReason));
+            failReason = ArenaConfig.CooldownReason;
+            events.Add(new InteractFailedEventDto(normalizedPoiId, ArenaConfig.CooldownReason));
             return false;
         }
 
@@ -63,18 +63,18 @@ public sealed partial class InMemoryBattleStore
             TileX: poi.TileX,
             TileY: poi.TileY));
 
-        if (string.Equals(poi.Type, PoiTypeChest, StringComparison.Ordinal) ||
-            string.Equals(poi.Type, PoiTypeSpeciesChest, StringComparison.Ordinal))
+        if (string.Equals(poi.Type, ArenaConfig.PoiTypeChest, StringComparison.Ordinal) ||
+            string.Equals(poi.Type, ArenaConfig.PoiTypeSpeciesChest, StringComparison.Ordinal))
         {
             state.ChestsOpened += 1;
             TryOfferCardChoice(state, events, CardOfferSource.Chest);
         }
-        else if (string.Equals(poi.Type, PoiTypeAltar, StringComparison.Ordinal))
+        else if (string.Equals(poi.Type, ArenaConfig.PoiTypeAltar, StringComparison.Ordinal))
         {
-            state.NextAltarInteractAllowedAtMs = nowMs + AltarCooldownMs;
-            var spawnedCount = SummonMobsAroundPlayer(state, AltarSummonSpawnCount, events);
+            state.NextAltarInteractAllowedAtMs = nowMs + ArenaConfig.AltarCooldownMs;
+            var spawnedCount = SummonMobsAroundPlayer(state, ArenaConfig.AltarSummonSpawnCount, events);
             events.Add(new AltarActivatedEventDto(
-                RequestedCount: AltarSummonSpawnCount,
+                RequestedCount: ArenaConfig.AltarSummonSpawnCount,
                 SpawnedCount: spawnedCount));
         }
 
@@ -137,14 +137,14 @@ public sealed partial class InMemoryBattleStore
         while (nowMs >= state.NextChestSpawnCheckAtMs)
         {
             TrySpawnChestPoi(state, state.NextChestSpawnCheckAtMs);
-            state.NextChestSpawnCheckAtMs += ChestSpawnCheckMs;
+            state.NextChestSpawnCheckAtMs += ArenaConfig.ChestSpawnCheckMs;
         }
 
         // Altar checks run after chest checks to keep POI ordering deterministic.
         while (nowMs >= state.NextAltarSpawnCheckAtMs)
         {
             TrySpawnAltarPoi(state, state.NextAltarSpawnCheckAtMs);
-            state.NextAltarSpawnCheckAtMs += AltarSpawnCheckMs;
+            state.NextAltarSpawnCheckAtMs += ArenaConfig.AltarSpawnCheckMs;
         }
     }
 
@@ -168,7 +168,7 @@ public sealed partial class InMemoryBattleStore
 
     private static void TrySpawnChestPoi(StoredBattle state, long checkAtMs)
     {
-        if (state.ChestsSpawned >= MaxChestsPerRun)
+        if (state.ChestsSpawned >= ArenaConfig.MaxChestsPerRun)
         {
             return;
         }
@@ -183,7 +183,7 @@ public sealed partial class InMemoryBattleStore
             return;
         }
 
-        if (NextIntFromPoiRng(state, 100) >= ChestSpawnChancePercent)
+        if (NextIntFromPoiRng(state, 100) >= ArenaConfig.ChestSpawnChancePercent)
         {
             return;
         }
@@ -201,10 +201,10 @@ public sealed partial class InMemoryBattleStore
         state.ChestsSpawned += 1;
         state.Pois[poiId] = new StoredPoi(
             poiId: poiId,
-            type: PoiTypeChest,
+            type: ArenaConfig.PoiTypeChest,
             tileX: tile.TileX,
             tileY: tile.TileY,
-            expiresAtMs: checkAtMs + ChestLifetimeMs,
+            expiresAtMs: checkAtMs + ArenaConfig.ChestLifetimeMs,
             species: null,
             metadata: null);
     }
@@ -216,7 +216,7 @@ public sealed partial class InMemoryBattleStore
             return;
         }
 
-        if (NextIntFromBattleRng(state, 100) >= AltarSpawnChancePercent)
+        if (NextIntFromBattleRng(state, 100) >= ArenaConfig.AltarSpawnChancePercent)
         {
             return;
         }
@@ -233,10 +233,10 @@ public sealed partial class InMemoryBattleStore
         state.NextPoiSequence += 1;
         state.Pois[poiId] = new StoredPoi(
             poiId: poiId,
-            type: PoiTypeAltar,
+            type: ArenaConfig.PoiTypeAltar,
             tileX: tile.TileX,
             tileY: tile.TileY,
-            expiresAtMs: checkAtMs + AltarLifetimeMs,
+            expiresAtMs: checkAtMs + ArenaConfig.AltarLifetimeMs,
             species: null,
             metadata: null);
     }
@@ -268,7 +268,7 @@ public sealed partial class InMemoryBattleStore
         MobArchetype speciesArchetype,
         long spawnAtMs)
     {
-        if (state.ChestsSpawned >= MaxChestsPerRun)
+        if (state.ChestsSpawned >= ArenaConfig.MaxChestsPerRun)
         {
             return false;
         }
@@ -287,10 +287,10 @@ public sealed partial class InMemoryBattleStore
         var species = GetSpeciesId(speciesArchetype);
         state.Pois[poiId] = new StoredPoi(
             poiId: poiId,
-            type: PoiTypeSpeciesChest,
+            type: ArenaConfig.PoiTypeSpeciesChest,
             tileX: tile.TileX,
             tileY: tile.TileY,
-            expiresAtMs: spawnAtMs + SpeciesChestLifetimeMs,
+            expiresAtMs: spawnAtMs + ArenaConfig.SpeciesChestLifetimeMs,
             species: species,
             metadata: null);
         events.Add(new SpeciesChestSpawnedEventDto(
@@ -316,7 +316,7 @@ public sealed partial class InMemoryBattleStore
     private static bool HasActiveAltarPoi(StoredBattle state, long nowMs)
     {
         return state.Pois.Values.Any(poi =>
-            string.Equals(poi.Type, PoiTypeAltar, StringComparison.Ordinal) &&
+            string.Equals(poi.Type, ArenaConfig.PoiTypeAltar, StringComparison.Ordinal) &&
             poi.ExpiresAtMs > nowMs);
     }
 
@@ -339,7 +339,7 @@ public sealed partial class InMemoryBattleStore
                     continue;
                 }
 
-                if (ComputeChebyshevDistance(x, y, ArenaConfig.PlayerTileX, ArenaConfig.PlayerTileY) > PoiSpawnMaxChebyshev)
+                if (ComputeChebyshevDistance(x, y, ArenaConfig.PlayerTileX, ArenaConfig.PlayerTileY) > ArenaConfig.PoiSpawnMaxChebyshev)
                 {
                     continue;
                 }
@@ -368,7 +368,7 @@ public sealed partial class InMemoryBattleStore
 
     private static bool IsChestPoiType(string poiType)
     {
-        return string.Equals(poiType, PoiTypeChest, StringComparison.Ordinal) ||
-               string.Equals(poiType, PoiTypeSpeciesChest, StringComparison.Ordinal);
+        return string.Equals(poiType, ArenaConfig.PoiTypeChest, StringComparison.Ordinal) ||
+               string.Equals(poiType, ArenaConfig.PoiTypeSpeciesChest, StringComparison.Ordinal);
     }
 }

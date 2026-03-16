@@ -70,6 +70,16 @@ docker compose up --build
 
 Current `docker-compose.yml` is a development skeleton with backend (`5080`) and frontend (`4200`) services.
 
+## Current Gameplay
+
+- Player is fixed at the center tile (3,3) — no WASD movement
+- All skills fire automatically via the assist system
+- **Left-click** a POI (chest, altar) to interact
+- **Right-click** a mob to lock it as the priority target
+- Level-up card choices offer skill unlocks (Exori, Exori Mas, Avalanche) and passive cards
+- Chest card choices offer passive cards only (max 4 distinct types, max 3 stacks per type)
+- All simulation constants are in `backend/src/KaezanArena.Api/Battle/ArenaConfig.cs`
+
 ## Code Style
 
 - Follow `.editorconfig` at repository root.

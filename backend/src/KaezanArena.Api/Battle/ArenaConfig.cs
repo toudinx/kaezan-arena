@@ -1,3 +1,5 @@
+using KaezanArena.Api.Contracts.Battle;
+
 namespace KaezanArena.Api.Battle;
 
 public static class ArenaConfig
@@ -12,6 +14,309 @@ public static class ArenaConfig
     public const int MaxAliveMobs = 10;
     public const long RunDurationMs = 180_000;
     public const long RunMidgameTargetMs = RunDurationMs / 2;
+
+    #region Player Stats
+    public const int PlayerBaseHp = 120;
+    public const int PlayerMoveCooldownMs = 300;
+    public const int PlayerAutoAttackCooldownMs = 800;
+    public const int PlayerGlobalCooldownMs = 400;
+    #endregion
+
+    #region Player Combat
+    public const int PlayerAutoAttackDamage = 8;
+    public const int PlayerShieldGainPerAction = 2;
+    public const int PlayerLifeLeechPercent = 30;
+    public const double PlayerDamageVarianceMinMultiplier = 0.90d;
+    public const double PlayerDamageVarianceMaxMultiplier = 1.10d;
+    public const double MobDamageVarianceMinMultiplier = 0.85d;
+    public const double MobDamageVarianceMaxMultiplier = 1.15d;
+    public const int CriticalHitChancePercent = 20;
+    #endregion
+
+    #region Visual / FX Timing
+    public const int CritTextDurationMs = 800;
+    public const string CritTextLabel = "CRIT!";
+    public const int MeleeSwingDurationMs = 120;
+    public const int RangedProjectileDurationMs = 220;
+    public const int DeathBurstDurationMs = 320;
+    public const int CorpseDecalLifetimeMs = 1200;
+    #endregion
+
+    #region Mob Spawn & Respawn
+    public const int MobRespawnDelayMs = 750;
+    public const int MobSpawnRingMinDistance = 2;
+    public const int MobSpawnRingMaxDistance = 4;
+    public const int EarlyMobConcurrentCap = 2;
+    #endregion
+
+    #region Ranged Mob Behavior
+    public const int RangedPreferredDistanceMin = 2;
+    public const int RangedPreferredDistanceMax = 3;
+    public const int RangedApproachDistance = 4;
+    public const int RangedCommitWindowTicks = 2;
+    #endregion
+
+    #region Skill IDs
+    public const string ExoriSkillId = "exori";
+    public const string ExoriMasSkillId = "exori_mas";
+    public const string ExoriMinSkillId = "exori_min";
+    public const string HealSkillId = "heal";
+    public const string GuardSkillId = "guard";
+    public const string AvalancheSkillId = "avalanche";
+    #endregion
+
+    #region Skill FX IDs
+    public const string ExoriFxId = "fx.skill.exori";
+    public const string ExoriMasFxId = "fx.skill.exori_mas";
+    public const string ExoriMinFxId = "fx.skill.exori_min";
+    public const string HealFxId = "fx.hit.small";
+    public const string GuardFxId = "fx.hit.small";
+    public const string AvalancheFxId = "fx.skill.exori_mas";
+    #endregion
+
+    #region Skill Element Types
+    public const ElementType ExoriElement = ElementType.Fire;
+    public const ElementType ExoriMasElement = ElementType.Energy;
+    public const ElementType ExoriMinElement = ElementType.Ice;
+    public const ElementType HealElement = ElementType.Holy;
+    public const ElementType GuardElement = ElementType.Energy;
+    public const ElementType AvalancheElement = ElementType.Ice;
+    public const ElementType DefaultMobElement = ElementType.Physical;
+    #endregion
+
+    #region Mob FX IDs
+    public const string MobCleaveFxId = "fx.mob.brute.cleave";
+    public const string MobPowerShotFxId = "fx.mob.archer.power_shot";
+    public const string MobDemonBeamFxId = "fx.mob.demon.beam";
+    public const string MobDragonBreathFxId = "fx.mob.dragon.breath";
+    #endregion
+
+    #region Skill Cooldowns
+    public const int ExoriCooldownTotalMs = 1200;
+    public const int ExoriMasCooldownTotalMs = 2000;
+    public const int ExoriMinCooldownTotalMs = 800;
+    public const int HealCooldownTotalMs = 7000;
+    public const int GuardCooldownTotalMs = 10000;
+    public const int AvalancheCooldownTotalMs = 2500;
+    #endregion
+
+    #region Skill Leveling
+    public const int SkillInitialLevel = 1;
+    public const int SkillCooldownReductionPerLevelPercent = 4;
+    public const int SkillCooldownReductionMaxPercent = 32;
+    public const int SkillDefensivePercentBonusPerLevel = 2;
+    #endregion
+
+    #region Skill Effects
+    public const int AvalancheDamage = 3;
+    public const int AvalancheRangeTilesManhattan = 3;
+    public const int HealPercentOfMaxHp = 22;
+    public const int GuardPercentOfMaxHp = 10;
+    #endregion
+
+    #region Player Class
+    public const int KinaReflectPercent = 20;
+    public const int KinaRangedReflectMultiplier = 2;
+    public const string PlayerClassKina = "kina";
+    #endregion
+
+    #region Run Progression
+    public const int RunInitialLevel = 1;
+    public const int RunInitialXp = 0;
+    public const int NormalMobKillXp = 10;
+    public const int EliteMobKillXp = 10;
+    public const int RunLevelXpBase = 60;
+    public const int RunLevelXpIncrementPerLevel = 40;
+    #endregion
+
+    #region Card System
+    public const int MaxCardOfferCount = 3;
+    public const int MaxCardSelectionsPerRun = 12;
+    public const int MaxDistinctPassiveCards = 4;
+    public const int MaxGlobalCooldownReductionPercent = 60;
+    public const string CardTagOffense = "offense";
+    public const string CardTagDefense = "defense";
+    public const string CardTagUtility = "utility";
+    public const string CardTagSustain = "sustain";
+    public const string CardTagMobility = "mobility";
+    public const string CardTagSkill = "skill";
+    #endregion
+
+    #region Mob Scaling Multipliers
+    public const double MobHpMultStart = 1.0d;
+    public const double MobHpMultEnd = 3.2d;
+    public const double MobDmgMultStart = 0.70d;
+    public const double MobDmgMultEnd = 2.6d;
+    public const double EliteHpMultiplierFactor = 1.35d;
+    public const double EliteDmgMultiplierFactor = 1.30d;
+    public const bool IsRunLevelHpSeasoningEnabled = true;
+    public const double RunLevelHpSeasoningPerLevel = 0.015d;
+    #endregion
+
+    #region Elite Commander System
+    public const int EliteCommanderMaxBuffTargets = 3;
+    public const int EliteCommanderDamageBonusPercent = 40;
+    public const int EliteCommanderAttackSpeedBonusPercent = 30;
+    #endregion
+
+    #region Battle Status Strings
+    public const string StatusStarted = "started";
+    public const string StatusDefeat = "defeat";
+    public const string StatusVictory = "victory";
+    public const string RunEndReasonVictoryTime = "victory_time";
+    public const string RunEndReasonDefeatDeath = "defeat_death";
+    #endregion
+
+    #region Facing Direction Strings
+    public const string FacingUp = "up";
+    public const string FacingUpRight = "up_right";
+    public const string FacingDown = "down";
+    public const string FacingDownRight = "down_right";
+    public const string FacingLeft = "left";
+    public const string FacingRight = "right";
+    public const string FacingDownLeft = "down_left";
+    public const string FacingUpLeft = "up_left";
+    #endregion
+
+    #region Command Type Strings
+    public const string CastSkillCommandType = "cast_skill";
+    public const string SetFacingCommandType = "set_facing";
+    public const string MovePlayerCommandType = "move_player";
+    public const string InteractPoiCommandType = "interact_poi";
+    public const string SetTargetCommandType = "set_target";
+    public const string SetGroundTargetCommandType = "set_ground_target";
+    public const string SetAssistConfigCommandType = "set_assist_config";
+    public const string SetPausedCommandType = "set_paused";
+    #endregion
+
+    #region Assist System
+    public const string AssistReasonAutoHeal = "auto_heal";
+    public const string AssistReasonAutoGuard = "auto_guard";
+    public const string AssistReasonAutoOffense = "auto_offense";
+    public const string AssistOffenseModeCooldownSpam = "cooldown_spam";
+    public const string AssistOffenseModeSmart = "smart";
+    public const int AssistDefaultHealAtHpPercent = 40;
+    public const int AssistDefaultGuardAtHpPercent = 60;
+    public const int AssistDefaultMaxAutoCastsPerTick = 1;
+    #endregion
+
+    #region Reject / Error Reason Strings
+    public const string UnknownCommandReason = "unknown_command";
+    public const string UnknownSkillReason = "unknown_skill";
+    public const string UnknownDirectionReason = "unknown_direction";
+    public const string InvalidGroundTargetReason = "invalid_ground_target";
+    public const string NoTargetReason = "no_target";
+    public const string OutOfRangeReason = "out_of_range";
+    public const string CooldownReason = "cooldown";
+    public const string GlobalCooldownReason = "global_cooldown";
+    public const string MoveBlockedReason = "move_blocked";
+    public const string UnknownPoiReason = "unknown_poi";
+    public const string PlayerDeadReason = "player_dead";
+    public const string NotStartedReason = "not_started";
+    public const string DefeatReason = "defeat";
+    public const string PausedReason = "paused";
+    public const string AwaitingCardChoiceReason = "awaiting_card_choice";
+    #endregion
+
+    #region Move Status / Reason Strings
+    public const string MoveStatusAccepted = "Accepted";
+    public const string MoveStatusBlocked = "Blocked";
+    public const string MoveReasonNone = "None";
+    public const string MoveReasonOccupied = "Occupied";
+    public const string MoveReasonCornerBlock = "CornerBlock";
+    public const string MoveReasonCooldown = "Cooldown";
+    public const string MoveReasonOutOfBounds = "OutOfBounds";
+    #endregion
+
+    #region Legacy End Reason Strings
+    public const string EndReasonDeath = "death";
+    public const string EndReasonTime = "time";
+    #endregion
+
+    #region POI Type Strings
+    public const string PoiTypeChest = "chest";
+    public const string PoiTypeSpeciesChest = "species_chest";
+    public const string PoiTypeAltar = "altar";
+    #endregion
+
+    #region Buff IDs
+    public const string HealingAmplifierBuffId = "healing_amplifier";
+    public const string AntiRangedPressureBuffId = "anti_ranged_pressure";
+    public const string ThornsBoostBuffId = "thorns_boost";
+    public const string DamageBoostBuffId = "damage_boost";
+    #endregion
+
+    #region POI Spawn Parameters
+    public const int PoiSpawnMaxChebyshev = 2;
+    public const int AltarSpawnCheckMs = 9000;
+    public const int AltarSpawnChancePercent = 35;
+    public const int AltarLifetimeMs = 10000;
+    public const int AltarCooldownMs = 12000;
+    public const int AltarSummonSpawnCount = 2;
+    public const int ChestSpawnCheckMs = 65_000;
+    public const int ChestSpawnChancePercent = 90;
+    public const int MaxChestsPerRun = 3;
+    public const int ChestLifetimeMs = 10000;
+    public const int SpeciesChestLifetimeMs = 10000;
+    #endregion
+
+    #region Buff Bonus Values
+    public const int HealAmplifierBonusPercent = 10;
+    public const int AntiRangedPressureReductionPercent = 20;
+    public const int ThornsBoostBonusPercent = 30;
+    public const int DamageBoostBonusPercent = 25;
+    #endregion
+
+    #region Bestiary Thresholds
+    public const int BestiaryFirstChestBaseKills = 150;
+    public const int BestiaryFirstChestRandomInclusiveMax = 30;
+    public const int BestiaryChestIncrementBaseKills = 300;
+    public const int BestiaryChestIncrementRandomInclusiveMax = 50;
+    public const string InitialChestPoiId = "poi.chest.0000";
+    #endregion
+
+    #region Mob Config Values
+    public const int MeleeBruteMaxHp = 90;
+    public const int MeleeBruteMoveCooldownMs = 500;
+    public const int MeleeBruteAutoAttackRangeTiles = 1;
+    public const int MeleeBruteAutoAttackDamage = 2;
+    public const int MeleeBruteAutoAttackCooldownMs = 1000;
+    public const int MeleeBruteAbilityDamage = 5;
+    public const int MeleeBruteAbilityRangeTiles = 1;
+    public const int MeleeBruteAbilityCooldownMs = 2500;
+    public const int RangedArcherMaxHp = 70;
+    public const int RangedArcherMoveCooldownMs = 500;
+    public const int RangedArcherAutoAttackRangeTiles = 4;
+    public const int RangedArcherAutoAttackDamage = 1;
+    public const int RangedArcherAutoAttackCooldownMs = 1250;
+    public const int RangedArcherAbilityDamage = 3;
+    public const int RangedArcherAbilityRangeTiles = 4;
+    public const int RangedArcherAbilityCooldownMs = 2800;
+    public const int MeleeDemonMaxHp = 104;
+    public const int MeleeDemonMoveCooldownMs = 500;
+    public const int MeleeDemonAutoAttackRangeTiles = 1;
+    public const int MeleeDemonAutoAttackDamage = 2;
+    public const int MeleeDemonAutoAttackCooldownMs = 1000;
+    public const int MeleeDemonAbilityDamage = 6;
+    public const int MeleeDemonAbilityRangeTiles = 4;
+    public const int MeleeDemonAbilityCooldownMs = 3000;
+    public const int RangedDragonMaxHp = 100;
+    public const int RangedDragonMoveCooldownMs = 500;
+    public const int RangedDragonAutoAttackRangeTiles = 4;
+    public const int RangedDragonAutoAttackDamage = 1;
+    public const int RangedDragonAutoAttackCooldownMs = 1250;
+    public const int RangedDragonAbilityDamage = 4;
+    public const int RangedDragonAbilityRangeTiles = 3;
+    public const int RangedDragonAbilityCooldownMs = 3600;
+    #endregion
+
+    #region Batch Processing
+    public const int MaxBatchStepCount = 16;
+    #endregion
+
+    #region Initial State Values
+    public const int InitialChestSpawnCheckAtMs = 45_000;
+    #endregion
 
     public static int NormalizeStepDeltaMs(int? configuredStepDeltaMs)
     {

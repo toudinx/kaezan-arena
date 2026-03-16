@@ -8,18 +8,20 @@ Data flow per tick:
 Client POST /step → StepBattle() → acquire lock →
   Phase 1: Cooldown countdowns (skills, GCD, move, mob combat)
   Phase 2: World state (TickPois, TickBuffs, EliteCommanderBuffs)
-  Phase 3: Player input (ApplyMoveCommandsBeforeMobMovement)
+  Phase 3: Player input (no movement — player fixed at 3,3; targeting commands only)
   Phase 4: Mob behavior (TickMobMovement, TickMobCommitWindows)
   Phase 5: Decal cleanup
-  Phase 6: Command resolution (skills, targeting, assist auto-cast)
+  Phase 6: Command resolution (targeting, assist auto-cast — all skills fire via assist)
   Phase 7: Combat (player AA → life leech → mob abilities → mob AAs → respawns)
 → Build BattleSnapshot → return JSON
+
+Batch step support: StepBattle accepts optional stepCount (1–16). Currently MAX_TICK_DEBT=0, so frontend always sends stepCount=1. Higher values reduce HTTP request frequency.
+
 Key classes: InMemoryBattleStore (orchestrator), StoredBattle (all mutable state), StoredActor (entity: position/hp/shield/facing), MobSlotState (mob slot lifecycle), BattleSnapshot (immutable DTO to client), IBattleStore (public contract).
 
 Coupling issues:
 
 God class: main file alone is ~4300 lines; the 7-phase tick order is implicit and order-dependent
-150+ hardcoded constants (lines 10–204): damage, timings, scaling curves, no config system
 Thread safety: single state.Sync lock guards all mutation; collections passed by reference through helpers
 2. Spawn System
 Files: InMemoryBattleStore.cs (TrySpawnMobInSlot, TickMobRespawns, BuildMobSlots), InMemoryBattleStore.ScalingAndDamage.cs (ResolveSpawnPacingDirector), InMemoryBattleStore.PoiSystem.cs (SummonMobsAroundPlayer)
@@ -58,54 +60,73 @@ Coupling issues: Kina reflect nested in damage path (player takes damage → ref
 4. Skill System
 Files: InMemoryBattleStore.cs (TryExecutePlayerSkillCast, ApplyAreaSquareSkill, ApplyFrontalMeleeSkill, EvaluateCombatAssist), InMemoryBattleStore.SkillLeveling.cs (cooldown formulas, upgrade order)
 
-6 skills (all hardcoded): Exori (sq r=1, 10dmg, 1200ms), Exori Mas (diamond r=2, 7dmg, 2000ms), Exori Min (frontal, 15dmg, 800ms), Avalanche (ground sq, 3dmg, 2500ms), Heal (22% maxHp, 7000ms), Guard (15% maxHp shield, 10000ms)
+6 skills defined in ArenaConfig.cs: Exori (sq r=1, 10dmg, 1200ms), Exori Mas (diamond r=2, 7dmg, 2000ms), Exori Min (frontal, 15dmg, 800ms), Avalanche (ground sq, 3dmg, 2500ms), Heal (22% maxHp, 7000ms), Guard (10% maxHp shield, 10000ms)
 
-Cast pipeline:
+Starting skills (from run start): Exori Min, Heal, Guard.
+Unlockable via level-up skill cards: Exori, Exori Mas, Avalanche.
+
+Cast pipeline (all via assist — no manual casting):
 
 
-Validate cooldowns (skill + GCD) → route by skillId (switch-case)
+Assist evaluates each tick → defensive (Guard → Heal) → offensive (Avalanche→ExoriMas→Exori→ExoriMin)
+→ Validate cooldowns (skill + GCD) → route by skillId (switch-case)
 → AoE: build tile set → ApplyDamageToMob per mob in shape
 → Heal/Guard: modify player HP/shield
 → ApplyPlayerCooldownsForCast() → set skill + GCD cooldown
-Leveling: upgradeIndex = (runLevel-1) % 6 → fixed order: Heal→Guard→Exori→ExoriMin→ExoriMas→Avalanche. Each level −4% cooldown; cards add GlobalCooldownReductionPercent (max −60%).
+Leveling: upgradeIndex = (runLevel-1) % 6 → fixed order: Heal→Guard→Exori→ExoriMin→ExoriMas→Avalanche. Each level −4% cooldown; passive cards add GlobalCooldownReductionPercent (max −60%).
 
-Assist system: Runs after ApplyCommands if enabled and no manual cast — defensive priority (Guard → Heal), then offensive in order (Avalanche→ExoriMas→Exori→ExoriMin), max 1 auto-cast/tick.
+Assist trigger thresholds (configurable):
+
+Guard fires when HP < 60% (AssistDefaultGuardAtHpPercent)
+Heal fires when HP < 40% (AssistDefaultHealAtHpPercent)
+Max 1 auto-cast/tick (AssistDefaultMaxAutoCastsPerTick)
 
 Coupling issues: Skills are switch-case (not polymorphic); adding a skill requires editing the switch; assist system mixed into combat resolution phase
 
 5. Card / Chest System
-Files: InMemoryBattleStore.cs (CardPool array, TryOfferCardChoice, RollCardOffer, ApplyCardEffects, ChooseCard), InMemoryBattleStore.PoiSystem.cs (chest interaction triggers card offer)
+Files: InMemoryBattleStore.cs (CardPool array, TryOfferCardChoice, RollCardOffer, CanOfferCard, ApplyCardEffects, ChooseCard), InMemoryBattleStore.PoiSystem.cs (chest interaction triggers card offer)
 
-Card structure: CardDefinition { Id, RarityWeight (50–110), MaxStacks (2–3), ScalingParams, Effects { FlatDamageBonus, PercentDamageBonus, PercentAttackSpeedBonus, PercentMaxHpBonus, FlatHpOnHit, GlobalCooldownReductionPercent } }. Pool: 18+ cards, 1 hardcoded incompatible pair.
+Card structure: CardDefinition { Id, RarityWeight (30–110), MaxStacks (1 for skill cards, 3 for passive cards), ScalingParams, Effects { FlatDamageBonus, PercentDamageBonus, PercentAttackSpeedBonus, PercentMaxHpBonus, FlatHpOnHit, GlobalCooldownReductionPercent }, IsSkillCard, SkillId }. Pool: 18 passive cards + 3 skill cards (Exori, Exori Mas, Avalanche), 1 incompatible pair.
+
+Two offer sources — CardOfferSource enum:
+
+CardOfferSource.LevelUp: offers skill cards (if skill not yet owned) + passive cards
+CardOfferSource.Chest: offers passive cards only (skill cards excluded via CanOfferCard)
+
+Passive card caps enforced by CanOfferCard:
+
+MaxDistinctPassiveCards = 4 (max 4 distinct passive types per run)
+MaxStacks per card = 3
 
 Flow:
 
 
-Chest opened → TryOfferCardChoice():
-  Guard (no pending, <12 total) → RollCardOffer() (weighted random 3)
+Level-up OR Chest opened → TryOfferCardChoice(source):
+  Guard (no pending, <12 total) → RollCardOffer(source) (weighted random 3)
   → PendingCardChoice created → battle PAUSED → CardChoiceOfferedEvent
 
 ChooseCard(): validate → ApplyCardEffects() → stack scaling (100% / 75–90%)
+  → if IsSkillCard: add skill to state.Skills → skill immediately usable via assist
   → mutates PlayerModifiers immediately → recalculates all skill cooldowns
   → clears PendingCardChoice → battle resumes
-Chest spawn: Normal chest every 65s (90% chance, max 3/run, 10s lifetime); species chest on bestiary threshold (150–180 kills first, +300–350 after); altar every 9s (35%, 1 active max).
+Chest spawn: Normal chest every 65s (90% chance, max 3/run, 10s lifetime, left-click to open); species chest on bestiary threshold (150–180 kills first, +300–350 after); altar every 9s (35%, 1 active max, left-click to activate).
 
 Coupling issues: Card pool hardcoded inline; species chest blocked if any normal chest POI active; card selection immediately mutates cooldowns mid-run
 
 6. Movement System
-Files: InMemoryBattleStore.MovementRules.cs (all pathfinding), InMemoryBattleStore.cs (TickMobMovement, ApplyMoveCommandsBeforeMobMovement)
+Files: InMemoryBattleStore.MovementRules.cs (mob pathfinding), InMemoryBattleStore.cs (TickMobMovement)
 
-Pathfinding approach: Greedy 1-step lookahead only. BuildGreedyStepCandidates() generates 1–2 candidates based on delta direction; IsWalkableTile() checks bounds + occupancy; no A*, no BFS.
+Player movement: NONE. Player is fixed at tile (3,3). The move_player command type still exists in the protocol but is not sent by the frontend.
 
-Player movement: Command → compute destination → walkability check → update tile → set facing → 300ms cooldown.
+Mob pathfinding approach: Greedy 1-step lookahead only. BuildGreedyStepCandidates() generates 1–2 candidates based on delta direction; IsWalkableTile() checks bounds + occupancy; no A*, no BFS.
 
 Mob movement:
 
-Melee: TryGetFirstWalkableGreedyStepTowardTarget() (approach)
+Melee: TryGetFirstWalkableGreedyStepTowardTarget() (approach toward player at center)
 Ranged: TryChooseRangedBandMove() → approach if dist≥4, retreat if dist≤1, TryGetFirstWalkableBandOrbitStep() to maintain dist 2–3
 Deterministic neighbor order: [Up, UpRight, Right, DownRight, Down, DownLeft, Left, UpLeft]
 
-Coupling issues: Mobs can get stuck behind each other (no resolution); ranged orbit has no AoE avoidance; move fails silently if tile blocked mid-tick
+Coupling issues: Mobs can get stuck behind each other (no resolution); ranged orbit has no AoE avoidance
 
 7. Telemetry / Event System
 Files (backend): BattleEventDto.cs (base + 28 derived event records); emission is inline throughout all partial files.
@@ -145,9 +166,17 @@ Files: battle-api.service.ts, account-api.service.ts
 
 Protocol: REST over HTTP, vanilla fetch(), JSON. No WebSocket/SignalR — client polls every game tick.
 
-Endpoints: POST /start, POST /step, POST /choose-card, POST /interact
+Endpoints: POST /start, POST /step (with optional stepCount 1–16), POST /choose-card, POST /interact
 
-Command types per step: move, cast_skill, interact, set_ground_target, lock_target, set_assist_config, pause/resume
+Command types per step: cast_skill (not used — all via assist), interact_poi (left-click), set_target (right-click), set_ground_target, set_assist_config, pause/resume
+
+Note: move_player command exists in protocol but is not currently sent. Player is fixed at center.
+
+Batch step:
+
+stepCount parameter allows sending multiple ticks per request.
+MAX_TICK_DEBT = 0 currently → stepCount=1, one request per 250ms tick.
+Increasing MAX_TICK_DEBT batches ticks: debt=1 → 500ms/req, debt=4 → 1.25s/req.
 
 Backend event → DOM flow:
 
@@ -155,13 +184,12 @@ Backend event → DOM flow:
 POST /step → BattleApiService → ArenaPageComponent.stepBattleSafe()
 → runInAngularZone() → applyBattlePayload() → ArenaEngine.applyBattleStep()
 → syncUiMetaState() → template bindings → CanvasLayeredRenderer.render()
-Coupling issues: Every game tick = one HTTP round trip (latency directly caps playability); no retry/backoff on network failure; no client-side command validation; clientTick mismatch detection exists but no automatic resync
+Coupling issues: Every game tick = one HTTP round trip (latency directly caps playability); no retry/backoff on network failure; clientTick mismatch detection exists but no automatic resync
 
 Summary: Top Architectural Concerns
 Concern	Severity	Location
 Backend god class (4300+ lines, 12 partials)	High	InMemoryBattleStore.cs
 Frontend god component (5000+ lines)	High	arena-page.component.ts
-150+ hardcoded constants, no config system	High	InMemoryBattleStore.cs lines 10–204
 HTTP polling per tick (latency-bound gameplay)	Medium	battle-api.service.ts
 No backend analytics persistence	Medium	All of backend
 Greedy pathfinding (mobs get stuck)	Medium	MovementRules.cs
@@ -169,4 +197,6 @@ Skills as switch-case (not extensible)	Medium	InMemoryBattleStore.cs
 Card pool hardcoded inline	Low	InMemoryBattleStore.cs
 Life leech as ref through 5+ methods	Low	Damage pipeline
 Client-side analytics only (30-run cap)	Low	run-result-logger.ts
-The architectural map has been saved to linear-soaring-badger.md for future reference.
+
+Resolved concerns:
+150+ hardcoded constants	FIXED	All constants now in ArenaConfig.cs

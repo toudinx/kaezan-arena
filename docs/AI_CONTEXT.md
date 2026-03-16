@@ -106,10 +106,10 @@ Run again
 
 During a run:
 
-survive
-position
-upgrade skills via run level
-choose cards from chests
+survive (player is fixed at center — no movement)
+choose level-up cards (skill cards unlock new skills; passive cards boost stats)
+open chests (passive cards only)
+lock targets via right-click to guide the assist system
 manage chaos
 5. Arena Rules
 
@@ -121,13 +121,19 @@ Core rules:
 
 1 entity per tile
 
-movement in 8 directions
-
 Chebyshev distance for melee
 
 Tibia-style diagonal corner blocking
 
-player positioning matters
+The player is fixed at the center tile (3,3).
+
+There is no WASD movement. The player does not move.
+
+Player agency comes from:
+
+right-click target locking (guides the assist system)
+left-click POI interaction (chests, altars)
+level-up and chest card choices
 
 The 7x7 is a core identity constraint.
 Do not casually expand it into large-map gameplay unless explicitly planned.
@@ -174,72 +180,78 @@ combat should reward good positioning, not spam clicking
 
 8. Skill System
 
-Skills are a major part of build identity.
+Skills are built progressively Vampire Survivors style.
 
-Known skill examples:
+Starting skills (always active from run start):
 
-Auto Attack
+Exori Min — frontal melee, 15 dmg, 800ms cooldown
+Heal — self-heal 22% maxHp, 7000ms cooldown
+Guard — shield 10% maxHp, 10000ms cooldown
 
-Exori
+Unlockable skills (obtained by choosing skill cards at level-up):
 
-Exori Min
+Exori — square AoE r=1, 10 dmg, 1200ms cooldown
+Exori Mas — diamond AoE r=2, 7 dmg, 2000ms cooldown
+Avalanche — ground AoE zone, 3 dmg, 2500ms cooldown
 
-Exori Mas
+All skills fire automatically via the Assist System.
 
-Avalanche
+Assist priority order:
 
-Design direction:
+Guard (when HP < 60%)
+Heal (when HP < 40%)
+Offensive: Avalanche → Exori Mas → Exori → Exori Min
 
-Run level upgrades should mainly improve skills
+Max 1 auto-cast per tick.
 
-skill upgrades may include branching variations
+Important distinctions:
 
-different skill upgrade choices should create different builds for the same character
+Level-up card choice → offers skill cards (unlock new skill) + passive cards
+Chest card choice → offers passive cards only (no skill cards)
 
-Examples of interesting skill upgrades:
+Passive card constraints:
 
-Exori → damage path / cooldown path / AoE path
-Avalanche → damage / slow / freeze utility
+Max 4 distinct passive card types per run
+Max 3 stacks per passive card
 
-Important distinction:
-
-Skill upgrades = character build core during the run
-
-Cards = broader run modifiers
-
-Do not make cards and skill upgrades overlap too much.
+Do not confuse the old "skill upgrade via run level" model with the current Vampire Survivors unlock model.
 
 9. Card System
 
-Cards are obtained primarily from chests.
+Two sources of card choices:
 
-Chest flow:
+Level-up card choice:
+  - Offers skill cards (unlock Exori, Exori Mas, Avalanche if not yet owned)
+  - Offers passive cards
+  - Mix of both in same offer
 
-interact with chest
-↓
-pause run
-↓
-choose 1 of 3 cards
+Chest card choice (left-click to open chest):
+  - Offers passive cards only
+  - No skill cards are ever offered from chests
 
-Design role of cards:
+Design role of passive cards:
 
 modify the run globally
 
 create surprise and strong identity
 
-complement skill upgrades
-
 encourage risk/reward decisions when going for chests
 
-Cards should not mostly be “+X% to one skill” if that belongs to the skill-upgrade system.
+Passive card constraints:
 
-Better card examples:
+Max 4 distinct passive card types per run
+Max 3 stacks per passive card type
+Max 12 total card selections per run
 
-life leech
-enemy explosion on death
-spawn rate increase
-shield regen modifier
-risk/reward modifiers
+Current passive card pool examples:
+
+Bloodletter Edge — +22% damage, +2 HP on hit
+Frenzy Clockwork — +35% attack speed, +8% damage
+Arcane Tempo — +30% global cooldown reduction
+Colossus Heart — +40% max HP, +6 damage
+Butcher Mark — +12 flat damage
+Iron Fortress — +55% max HP
+Warlord Banner — +18% damage, +20% max HP
 
 Avoid false choices:
 
@@ -403,27 +415,20 @@ If determinism breaks, treat it as a serious technical issue.
 
 The simulation tick is configurable.
 
-Default historically was:
+Default:
 
-250ms
+250ms (configurable via Battle:StepDeltaMs, range 50–2000ms)
 
-This may feel too sluggish for movement.
+The player is fixed at center — there is no movement to feel sluggish.
 
-Important distinction:
+HTTP polling:
 
-movement responsiveness matters a lot
+Currently MAX_TICK_DEBT = 0 → one HTTP request per tick (4 req/s at 250ms).
 
-AI does not necessarily need to “think” more often just because tick is smaller
+Batch step is implemented (up to 16 steps per request via stepCount).
+Increasing MAX_TICK_DEBT batches multiple ticks per request (lower req/s, higher latency visibility).
 
-simulation tick and AI think interval may eventually be separated if needed
-
-Current design concern:
-
-movement should feel reliable
-
-player should not feel like movement commands are being ignored
-
-blocked movement reasons should be visible/debuggable
+Frontend schedules steps based on the backend-provided stepDeltaMs value.
 
 17. Run Telemetry
 
@@ -469,7 +474,7 @@ Balancing should be based on real run telemetry, not only intuition.
 
 Current major product areas include:
 
-Arena page
+Arena page (player fixed at center, Vampire Survivors skill unlock, assist auto-cast)
 
 Home page
 
@@ -481,13 +486,17 @@ Backpack drawer
 
 Replay export/import
 
-Run logger / telemetry
+Run logger / telemetry (kills, damageDealt, damageTaken, minHpObserved, xpGained)
 
 Simulation invariants
 
-Movement reliability improvements
-
 Configurable step delta
+
+HTTP batch step (MAX_TICK_DEBT = 0 currently)
+
+ArenaConfig.cs — centralized constants (all simulation tuning values)
+
+Tibia-style UI layout with skills and passives in right panel
 
 The project is no longer “just an arena prototype”; it already has meaningful product structure outside combat.
 
@@ -593,15 +602,13 @@ mention model/reasoning level if asked for Codex prompts
 
 At the latest known state, the biggest priorities are:
 
-movement feel / responsiveness
+baseline combat balance (spawn pacing, mob damage, player survivability)
 
-baseline combat balance
+run telemetry collection and analysis (telemetry is now correctly capturing all key fields)
 
-run telemetry collection
+defining run pacing (calm → pressure → chaos curve)
 
-defining run pacing
-
-solidifying skill-upgrade vs chest-card roles
+build variety via skill unlock combos + passive card stacking
 
 building permanent progression layers cleanly
 
@@ -618,18 +625,20 @@ iterate
 
 23. High-Level Design Direction Going Forward
 
-Strong likely direction:
+Current confirmed system split:
 
-Run Level → upgrade skills / choose skill variations
-Chest → choose 1 of 3 cards (global run modifiers)
+Run Level → card choice (skill cards unlock new skills; passive cards boost stats)
+Chest → card choice (passive cards only)
 Bestiary / future charms → permanent progression
 Equipment → persistent character progression
 
 This creates a clear system split:
 
-skills define the run build core
+skill unlock choices at level-up define the run build core
 
-cards define run modifiers and surprise
+passive card stacking defines run power curve
+
+chests offer passive card power, not skill unlocks
 
 permanent progression creates long-term retention
 
@@ -645,7 +654,17 @@ frontend must not simulate combat
 
 the game should start calmer and ramp to chaos
 
-movement feel is currently a key issue
+player is fixed at tile (3,3) — no WASD movement
+
+all skills fire via the assist system — no manual skill casting
+
+skill unlock is Vampire Survivors style: Exori Min from start, others via level-up cards
+
+chests offer passive cards only — never skill cards
+
+passive card caps: max 4 distinct types, max 3 stacks per type
+
+all constants are in ArenaConfig.cs — never hardcode simulation values
 
 short-run fun matters more than large-system complexity
 

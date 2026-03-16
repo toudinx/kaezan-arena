@@ -62,21 +62,21 @@ long setup before gameplay starts
 
 progression that only feels meaningful after many hours
 
-3. Positioning Must Matter
+3. Target Priority & Decision-Making Must Matter
 
-The soul of Kaezan Arena is positional combat.
+The soul of Kaezan Arena is tactical decision-making within the arena.
+
+The player is fixed at the center — there is no movement.
 
 The player should win or lose primarily because of:
 
-movement
+target priority (right-click lock on the right enemy)
 
-spacing
+timing of card choices
 
-target priority
+risk/reward decisions (go for the chest or not?)
 
-risk/reward decisions
-
-timing of interactions
+build choices (which skills to unlock, which passives to stack)
 
 Not because of:
 
@@ -90,7 +90,7 @@ menu management inside the run
 
 A feature is usually good if it creates:
 
-a new positioning decision inside the 7x7 arena
+a new tactical decision inside the 7x7 arena (even without movement)
 
 4. 7x7 Is a Feature, Not a Limitation
 
@@ -336,16 +336,12 @@ A run that feels the same from second 1 to second 180 is failing.
 
 Each progression system should have a clear purpose.
 
-Recommended separation:
+Confirmed separation:
 
-Run Level → skill upgrades / skill path decisions
-
-Chests → card choices / global run modifiers
-
+Run Level → card choices: skill cards (unlock skills) + passive cards
+Chests → passive cards only (no skill unlocks from chests)
 Bestiary → permanent species progression
-
 Equipment → persistent character strength and identity
-
 Future charms → long-term specialization
 
 If two systems do the same thing, one of them is probably redundant.

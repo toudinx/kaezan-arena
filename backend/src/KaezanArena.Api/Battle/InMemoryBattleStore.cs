@@ -9,186 +9,6 @@ public sealed partial class InMemoryBattleStore : IBattleStore
 {
     // Deterministic simulation delta per battle step.
     private static int StepDeltaMs = ArenaConfig.DefaultStepDeltaMs;
-    private const int MobRespawnDelayMs = 750;
-    private const int PlayerMoveCooldownMs = 300;
-    private const int PlayerAutoAttackCooldownMs = 800;
-    private const int PlayerGlobalCooldownMs = 400;
-    private const int PlayerBaseHp = 120;
-    private const int MobSpawnRingMinDistance = 2;
-    private const int MobSpawnRingMaxDistance = 4;
-    private const int EarlyMobConcurrentCap = 2;
-    private const int RangedPreferredDistanceMin = 2;
-    private const int RangedPreferredDistanceMax = 3;
-    private const int RangedApproachDistance = 4;
-    private const int RangedCommitWindowTicks = 2;
-    private const int PlayerAutoAttackDamage = 8;
-    private const int PlayerShieldGainPerAction = 2;
-    private const int PlayerLifeLeechPercent = 30;
-    private const double PlayerDamageVarianceMinMultiplier = 0.90d;
-    private const double PlayerDamageVarianceMaxMultiplier = 1.10d;
-    private const double MobDamageVarianceMinMultiplier = 0.85d;
-    private const double MobDamageVarianceMaxMultiplier = 1.15d;
-    private const int CriticalHitChancePercent = 20;
-    private const int CritTextDurationMs = 800;
-    private const string CritTextLabel = "CRIT!";
-    private const int MeleeSwingDurationMs = 120;
-    private const int RangedProjectileDurationMs = 220;
-    private const int DeathBurstDurationMs = 320;
-    private const int CorpseDecalLifetimeMs = 1200;
-
-    private const string ExoriSkillId = "exori";
-    private const string ExoriMasSkillId = "exori_mas";
-    private const string ExoriMinSkillId = "exori_min";
-    private const string HealSkillId = "heal";
-    private const string GuardSkillId = "guard";
-    private const string AvalancheSkillId = "avalanche";
-    private const string ExoriFxId = "fx.skill.exori";
-    private const string ExoriMasFxId = "fx.skill.exori_mas";
-    private const string ExoriMinFxId = "fx.skill.exori_min";
-    private const string HealFxId = "fx.hit.small";
-    private const string GuardFxId = "fx.hit.small";
-    private const string AvalancheFxId = "fx.skill.exori_mas";
-    // TODO(prompt20): Remove temporary skill-specific elements after validating row-based FX rendering.
-    private const ElementType ExoriElement = ElementType.Fire;
-    private const ElementType ExoriMasElement = ElementType.Energy;
-    private const ElementType ExoriMinElement = ElementType.Ice;
-    private const ElementType HealElement = ElementType.Holy;
-    private const ElementType GuardElement = ElementType.Energy;
-    private const ElementType AvalancheElement = ElementType.Ice;
-    private const ElementType DefaultMobElement = ElementType.Physical;
-    private const string MobCleaveFxId = "fx.mob.brute.cleave";
-    private const string MobPowerShotFxId = "fx.mob.archer.power_shot";
-    private const string MobDemonBeamFxId = "fx.mob.demon.beam";
-    private const string MobDragonBreathFxId = "fx.mob.dragon.breath";
-    private const int ExoriCooldownTotalMs = 1200;
-    private const int ExoriMasCooldownTotalMs = 2000;
-    private const int ExoriMinCooldownTotalMs = 800;
-    private const int HealCooldownTotalMs = 7000;
-    private const int GuardCooldownTotalMs = 10000;
-    private const int AvalancheCooldownTotalMs = 2500;
-    private const int SkillInitialLevel = 1;
-    private const int SkillCooldownReductionPerLevelPercent = 4;
-    private const int SkillCooldownReductionMaxPercent = 32;
-    private const int SkillDefensivePercentBonusPerLevel = 2;
-    private const int AvalancheDamage = 3;       
-    private const int AvalancheRangeTilesManhattan = 3;
-    private const int HealPercentOfMaxHp = 22;
-    private const int GuardPercentOfMaxHp = 10;
-    private const int KinaReflectPercent = 20;
-    private const int KinaRangedReflectMultiplier = 2;
-    private const string PlayerClassKina = "kina";
-    private const int RunInitialLevel = 1;
-    private const int RunInitialXp = 0;
-    private const int NormalMobKillXp = 10;
-    private const int EliteMobKillXp = 10;
-    private const int RunLevelXpBase = 60;
-    private const int RunLevelXpIncrementPerLevel = 40;
-    private const int MaxCardOfferCount = 3;
-    private const int MaxCardSelectionsPerRun = 12;
-    private const int MaxDistinctPassiveCards = 4;
-    private const int MaxGlobalCooldownReductionPercent = 60;
-    private const string CardTagOffense = "offense";
-    private const string CardTagDefense = "defense";
-    private const string CardTagUtility = "utility";
-    private const string CardTagSustain = "sustain";
-    private const string CardTagMobility = "mobility";
-    private const string CardTagSkill = "skill";
-    private const double MobHpMultStart = 1.0d;
-    private const double MobHpMultEnd = 3.2d;
-    private const double MobDmgMultStart = 0.70d;
-    private const double MobDmgMultEnd = 2.6d;
-    private const double EliteHpMultiplierFactor = 1.35d;
-    private const double EliteDmgMultiplierFactor = 1.30d;
-    private const bool IsRunLevelHpSeasoningEnabled = true;
-    private const double RunLevelHpSeasoningPerLevel = 0.015d;
-    private const int EliteCommanderMaxBuffTargets = 3;
-    private const int EliteCommanderDamageBonusPercent = 40;
-    private const int EliteCommanderAttackSpeedBonusPercent = 30;
-
-    private const string StatusStarted = "started";
-    private const string StatusDefeat = "defeat";
-    private const string StatusVictory = "victory";
-    private const string RunEndReasonVictoryTime = "victory_time";
-    private const string RunEndReasonDefeatDeath = "defeat_death";
-
-    private const string FacingUp = "up";
-    private const string FacingUpRight = "up_right";
-    private const string FacingDown = "down";
-    private const string FacingDownRight = "down_right";
-    private const string FacingLeft = "left";
-    private const string FacingRight = "right";
-    private const string FacingDownLeft = "down_left";
-    private const string FacingUpLeft = "up_left";
-
-    private const string CastSkillCommandType = "cast_skill";
-    private const string SetFacingCommandType = "set_facing";
-    private const string MovePlayerCommandType = "move_player";
-    private const string InteractPoiCommandType = "interact_poi";
-    private const string SetTargetCommandType = "set_target";
-    private const string SetGroundTargetCommandType = "set_ground_target";
-    private const string SetAssistConfigCommandType = "set_assist_config";
-    private const string SetPausedCommandType = "set_paused";
-
-    private const string AssistReasonAutoHeal = "auto_heal";
-    private const string AssistReasonAutoGuard = "auto_guard";
-    private const string AssistReasonAutoOffense = "auto_offense";
-    private const string AssistOffenseModeCooldownSpam = "cooldown_spam";
-    private const string AssistOffenseModeSmart = "smart";
-    private const int AssistDefaultHealAtHpPercent = 40;
-    private const int AssistDefaultGuardAtHpPercent = 60;
-    private const int AssistDefaultMaxAutoCastsPerTick = 1;
-
-    private const string UnknownCommandReason = "unknown_command";
-    private const string UnknownSkillReason = "unknown_skill";
-    private const string UnknownDirectionReason = "unknown_direction";
-    private const string InvalidGroundTargetReason = "invalid_ground_target";
-    private const string NoTargetReason = "no_target";
-    private const string OutOfRangeReason = "out_of_range";
-    private const string CooldownReason = "cooldown";
-    private const string GlobalCooldownReason = "global_cooldown";
-    private const string MoveBlockedReason = "move_blocked";
-    private const string UnknownPoiReason = "unknown_poi";
-    private const string PlayerDeadReason = "player_dead";
-    private const string NotStartedReason = "not_started";
-    private const string DefeatReason = "defeat";
-    private const string PausedReason = "paused";
-    private const string AwaitingCardChoiceReason = "awaiting_card_choice";
-    private const string MoveStatusAccepted = "Accepted";
-    private const string MoveStatusBlocked = "Blocked";
-    private const string MoveReasonNone = "None";
-    private const string MoveReasonOccupied = "Occupied";
-    private const string MoveReasonCornerBlock = "CornerBlock";
-    private const string MoveReasonCooldown = "Cooldown";
-    private const string MoveReasonOutOfBounds = "OutOfBounds";
-    private const string EndReasonDeath = "death";
-    private const string EndReasonTime = "time";
-    private const string PoiTypeChest = "chest";
-    private const string PoiTypeSpeciesChest = "species_chest";
-    private const string PoiTypeAltar = "altar";
-    private const string HealingAmplifierBuffId = "healing_amplifier";
-    private const string AntiRangedPressureBuffId = "anti_ranged_pressure";
-    private const string ThornsBoostBuffId = "thorns_boost";
-    private const string DamageBoostBuffId = "damage_boost";
-    private const int PoiSpawnMaxChebyshev = 2;
-    private const int AltarSpawnCheckMs = 9000;
-    private const int AltarSpawnChancePercent = 35;
-    private const int AltarLifetimeMs = 10000;
-    private const int AltarCooldownMs = 12000;
-    private const int AltarSummonSpawnCount = 2;
-    private const int ChestSpawnCheckMs = 65_000;
-    private const int ChestSpawnChancePercent = 90;
-    private const int MaxChestsPerRun = 3;
-    private const int ChestLifetimeMs = 10000;
-    private const int SpeciesChestLifetimeMs = 10000;
-    private const int HealAmplifierBonusPercent = 10;
-    private const int AntiRangedPressureReductionPercent = 20;
-    private const int ThornsBoostBonusPercent = 30;
-    private const int DamageBoostBonusPercent = 25;
-    private const int BestiaryFirstChestBaseKills = 150;
-    private const int BestiaryFirstChestRandomInclusiveMax = 30;
-    private const int BestiaryChestIncrementBaseKills = 300;
-    private const int BestiaryChestIncrementRandomInclusiveMax = 50;
-    private const string InitialChestPoiId = "poi.chest.0000";
     private static readonly int[] BestiaryRankKillThresholds = [0, 10, 30, 60, 100];
 
     private static readonly MobArchetype[] SpawnArchetypeCycle =
@@ -200,27 +20,27 @@ public sealed partial class InMemoryBattleStore : IBattleStore
     ];
     private static readonly string[] AssistOffenseSkillPriority =
     [
-        AvalancheSkillId,
-        ExoriMasSkillId,
-        ExoriSkillId,
-        ExoriMinSkillId
+        ArenaConfig.AvalancheSkillId,
+        ArenaConfig.ExoriMasSkillId,
+        ArenaConfig.ExoriSkillId,
+        ArenaConfig.ExoriMinSkillId
     ];
     private static readonly string[] RunLevelSkillUpgradeOrder =
     [
-        HealSkillId,
-        GuardSkillId,
-        ExoriSkillId,
-        ExoriMinSkillId,
-        ExoriMasSkillId,
-        AvalancheSkillId
+        ArenaConfig.HealSkillId,
+        ArenaConfig.GuardSkillId,
+        ArenaConfig.ExoriSkillId,
+        ArenaConfig.ExoriMinSkillId,
+        ArenaConfig.ExoriMasSkillId,
+        ArenaConfig.AvalancheSkillId
     ];
     private static readonly IReadOnlyDictionary<string, bool> DefaultAssistAutoSkills =
         new Dictionary<string, bool>(StringComparer.Ordinal)
         {
-            [ExoriSkillId] = true,
-            [ExoriMinSkillId] = true,
-            [ExoriMasSkillId] = true,
-            [AvalancheSkillId] = true
+            [ArenaConfig.ExoriSkillId] = true,
+            [ArenaConfig.ExoriMinSkillId] = true,
+            [ArenaConfig.ExoriMasSkillId] = true,
+            [ArenaConfig.AvalancheSkillId] = true
         };
     private static readonly IReadOnlyDictionary<MobArchetype, string> SpeciesByArchetype =
         new Dictionary<MobArchetype, string>
@@ -241,7 +61,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             Id: "colossus_heart",
             Name: "Colossus Heart",
             Description: "+40% max HP and +6 damage.",
-            Tags: [CardTagDefense, CardTagSustain],
+            Tags: [ArenaConfig.CardTagDefense, ArenaConfig.CardTagSustain],
             RarityWeight: 40,
             MaxStacks: 3,
             ScalingParams: new CardScalingParams(BaseStackMultiplierPercent: 100, AdditionalStackMultiplierPercent: 80),
@@ -250,7 +70,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             Id: "bloodletter_edge",
             Name: "Bloodletter Edge",
             Description: "+22% damage and +2 HP on hit.",
-            Tags: [CardTagOffense, CardTagSustain],
+            Tags: [ArenaConfig.CardTagOffense, ArenaConfig.CardTagSustain],
             RarityWeight: 90,
             MaxStacks: 3,
             ScalingParams: new CardScalingParams(BaseStackMultiplierPercent: 100, AdditionalStackMultiplierPercent: 90),
@@ -259,7 +79,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             Id: "frenzy_clockwork",
             Name: "Frenzy Clockwork",
             Description: "+35% attack speed and +8% damage.",
-            Tags: [CardTagOffense, CardTagMobility],
+            Tags: [ArenaConfig.CardTagOffense, ArenaConfig.CardTagMobility],
             RarityWeight: 80,
             MaxStacks: 3,
             ScalingParams: new CardScalingParams(BaseStackMultiplierPercent: 100, AdditionalStackMultiplierPercent: 85),
@@ -268,7 +88,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             Id: "butcher_mark",
             Name: "Butcher Mark",
             Description: "+12 flat damage.",
-            Tags: [CardTagOffense],
+            Tags: [ArenaConfig.CardTagOffense],
             RarityWeight: 110,
             MaxStacks: 3,
             ScalingParams: new CardScalingParams(BaseStackMultiplierPercent: 100, AdditionalStackMultiplierPercent: 100),
@@ -277,7 +97,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             Id: "vampiric_spikes",
             Name: "Vampiric Spikes",
             Description: "+4 HP on hit and +10% max HP.",
-            Tags: [CardTagSustain, CardTagDefense],
+            Tags: [ArenaConfig.CardTagSustain, ArenaConfig.CardTagDefense],
             RarityWeight: 70,
             MaxStacks: 3,
             ScalingParams: new CardScalingParams(BaseStackMultiplierPercent: 100, AdditionalStackMultiplierPercent: 85),
@@ -286,7 +106,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             Id: "overclocked_reflex",
             Name: "Overclocked Reflex",
             Description: "+25% global cooldown reduction and +20% attack speed.",
-            Tags: [CardTagUtility, CardTagMobility],
+            Tags: [ArenaConfig.CardTagUtility, ArenaConfig.CardTagMobility],
             RarityWeight: 35,
             MaxStacks: 3,
             ScalingParams: new CardScalingParams(BaseStackMultiplierPercent: 100, AdditionalStackMultiplierPercent: 75),
@@ -295,7 +115,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             Id: "warlord_banner",
             Name: "Warlord Banner",
             Description: "+18% damage and +20% max HP.",
-            Tags: [CardTagOffense, CardTagDefense],
+            Tags: [ArenaConfig.CardTagOffense, ArenaConfig.CardTagDefense],
             RarityWeight: 45,
             MaxStacks: 3,
             ScalingParams: new CardScalingParams(BaseStackMultiplierPercent: 100, AdditionalStackMultiplierPercent: 80),
@@ -304,7 +124,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             Id: "titan_grip",
             Name: "Titan Grip",
             Description: "+10 flat damage and +20% attack speed.",
-            Tags: [CardTagOffense],
+            Tags: [ArenaConfig.CardTagOffense],
             RarityWeight: 85,
             MaxStacks: 3,
             ScalingParams: new CardScalingParams(BaseStackMultiplierPercent: 100, AdditionalStackMultiplierPercent: 90),
@@ -313,7 +133,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             Id: "arcane_tempo",
             Name: "Arcane Tempo",
             Description: "+30% global cooldown reduction.",
-            Tags: [CardTagUtility, CardTagMobility],
+            Tags: [ArenaConfig.CardTagUtility, ArenaConfig.CardTagMobility],
             RarityWeight: 30,
             MaxStacks: 3,
             ScalingParams: new CardScalingParams(BaseStackMultiplierPercent: 100, AdditionalStackMultiplierPercent: 70),
@@ -322,7 +142,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             Id: "crushing_momentum",
             Name: "Crushing Momentum",
             Description: "+16% damage and +16% attack speed.",
-            Tags: [CardTagOffense, CardTagMobility],
+            Tags: [ArenaConfig.CardTagOffense, ArenaConfig.CardTagMobility],
             RarityWeight: 75,
             MaxStacks: 3,
             ScalingParams: new CardScalingParams(BaseStackMultiplierPercent: 100, AdditionalStackMultiplierPercent: 90),
@@ -331,7 +151,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             Id: "iron_fortress",
             Name: "Iron Fortress",
             Description: "+55% max HP.",
-            Tags: [CardTagDefense],
+            Tags: [ArenaConfig.CardTagDefense],
             RarityWeight: 40,
             MaxStacks: 3,
             ScalingParams: new CardScalingParams(BaseStackMultiplierPercent: 100, AdditionalStackMultiplierPercent: 80),
@@ -340,7 +160,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             Id: "executioner_oath",
             Name: "Executioner Oath",
             Description: "+30% damage.",
-            Tags: [CardTagOffense],
+            Tags: [ArenaConfig.CardTagOffense],
             RarityWeight: 45,
             MaxStacks: 3,
             ScalingParams: new CardScalingParams(BaseStackMultiplierPercent: 100, AdditionalStackMultiplierPercent: 80),
@@ -349,7 +169,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             Id: "sanguine_engine",
             Name: "Sanguine Engine",
             Description: "+3 HP on hit and +15% attack speed.",
-            Tags: [CardTagSustain, CardTagOffense],
+            Tags: [ArenaConfig.CardTagSustain, ArenaConfig.CardTagOffense],
             RarityWeight: 80,
             MaxStacks: 3,
             ScalingParams: new CardScalingParams(BaseStackMultiplierPercent: 100, AdditionalStackMultiplierPercent: 90),
@@ -358,7 +178,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             Id: "battle_hymn",
             Name: "Battle Hymn",
             Description: "+8 flat damage and +20% global cooldown reduction.",
-            Tags: [CardTagOffense, CardTagUtility],
+            Tags: [ArenaConfig.CardTagOffense, ArenaConfig.CardTagUtility],
             RarityWeight: 50,
             MaxStacks: 3,
             ScalingParams: new CardScalingParams(BaseStackMultiplierPercent: 100, AdditionalStackMultiplierPercent: 85),
@@ -367,35 +187,35 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             Id: "skill_exori",
             Name: "Exori",
             Description: "Unlock Exori: square AoE strike around you.",
-            Tags: [CardTagSkill, CardTagOffense],
+            Tags: [ArenaConfig.CardTagSkill, ArenaConfig.CardTagOffense],
             RarityWeight: 80,
             MaxStacks: 1,
             ScalingParams: new CardScalingParams(BaseStackMultiplierPercent: 100, AdditionalStackMultiplierPercent: 100),
             Effects: new CardEffectBundle(),
             IsSkillCard: true,
-            SkillId: ExoriSkillId),
+            SkillId: ArenaConfig.ExoriSkillId),
         new(
             Id: "skill_exori_mas",
             Name: "Exori Mas",
             Description: "Unlock Exori Mas: wide diamond AoE strike.",
-            Tags: [CardTagSkill, CardTagOffense],
+            Tags: [ArenaConfig.CardTagSkill, ArenaConfig.CardTagOffense],
             RarityWeight: 50,
             MaxStacks: 1,
             ScalingParams: new CardScalingParams(BaseStackMultiplierPercent: 100, AdditionalStackMultiplierPercent: 100),
             Effects: new CardEffectBundle(),
             IsSkillCard: true,
-            SkillId: ExoriMasSkillId),
+            SkillId: ArenaConfig.ExoriMasSkillId),
         new(
             Id: "skill_avalanche",
             Name: "Avalanche",
             Description: "Unlock Avalanche: place a ground AoE zone.",
-            Tags: [CardTagSkill, CardTagUtility],
+            Tags: [ArenaConfig.CardTagSkill, ArenaConfig.CardTagUtility],
             RarityWeight: 40,
             MaxStacks: 1,
             ScalingParams: new CardScalingParams(BaseStackMultiplierPercent: 100, AdditionalStackMultiplierPercent: 100),
             Effects: new CardEffectBundle(),
             IsSkillCard: true,
-            SkillId: AvalancheSkillId)
+            SkillId: ArenaConfig.AvalancheSkillId)
     ];
     private static readonly IReadOnlyDictionary<string, CardDefinition> CardById =
         CardPool.ToDictionary(card => card.Id, StringComparer.Ordinal);
@@ -406,45 +226,45 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         new Dictionary<MobArchetype, MobArchetypeConfig>
         {
             [MobArchetype.MeleeBrute] = new(
-                MaxHp: 90,
-                MoveCooldownMs: 500,
-                AutoAttackRangeTiles: 1,
-                AutoAttackDamage: 2,
-                AutoAttackCooldownMs: 1000,
-                AbilityDamage: 5,
-                AbilityRangeTiles: 1,
-                AbilityCooldownMs: 2500,
-                AbilityFxId: MobCleaveFxId),
+                MaxHp: ArenaConfig.MeleeBruteMaxHp,
+                MoveCooldownMs: ArenaConfig.MeleeBruteMoveCooldownMs,
+                AutoAttackRangeTiles: ArenaConfig.MeleeBruteAutoAttackRangeTiles,
+                AutoAttackDamage: ArenaConfig.MeleeBruteAutoAttackDamage,
+                AutoAttackCooldownMs: ArenaConfig.MeleeBruteAutoAttackCooldownMs,
+                AbilityDamage: ArenaConfig.MeleeBruteAbilityDamage,
+                AbilityRangeTiles: ArenaConfig.MeleeBruteAbilityRangeTiles,
+                AbilityCooldownMs: ArenaConfig.MeleeBruteAbilityCooldownMs,
+                AbilityFxId: ArenaConfig.MobCleaveFxId),
             [MobArchetype.RangedArcher] = new(
-                MaxHp: 70,
-                MoveCooldownMs: 500,
-                AutoAttackRangeTiles: 4,
-                AutoAttackDamage: 1,
-                AutoAttackCooldownMs: 1250,
-                AbilityDamage: 3,
-                AbilityRangeTiles: 4,
-                AbilityCooldownMs: 2800,
-                AbilityFxId: MobPowerShotFxId),
+                MaxHp: ArenaConfig.RangedArcherMaxHp,
+                MoveCooldownMs: ArenaConfig.RangedArcherMoveCooldownMs,
+                AutoAttackRangeTiles: ArenaConfig.RangedArcherAutoAttackRangeTiles,
+                AutoAttackDamage: ArenaConfig.RangedArcherAutoAttackDamage,
+                AutoAttackCooldownMs: ArenaConfig.RangedArcherAutoAttackCooldownMs,
+                AbilityDamage: ArenaConfig.RangedArcherAbilityDamage,
+                AbilityRangeTiles: ArenaConfig.RangedArcherAbilityRangeTiles,
+                AbilityCooldownMs: ArenaConfig.RangedArcherAbilityCooldownMs,
+                AbilityFxId: ArenaConfig.MobPowerShotFxId),
             [MobArchetype.MeleeDemon] = new(
-                MaxHp: 104,
-                MoveCooldownMs: 500,
-                AutoAttackRangeTiles: 1,
-                AutoAttackDamage: 2,
-                AutoAttackCooldownMs: 1000,
-                AbilityDamage: 6,
-                AbilityRangeTiles: 4,
-                AbilityCooldownMs: 3000,
-                AbilityFxId: MobDemonBeamFxId),
+                MaxHp: ArenaConfig.MeleeDemonMaxHp,
+                MoveCooldownMs: ArenaConfig.MeleeDemonMoveCooldownMs,
+                AutoAttackRangeTiles: ArenaConfig.MeleeDemonAutoAttackRangeTiles,
+                AutoAttackDamage: ArenaConfig.MeleeDemonAutoAttackDamage,
+                AutoAttackCooldownMs: ArenaConfig.MeleeDemonAutoAttackCooldownMs,
+                AbilityDamage: ArenaConfig.MeleeDemonAbilityDamage,
+                AbilityRangeTiles: ArenaConfig.MeleeDemonAbilityRangeTiles,
+                AbilityCooldownMs: ArenaConfig.MeleeDemonAbilityCooldownMs,
+                AbilityFxId: ArenaConfig.MobDemonBeamFxId),
             [MobArchetype.RangedDragon] = new(
-                MaxHp: 100,
-                MoveCooldownMs: 500,
-                AutoAttackRangeTiles: 4,
-                AutoAttackDamage: 1,
-                AutoAttackCooldownMs: 1250,
-                AbilityDamage: 4,
-                AbilityRangeTiles: 3,
-                AbilityCooldownMs: 3600,
-                AbilityFxId: MobDragonBreathFxId)
+                MaxHp: ArenaConfig.RangedDragonMaxHp,
+                MoveCooldownMs: ArenaConfig.RangedDragonMoveCooldownMs,
+                AutoAttackRangeTiles: ArenaConfig.RangedDragonAutoAttackRangeTiles,
+                AutoAttackDamage: ArenaConfig.RangedDragonAutoAttackDamage,
+                AutoAttackCooldownMs: ArenaConfig.RangedDragonAutoAttackCooldownMs,
+                AbilityDamage: ArenaConfig.RangedDragonAbilityDamage,
+                AbilityRangeTiles: ArenaConfig.RangedDragonAbilityRangeTiles,
+                AbilityCooldownMs: ArenaConfig.RangedDragonAbilityCooldownMs,
+                AbilityFxId: ArenaConfig.MobDragonBreathFxId)
         };
     private static readonly IReadOnlyDictionary<MobArchetype, IMobBehavior> MobBehaviors =
         new Dictionary<MobArchetype, IMobBehavior>
@@ -485,22 +305,22 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             bestiaryRng: bestiaryRng,
             critRng: critRng,
             tick: 0,
-            playerFacingDirection: FacingUp,
-            battleStatus: StatusStarted,
+            playerFacingDirection: ArenaConfig.FacingUp,
+            battleStatus: ArenaConfig.StatusStarted,
             isRunEnded: false,
             runEndReason: null,
             runEndedAtMs: null,
             isPaused: false,
-            runXp: RunInitialXp,
-            runLevel: RunInitialLevel,
+            runXp: ArenaConfig.RunInitialXp,
+            runLevel: ArenaConfig.RunInitialLevel,
             totalKills: 0,
             eliteKills: 0,
             chestsOpened: 0,
             playerMoveCooldownRemainingMs: 0,
             playerAttackCooldownRemainingMs: 0,
             playerGlobalCooldownRemainingMs: 0,
-            nextChestSpawnCheckAtMs: 45_000,
-            nextAltarSpawnCheckAtMs: AltarSpawnCheckMs,
+            nextChestSpawnCheckAtMs: ArenaConfig.InitialChestSpawnCheckAtMs,
+            nextAltarSpawnCheckAtMs: ArenaConfig.AltarSpawnCheckMs,
             nextAltarInteractAllowedAtMs: 0,
             nextPoiSequence: 1,
             lockedTargetEntityId: null,
@@ -515,13 +335,13 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                     mobType: null,
                     isElite: false,
                     buffSourceEliteId: null,
-                    facingDirection: FacingUp,
+                    facingDirection: ArenaConfig.FacingUp,
                     tileX: ArenaConfig.PlayerTileX,
                     tileY: ArenaConfig.PlayerTileY,
-                    hp: PlayerBaseHp,
-                    maxHp: PlayerBaseHp,
+                    hp: ArenaConfig.PlayerBaseHp,
+                    maxHp: ArenaConfig.PlayerBaseHp,
                     shield: 0,
-                    maxShield: ComputePlayerMaxShield(maxHp: PlayerBaseHp),
+                    maxShield: ComputePlayerMaxShield(maxHp: ArenaConfig.PlayerBaseHp),
                     mobSlotIndex: null)
             },
             skills: BuildInitialSkills(),
@@ -556,8 +376,6 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         return ToSnapshot(state, [], []);
     }
 
-    // Maximum ticks processed in a single StepBattle call. Caps runaway batch requests (~4s at 250ms/tick).
-    private const int MaxBatchStepCount = 16;
 
     public BattleSnapshot StepBattle(string battleId, int? clientTick, IReadOnlyList<BattleCommandDto>? commands, int? stepCount = null)
     {
@@ -586,7 +404,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                 return ToSnapshot(state, [], rejectedCommandResults);
             }
 
-            var stepsToRun = Math.Max(1, Math.Min(stepCount ?? 1, MaxBatchStepCount));
+            var stepsToRun = Math.Max(1, Math.Min(stepCount ?? 1, ArenaConfig.MaxBatchStepCount));
             var allEvents = new List<BattleEventDto>();
             IReadOnlyList<CommandResultDto> finalCommandResults = [];
 
@@ -762,7 +580,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             if (ExceedsDistinctPassiveCap(state, selectedCard))
             {
                 throw new InvalidOperationException(
-                    $"Cannot pick '{selectedCard.Id}': already at {MaxDistinctPassiveCards} distinct passive types.");
+                    $"Cannot pick '{selectedCard.Id}': already at {ArenaConfig.MaxDistinctPassiveCards} distinct passive types.");
             }
 
             var player = GetPlayerActor(state);
@@ -845,23 +663,23 @@ public sealed partial class InMemoryBattleStore : IBattleStore
 
     private static int ComputeInitialBestiaryThreshold(Random bestiaryRng)
     {
-        return BestiaryFirstChestBaseKills + NextIntFromBestiaryRng(
+        return ArenaConfig.BestiaryFirstChestBaseKills + NextIntFromBestiaryRng(
             bestiaryRng,
-            BestiaryFirstChestRandomInclusiveMax + 1);
+            ArenaConfig.BestiaryFirstChestRandomInclusiveMax + 1);
     }
 
     private static int ComputeBestiaryThresholdIncrement(Random bestiaryRng)
     {
-        return BestiaryChestIncrementBaseKills + NextIntFromBestiaryRng(
+        return ArenaConfig.BestiaryChestIncrementBaseKills + NextIntFromBestiaryRng(
             bestiaryRng,
-            BestiaryChestIncrementRandomInclusiveMax + 1);
+            ArenaConfig.BestiaryChestIncrementRandomInclusiveMax + 1);
     }
 
     private static int ComputeBestiaryThresholdIncrement(StoredBattle state)
     {
-        return BestiaryChestIncrementBaseKills + NextIntFromBestiaryRng(
+        return ArenaConfig.BestiaryChestIncrementBaseKills + NextIntFromBestiaryRng(
             state,
-            BestiaryChestIncrementRandomInclusiveMax + 1);
+            ArenaConfig.BestiaryChestIncrementRandomInclusiveMax + 1);
     }
 
     private static int ResolveBestiaryRank(int killsTotal)
@@ -886,7 +704,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
     {
         // MVP: every current run uses Kina. Keep this hook to make class selection explicit/extensible.
         _ = playerActorId;
-        return PlayerClassKina;
+        return ArenaConfig.PlayerClassKina;
     }
 
     private static StoredAssistConfig BuildDefaultAssistConfig()
@@ -894,13 +712,13 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         return new StoredAssistConfig(
             enabled: true,
             autoHealEnabled: true,
-            healAtHpPercent: AssistDefaultHealAtHpPercent,
+            healAtHpPercent: ArenaConfig.AssistDefaultHealAtHpPercent,
             autoGuardEnabled: true,
-            guardAtHpPercent: AssistDefaultGuardAtHpPercent,
+            guardAtHpPercent: ArenaConfig.AssistDefaultGuardAtHpPercent,
             autoOffenseEnabled: true,
-            offenseMode: AssistOffenseModeCooldownSpam,
+            offenseMode: ArenaConfig.AssistOffenseModeCooldownSpam,
             autoSkills: CopyAutoSkillMap(DefaultAssistAutoSkills),
-            maxAutoCastsPerTick: AssistDefaultMaxAutoCastsPerTick);
+            maxAutoCastsPerTick: ArenaConfig.AssistDefaultMaxAutoCastsPerTick);
     }
 
     private static AssistConfigDto ToAssistConfigDto(StoredAssistConfig config)
@@ -979,8 +797,8 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         var normalized = value.Trim().ToLowerInvariant();
         return normalized switch
         {
-            AssistOffenseModeCooldownSpam => AssistOffenseModeCooldownSpam,
-            AssistOffenseModeSmart => AssistOffenseModeSmart,
+            ArenaConfig.AssistOffenseModeCooldownSpam => ArenaConfig.AssistOffenseModeCooldownSpam,
+            ArenaConfig.AssistOffenseModeSmart => ArenaConfig.AssistOffenseModeSmart,
             _ => null
         };
     }
@@ -1005,7 +823,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         return Math.Max(
             1,
             ApplyPercentIncrease(
-                PlayerBaseHp,
+                ArenaConfig.PlayerBaseHp,
                 Math.Max(0, state.PlayerModifiers.PercentMaxHpBonus)));
     }
 
@@ -1014,14 +832,14 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         return Math.Max(
             1,
             ApplyPercentReduction(
-                PlayerAutoAttackCooldownMs,
+                ArenaConfig.PlayerAutoAttackCooldownMs,
                 Math.Max(0, state.PlayerModifiers.PercentAttackSpeedBonus)));
     }
 
     private static int ResolvePlayerGlobalCooldownMs(StoredBattle state)
     {
         var reductionPercent = ResolveCardGlobalCooldownReductionPercent(state);
-        return Math.Max(1, ApplyPercentReduction(PlayerGlobalCooldownMs, reductionPercent));
+        return Math.Max(1, ApplyPercentReduction(ArenaConfig.PlayerGlobalCooldownMs, reductionPercent));
     }
 
     private static ElementType GetPlayerBaseElement(StoredBattle state)
@@ -1074,12 +892,12 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                 continue;
             }
 
-            if (string.Equals(commandType, SetFacingCommandType, StringComparison.Ordinal))
+            if (string.Equals(commandType, ArenaConfig.SetFacingCommandType, StringComparison.Ordinal))
             {
                 var normalizedDirection = NormalizeDirection(command.Dir);
                 if (normalizedDirection is null)
                 {
-                    commandResults.Add(new CommandResultDto(index, commandType, false, UnknownDirectionReason));
+                    commandResults.Add(new CommandResultDto(index, commandType, false, ArenaConfig.UnknownDirectionReason));
                     continue;
                 }
 
@@ -1089,14 +907,14 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                 continue;
             }
 
-            if (string.Equals(commandType, MovePlayerCommandType, StringComparison.Ordinal))
+            if (string.Equals(commandType, ArenaConfig.MovePlayerCommandType, StringComparison.Ordinal))
             {
                 // move_player commands are consumed in the pre-mob movement phase.
-                commandResults.Add(new CommandResultDto(index, commandType, false, UnknownCommandReason));
+                commandResults.Add(new CommandResultDto(index, commandType, false, ArenaConfig.UnknownCommandReason));
                 continue;
             }
 
-            if (string.Equals(commandType, SetTargetCommandType, StringComparison.Ordinal))
+            if (string.Equals(commandType, ArenaConfig.SetTargetCommandType, StringComparison.Ordinal))
             {
                 var normalizedTargetId = string.IsNullOrWhiteSpace(command.TargetEntityId)
                     ? null
@@ -1123,30 +941,30 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                 continue;
             }
 
-            if (string.Equals(commandType, SetAssistConfigCommandType, StringComparison.Ordinal))
+            if (string.Equals(commandType, ArenaConfig.SetAssistConfigCommandType, StringComparison.Ordinal))
             {
                 state.AssistConfig = SanitizeAssistConfig(command.AssistConfig, state.AssistConfig);
                 commandResults.Add(new CommandResultDto(index, commandType, true, null));
                 continue;
             }
 
-            if (string.Equals(commandType, InteractPoiCommandType, StringComparison.Ordinal))
+            if (string.Equals(commandType, ArenaConfig.InteractPoiCommandType, StringComparison.Ordinal))
             {
                 var interacted = TryExecutePoiInteraction(state, events, command.PoiId, out var interactionFailReason);
                 commandResults.Add(new CommandResultDto(index, commandType, interacted, interactionFailReason));
                 continue;
             }
 
-            if (!string.Equals(commandType, CastSkillCommandType, StringComparison.Ordinal))
+            if (!string.Equals(commandType, ArenaConfig.CastSkillCommandType, StringComparison.Ordinal))
             {
-                commandResults.Add(new CommandResultDto(index, commandType, false, UnknownCommandReason));
+                commandResults.Add(new CommandResultDto(index, commandType, false, ArenaConfig.UnknownCommandReason));
                 continue;
             }
 
             var normalizedSkillId = NormalizeSkillId(command.SkillId);
             if (string.IsNullOrEmpty(normalizedSkillId))
             {
-                commandResults.Add(new CommandResultDto(index, commandType, false, UnknownSkillReason));
+                commandResults.Add(new CommandResultDto(index, commandType, false, ArenaConfig.UnknownSkillReason));
                 continue;
             }
 
@@ -1165,26 +983,26 @@ public sealed partial class InMemoryBattleStore : IBattleStore
     {
         if (!state.Skills.TryGetValue(normalizedSkillId, out var skill))
         {
-            return SkillCastResult.Fail(UnknownSkillReason);
+            return SkillCastResult.Fail(ArenaConfig.UnknownSkillReason);
         }
 
         if (skill.CooldownRemainingMs > 0)
         {
-            return SkillCastResult.Fail(CooldownReason);
+            return SkillCastResult.Fail(ArenaConfig.CooldownReason);
         }
 
         if (state.PlayerGlobalCooldownRemainingMs > 0)
         {
-            return SkillCastResult.Fail(GlobalCooldownReason);
+            return SkillCastResult.Fail(ArenaConfig.GlobalCooldownReason);
         }
 
         var player = GetPlayerActor(state);
         if (player is null)
         {
-            return SkillCastResult.Fail(NoTargetReason);
+            return SkillCastResult.Fail(ArenaConfig.NoTargetReason);
         }
 
-        if (string.Equals(normalizedSkillId, ExoriSkillId, StringComparison.Ordinal))
+        if (string.Equals(normalizedSkillId, ArenaConfig.ExoriSkillId, StringComparison.Ordinal))
         {
             var hitAnyTarget = ApplyAreaSquareSkill(
                 state,
@@ -1192,15 +1010,15 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                 player,
                 radius: 1,
                 damage: 10,
-                fxId: ExoriFxId,
-                element: ExoriElement,
+                fxId: ArenaConfig.ExoriFxId,
+                element: ArenaConfig.ExoriElement,
                 ref pendingLifeLeechHeal);
             ApplyPlayerCooldownsForCast(state, skill);
-            GrantPlayerShield(state, events, PlayerShieldGainPerAction);
-            return SkillCastResult.Ok(hitAnyTarget ? null : NoTargetReason);
+            GrantPlayerShield(state, events, ArenaConfig.PlayerShieldGainPerAction);
+            return SkillCastResult.Ok(hitAnyTarget ? null : ArenaConfig.NoTargetReason);
         }
 
-        if (string.Equals(normalizedSkillId, ExoriMasSkillId, StringComparison.Ordinal))
+        if (string.Equals(normalizedSkillId, ArenaConfig.ExoriMasSkillId, StringComparison.Ordinal))
         {
             var hitAnyTarget = ApplyAreaDiamondSkill(
                 state,
@@ -1208,49 +1026,49 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                 player,
                 radius: 2,
                 damage: 7,
-                fxId: ExoriMasFxId,
-                element: ExoriMasElement,
+                fxId: ArenaConfig.ExoriMasFxId,
+                element: ArenaConfig.ExoriMasElement,
                 ref pendingLifeLeechHeal);
             ApplyPlayerCooldownsForCast(state, skill);
-            GrantPlayerShield(state, events, PlayerShieldGainPerAction);
-            return SkillCastResult.Ok(hitAnyTarget ? null : NoTargetReason);
+            GrantPlayerShield(state, events, ArenaConfig.PlayerShieldGainPerAction);
+            return SkillCastResult.Ok(hitAnyTarget ? null : ArenaConfig.NoTargetReason);
         }
 
-        if (string.Equals(normalizedSkillId, ExoriMinSkillId, StringComparison.Ordinal))
+        if (string.Equals(normalizedSkillId, ArenaConfig.ExoriMinSkillId, StringComparison.Ordinal))
         {
             var hitAnyTarget = ApplyFrontalMeleeSkill(
                 state,
                 events,
                 player,
                 damage: 15,
-                fxId: ExoriMinFxId,
-                element: ExoriMinElement,
+                fxId: ArenaConfig.ExoriMinFxId,
+                element: ArenaConfig.ExoriMinElement,
                 ref pendingLifeLeechHeal);
             ApplyPlayerCooldownsForCast(state, skill);
-            GrantPlayerShield(state, events, PlayerShieldGainPerAction);
-            return SkillCastResult.Ok(hitAnyTarget ? null : NoTargetReason);
+            GrantPlayerShield(state, events, ArenaConfig.PlayerShieldGainPerAction);
+            return SkillCastResult.Ok(hitAnyTarget ? null : ArenaConfig.NoTargetReason);
         }
 
-        if (string.Equals(normalizedSkillId, HealSkillId, StringComparison.Ordinal))
+        if (string.Equals(normalizedSkillId, ArenaConfig.HealSkillId, StringComparison.Ordinal))
         {
             ApplySelfHealSkill(state, events, player, skill);
             ApplyPlayerCooldownsForCast(state, skill);
             return SkillCastResult.Ok(null);
         }
 
-        if (string.Equals(normalizedSkillId, GuardSkillId, StringComparison.Ordinal))
+        if (string.Equals(normalizedSkillId, ArenaConfig.GuardSkillId, StringComparison.Ordinal))
         {
             ApplyGuardSkill(events, player, skill);
             ApplyPlayerCooldownsForCast(state, skill);
             return SkillCastResult.Ok(null);
         }
 
-        if (string.Equals(normalizedSkillId, AvalancheSkillId, StringComparison.Ordinal))
+        if (string.Equals(normalizedSkillId, ArenaConfig.AvalancheSkillId, StringComparison.Ordinal))
         {
             var targetResolution = TryResolveAvalancheCastTarget(state, player);
             if (!targetResolution.HasTarget)
             {
-                return SkillCastResult.Fail(targetResolution.FailReason ?? NoTargetReason);
+                return SkillCastResult.Fail(targetResolution.FailReason ?? ArenaConfig.NoTargetReason);
             }
 
             var hitAnyTarget = ApplyGroundSquareSkillAt(
@@ -1259,17 +1077,17 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                 targetResolution.TileX,
                 targetResolution.TileY,
                 radius: 1,
-                damage: AvalancheDamage,
-                fxId: AvalancheFxId,
-                element: AvalancheElement,
+                damage: ArenaConfig.AvalancheDamage,
+                fxId: ArenaConfig.AvalancheFxId,
+                element: ArenaConfig.AvalancheElement,
                 attacker: player,
                 ref pendingLifeLeechHeal);
             ApplyPlayerCooldownsForCast(state, skill);
-            GrantPlayerShield(state, events, PlayerShieldGainPerAction);
-            return SkillCastResult.Ok(hitAnyTarget ? null : NoTargetReason);
+            GrantPlayerShield(state, events, ArenaConfig.PlayerShieldGainPerAction);
+            return SkillCastResult.Ok(hitAnyTarget ? null : ArenaConfig.NoTargetReason);
         }
 
-        return SkillCastResult.Fail(UnknownSkillReason);
+        return SkillCastResult.Fail(ArenaConfig.UnknownSkillReason);
     }
 
     private static void ApplyPlayerCooldownsForCast(StoredBattle state, StoredSkill skill)
@@ -1325,7 +1143,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
 
         if (assist.AutoGuardEnabled && hpPercent <= assist.GuardAtHpPercent)
         {
-            if (TryApplyAssistSkillCast(state, events, GuardSkillId, AssistReasonAutoGuard, ref pendingLifeLeechHeal))
+            if (TryApplyAssistSkillCast(state, events, ArenaConfig.GuardSkillId, ArenaConfig.AssistReasonAutoGuard, ref pendingLifeLeechHeal))
             {
                 return true;
             }
@@ -1333,7 +1151,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
 
         if (assist.AutoHealEnabled && hpPercent <= assist.HealAtHpPercent)
         {
-            if (TryApplyAssistSkillCast(state, events, HealSkillId, AssistReasonAutoHeal, ref pendingLifeLeechHeal))
+            if (TryApplyAssistSkillCast(state, events, ArenaConfig.HealSkillId, ArenaConfig.AssistReasonAutoHeal, ref pendingLifeLeechHeal))
             {
                 return true;
             }
@@ -1366,7 +1184,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                 continue;
             }
 
-            if (TryApplyAssistSkillCast(state, events, skillId, AssistReasonAutoOffense, ref pendingLifeLeechHeal))
+            if (TryApplyAssistSkillCast(state, events, skillId, ArenaConfig.AssistReasonAutoOffense, ref pendingLifeLeechHeal))
             {
                 return true;
             }
@@ -1412,7 +1230,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             .Where(tile =>
             {
                 var distance = ComputeChebyshevDistance(tile.TileX, tile.TileY, spawnCenterX, spawnCenterY);
-                return distance >= MobSpawnRingMinDistance && distance <= MobSpawnRingMaxDistance;
+                return distance >= ArenaConfig.MobSpawnRingMinDistance && distance <= ArenaConfig.MobSpawnRingMaxDistance;
             })
             .ToList();
 
@@ -1428,7 +1246,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             mobType: slot.Archetype,
             isElite: spawnAsElite,
             buffSourceEliteId: null,
-            facingDirection: FacingUp,
+            facingDirection: ArenaConfig.FacingUp,
             tileX: tile.TileX,
             tileY: tile.TileY,
             hp: maxHp,
@@ -1549,7 +1367,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             fromActor: player,
             toActor: targetMob,
             elementType: playerBaseElement,
-            durationMs: MeleeSwingDurationMs);
+            durationMs: ArenaConfig.MeleeSwingDurationMs);
 
         events.Add(new FxSpawnEventDto(
             FxId: "fx.hit.small",
@@ -1563,11 +1381,11 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             state,
             events,
             targetMob,
-            PlayerAutoAttackDamage,
+            ArenaConfig.PlayerAutoAttackDamage,
             playerBaseElement,
             attacker: player);
         pendingLifeLeechHeal += ComputeLifeLeechHeal(hpDamageApplied);
-        GrantPlayerShield(state, events, PlayerShieldGainPerAction);
+        GrantPlayerShield(state, events, ArenaConfig.PlayerShieldGainPerAction);
         state.PlayerAttackCooldownRemainingMs = ResolvePlayerAutoAttackCooldownMs(state);
     }
 
@@ -1666,15 +1484,15 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                 ? CombatFxKind.RangedProjectile
                 : CombatFxKind.MeleeSwing;
             var attackFxDuration = attackFxKind == CombatFxKind.RangedProjectile
-                ? RangedProjectileDurationMs
-                : MeleeSwingDurationMs;
+                ? ArenaConfig.RangedProjectileDurationMs
+                : ArenaConfig.MeleeSwingDurationMs;
             EmitAttackFx(
                 state,
                 events,
                 attackFxKind,
                 fromActor: liveMob,
                 toActor: player,
-                elementType: DefaultMobElement,
+                elementType: ArenaConfig.DefaultMobElement,
                 durationMs: attackFxDuration);
 
             events.Add(new FxSpawnEventDto(
@@ -1683,14 +1501,14 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                 TileY: player.TileY,
                 Layer: "hitFx",
                 DurationMs: 620,
-                Element: DefaultMobElement));
+                Element: ArenaConfig.DefaultMobElement));
 
             ApplyDamageToPlayer(
                 state,
                 events,
                 player,
                 ResolveMobOutgoingDamage(state, liveMob, config.AutoAttackDamage),
-                DefaultMobElement,
+                ArenaConfig.DefaultMobElement,
                 attacker: liveMob,
                 isRangedAutoAttack: config.AutoAttackRangeTiles > 1);
             slot.AttackCooldownRemainingMs = ResolveMobAutoAttackCooldownMs(config, liveMob);
@@ -1768,15 +1586,15 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             fxKind: CombatFxKind.MeleeSwing,
             fromActor: mob,
             toActor: player,
-            elementType: DefaultMobElement,
-            durationMs: MeleeSwingDurationMs);
-        EmitFxForTiles(events, tiles, config.AbilityFxId, DefaultMobElement);
+            elementType: ArenaConfig.DefaultMobElement,
+            durationMs: ArenaConfig.MeleeSwingDurationMs);
+        EmitFxForTiles(events, tiles, config.AbilityFxId, ArenaConfig.DefaultMobElement);
         ApplyDamageToPlayer(
             state,
             events,
             player,
             ResolveMobOutgoingDamage(state, mob, config.AbilityDamage),
-            DefaultMobElement,
+            ArenaConfig.DefaultMobElement,
             attacker: mob);
         return true;
     }
@@ -1801,15 +1619,15 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             fxKind: CombatFxKind.RangedProjectile,
             fromActor: mob,
             toActor: player,
-            elementType: DefaultMobElement,
-            durationMs: RangedProjectileDurationMs);
-        EmitFxForTiles(events, tiles, config.AbilityFxId, DefaultMobElement);
+            elementType: ArenaConfig.DefaultMobElement,
+            durationMs: ArenaConfig.RangedProjectileDurationMs);
+        EmitFxForTiles(events, tiles, config.AbilityFxId, ArenaConfig.DefaultMobElement);
         ApplyDamageToPlayer(
             state,
             events,
             player,
             ResolveMobOutgoingDamage(state, mob, config.AbilityDamage),
-            DefaultMobElement,
+            ArenaConfig.DefaultMobElement,
             attacker: mob);
         return true;
     }
@@ -1830,7 +1648,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             return false;
         }
 
-        EmitFxForTiles(events, lineTiles, config.AbilityFxId, DefaultMobElement);
+        EmitFxForTiles(events, lineTiles, config.AbilityFxId, ArenaConfig.DefaultMobElement);
         if (playerCollinearInFront)
         {
             ApplyDamageToPlayer(
@@ -1838,7 +1656,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                 events,
                 player,
                 ResolveMobOutgoingDamage(state, mob, config.AbilityDamage),
-                DefaultMobElement,
+                ArenaConfig.DefaultMobElement,
                 attacker: mob);
         }
 
@@ -1860,13 +1678,13 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             return false;
         }
 
-        EmitFxForTiles(events, coneTiles, config.AbilityFxId, DefaultMobElement);
+        EmitFxForTiles(events, coneTiles, config.AbilityFxId, ArenaConfig.DefaultMobElement);
         ApplyDamageToPlayer(
             state,
             events,
             player,
             ResolveMobOutgoingDamage(state, mob, config.AbilityDamage),
-            DefaultMobElement,
+            ArenaConfig.DefaultMobElement,
             attacker: mob);
         return true;
     }
@@ -1948,7 +1766,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
     private static AvalancheCastTargetResolution TryResolveAvalancheCastTarget(StoredBattle state, StoredActor player)
     {
         // Find the in-range tile whose 3x3 square (radius 1) would hit the most mobs.
-        // Scan row-major (Y then X) for a deterministic tie-break — first tile with max count wins.
+        // Scan row-major (Y then X) for a deterministic tie-break â€” first tile with max count wins.
         int? bestX = null;
         int? bestY = null;
         var bestCount = 0;
@@ -1957,7 +1775,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         {
             for (var cx = 0; cx < ArenaConfig.Width; cx++)
             {
-                if (ComputeManhattanDistance(player.TileX, player.TileY, cx, cy) > AvalancheRangeTilesManhattan)
+                if (ComputeManhattanDistance(player.TileX, player.TileY, cx, cy) > ArenaConfig.AvalancheRangeTilesManhattan)
                 {
                     continue;
                 }
@@ -1977,7 +1795,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
 
         if (bestX is null || bestCount == 0)
         {
-            return AvalancheCastTargetResolution.Fail(NoTargetReason);
+            return AvalancheCastTargetResolution.Fail(ArenaConfig.NoTargetReason);
         }
 
         return AvalancheCastTargetResolution.Success(bestX.Value, bestY!.Value);
@@ -2066,7 +1884,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             return BattleHitKinds.Normal;
         }
 
-        return NextIntFromCritRng(state, 100) < CriticalHitChancePercent
+        return NextIntFromCritRng(state, 100) < ArenaConfig.CriticalHitChancePercent
             ? BattleHitKinds.Crit
             : BattleHitKinds.Normal;
     }
@@ -2074,11 +1892,11 @@ public sealed partial class InMemoryBattleStore : IBattleStore
     private static void EmitCritTextEvent(List<BattleEventDto> events, int tileX, int tileY, long startAtMs)
     {
         events.Add(new CritTextEventDto(
-            Text: CritTextLabel,
+            Text: ArenaConfig.CritTextLabel,
             TileX: tileX,
             TileY: tileY,
             StartAtMs: startAtMs,
-            DurationMs: CritTextDurationMs));
+            DurationMs: ArenaConfig.CritTextDurationMs));
     }
 
     private static IEnumerable<string> ResolveMobIdsOnTiles(StoredBattle state, IReadOnlyList<(int TileX, int TileY)> tiles)
@@ -2197,11 +2015,11 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                 ToTileX: player.TileX,
                 ToTileY: player.TileY,
                 ElementType: element,
-                DurationMs: DeathBurstDurationMs,
+                DurationMs: ArenaConfig.DeathBurstDurationMs,
                 CreatedAtTick: state.Tick,
                 EventId: NextTickEventId(state)));
             player.Shield = 0;
-            EndRun(state, events, RunEndReasonDefeatDeath);
+            EndRun(state, events, ArenaConfig.RunEndReasonDefeatDeath);
         }
     }
 
@@ -2232,17 +2050,17 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             return;
         }
 
-        var reflectedBase = (int)Math.Floor(incomingDamageAppliedToPlayer * (KinaReflectPercent / 100.0d));
+        var reflectedBase = (int)Math.Floor(incomingDamageAppliedToPlayer * (ArenaConfig.KinaReflectPercent / 100.0d));
         reflectedBase = Math.Max(1, reflectedBase);
         var reflectedDamage = reflectedBase;
         if (attacker.MobType is MobArchetype attackerArchetype && IsRangedArchetype(attackerArchetype))
         {
-            reflectedDamage *= KinaRangedReflectMultiplier;
+            reflectedDamage *= ArenaConfig.KinaRangedReflectMultiplier;
         }
 
-        if (IsBuffActive(state, ThornsBoostBuffId))
+        if (IsBuffActive(state, ArenaConfig.ThornsBoostBuffId))
         {
-            reflectedDamage = ApplyPercentIncrease(reflectedDamage, ThornsBoostBonusPercent);
+            reflectedDamage = ApplyPercentIncrease(reflectedDamage, ArenaConfig.ThornsBoostBonusPercent);
         }
 
         events.Add(new ReflectEventDto(
@@ -2270,7 +2088,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
     private static bool IsKinaReflectEnabled(StoredBattle state, StoredActor player)
     {
         return string.Equals(player.Kind, "player", StringComparison.Ordinal) &&
-               string.Equals(state.PlayerClassId, PlayerClassKina, StringComparison.Ordinal);
+               string.Equals(state.PlayerClassId, ArenaConfig.PlayerClassKina, StringComparison.Ordinal);
     }
 
     private static void GrantPlayerShield(StoredBattle state, List<BattleEventDto> events, int amount)
@@ -2402,7 +2220,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             ToTileX: mob.TileX,
             ToTileY: mob.TileY,
             ElementType: element,
-            DurationMs: DeathBurstDurationMs,
+            DurationMs: ArenaConfig.DeathBurstDurationMs,
             CreatedAtTick: state.Tick,
             EventId: NextTickEventId(state)));
         AddCorpseDecal(state, mob);
@@ -2417,7 +2235,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
 
         if (mob.MobSlotIndex is int slotIndex && state.MobSlots.TryGetValue(slotIndex, out var slot))
         {
-            slot.RespawnRemainingMs = MobRespawnDelayMs;
+            slot.RespawnRemainingMs = ArenaConfig.MobRespawnDelayMs;
             slot.AttackCooldownRemainingMs = 0;
             slot.AbilityCooldownRemainingMs = 0;
             slot.MoveCooldownRemainingMs = 0;
@@ -2541,7 +2359,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             return;
         }
 
-        if (state.CardSelectionsGranted >= MaxCardSelectionsPerRun)
+        if (state.CardSelectionsGranted >= ArenaConfig.MaxCardSelectionsPerRun)
         {
             return;
         }
@@ -2577,7 +2395,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             return [];
         }
 
-        var offerCount = Math.Min(MaxCardOfferCount, availableCards.Count);
+        var offerCount = Math.Min(ArenaConfig.MaxCardOfferCount, availableCards.Count);
         var offeredCards = new List<CardDefinition>(offerCount);
         for (var index = 0; index < offerCount; index += 1)
         {
@@ -2647,10 +2465,10 @@ public sealed partial class InMemoryBattleStore : IBattleStore
     private static bool ExceedsDistinctPassiveCap(StoredBattle state, CardDefinition card)
     {
         if (card.IsSkillCard) return false;
-        if (GetCardStackCount(state, card.Id) > 0) return false; // already owned — stacking OK
+        if (GetCardStackCount(state, card.Id) > 0) return false; // already owned â€” stacking OK
         var distinctPassiveCount = state.SelectedCardStacks
             .Count(kvp => kvp.Value > 0 && CardById.TryGetValue(kvp.Key, out var def) && !def.IsSkillCard);
-        return distinctPassiveCount >= MaxDistinctPassiveCards;
+        return distinctPassiveCount >= ArenaConfig.MaxDistinctPassiveCards;
     }
 
     private static bool IsCardBannedByCurrentLoadout(StoredBattle state, string cardId)
@@ -2720,7 +2538,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                     skillId: card.SkillId,
                     cooldownRemainingMs: 0,
                     cooldownTotalMs: ResolveBaseSkillCooldownTotalMs(card.SkillId),
-                    level: SkillInitialLevel);
+                    level: ArenaConfig.SkillInitialLevel);
             }
 
             return;
@@ -2737,7 +2555,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         state.PlayerModifiers.GlobalCooldownReductionPercent = Math.Clamp(
             state.PlayerModifiers.GlobalCooldownReductionPercent + Math.Max(0, scaledEffects.GlobalCooldownReductionPercent),
             0,
-            MaxGlobalCooldownReductionPercent);
+            ArenaConfig.MaxGlobalCooldownReductionPercent);
 
         var resolvedMaxHp = ResolvePlayerMaxHp(state);
         player.MaxHp = resolvedMaxHp;
@@ -2775,7 +2593,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             return 0;
         }
 
-        return IsEliteMob(mob) ? EliteMobKillXp : NormalMobKillXp;
+        return IsEliteMob(mob) ? ArenaConfig.EliteMobKillXp : ArenaConfig.NormalMobKillXp;
     }
 
     private static bool IsEliteMob(StoredActor mob)
@@ -2798,8 +2616,8 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             tileX: entity.TileX,
             tileY: entity.TileY,
             spriteKey: null,
-            remainingMs: CorpseDecalLifetimeMs,
-            totalMs: CorpseDecalLifetimeMs,
+            remainingMs: ArenaConfig.CorpseDecalLifetimeMs,
+            totalMs: ArenaConfig.CorpseDecalLifetimeMs,
             createdTick: state.Tick));
     }
 
@@ -2810,7 +2628,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             return 0;
         }
 
-        return (int)Math.Floor(hpDamageApplied * (PlayerLifeLeechPercent / 100.0d));
+        return (int)Math.Floor(hpDamageApplied * (ArenaConfig.PlayerLifeLeechPercent / 100.0d));
     }
 
     private static void ApplyPlayerFlatHpOnHit(StoredBattle state, List<BattleEventDto> events)
@@ -2856,12 +2674,12 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         var maxHealAmount = ComputePercentValue(player.MaxHp, ResolveSkillHealPercent(skill));
 
         events.Add(new FxSpawnEventDto(
-            FxId: HealFxId,
+            FxId: ArenaConfig.HealFxId,
             TileX: player.TileX,
             TileY: player.TileY,
             Layer: "hitFx",
             DurationMs: 620,
-            Element: HealElement));
+            Element: ArenaConfig.HealElement));
 
         return ApplyPlayerHeal(state, events, player, maxHealAmount, "skill_heal");
     }
@@ -2879,12 +2697,12 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         var appliedShield = Math.Max(0, player.Shield - previousShield);
 
         events.Add(new FxSpawnEventDto(
-            FxId: GuardFxId,
+            FxId: ArenaConfig.GuardFxId,
             TileX: player.TileX,
             TileY: player.TileY,
             Layer: "hitFx",
             DurationMs: 620,
-            Element: GuardElement));
+            Element: ArenaConfig.GuardElement));
 
         if (appliedShield > 0)
         {
@@ -2926,9 +2744,9 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         }
 
         var finalHealAmount = baseHealAmount;
-        if (IsBuffActive(state, HealingAmplifierBuffId))
+        if (IsBuffActive(state, ArenaConfig.HealingAmplifierBuffId))
         {
-            finalHealAmount += ComputeFloorPercentValue(player.MaxHp, HealAmplifierBonusPercent);
+            finalHealAmount += ComputeFloorPercentValue(player.MaxHp, ArenaConfig.HealAmplifierBonusPercent);
         }
 
         var appliedHeal = Math.Min(finalHealAmount, missingHp);
@@ -2969,7 +2787,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
 
     private static bool IsDefeat(StoredBattle state)
     {
-        return string.Equals(state.BattleStatus, StatusDefeat, StringComparison.Ordinal);
+        return string.Equals(state.BattleStatus, ArenaConfig.StatusDefeat, StringComparison.Ordinal);
     }
 
     private static bool TryEndRunIfNeeded(StoredBattle state, List<BattleEventDto> events)
@@ -2982,14 +2800,14 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         var player = GetPlayerActor(state);
         if (player is null || player.Hp <= 0)
         {
-            EndRun(state, events, RunEndReasonDefeatDeath);
+            EndRun(state, events, ArenaConfig.RunEndReasonDefeatDeath);
             return true;
         }
 
         var nowMs = GetElapsedMsForTick(state.Tick);
         if (nowMs >= ArenaConfig.RunDurationMs)
         {
-            EndRun(state, events, RunEndReasonVictoryTime);
+            EndRun(state, events, ArenaConfig.RunEndReasonVictoryTime);
             return true;
         }
 
@@ -3003,16 +2821,16 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             return;
         }
 
-        var resolvedReason = string.Equals(runEndReason, RunEndReasonDefeatDeath, StringComparison.Ordinal)
-            ? RunEndReasonDefeatDeath
-            : RunEndReasonVictoryTime;
+        var resolvedReason = string.Equals(runEndReason, ArenaConfig.RunEndReasonDefeatDeath, StringComparison.Ordinal)
+            ? ArenaConfig.RunEndReasonDefeatDeath
+            : ArenaConfig.RunEndReasonVictoryTime;
         var endedAtMs = GetElapsedMsForTick(state.Tick);
         state.IsRunEnded = true;
         state.RunEndReason = resolvedReason;
         state.RunEndedAtMs = endedAtMs;
-        state.BattleStatus = string.Equals(resolvedReason, RunEndReasonDefeatDeath, StringComparison.Ordinal)
-            ? StatusDefeat
-            : StatusVictory;
+        state.BattleStatus = string.Equals(resolvedReason, ArenaConfig.RunEndReasonDefeatDeath, StringComparison.Ordinal)
+            ? ArenaConfig.StatusDefeat
+            : ArenaConfig.StatusVictory;
         state.IsPaused = false;
         events?.Add(new RunEndedEventDto(
             Reason: resolvedReason,
@@ -3021,7 +2839,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
 
     private static bool IsStarted(StoredBattle state)
     {
-        return string.Equals(state.BattleStatus, StatusStarted, StringComparison.Ordinal);
+        return string.Equals(state.BattleStatus, ArenaConfig.StatusStarted, StringComparison.Ordinal);
     }
 
     private static bool IsAdjacent(StoredActor left, StoredActor right)
@@ -3161,25 +2979,25 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         var normalizedFacing = ResolveCardinalFacingForSkills(facingDirection);
         return normalizedFacing switch
         {
-            FacingUp =>
+            ArenaConfig.FacingUp =>
             [
                 (playerX - 1, playerY - 1),
                 (playerX, playerY - 1),
                 (playerX + 1, playerY - 1)
             ],
-            FacingDown =>
+            ArenaConfig.FacingDown =>
             [
                 (playerX - 1, playerY + 1),
                 (playerX, playerY + 1),
                 (playerX + 1, playerY + 1)
             ],
-            FacingLeft =>
+            ArenaConfig.FacingLeft =>
             [
                 (playerX - 1, playerY - 1),
                 (playerX - 1, playerY),
                 (playerX - 1, playerY + 1)
             ],
-            FacingRight =>
+            ArenaConfig.FacingRight =>
             [
                 (playerX + 1, playerY - 1),
                 (playerX + 1, playerY),
@@ -3196,13 +3014,13 @@ public sealed partial class InMemoryBattleStore : IBattleStore
 
     private static string ResolveCardinalFacingForSkills(string facingDirection)
     {
-        var normalizedFacing = NormalizeDirection(facingDirection) ?? FacingUp;
+        var normalizedFacing = NormalizeDirection(facingDirection) ?? ArenaConfig.FacingUp;
         return normalizedFacing switch
         {
-            FacingUpRight => FacingRight,
-            FacingDownRight => FacingRight,
-            FacingUpLeft => FacingLeft,
-            FacingDownLeft => FacingLeft,
+            ArenaConfig.FacingUpRight => ArenaConfig.FacingRight,
+            ArenaConfig.FacingDownRight => ArenaConfig.FacingRight,
+            ArenaConfig.FacingUpLeft => ArenaConfig.FacingLeft,
+            ArenaConfig.FacingDownLeft => ArenaConfig.FacingLeft,
             _ => normalizedFacing
         };
     }
@@ -3543,7 +3361,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
         foreach (var (eliteActorId, buffCount) in buffCountByElite)
         {
-            if (buffCount > EliteCommanderMaxBuffTargets)
+            if (buffCount > ArenaConfig.EliteCommanderMaxBuffTargets)
             {
                 throw new InvalidOperationException(
                     $"Elite '{eliteActorId}' exceeded buff cap: {buffCount}.");
@@ -3568,7 +3386,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                 $"Player move cooldown is invalid: {state.PlayerMoveCooldownRemainingMs}.");
         }
 
-        if (state.RunLevel < RunInitialLevel)
+        if (state.RunLevel < ArenaConfig.RunInitialLevel)
         {
             throw new InvalidOperationException($"Run level is invalid: {state.RunLevel}.");
         }
@@ -3587,7 +3405,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
 
         foreach (var skill in state.Skills.Values.OrderBy(value => value.SkillId, StringComparer.Ordinal))
         {
-            if (skill.Level < SkillInitialLevel)
+            if (skill.Level < ArenaConfig.SkillInitialLevel)
             {
                 throw new InvalidOperationException($"Skill level is invalid for '{skill.SkillId}': {skill.Level}.");
             }
@@ -3629,7 +3447,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             throw new InvalidOperationException("Run end reason/timestamp must be null while run is active.");
         }
 
-        if (state.CardSelectionsGranted < 0 || state.CardSelectionsGranted > MaxCardSelectionsPerRun)
+        if (state.CardSelectionsGranted < 0 || state.CardSelectionsGranted > ArenaConfig.MaxCardSelectionsPerRun)
         {
             throw new InvalidOperationException($"Card selection count is invalid: {state.CardSelectionsGranted}.");
         }
@@ -3706,7 +3524,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             }
 
             if (state.PendingCardChoice.OfferedCardIds.Count == 0 ||
-                state.PendingCardChoice.OfferedCardIds.Count > MaxCardOfferCount)
+                state.PendingCardChoice.OfferedCardIds.Count > ArenaConfig.MaxCardOfferCount)
             {
                 throw new InvalidOperationException(
                     $"Pending card offer count is invalid: {state.PendingCardChoice.OfferedCardIds.Count}.");
@@ -3746,7 +3564,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             state.PlayerModifiers.PercentMaxHpBonus < 0 ||
             state.PlayerModifiers.FlatHpOnHit < 0 ||
             state.PlayerModifiers.GlobalCooldownReductionPercent < 0 ||
-            state.PlayerModifiers.GlobalCooldownReductionPercent > MaxGlobalCooldownReductionPercent)
+            state.PlayerModifiers.GlobalCooldownReductionPercent > ArenaConfig.MaxGlobalCooldownReductionPercent)
         {
             throw new InvalidOperationException("Player card modifiers are invalid.");
         }
@@ -3852,7 +3670,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         }
 
         var activeAltarCount = state.Pois.Values.Count(poi =>
-            string.Equals(poi.Type, PoiTypeAltar, StringComparison.Ordinal) &&
+            string.Equals(poi.Type, ArenaConfig.PoiTypeAltar, StringComparison.Ordinal) &&
             poi.ExpiresAtMs > nowMs);
         if (activeAltarCount > 1)
         {
@@ -4238,7 +4056,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             MobType = mobType;
             IsElite = isElite;
             BuffSourceEliteId = buffSourceEliteId;
-            FacingDirection = NormalizeDirection(facingDirection) ?? FacingUp;
+            FacingDirection = NormalizeDirection(facingDirection) ?? ArenaConfig.FacingUp;
             TileX = tileX;
             TileY = tileY;
             Hp = hp;
@@ -4282,7 +4100,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             SkillId = skillId;
             CooldownRemainingMs = cooldownRemainingMs;
             CooldownTotalMs = cooldownTotalMs;
-            Level = Math.Max(SkillInitialLevel, level);
+            Level = Math.Max(ArenaConfig.SkillInitialLevel, level);
         }
 
         public string SkillId { get; }

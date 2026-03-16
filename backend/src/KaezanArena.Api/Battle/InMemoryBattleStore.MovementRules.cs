@@ -117,7 +117,7 @@ public sealed partial class InMemoryBattleStore
             return;
         }
 
-        slot.CommitTicksRemaining = RangedCommitWindowTicks;
+        slot.CommitTicksRemaining = ArenaConfig.RangedCommitWindowTicks;
     }
 
     private static bool IsRangedArchetype(MobArchetype archetype)
@@ -140,7 +140,7 @@ public sealed partial class InMemoryBattleStore
         }
 
         var distance = ComputeChebyshevDistance(mob, player.TileX, player.TileY);
-        if (distance >= RangedApproachDistance)
+        if (distance >= ArenaConfig.RangedApproachDistance)
         {
             return TryGetFirstWalkableGreedyStepTowardTarget(state, mob, player.TileX, player.TileY, out destination);
         }
@@ -177,7 +177,7 @@ public sealed partial class InMemoryBattleStore
             }
 
             var nextDistance = ComputeChebyshevDistance(candidate.TileX, candidate.TileY, player.TileX, player.TileY);
-            if (nextDistance < RangedPreferredDistanceMin || nextDistance > RangedPreferredDistanceMax)
+            if (nextDistance < ArenaConfig.RangedPreferredDistanceMin || nextDistance > ArenaConfig.RangedPreferredDistanceMax)
             {
                 continue;
             }
@@ -240,24 +240,24 @@ public sealed partial class InMemoryBattleStore
         {
             if (deltaX > 0)
             {
-                return FacingRight;
+                return ArenaConfig.FacingRight;
             }
 
             if (deltaX < 0)
             {
-                return FacingLeft;
+                return ArenaConfig.FacingLeft;
             }
         }
         else
         {
             if (deltaY > 0)
             {
-                return FacingDown;
+                return ArenaConfig.FacingDown;
             }
 
             if (deltaY < 0)
             {
-                return FacingUp;
+                return ArenaConfig.FacingUp;
             }
         }
 

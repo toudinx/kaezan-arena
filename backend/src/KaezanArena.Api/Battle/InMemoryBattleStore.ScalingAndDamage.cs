@@ -10,12 +10,12 @@ public sealed partial class InMemoryBattleStore
             ? 1.0d
             : clampedNowMs / (double)ArenaConfig.RunDurationMs;
 
-        var baseMaxAlive = EarlyMobConcurrentCap + (int)Math.Floor(
-            (ArenaConfig.MaxAliveMobs - EarlyMobConcurrentCap) * normalizedRunProgress);
+        var baseMaxAlive = ArenaConfig.EarlyMobConcurrentCap + (int)Math.Floor(
+            (ArenaConfig.MaxAliveMobs - ArenaConfig.EarlyMobConcurrentCap) * normalizedRunProgress);
         var killDrivenMobCapBonus = Math.Min(1, Math.Max(0, state.TotalKills) / 70);
         var maxAliveMobs = Math.Clamp(
             baseMaxAlive + killDrivenMobCapBonus,
-            EarlyMobConcurrentCap,
+            ArenaConfig.EarlyMobConcurrentCap,
             ArenaConfig.MaxAliveMobs);
 
         var timeDrivenEliteBonus = (int)Math.Floor(40d * normalizedRunProgress);
@@ -38,9 +38,9 @@ public sealed partial class InMemoryBattleStore
         }
 
         var adjustedDamage = baseDamage;
-        if (isRangedAutoAttack && IsBuffActive(state, AntiRangedPressureBuffId))
+        if (isRangedAutoAttack && IsBuffActive(state, ArenaConfig.AntiRangedPressureBuffId))
         {
-            adjustedDamage = ApplyPercentReduction(adjustedDamage, AntiRangedPressureReductionPercent);
+            adjustedDamage = ApplyPercentReduction(adjustedDamage, ArenaConfig.AntiRangedPressureReductionPercent);
         }
 
         return Math.Max(1, adjustedDamage);
@@ -55,9 +55,9 @@ public sealed partial class InMemoryBattleStore
 
         var adjustedDamage = baseDamage + Math.Max(0, state.PlayerModifiers.FlatDamageBonus);
         adjustedDamage = ApplyPercentIncrease(adjustedDamage, Math.Max(0, state.PlayerModifiers.PercentDamageBonus));
-        if (IsBuffActive(state, DamageBoostBuffId))
+        if (IsBuffActive(state, ArenaConfig.DamageBoostBuffId))
         {
-            adjustedDamage = ApplyPercentIncrease(adjustedDamage, DamageBoostBonusPercent);
+            adjustedDamage = ApplyPercentIncrease(adjustedDamage, ArenaConfig.DamageBoostBonusPercent);
         }
 
         return Math.Max(1, adjustedDamage);
@@ -67,7 +67,7 @@ public sealed partial class InMemoryBattleStore
     {
         var attackSpeedBonusPercent = mob.BuffSourceEliteId is null
             ? 0
-            : EliteCommanderAttackSpeedBonusPercent;
+            : ArenaConfig.EliteCommanderAttackSpeedBonusPercent;
         return Math.Max(
             1,
             ApplyPercentReduction(
@@ -92,7 +92,7 @@ public sealed partial class InMemoryBattleStore
 
         if (attacker.BuffSourceEliteId is not null)
         {
-            adjusted = ApplyPercentIncrease(adjusted, EliteCommanderDamageBonusPercent);
+            adjusted = ApplyPercentIncrease(adjusted, ArenaConfig.EliteCommanderDamageBonusPercent);
         }
 
         return Math.Max(1, adjusted);
@@ -132,12 +132,12 @@ public sealed partial class InMemoryBattleStore
     private static ScalingDirectorV2 ResolveScalingDirectorV2(long nowMs, int runLevel)
     {
         var t = Clamp01(Math.Max(0L, nowMs) / (double)ArenaConfig.RunDurationMs);
-        var baseNormalHpMult = Lerp(MobHpMultStart, MobHpMultEnd, t);
-        var normalDmgMult = Lerp(MobDmgMultStart, MobDmgMultEnd, t);
-        var baseEliteHpMult = baseNormalHpMult * EliteHpMultiplierFactor;
-        var eliteDmgMult = normalDmgMult * EliteDmgMultiplierFactor;
+        var baseNormalHpMult = Lerp(ArenaConfig.MobHpMultStart, ArenaConfig.MobHpMultEnd, t);
+        var normalDmgMult = Lerp(ArenaConfig.MobDmgMultStart, ArenaConfig.MobDmgMultEnd, t);
+        var baseEliteHpMult = baseNormalHpMult * ArenaConfig.EliteHpMultiplierFactor;
+        var eliteDmgMult = normalDmgMult * ArenaConfig.EliteDmgMultiplierFactor;
 
-        var lvlFactor = IsRunLevelHpSeasoningEnabled
+        var lvlFactor = ArenaConfig.IsRunLevelHpSeasoningEnabled
             ? ResolveRunLevelHpFactor(runLevel)
             : 1.0d;
         return new ScalingDirectorV2(
@@ -146,13 +146,13 @@ public sealed partial class InMemoryBattleStore
             EliteHpMult: baseEliteHpMult * lvlFactor,
             EliteDmgMult: eliteDmgMult,
             LvlFactor: lvlFactor,
-            IsLvlFactorEnabled: IsRunLevelHpSeasoningEnabled);
+            IsLvlFactorEnabled: ArenaConfig.IsRunLevelHpSeasoningEnabled);
     }
 
     private static double ResolveRunLevelHpFactor(int runLevel)
     {
-        var clampedRunLevel = Math.Max(RunInitialLevel, runLevel);
-        return 1.0d + (RunLevelHpSeasoningPerLevel * (clampedRunLevel - RunInitialLevel));
+        var clampedRunLevel = Math.Max(ArenaConfig.RunInitialLevel, runLevel);
+        return 1.0d + (ArenaConfig.RunLevelHpSeasoningPerLevel * (clampedRunLevel - ArenaConfig.RunInitialLevel));
     }
 
     private static int ScaleByMultiplier(int baseValue, double multiplier)
@@ -191,15 +191,15 @@ public sealed partial class InMemoryBattleStore
             return RollDamage(
                 state,
                 baseDamage,
-                PlayerDamageVarianceMinMultiplier,
-                PlayerDamageVarianceMaxMultiplier);
+                ArenaConfig.PlayerDamageVarianceMinMultiplier,
+                ArenaConfig.PlayerDamageVarianceMaxMultiplier);
         }
 
         return RollDamage(
             state,
             baseDamage,
-            MobDamageVarianceMinMultiplier,
-            MobDamageVarianceMaxMultiplier);
+            ArenaConfig.MobDamageVarianceMinMultiplier,
+            ArenaConfig.MobDamageVarianceMaxMultiplier);
     }
 
     private static int RollDamage(StoredBattle state, int baseDamage, double minMultiplier, double maxMultiplier)

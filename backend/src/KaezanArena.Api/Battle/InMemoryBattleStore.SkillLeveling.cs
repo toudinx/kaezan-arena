@@ -4,20 +4,20 @@ public sealed partial class InMemoryBattleStore
 {
     private static readonly string[] InitialSkillOrder =
     [
-        ExoriMinSkillId,
-        HealSkillId,
-        GuardSkillId
+        ArenaConfig.ExoriMinSkillId,
+        ArenaConfig.HealSkillId,
+        ArenaConfig.GuardSkillId
     ];
 
     private static readonly IReadOnlyDictionary<string, int> SkillBaseCooldownTotalMsById =
         new Dictionary<string, int>(StringComparer.Ordinal)
         {
-            [ExoriSkillId] = ExoriCooldownTotalMs,
-            [ExoriMasSkillId] = ExoriMasCooldownTotalMs,
-            [ExoriMinSkillId] = ExoriMinCooldownTotalMs,
-            [HealSkillId] = HealCooldownTotalMs,
-            [GuardSkillId] = GuardCooldownTotalMs,
-            [AvalancheSkillId] = AvalancheCooldownTotalMs
+            [ArenaConfig.ExoriSkillId] = ArenaConfig.ExoriCooldownTotalMs,
+            [ArenaConfig.ExoriMasSkillId] = ArenaConfig.ExoriMasCooldownTotalMs,
+            [ArenaConfig.ExoriMinSkillId] = ArenaConfig.ExoriMinCooldownTotalMs,
+            [ArenaConfig.HealSkillId] = ArenaConfig.HealCooldownTotalMs,
+            [ArenaConfig.GuardSkillId] = ArenaConfig.GuardCooldownTotalMs,
+            [ArenaConfig.AvalancheSkillId] = ArenaConfig.AvalancheCooldownTotalMs
         };
 
     private static Dictionary<string, StoredSkill> BuildInitialSkills()
@@ -29,7 +29,7 @@ public sealed partial class InMemoryBattleStore
                 skillId: skillId,
                 cooldownRemainingMs: 0,
                 cooldownTotalMs: ResolveBaseSkillCooldownTotalMs(skillId),
-                level: SkillInitialLevel);
+                level: ArenaConfig.SkillInitialLevel);
         }
 
         return skills;
@@ -47,8 +47,8 @@ public sealed partial class InMemoryBattleStore
 
     private static int GetXpToNextLevel(int runLevel)
     {
-        var clampedLevel = Math.Max(RunInitialLevel, runLevel);
-        return RunLevelXpBase + ((clampedLevel - RunInitialLevel) * RunLevelXpIncrementPerLevel);
+        var clampedLevel = Math.Max(ArenaConfig.RunInitialLevel, runLevel);
+        return ArenaConfig.RunLevelXpBase + ((clampedLevel - ArenaConfig.RunInitialLevel) * ArenaConfig.RunLevelXpIncrementPerLevel);
     }
 
     private static void ApplyDeterministicSkillUpgradeForRunLevel(StoredBattle state)
@@ -59,7 +59,7 @@ public sealed partial class InMemoryBattleStore
             return;
         }
 
-        upgradedSkill.Level = Math.Max(SkillInitialLevel, upgradedSkill.Level + 1);
+        upgradedSkill.Level = Math.Max(ArenaConfig.SkillInitialLevel, upgradedSkill.Level + 1);
         upgradedSkill.CooldownRemainingMs = Math.Min(
             upgradedSkill.CooldownRemainingMs,
             ResolveSkillCooldownTotalMs(state, upgradedSkill));
@@ -67,39 +67,39 @@ public sealed partial class InMemoryBattleStore
 
     private static string? ResolveDeterministicUpgradeSkillId(int runLevel)
     {
-        if (runLevel <= RunInitialLevel || RunLevelSkillUpgradeOrder.Length == 0)
+        if (runLevel <= ArenaConfig.RunInitialLevel || RunLevelSkillUpgradeOrder.Length == 0)
         {
             return null;
         }
 
-        var upgradeIndex = (runLevel - RunInitialLevel - 1) % RunLevelSkillUpgradeOrder.Length;
+        var upgradeIndex = (runLevel - ArenaConfig.RunInitialLevel - 1) % RunLevelSkillUpgradeOrder.Length;
         return RunLevelSkillUpgradeOrder[upgradeIndex];
     }
 
     private static int ResolveSkillBonusLevels(StoredSkill skill)
     {
-        return Math.Max(0, skill.Level - SkillInitialLevel);
+        return Math.Max(0, skill.Level - ArenaConfig.SkillInitialLevel);
     }
 
     private static int ResolveSkillLevelCooldownReductionPercent(StoredSkill skill)
     {
-        var reduction = ResolveSkillBonusLevels(skill) * SkillCooldownReductionPerLevelPercent;
-        return Math.Clamp(reduction, 0, SkillCooldownReductionMaxPercent);
+        var reduction = ResolveSkillBonusLevels(skill) * ArenaConfig.SkillCooldownReductionPerLevelPercent;
+        return Math.Clamp(reduction, 0, ArenaConfig.SkillCooldownReductionMaxPercent);
     }
 
     private static int ResolveSkillHealPercent(StoredSkill skill)
     {
-        return ResolveSkillScaledPercent(HealPercentOfMaxHp, skill);
+        return ResolveSkillScaledPercent(ArenaConfig.HealPercentOfMaxHp, skill);
     }
 
     private static int ResolveSkillGuardPercent(StoredSkill skill)
     {
-        return ResolveSkillScaledPercent(GuardPercentOfMaxHp, skill);
+        return ResolveSkillScaledPercent(ArenaConfig.GuardPercentOfMaxHp, skill);
     }
 
     private static int ResolveSkillScaledPercent(int basePercent, StoredSkill skill)
     {
-        return basePercent + (ResolveSkillBonusLevels(skill) * SkillDefensivePercentBonusPerLevel);
+        return basePercent + (ResolveSkillBonusLevels(skill) * ArenaConfig.SkillDefensivePercentBonusPerLevel);
     }
 
     private static int ResolveSkillCooldownTotalMs(StoredBattle state, StoredSkill skill)
@@ -116,6 +116,6 @@ public sealed partial class InMemoryBattleStore
         return Math.Clamp(
             state.PlayerModifiers.GlobalCooldownReductionPercent,
             0,
-            MaxGlobalCooldownReductionPercent);
+            ArenaConfig.MaxGlobalCooldownReductionPercent);
     }
 }

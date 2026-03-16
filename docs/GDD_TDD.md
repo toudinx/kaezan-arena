@@ -156,62 +156,75 @@ Run Level reseta a cada run.
 
 9. Skill System
 
-Skills são o principal sistema de build.
+Skills são o principal sistema de build — estilo Vampire Survivors.
 
-Exemplos:
+Personagem começa com:
 
-Auto Attack
-Exori
-Exori Min
-Exori Mas
-Avalanche
+Exori Min (ataque frontal — sempre ativo)
+Heal (cura — sempre ativo)
+Guard (escudo — sempre ativo)
+
+Skills adicionais são desbloqueadas via skill cards obtidas em level-ups:
+
+Exori (AoE quadrado ao redor do personagem)
+Exori Mas (AoE wide diamond)
+Avalanche (zona de AoE no chão)
+
+Todas as skills disparam automaticamente via Assist System — sem casting manual.
+
 Skill Leveling
 
-Level ups permitem evoluir skills.
+Cada level-up abre uma tela de escolha de carta.
 
-Exemplo:
+Possíveis cartas em level-up:
 
-Level 2 → upgrade
-Level 3 → upgrade
-Level 4 → upgrade
-Level 5 → upgrade
-Skill Paths
+Skill cards (desbloqueiam novas skills — ex: Exori, Exori Mas, Avalanche)
+Passive cards (modificadores de run — até 4 tipos distintos, máx 3 stacks cada)
 
-Cada skill possui caminhos.
+Cada skill ganha cooldown reduzido automaticamente conforme evolui.
 
-Exemplo Exori:
+Passive Cards
 
-Damage path
-Cooldown path
-AoE path
+Cartas passivas modificam o personagem durante a run.
 
-Isso cria builds diferentes.
+Limites:
+
+Máx 4 tipos distintos de passivos por run
+Máx 3 stacks por passivo
+
+Exemplos: Colossus Heart, Bloodletter Edge, Frenzy Clockwork, Arcane Tempo
 
 10. Chest System
 
 Baús aparecem durante a run.
 
-Ao abrir um baú:
+Ao abrir um baú (left-click):
 
 run pausa
-player escolhe 1 de 3 cartas
+player escolhe 1 de 3 passive cards
+
+Chests oferecem apenas passive cards — não skill cards.
+
+Skill cards são obtidas exclusivamente em level-ups.
+
 Card System
 
-Cartas modificam a run.
+Cartas passivas modificam a run globalmente.
 
 Exemplos:
 
-Blood Feast
-+life leech
-
-Chain Explosion
-mobs explodem
-
-Overpopulation
-+spawn rate
-+XP
+Bloodletter Edge — +22% damage, +2 HP on hit
+Frenzy Clockwork — +35% attack speed, +8% damage
+Arcane Tempo — +30% global cooldown reduction
+Colossus Heart — +40% max HP, +6 damage
 
 Cartas devem evitar false choices.
+
+Limites por run:
+
+Máx 4 tipos distintos de passivos
+Máx 3 stacks por passivo
+Máx 12 card selections totais por run
 
 11. Character System
 
@@ -320,24 +333,21 @@ Battle:StepDeltaMs
 
 Frontend usa valor do backend.
 
-18. Movement System
+18. Controls & Targeting
 
-Movimento funciona com:
+O player está fixo no tile central (3,3) — sem movimento WASD.
 
-tecla segurada
-comando enviado todo tick
+O combate é posicional via targeting e skills automáticas.
 
-Resultados possíveis:
+Controles ativos:
 
-Accepted
-Blocked
+Left-click em POI → interagir (abrir baú, ativar altar)
+Right-click em mob → lock target (o assist prioriza o target travado)
 
-Razões:
+Teclas removidas:
 
-occupied
-corner block
-cooldown
-out of bounds
+WASD / setas — removidos (player fixo)
+F key — removido (POI interaction agora é left-click)
 19. Replay System
 
 Replays permitem reproduzir runs.
@@ -402,12 +412,17 @@ deterministic RNG
 Componentes principais:
 
 BattleV1Controller
-InMemoryBattleStore
-ArenaConfig
+InMemoryBattleStore (partials: MovementRules, PoiSystem, SkillLeveling, etc.)
+ArenaConfig (todas as constantes — damage, timings, scaling curves, IDs)
 Frontend
 Angular
 snapshot renderer
-input → commands
+input → commands (left-click, right-click, card choice)
+
+HTTP Polling:
+
+POST /step por tick (MAX_TICK_DEBT = 0 atualmente → 1 request por 250ms)
+Batch step implementado (até 16 steps por request, disponível para futuro uso)
 
 Principais páginas:
 
@@ -453,18 +468,21 @@ Sempre priorizando MVP jogável.
 
 O MVP já possui:
 
-arena combat
-enemy spawn
-elite system
-skill leveling
-card chests
-inventory
-characters page
-bestiary
+arena combat (player fixo em centro, skills automáticas)
+enemy spawn + pacing progressivo
+elite commander system
+Vampire Survivors–style skill progression (Exori Min inicial, unlock por cards)
+card system: passive cards (chests), skill cards + passive cards (level-up)
+passive card caps (máx 4 distintos, máx 3 stacks cada)
+assist system (todas as skills disparam automaticamente)
+POI interaction: left-click (chests, altar)
+right-click target lock
+ArenaConfig com todos os constants (clean config system)
+HTTP batch step (MAX_TICK_DEBT = 0 atualmente)
+inventory + characters page + bestiary page
 replay system
-movement fixes
-tick config
-run telemetry
+run telemetry completo (kills, damageDealt, damageTaken, minHpObserved, xpGained)
+Tibia-style UI layout com skills e passivos no painel direito
 
 A base técnica está pronta para expansão.
 

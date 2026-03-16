@@ -14,9 +14,9 @@ public sealed partial class InMemoryBattleStore
             return commandResults;
         }
 
-        var reason = string.Equals(state.BattleStatus, StatusDefeat, StringComparison.Ordinal)
-            ? DefeatReason
-            : NotStartedReason;
+        var reason = string.Equals(state.BattleStatus, ArenaConfig.StatusDefeat, StringComparison.Ordinal)
+            ? ArenaConfig.DefeatReason
+            : ArenaConfig.NotStartedReason;
 
         for (var index = 0; index < commands.Count; index += 1)
         {
@@ -42,14 +42,14 @@ public sealed partial class InMemoryBattleStore
         {
             var command = commands[index];
             var commandType = NormalizeCommandType(command.Type);
-            if (!string.Equals(commandType, SetPausedCommandType, StringComparison.Ordinal))
+            if (!string.Equals(commandType, ArenaConfig.SetPausedCommandType, StringComparison.Ordinal))
             {
                 continue;
             }
 
             if (!command.Paused.HasValue)
             {
-                commandResults[index] = new CommandResultDto(index, commandType, false, UnknownCommandReason);
+                commandResults[index] = new CommandResultDto(index, commandType, false, ArenaConfig.UnknownCommandReason);
                 continue;
             }
 
@@ -79,7 +79,7 @@ public sealed partial class InMemoryBattleStore
             }
 
             var commandType = NormalizeCommandType(commands[index].Type);
-            commandResults.Add(new CommandResultDto(index, commandType, false, PausedReason));
+            commandResults.Add(new CommandResultDto(index, commandType, false, ArenaConfig.PausedReason));
         }
 
         return commandResults;
@@ -104,7 +104,7 @@ public sealed partial class InMemoryBattleStore
             }
 
             var commandType = NormalizeCommandType(commands[index].Type);
-            commandResults.Add(new CommandResultDto(index, commandType, false, AwaitingCardChoiceReason));
+            commandResults.Add(new CommandResultDto(index, commandType, false, ArenaConfig.AwaitingCardChoiceReason));
         }
 
         return commandResults;

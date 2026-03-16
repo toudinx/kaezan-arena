@@ -140,18 +140,25 @@ Chests should create risk/reward decisions.
 
 Skill Power Curve
 
-Skills must scale during the run.
+Skills grow through two mechanisms:
 
-Example structure:
+1. Skill unlocks via level-up cards:
 
-Level	Effect
-Start	basic skill
-Level 2	upgrade
-Level 3	upgrade
-Level 4	upgrade
-Level 5	upgrade
+Run start → Exori Min (only offensive skill)
+First skill card → unlock Exori, Exori Mas, or Avalanche
+More skill cards → unlock remaining offensive skills
 
-Players should feel stronger every ~30 seconds.
+2. Passive card stacking:
+
+Each passive card level increases one or more stats (damage, attack speed, HP, cooldown reduction)
+Passive cards stack up to 3x
+Capped at 4 distinct passive types per run
+
+Players should feel stronger every ~30 seconds via level-ups.
+
+The power curve is driven by:
+- new skill unlocks (step-function power spikes)
+- passive card accumulation (gradual scaling)
 
 Card Impact
 
@@ -170,24 +177,24 @@ spawn modifier
 
 Cards must avoid false choices.
 
-Movement Balance
+Targeting & Interaction Balance
 
-Movement must feel responsive.
+The player is fixed at tile (3,3). There is no movement to balance.
 
-Key constraints:
+Key interaction constraints:
 
-player should escape small traps
-movement should never feel "stuck"
+right-click target lock should visibly guide the assist priority
+left-click POI interaction should feel responsive (no false failures)
 
-Tick interval affects feel.
+Tick interval affects how fast skills fire and how reactive the assist feels.
 
-Possible values:
+Possible tick values:
 
 250ms (default)
 150ms
 100ms
 
-Testing is required to determine the ideal value.
+Testing is required to determine the ideal tick for assist-driven combat.
 
 Tick Rate Impact
 

@@ -167,8 +167,8 @@ public sealed partial class InMemoryBattleStore
     {
         return runEndReason switch
         {
-            RunEndReasonDefeatDeath => EndReasonDeath,
-            RunEndReasonVictoryTime => EndReasonTime,
+            ArenaConfig.RunEndReasonDefeatDeath => ArenaConfig.EndReasonDeath,
+            ArenaConfig.RunEndReasonVictoryTime => ArenaConfig.EndReasonTime,
             _ => null
         };
     }

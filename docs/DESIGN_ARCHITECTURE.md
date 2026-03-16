@@ -141,11 +141,12 @@ Arena grid:
 Rules:
 
 1 entity per tile
-8-direction movement
 Chebyshev distance for melee
 Tibia-style diagonal corner blocking
 
-The player usually begins in the center.
+The player is fixed at the center tile (3,3).
+
+There is no player movement — positioning advantage comes from target selection and skill range decisions.
 
 Enemies spawn dynamically during the run.
 
@@ -228,59 +229,60 @@ Run level always resets at the start of each run.
 
 Skill System
 
-Skills are the core build system of the run.
+Skills are the core build system of the run — Vampire Survivors style.
 
-Instead of unlocking skills via cards, skills evolve through run level upgrades.
+The character starts with:
 
-Example skills:
+Exori Min (frontal melee — unlocked from start)
+Heal (self-heal — unlocked from start)
+Guard (shield — unlocked from start)
 
-Auto Attack
-Exori
-Exori Min
-Exori Mas
-Avalanche
+Additional skills are unlocked during the run via skill cards chosen at level-up:
+
+Exori — square AoE around the player (Chebyshev r=1)
+Exori Mas — wide diamond AoE (r=2)
+Avalanche — ground-targeted AoE zone
+
+All skills fire automatically via the Assist System.
+
+The assist fires defensive skills (Guard → Heal) when HP/shield is low, then offensive skills in priority order (Avalanche → Exori Mas → Exori → Exori Min).
+
+Max 1 auto-cast per tick.
+
 Skill Leveling
 
-Each level up allows upgrading a skill.
+Each level up triggers a card choice screen.
 
-Example:
+Level-up card choice offers both:
 
-Level 2 → upgrade skill
-Level 3 → upgrade skill
-Level 4 → upgrade skill
-Level 5 → upgrade skill
+Skill cards — unlock new skills (available until the skill is already owned)
+Passive cards — global run modifiers (max 3 stacks per card, max 4 distinct passives per run)
 
-Each skill has multiple upgrade paths.
+Chest card choice offers passive cards only — no skill cards.
 
-Example:
+Each skill's cooldown is reduced automatically as it gains levels via run progression.
 
-Exori:
+Passive card cap:
 
-Path A → Damage
-Path B → Cooldown
-Path C → AoE
-
-This creates different builds for the same character.
+Max 4 distinct passive cards per run
+Max 3 stacks per passive card type
 
 Chest System
 
-Chests appear during runs.
+Chests appear during runs and are opened via left-click.
 
 They pause the simulation.
 
-The player chooses 1 of 3 cards.
+The player chooses 1 of 3 passive cards (chests never offer skill cards).
 
-Cards are run modifiers, not skill upgrades.
+Example passive cards:
 
-Example cards:
+Bloodletter Edge — +22% damage, +2 HP on hit
+Frenzy Clockwork — +35% attack speed, +8% damage
+Arcane Tempo — +30% global cooldown reduction
+Colossus Heart — +40% max HP, +6 damage
+Overclocked Reflex — +25% global cooldown reduction, +20% attack speed
 
-Blood Feast
-+40% life leech
-Chain Explosion
-Enemies explode on death
-Overpopulation
-+40% spawn rate
-+40% XP
 Card Design Rules
 
 Cards should avoid false choices.
@@ -293,11 +295,14 @@ Bad design:
 
 Good design:
 
-Damage
-Survival
-Risk modifier
+Damage vs Survival vs Speed trade-offs
 
-Cards should modify the gameplay system, not just numbers.
+Cards modify global run stats (damage, attack speed, HP, cooldown reduction, HP on hit).
+
+System split:
+
+Level-up → skill cards (unlock skills) + passive cards
+Chest → passive cards only
 
 Character System
 
@@ -398,23 +403,22 @@ hp <= maxHp
 
 Violations throw errors in debug builds.
 
-Movement System
+Controls & Targeting
 
-Movement commands are sent every step while keys are held.
+The player is fixed at tile (3,3) — there is no WASD movement.
 
-Movement results:
+Active controls:
 
-Accepted
-Blocked
+Left-click on a POI tile → interact (open chest, activate altar)
+Right-click on a mob → lock target (assist prioritizes the locked target)
 
-Block reasons:
+The F key has been removed. POI interaction is now left-click only.
 
-occupied
-corner block
-cooldown
-out of bounds
+Mob targeting:
 
-This improves responsiveness and debugging.
+The assist system automatically attacks the nearest valid target.
+Right-clicking a mob locks it as the priority attack target.
+Right-clicking empty space clears the lock.
 
 Tick System
 
@@ -428,18 +432,26 @@ Configurable via:
 
 Battle:StepDeltaMs
 
+Range: 50ms – 2000ms.
+
+Frontend schedules steps using the backend-provided value.
+
+HTTP Batch Step:
+
+Batch step is implemented (up to 16 steps per request via stepCount parameter).
+Currently MAX_TICK_DEBT = 0: one HTTP request is sent per tick (standard polling).
+Increasing MAX_TICK_DEBT would batch multiple ticks per request, reducing request rate.
+
 Possible experimentation values:
 
 150ms
 100ms
 
-Frontend schedules steps using the backend-provided value.
-
 Run Telemetry
 
 Runs generate structured telemetry.
 
-Example run result fields:
+Run result fields (all correctly captured):
 
 battleSeed
 duration
@@ -449,15 +461,13 @@ runLevel
 xpGained
 damageDealt
 damageTaken
-minHP
-maxHP
+minHpObserved
 cardsChosen
 drops
 
 Results are:
 
-printed to console
-stored in localStorage
+stored in localStorage (max 30 runs)
 exportable for analysis
 
 Telemetry enables real balance tuning.
@@ -503,19 +513,26 @@ Current MVP Status
 
 The MVP currently includes:
 
-arena combat
-enemy spawning
-elite system
-run XP
-skill leveling
-chest cards
+arena combat (player fixed at center tile 3,3)
+enemy spawning + progressive pacing
+elite commander system
+Vampire Survivors–style skill progression:
+  - character starts with Exori Min + Heal + Guard
+  - Exori, Exori Mas, Avalanche unlocked via level-up skill cards
+all skills fire automatically via assist system
+card system: level-up → skill cards + passive cards; chest → passive cards only
+passive card caps: max 4 distinct, max 3 stacks per card
+left-click POI interaction (F key removed)
+right-click target lock
+ArenaConfig.cs centralizes all simulation constants
+HTTP batch step implemented (MAX_TICK_DEBT = 0 currently)
+Tibia-style UI with skills + passives in right panel
 backpack inventory
 characters page
 bestiary page
 replay system
-movement fixes
 simulation invariants
-run telemetry
+run telemetry: kills, damageDealt, damageTaken, minHpObserved, xpGained
 
 The foundation for the full game is complete.
 

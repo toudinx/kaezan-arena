@@ -133,18 +133,18 @@ public sealed partial class InMemoryBattleStore
         var normalized = value.Trim().ToLowerInvariant();
         return normalized switch
         {
-            "n" or "north" => FacingUp,
-            FacingUp => FacingUp,
-            "ne" or "north_east" or "northeast" or "up-right" or "up_right" => FacingUpRight,
-            "e" or "east" => FacingRight,
-            "se" or "south_east" or "southeast" or "down-right" or "down_right" => FacingDownRight,
-            "s" or "south" => FacingDown,
-            FacingDown => FacingDown,
-            "sw" or "south_west" or "southwest" or "down-left" or "down_left" => FacingDownLeft,
-            "w" or "west" => FacingLeft,
-            FacingLeft => FacingLeft,
-            FacingRight => FacingRight,
-            "nw" or "north_west" or "northwest" or "up-left" or "up_left" => FacingUpLeft,
+            "n" or "north" => ArenaConfig.FacingUp,
+            ArenaConfig.FacingUp => ArenaConfig.FacingUp,
+            "ne" or "north_east" or "northeast" or "up-right" or "up_right" => ArenaConfig.FacingUpRight,
+            "e" or "east" => ArenaConfig.FacingRight,
+            "se" or "south_east" or "southeast" or "down-right" or "down_right" => ArenaConfig.FacingDownRight,
+            "s" or "south" => ArenaConfig.FacingDown,
+            ArenaConfig.FacingDown => ArenaConfig.FacingDown,
+            "sw" or "south_west" or "southwest" or "down-left" or "down_left" => ArenaConfig.FacingDownLeft,
+            "w" or "west" => ArenaConfig.FacingLeft,
+            ArenaConfig.FacingLeft => ArenaConfig.FacingLeft,
+            ArenaConfig.FacingRight => ArenaConfig.FacingRight,
+            "nw" or "north_west" or "northwest" or "up-left" or "up_left" => ArenaConfig.FacingUpLeft,
             _ => null
         };
     }

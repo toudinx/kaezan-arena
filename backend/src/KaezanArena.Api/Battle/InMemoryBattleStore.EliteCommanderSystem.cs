@@ -44,7 +44,7 @@ public sealed partial class InMemoryBattleStore
                 string.Equals(actor.Kind, "mob", StringComparison.Ordinal) &&
                 !actor.IsElite &&
                 string.Equals(actor.BuffSourceEliteId, elite.ActorId, StringComparison.Ordinal));
-            var remaining = EliteCommanderMaxBuffTargets - assignedCount;
+            var remaining = ArenaConfig.EliteCommanderMaxBuffTargets - assignedCount;
             if (remaining <= 0)
             {
                 continue;
