@@ -2,11 +2,13 @@ namespace KaezanArena.Api.Battle;
 
 public sealed partial class InMemoryBattleStore
 {
+    // Fixed 3-slot offensive kit. Heal and Guard are preserved as implementations
+    // but are no longer seeded at run start — they return as free-slot runes in a future step.
     private static readonly string[] InitialSkillOrder =
     [
         ArenaConfig.ExoriMinSkillId,
-        ArenaConfig.HealSkillId,
-        ArenaConfig.GuardSkillId
+        ArenaConfig.ExoriSkillId,
+        ArenaConfig.ExoriMasSkillId
     ];
 
     private static readonly IReadOnlyDictionary<string, int> SkillBaseCooldownTotalMsById =

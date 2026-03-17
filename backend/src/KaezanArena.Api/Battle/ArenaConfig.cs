@@ -72,6 +72,7 @@ public static class ArenaConfig
     public const string HealFxId = "fx.hit.small";
     public const string GuardFxId = "fx.hit.small";
     public const string AvalancheFxId = "fx.skill.exori_mas";
+    public const string HitSmallFxId = "fx.hit.small";
     #endregion
 
     #region Skill Element Types
@@ -316,6 +317,91 @@ public static class ArenaConfig
 
     #region Initial State Values
     public const int InitialChestSpawnCheckAtMs = 45_000;
+    #endregion
+
+    #region Stable Entity IDs
+    /// <summary>Stable weapon (skill) IDs. Values are the authoritative keys for display name lookup.</summary>
+    public static class WeaponIds
+    {
+        public const string ExoriMin  = "weapon:exori_min";
+        public const string Exori     = "weapon:exori";
+        public const string ExoriMas  = "weapon:exori_mas";
+        public const string Avalanche = "weapon:avalanche";
+        public const string Heal      = "weapon:heal";
+        public const string Guard     = "weapon:guard";
+    }
+
+    /// <summary>Stable character IDs. Values are the authoritative keys for display name lookup.</summary>
+    public static class CharacterIds
+    {
+        public const string Kina = "character:kina";
+    }
+
+    /// <summary>Stable mob species ID strings. Values match the protocol species field used in snapshots.</summary>
+    public static class SpeciesIds
+    {
+        public const string MeleeBrute   = "melee_brute";
+        public const string RangedArcher = "ranged_archer";
+        public const string MeleeDemon   = "melee_demon";
+        public const string RangedDragon = "ranged_dragon";
+    }
+    #endregion
+
+    #region Display Names
+    /// <summary>
+    /// Single source of truth for all entity display names.
+    /// Keys are stable IDs from <see cref="WeaponIds"/>, <see cref="CharacterIds"/>, and <see cref="SpeciesIds"/>.
+    /// </summary>
+    public static readonly IReadOnlyDictionary<string, string> DisplayNames =
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [WeaponIds.ExoriMin]        = "Exori Min",
+            [WeaponIds.Exori]           = "Exori",
+            [WeaponIds.ExoriMas]        = "Exori Mas",
+            [WeaponIds.Avalanche]       = "Avalanche",
+            [WeaponIds.Heal]            = "Heal",
+            [WeaponIds.Guard]           = "Guard",
+            [CharacterIds.Kina]         = "Kina",
+            [SpeciesIds.MeleeBrute]     = "Melee Brute",
+            [SpeciesIds.RangedArcher]   = "Ranged Archer",
+            [SpeciesIds.MeleeDemon]     = "Melee Demon",
+            [SpeciesIds.RangedDragon]   = "Ranged Dragon",
+        };
+
+    // Maps simulation skill logic IDs to stable WeaponIds for display name resolution.
+    private static readonly IReadOnlyDictionary<string, string> SkillIdToWeaponId =
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [ExoriSkillId]     = WeaponIds.Exori,
+            [ExoriMinSkillId]  = WeaponIds.ExoriMin,
+            [ExoriMasSkillId]  = WeaponIds.ExoriMas,
+            [AvalancheSkillId] = WeaponIds.Avalanche,
+            [HealSkillId]      = WeaponIds.Heal,
+            [GuardSkillId]     = WeaponIds.Guard,
+        };
+
+    /// <summary>Returns the display name for a simulation skill ID, or null if not found.</summary>
+    public static string? GetSkillDisplayName(string skillId) =>
+        SkillIdToWeaponId.TryGetValue(skillId, out var weaponId) &&
+        DisplayNames.TryGetValue(weaponId, out var name)
+            ? name
+            : null;
+
+    // Maps stable WeaponIds back to simulation skill logic IDs for the Assist System free-slot check.
+    private static readonly IReadOnlyDictionary<string, string> WeaponIdToSkillId =
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [WeaponIds.Exori]     = ExoriSkillId,
+            [WeaponIds.ExoriMin]  = ExoriMinSkillId,
+            [WeaponIds.ExoriMas]  = ExoriMasSkillId,
+            [WeaponIds.Avalanche] = AvalancheSkillId,
+            [WeaponIds.Heal]      = HealSkillId,
+            [WeaponIds.Guard]     = GuardSkillId,
+        };
+
+    /// <summary>Returns the simulation skill ID for a stable weapon ID, or null if not found.</summary>
+    public static string? GetSkillIdForWeaponId(string weaponId) =>
+        WeaponIdToSkillId.TryGetValue(weaponId, out var skillId) ? skillId : null;
     #endregion
 
     public static int NormalizeStepDeltaMs(int? configuredStepDeltaMs)

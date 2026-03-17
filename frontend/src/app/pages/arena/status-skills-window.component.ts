@@ -5,6 +5,7 @@ import type { ArenaBuffState, ArenaSkillState } from "../../arena/engine/arena-e
 import {
   type StatusBuffViewModel,
   type StatusSkillSlotViewModel,
+  buildFreeSlotViewModel,
   mapStatusBuffs,
   mapStatusSkillSlots
 } from "./status-skills.helpers";
@@ -27,6 +28,7 @@ export class StatusSkillsWindowComponent {
   @Input() globalCooldownRemainingMs = 0;
   @Input() globalCooldownTotalMs = 0;
   @Input() activeBuffs: ReadonlyArray<ArenaBuffState> = [];
+  @Input() freeSlotWeaponName: string | null = null;
 
   @Output() readonly skillActivated = new EventEmitter<string>();
 
@@ -48,7 +50,10 @@ export class StatusSkillsWindowComponent {
   }
 
   get skillSlots(): ReadonlyArray<StatusSkillSlotViewModel> {
-    return mapStatusSkillSlots(this.skills, this.globalCooldownRemainingMs, this.globalCooldownTotalMs);
+    return [
+      ...mapStatusSkillSlots(this.skills, this.globalCooldownRemainingMs, this.globalCooldownTotalMs),
+      buildFreeSlotViewModel(this.freeSlotWeaponName, this.skills, this.globalCooldownRemainingMs)
+    ];
   }
 
   get buffs(): ReadonlyArray<StatusBuffViewModel> {

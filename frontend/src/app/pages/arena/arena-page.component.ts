@@ -69,6 +69,7 @@ import type { BackpackEquipMode, BackpackEquipRequest } from "./backpack-window.
 import {
   type StatusBuffViewModel,
   type StatusSkillSlotViewModel,
+  buildFreeSlotViewModel,
   mapStatusBuffs,
   mapStatusSkillSlots
 } from "./status-skills.helpers";
@@ -280,6 +281,8 @@ type ArenaUiState = Readonly<{
   tick: number;
   status: string;
   facing: FacingDirection;
+  /** Weapon name in the free (rune) slot. Null until the rune system assigns a weapon. */
+  freeSlotWeaponName: string | null;
 }>;
 type BootPhase =
   | "measuring_canvas"
@@ -463,7 +466,8 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     skills: [],
     tick: 0,
     status: "idle",
-    facing: "up"
+    facing: "up",
+    freeSlotWeaponName: null
   };
 
   private readonly engine = new ArenaEngine();
@@ -670,11 +674,12 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   }
 
   get bottomBarSkillSlots(): ReadonlyArray<StatusSkillSlotViewModel> {
-    return mapStatusSkillSlots(
-      this.ui.skills,
-      this.ui.player.globalCooldownRemainingMs,
-      this.ui.player.globalCooldownTotalMs
-    );
+    const gcd = this.ui.player.globalCooldownRemainingMs;
+    const gcdTotal = this.ui.player.globalCooldownTotalMs;
+    return [
+      ...mapStatusSkillSlots(this.ui.skills, gcd, gcdTotal),
+      buildFreeSlotViewModel(this.ui.freeSlotWeaponName, this.ui.skills, gcd)
+    ];
   }
 
   get hudPassiveSlots(): ReadonlyArray<ArenaCardOffer> {
@@ -2714,6 +2719,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         this.applyRunProgressFromSnapshot(response);
         this.applyScalingTelemetryFromSnapshot(response);
         this.applyCardChoiceStateFromSnapshot(response);
+        this.applyFreeSlotFromSnapshot(response);
         this.runResultLogger.startRun({
           battleSeed: this.currentSeed,
           stepDeltaMs: this.stepIntervalMs,
@@ -3219,6 +3225,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.applyRunProgressFromSnapshot(response);
     this.applyScalingTelemetryFromSnapshot(response);
     this.applyCardChoiceStateFromSnapshot(response);
+    this.applyFreeSlotFromSnapshot(response);
     this.activeFxCount = this.getActiveFxCount(this.scene);
     this.appendDamageLogs(applied.damageNumbers);
     this.appendDamageConsoleLogs(applied.damageNumbers);
@@ -3449,6 +3456,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
 
       mapped.push({
         skillId: typedSkill.skillId,
+        displayName: typedSkill.displayName ?? null,
         cooldownRemainingMs: typedSkill.cooldownRemainingMs ?? 0,
         cooldownTotalMs: typedSkill.cooldownTotalMs ?? 0
       });
@@ -3966,6 +3974,15 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       this.readNumber((snapshot as Record<string, unknown>)["altarCooldownRemainingMs"]) ?? this.altarCooldownRemainingMs
     );
     this.altarCooldownRemainingMs = remainingMs;
+  }
+
+  private applyFreeSlotFromSnapshot(snapshot: StartBattleResponse | StepBattleResponse): void {
+    const record = snapshot as Record<string, unknown>;
+    const rawName = record["freeSlotWeaponName"];
+    const freeSlotWeaponName = typeof rawName === "string" ? rawName : null;
+    if (freeSlotWeaponName !== this.ui.freeSlotWeaponName) {
+      this.ui = { ...this.ui, freeSlotWeaponName };
+    }
   }
 
   private applyRunProgressFromSnapshot(snapshot: StartBattleResponse | StepBattleResponse): void {

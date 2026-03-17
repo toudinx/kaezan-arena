@@ -24,6 +24,7 @@
         type="button"
         class="status-window__skill"
         [class.status-window__skill--disabled]="slot.disabled"
+        [class.status-window__skill--free]="slot.isFreeSlot"
         (click)="onSkillClick(slot.skillId)"
         [disabled]="slot.disabled"
       >

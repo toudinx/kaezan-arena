@@ -311,9 +311,13 @@
             </div>
             <div class="top-hud__cooldowns" aria-label="Skill cooldowns">
               @for (slot of bottomBarSkillSlots; track trackSkillSlotBySkillId($index, slot)) {
-                <span class="top-hud__cooldown" [class.top-hud__cooldown--ready]="!slot.cooldownText">
+                <span
+                  class="top-hud__cooldown"
+                  [class.top-hud__cooldown--ready]="!slot.cooldownText && !slot.isLocked"
+                  [class.top-hud__cooldown--free]="slot.isFreeSlot"
+                >
                   <span class="top-hud__cooldown-key">{{ slot.keyLabel }}</span>
-                  <span>{{ slot.cooldownText || "Ready" }}</span>
+                  <span>{{ slot.isLocked ? slot.label : (slot.cooldownText || "Ready") }}</span>
                 </span>
               }
             </div>
@@ -429,7 +433,8 @@
                 <div
                   class="right-panel-skill-row"
                   [class.right-panel-skill-row--locked]="slot.isLocked"
-                  [title]="slot.isLocked ? 'Locked' : slot.label"
+                  [class.right-panel-skill-row--free]="slot.isFreeSlot"
+                  [title]="slot.isFreeSlot && slot.isLocked ? 'Free slot — empty until rune system' : slot.isLocked ? 'Locked' : slot.label"
                 >
                   @if (!slot.isLocked) {
                     <span class="right-panel-skill-row__name">{{ slot.label }}</span>
@@ -438,6 +443,8 @@
                     } @else {
                       <span class="right-panel-skill-row__ready">Ready</span>
                     }
+                  } @else if (slot.isFreeSlot) {
+                    <span class="right-panel-skill-row__name right-panel-skill-row__name--muted">{{ slot.label }}</span>
                   }
                 </div>
               }

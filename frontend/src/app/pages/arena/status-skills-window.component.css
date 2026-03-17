@@ -108,6 +108,11 @@
   opacity: 0.72;
 }
 
+.status-window__skill--free {
+  border-style: dashed;
+  opacity: 0.55;
+}
+
 .status-window__key {
   position: absolute;
   top: 2px;

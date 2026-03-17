@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using KaezanArena.Api.Battle;
 
 namespace KaezanArena.Api.Account;
 
@@ -931,7 +932,7 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
                     InstanceId: refineCommonInstanceId,
                     DefinitionId: "wpn.primal_forged_blade",
                     IsLocked: false,
-                    OriginSpeciesId: "melee_brute",
+                    OriginSpeciesId: ArenaConfig.SpeciesIds.MeleeBrute,
                     Slot: "weapon",
                     Rarity: "common");
             }
@@ -943,7 +944,7 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
                     InstanceId: refineLegendaryInstanceId,
                     DefinitionId: "wpn.primal_forged_blade",
                     IsLocked: false,
-                    OriginSpeciesId: "melee_brute",
+                    OriginSpeciesId: ArenaConfig.SpeciesIds.MeleeBrute,
                     Slot: "weapon",
                     Rarity: "legendary");
             }
@@ -973,13 +974,13 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
         var initialBestiaryBySpecies = startsWithAnyCraftingResources
             ? new Dictionary<string, int>(StringComparer.Ordinal)
             {
-                ["melee_brute"] = initialSpeciesProgress
+                [ArenaConfig.SpeciesIds.MeleeBrute] =initialSpeciesProgress
             }
             : new Dictionary<string, int>(StringComparer.Ordinal);
         var initialPrimalCoreBySpecies = startsWithAnyCraftingResources
             ? new Dictionary<string, int>(StringComparer.Ordinal)
             {
-                ["melee_brute"] = startsWithAscendantCapProgress
+                [ArenaConfig.SpeciesIds.MeleeBrute] =startsWithAscendantCapProgress
                     ? 2500
                     : startsWithRefineReadyResources
                         ? 2000

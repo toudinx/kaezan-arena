@@ -1,13 +1,15 @@
+using KaezanArena.Api.Battle;
+
 namespace KaezanArena.Api.Account;
 
 public static class AccountCatalog
 {
     public static IReadOnlyList<SpeciesDefinition> SpeciesDefinitions { get; } =
     [
-        new SpeciesDefinition("melee_brute", "Melee Brute"),
-        new SpeciesDefinition("ranged_archer", "Ranged Archer"),
-        new SpeciesDefinition("melee_demon", "Melee Demon"),
-        new SpeciesDefinition("ranged_dragon", "Ranged Dragon")
+        new SpeciesDefinition(ArenaConfig.SpeciesIds.MeleeBrute,   ArenaConfig.DisplayNames[ArenaConfig.SpeciesIds.MeleeBrute]),
+        new SpeciesDefinition(ArenaConfig.SpeciesIds.RangedArcher, ArenaConfig.DisplayNames[ArenaConfig.SpeciesIds.RangedArcher]),
+        new SpeciesDefinition(ArenaConfig.SpeciesIds.MeleeDemon,   ArenaConfig.DisplayNames[ArenaConfig.SpeciesIds.MeleeDemon]),
+        new SpeciesDefinition(ArenaConfig.SpeciesIds.RangedDragon, ArenaConfig.DisplayNames[ArenaConfig.SpeciesIds.RangedDragon]),
     ];
 
     public static IReadOnlyList<ItemDefinition> ItemDefinitions { get; } =

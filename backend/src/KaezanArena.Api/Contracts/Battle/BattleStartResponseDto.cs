@@ -43,4 +43,6 @@ public sealed record BattleStartResponseDto(
     bool IsAwaitingCardChoice,
     string? PendingChoiceId,
     IReadOnlyList<BattleCardOfferDto> OfferedCards,
-    IReadOnlyList<BattleCardOfferDto> SelectedCards);
+    IReadOnlyList<BattleCardOfferDto> SelectedCards,
+    string? FreeSlotWeaponId,
+    string? FreeSlotWeaponName);

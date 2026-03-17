@@ -73,12 +73,30 @@ Current `docker-compose.yml` is a development skeleton with backend (`5080`) and
 ## Current Gameplay
 
 - Player is fixed at the center tile (3,3) — no WASD movement
-- All skills fire automatically via the assist system
+- All weapons fire automatically via the assist system — no manual casting
+- Each character has a **fixed 3-slot weapon kit** + **1 free slot (rune slot)**
+  - Kina / Velvet kit: Exori Min + Exori + Exori Mas (fixed)
+  - Free slot (`StoredBattle.FreeSlotWeaponId`) starts **null** every run — filled by the future rune system
+  - Assist order: ExoriMas → Exori → ExoriMin → [free slot weapon if set]
+- Avalanche is **not** auto-cast from the fixed kit; it re-enters the assist once the rune system assigns it to the free slot
+- Heal and Guard removed from kit — survivability comes from passive cards only
 - **Left-click** a POI (chest, altar) to interact
 - **Right-click** a mob to lock it as the priority target
-- Level-up card choices offer skill unlocks (Exori, Exori Mas, Avalanche) and passive cards
+- Level-up card choices offer passive cards (skill upgrade cards postponed)
 - Chest card choices offer passive cards only (max 4 distinct types, max 3 stacks per type)
 - All simulation constants are in `backend/src/KaezanArena.Api/Battle/ArenaConfig.cs`
+
+## Stable ID System
+
+All weapon, character, and species IDs are defined as named constants in `backend/src/KaezanArena.Api/Battle/ArenaConfig.cs`:
+
+- `ArenaConfig.WeaponIds` — stable weapon/skill IDs (e.g. `WeaponIds.ExoriMin = "weapon:exori_min"`)
+- `ArenaConfig.CharacterIds` — stable character IDs (e.g. `CharacterIds.Kina = "character:kina"`)
+- `ArenaConfig.SpeciesIds` — mob species ID strings used in snapshots and the account bestiary
+
+`ArenaConfig.DisplayNames` is the **single source of truth** for all entity display names, keyed by the stable IDs above. No display name strings should appear anywhere else in the codebase.
+
+The `SkillStateDto` carries a `displayName` field (populated server-side) so Angular components never need their own name mappings.
 
 ## Code Style
 

@@ -50,8 +50,8 @@ public sealed class DeterminismAuditTests
                                 OffenseMode: "nearest",
                                 AutoSkills: new Dictionary<string, bool>(StringComparer.Ordinal)
                                 {
-                                    ["heal"] = true,
-                                    ["guard"] = true
+                                    [ArenaConfig.HealSkillId] = true,
+                                    [ArenaConfig.GuardSkillId] = true
                                 },
                                 MaxAutoCastsPerTick: 2))
                     ]
@@ -156,8 +156,8 @@ public sealed class DeterminismAuditTests
                                 OffenseMode: "nearest",
                                 AutoSkills: new Dictionary<string, bool>(StringComparer.Ordinal)
                                 {
-                                    ["guard"] = true,
-                                    ["heal"] = true
+                                    [ArenaConfig.GuardSkillId] = true,
+                                    [ArenaConfig.HealSkillId] = true
                                 },
                                 MaxAutoCastsPerTick: 2))
                     ]),
@@ -166,7 +166,7 @@ public sealed class DeterminismAuditTests
                     ClientTick: 1,
                     Commands:
                     [
-                        new BattleCommandDto("cast_skill", SkillId: "exori"),
+                        new BattleCommandDto("cast_skill", SkillId: ArenaConfig.ExoriSkillId),
                         new BattleCommandDto("set_facing", Dir: "up_left")
                     ])
             ]);
@@ -176,10 +176,10 @@ public sealed class DeterminismAuditTests
     {
         return (stepIndex % 6) switch
         {
-            0 => [new BattleCommandDto("cast_skill", SkillId: "exori")],
+            0 => [new BattleCommandDto("cast_skill", SkillId: ArenaConfig.ExoriSkillId)],
             1 => [new BattleCommandDto("move_player", Dir: "right")],
             2 => [new BattleCommandDto("set_facing", Dir: "down_left")],
-            3 => [new BattleCommandDto("cast_skill", SkillId: "exori_min")],
+            3 => [new BattleCommandDto("cast_skill", SkillId: ArenaConfig.ExoriMinSkillId)],
             4 => [new BattleCommandDto("move_player", Dir: "up")],
             _ => []
         };

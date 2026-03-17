@@ -216,10 +216,10 @@ public sealed class BattleReplayEndpointsTests : IClassFixture<ApiTestWebApplica
     {
         return (stepIndex % 5) switch
         {
-            0 => [new BattleCommandDto("cast_skill", SkillId: "exori")],
+            0 => [new BattleCommandDto("cast_skill", SkillId: ArenaConfig.ExoriSkillId)],
             1 => [new BattleCommandDto("move_player", Dir: "right")],
             2 => [new BattleCommandDto("set_facing", Dir: "down_left")],
-            3 => [new BattleCommandDto("cast_skill", SkillId: "exori_min")],
+            3 => [new BattleCommandDto("cast_skill", SkillId: ArenaConfig.ExoriMinSkillId)],
             _ => []
         };
     }

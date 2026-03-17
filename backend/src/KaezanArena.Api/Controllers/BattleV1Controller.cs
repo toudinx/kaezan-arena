@@ -223,7 +223,9 @@ public sealed class BattleV1Controller : ControllerBase
             IsAwaitingCardChoice: snapshot.IsAwaitingCardChoice,
             PendingChoiceId: snapshot.PendingChoiceId,
             OfferedCards: snapshot.OfferedCards,
-            SelectedCards: snapshot.SelectedCards);
+            SelectedCards: snapshot.SelectedCards,
+            FreeSlotWeaponId: snapshot.FreeSlotWeaponId,
+            FreeSlotWeaponName: snapshot.FreeSlotWeaponName);
     }
 
     private BattleStepResponseDto ToStepResponse(BattleSnapshot snapshot)
@@ -273,7 +275,9 @@ public sealed class BattleV1Controller : ControllerBase
             OfferedCards: snapshot.OfferedCards,
             SelectedCards: snapshot.SelectedCards,
             Events: snapshot.Events,
-            CommandResults: snapshot.CommandResults);
+            CommandResults: snapshot.CommandResults,
+            FreeSlotWeaponId: snapshot.FreeSlotWeaponId,
+            FreeSlotWeaponName: snapshot.FreeSlotWeaponName);
     }
 
     private ApiErrorDto BuildValidationError(string message)

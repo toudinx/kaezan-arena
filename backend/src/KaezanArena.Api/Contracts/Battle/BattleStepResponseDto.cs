@@ -45,4 +45,6 @@ public sealed record BattleStepResponseDto(
     IReadOnlyList<BattleCardOfferDto> OfferedCards,
     IReadOnlyList<BattleCardOfferDto> SelectedCards,
     IReadOnlyList<BattleEventDto> Events,
-    IReadOnlyList<CommandResultDto> CommandResults);
+    IReadOnlyList<CommandResultDto> CommandResults,
+    string? FreeSlotWeaponId,
+    string? FreeSlotWeaponName);

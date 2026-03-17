@@ -87,6 +87,7 @@ Late: caos total
 Arena grid:
 
 7x7 tiles
+Mudança futura planejada: 9x7 (mais larga, mesma altura). Não implementar até ser explicitamente solicitado.
 
 Regras:
 
@@ -154,34 +155,84 @@ Run Levels
 
 Run Level reseta a cada run.
 
-9. Skill System
+9. Weapon Kit System
 
-Skills são o principal sistema de build — estilo Vampire Survivors.
+Cada personagem tem um kit fixo de 3 armas + 1 slot livre por run.
 
-Personagem começa com:
+Heal e Guard foram removidos do kit. Sobrevivência vem exclusivamente de cartas passivas (Vampiric Spikes, lifesteal, etc.).
+Auto-attack melee single-target removido — substituído pelas armas do kit fixo.
 
-Exori Min (ataque frontal — sempre ativo)
-Heal (cura — sempre ativo)
-Guard (escudo — sempre ativo)
+Kits de personagem:
 
-Skills adicionais são desbloqueadas via skill cards obtidas em level-ups:
+Kina / Velvet:
+  Fixos: Exori Min (frontal, 800ms) + Exori (AoE quadrado r=1, 1200ms) + Exori Mas (AoE diamond r=2, 2000ms)
+  Livre: 1 arma de ataque escolhida por run via carta
 
-Exori (AoE quadrado ao redor do personagem)
-Exori Mas (AoE wide diamond)
-Avalanche (zona de AoE no chão)
+Archer (futuro):
+  Fixos: AA Ranged + Shotgun + Pierce Bolt
+  Livre: 1 arma de ataque escolhida por run via carta
 
-Todas as skills disparam automaticamente via Assist System — sem casting manual.
+Mage (futuro):
+  Fixos: AA Ranged + Pierce Bolt + Void Ricochet
+  Livre: 1 arma de ataque escolhida por run via carta
 
-Skill Leveling
+Slot livre — regras:
 
-Cada level-up abre uma tela de escolha de carta.
+Apenas armas de ataque/dano são permitidas — sem heal ou shield.
+Exemplos: Avalanche (AoE no chão), Ranged projectile rune, Elemental rune.
+É o principal vetor de customização por run.
+Runes só podem ser equipadas no slot livre.
 
-Possíveis cartas em level-up:
+Todas as armas disparam automaticamente via Assist System — sem casting manual.
 
-Skill cards (desbloqueiam novas skills — ex: Exori, Exori Mas, Avalanche)
-Passive cards (modificadores de run — até 4 tipos distintos, máx 3 stacks cada)
+Ordem de prioridade do Assist (apenas ofensivo):
 
-Cada skill ganha cooldown reduzido automaticamente conforme evolui.
+Exori Mas → Exori → Exori Min → [FreeSlotWeaponId se definido]
+
+Máx 1 auto-cast por tick.
+
+Estado atual: slot livre começa null a cada run. Avalanche não está mais na prioridade fixa
+do Assist — retorna automaticamente quando o sistema de runes definir
+StoredBattle.FreeSlotWeaponId = ArenaConfig.WeaponIds.Avalanche.
+
+Armas ranged (planejadas, implementação futura):
+
+AA Ranged — single target, alta cadência
+Shotgun — cone AoE
+Pierce Bolt — atravessa mobs
+Void Ricochet — ricocheteia nas bordas do grid
+
+Obstáculos destrutíveis: planejados após implementação de ranged.
+
+9b. Rune System
+
+Cada personagem desbloqueia uma rune especial (arma evoluída) ao ser obtido.
+
+Runes de personagem:
+
+Velvet / Kina: Exori Mas Rune (AoE melee evoluído)
+Archer: Shotgun + Pierce combinados
+Mage: Pierce + Void Ricochet combinados
+
+Regras das runes:
+
+A rune de um personagem pode ser equipada no slot livre de outro personagem.
+Pré-requisitos: o jogador deve ter as armas base do personagem-alvo desbloqueadas
+  (ex: rune da Velvet requer AA Ranged + Shotgun + Pierce desbloqueados)
+O slot livre é o único slot onde runes podem ser equipadas.
+
+Valor de design:
+
+Colecionar personagens tem valor de gameplay real — além do cosmético.
+Lore: absorver o Sigilo de outro Kaeli concede acesso ao poder deles.
+
+Card System — Level-up
+
+Cartas em level-up oferecem:
+
+Passive cards (modificadores de run)
+Skill upgrade cards: adiadas — não implementando agora
+Weapon card para slot livre: escolha única por run
 
 Passive Cards
 
@@ -235,6 +286,9 @@ Possuem:
 inventory
 equipment
 progression
+kit fixo de armas (3 slots fixos + 1 slot livre por run)
+rune própria (desbloqueada ao obter o personagem)
+
 Equipment
 
 Slots principais:
@@ -244,6 +298,9 @@ Armor
 Relic
 
 Equipamentos persistem entre runs.
+
+Cada personagem tem uma identidade distinta definida pelo kit fixo e pela rune.
+Coletar personagens novos expande as opções de rune disponíveis para todos os personagens.
 
 12. Backpack System
 
@@ -468,13 +525,16 @@ Sempre priorizando MVP jogável.
 
 O MVP já possui:
 
-arena combat (player fixo em centro, skills automáticas)
+arena combat (player fixo em centro, armas automáticas via Assist)
 enemy spawn + pacing progressivo
 elite commander system
-Vampire Survivors–style skill progression (Exori Min inicial, unlock por cards)
-card system: passive cards (chests), skill cards + passive cards (level-up)
+kit de armas fixo por personagem (3 slots fixos + 1 slot livre / rune slot)
+slot livre (FreeSlotWeaponId) começa null a cada run — rune system a implementar
+Avalanche não está mais no Assist fixo — aguarda o rune system
+Heal e Guard removidos do kit — sobrevivência via passivos
+card system: passive cards (chests + level-up); skill upgrade cards adiadas
 passive card caps (máx 4 distintos, máx 3 stacks cada)
-assist system (todas as skills disparam automaticamente)
+assist system (armas fixas disparam automaticamente; slot livre incluído quando preenchido)
 POI interaction: left-click (chests, altar)
 right-click target lock
 ArenaConfig com todos os constants (clean config system)
@@ -490,10 +550,15 @@ A base técnica está pronta para expansão.
 
 Planejados:
 
+armas ranged (AA Ranged, Shotgun, Pierce Bolt, Void Ricochet)
+grid 9x7 (expansão planejada após ranged)
+obstáculos destrutíveis (após ranged implementado)
+rune system (cada personagem tem rune equipável no slot livre de outros)
+skill upgrade cards (adiadas para após estabilização do kit fixo)
 charms
 meta progression
 crafting
-novos personagens
+novos personagens (Archer, Mage)
 novos mobs
 novos eventos
 27. Long-Term Vision

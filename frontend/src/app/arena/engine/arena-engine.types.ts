@@ -56,6 +56,7 @@ export type ActorVisualStateMap = Record<string, ActorVisualState>;
 
 export interface ArenaSkillState {
   skillId: string;
+  displayName?: string | null;
   cooldownRemainingMs: number;
   cooldownTotalMs: number;
 }

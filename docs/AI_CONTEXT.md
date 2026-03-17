@@ -116,6 +116,7 @@ manage chaos
 Arena size:
 
 7x7 grid
+Planned future change: 9x7 (wider, same height). Do not implement until explicitly requested.
 
 Core rules:
 
@@ -134,6 +135,7 @@ Player agency comes from:
 right-click target locking (guides the assist system)
 left-click POI interaction (chests, altars)
 level-up and chest card choices
+free weapon slot selection (one attack weapon per run, chosen via card)
 
 The 7x7 is a core identity constraint.
 Do not casually expand it into large-map gameplay unless explicitly planned.
@@ -178,52 +180,90 @@ movement and target selection matter
 
 combat should reward good positioning, not spam clicking
 
-8. Skill System
+8. Weapon Kit System
 
-Skills are built progressively Vampire Survivors style.
+Each character has a fixed weapon kit defining their attack identity.
+Heal and Guard are removed from the player kit — survivability comes exclusively from passive cards (Vampiric Spikes, lifesteal, etc.).
+Auto-attack single-target melee is removed — kit melee weapons replace it.
 
-Starting skills (always active from run start):
+Character kits (3 fixed slots + 1 free slot):
 
-Exori Min — frontal melee, 15 dmg, 800ms cooldown
-Heal — self-heal 22% maxHp, 7000ms cooldown
-Guard — shield 10% maxHp, 10000ms cooldown
+Kina / Velvet:
+  Fixed: Exori Min (frontal melee, 800ms) + Exori (square AoE r=1, 1200ms) + Exori Mas (diamond AoE r=2, 2000ms)
+  Free: 1 attack weapon chosen per run via card
 
-Unlockable skills (obtained by choosing skill cards at level-up):
+Archer (future):
+  Fixed: AA Ranged + Shotgun + Pierce Bolt
+  Free: 1 attack weapon chosen per run via card
 
-Exori — square AoE r=1, 10 dmg, 1200ms cooldown
-Exori Mas — diamond AoE r=2, 7 dmg, 2000ms cooldown
-Avalanche — ground AoE zone, 3 dmg, 2500ms cooldown
+Mage (future):
+  Fixed: AA Ranged + Pierce Bolt + Void Ricochet
+  Free: 1 attack weapon chosen per run via card
 
-All skills fire automatically via the Assist System.
+Free weapon slot rules:
 
-Assist priority order:
+Player chooses one attack/damage weapon per run via a card choice.
+Only attack/damage weapons are allowed in the free slot — no heal or shield.
+Example weapons: Avalanche (ground AoE zone), Ranged projectile rune, Elemental rune.
+This is the primary run customization vector.
+Runes (see section 8b) can only be equipped in the free slot.
 
-Guard (when HP < 60%)
-Heal (when HP < 40%)
-Offensive: Avalanche → Exori Mas → Exori → Exori Min
+All weapons fire automatically via the Assist System.
+
+Assist priority order (offensive only):
+
+Exori Mas → Exori → Exori Min → [FreeSlotWeaponId if set]
 
 Max 1 auto-cast per tick.
 
-Important distinctions:
+Current state: free slot starts null every run. Avalanche is no longer in the fixed assist
+priority — it re-enters automatically once the rune system sets StoredBattle.FreeSlotWeaponId
+= ArenaConfig.WeaponIds.Avalanche.
 
-Level-up card choice → offers skill cards (unlock new skill) + passive cards
-Chest card choice → offers passive cards only (no skill cards)
+Ranged weapons (planned, future implementation):
 
-Passive card constraints:
+AA Ranged — single target, high cadence
+Shotgun — cone AoE
+Pierce Bolt — pierces through mobs
+Void Ricochet — bounces off grid borders
 
-Max 4 distinct passive card types per run
-Max 3 stacks per passive card
+Destructible obstacles: planned after ranged weapons are implemented.
 
-Do not confuse the old "skill upgrade via run level" model with the current Vampire Survivors unlock model.
+8b. Rune System
+
+Each character unlocks a powerful evolved weapon rune when obtained.
+
+Character runes:
+
+Velvet / Kina rune: Exori Mas Rune (evolved AoE melee)
+Archer rune: Shotgun + Pierce combined
+Mage rune: Pierce + Void Ricochet combined
+
+Rune rules:
+
+A character's rune can be equipped in the free weapon slot of other characters.
+Prerequisites: player must have the base weapons of the target character unlocked
+  (e.g. equipping Velvet's rune requires AA Ranged + Shotgun + Pierce unlocked)
+The free weapon slot is the only slot where runes can be equipped.
+
+Design purpose:
+
+Character collection has real gameplay value beyond cosmetics.
+Lore: absorbing another Kaeli's Sigil grants access to their signature power.
+
+Important:
+
+Do not confuse the old "skill upgrade via run level" model with the current kit model.
+Skill upgrade cards are postponed — not implementing now.
 
 9. Card System
 
 Two sources of card choices:
 
 Level-up card choice:
-  - Offers skill cards (unlock Exori, Exori Mas, Avalanche if not yet owned)
   - Offers passive cards
-  - Mix of both in same offer
+  - Skill upgrade cards: postponed — not currently implemented
+  - Weapon card for free slot: offered as a one-time run choice
 
 Chest card choice (left-click to open chest):
   - Offers passive cards only
@@ -650,19 +690,29 @@ backend is authoritative
 
 frontend must not simulate combat
 
-7x7 is intentional
+7x7 is intentional (9x7 is a planned future change — do not implement until requested)
 
 the game should start calmer and ramp to chaos
 
 player is fixed at tile (3,3) — no WASD movement
 
-all skills fire via the assist system — no manual skill casting
+all weapons fire via the assist system — no manual casting
 
-skill unlock is Vampire Survivors style: Exori Min from start, others via level-up cards
+each character has a fixed 3-slot weapon kit + 1 free weapon slot (rune slot) per run
 
-chests offer passive cards only — never skill cards
+the free weapon slot (StoredBattle.FreeSlotWeaponId) starts null every run — filled by the future rune system
+
+Avalanche is no longer auto-cast from the fixed assist; it re-enters once the rune system assigns it to FreeSlotWeaponId
+
+Heal and Guard are removed from kit — survivability comes from passives only
+
+skill upgrade cards are postponed — not implementing now
+
+chests offer passive cards only — never skill cards or weapon cards
 
 passive card caps: max 4 distinct types, max 3 stacks per type
+
+runes can only be equipped in the free weapon slot; prerequisites apply
 
 all constants are in ArenaConfig.cs — never hardcode simulation values
 

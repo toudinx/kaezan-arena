@@ -32,6 +32,7 @@ public sealed partial class InMemoryBattleStore
             .OrderBy(skill => skill.SkillId, StringComparer.Ordinal)
             .Select(skill => new SkillStateDto(
                 SkillId: skill.SkillId,
+                DisplayName: ArenaConfig.GetSkillDisplayName(skill.SkillId),
                 CooldownRemainingMs: skill.CooldownRemainingMs,
                 CooldownTotalMs: ResolveSkillCooldownTotalMs(state, skill)))
             .ToList();
@@ -160,7 +161,12 @@ public sealed partial class InMemoryBattleStore
             OfferedCards: offeredCards,
             SelectedCards: selectedCards,
             Events: events,
-            CommandResults: commandResults);
+            CommandResults: commandResults,
+            FreeSlotWeaponId: state.FreeSlotWeaponId,
+            FreeSlotWeaponName: state.FreeSlotWeaponId is string freeId
+                && ArenaConfig.DisplayNames.TryGetValue(freeId, out var freeName)
+                    ? freeName
+                    : null);
     }
 
     private static string? ResolveLegacyEndReason(string? runEndReason)

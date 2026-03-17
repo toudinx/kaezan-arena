@@ -8,11 +8,11 @@ export type StatusSkillBinding = Readonly<{
   accentColor: string;
 }>;
 
+// Fixed 3-slot kit bindings. Avalanche removed — it lives in the free slot (rune system).
 export const STATUS_SKILL_BINDINGS: readonly StatusSkillBinding[] = [
   { keyLabel: "1", skillId: "exori", label: "Exori", accentColor: "#f97316" },
   { keyLabel: "2", skillId: "exori_min", label: "Exori Min", accentColor: "#ef4444" },
-  { keyLabel: "3", skillId: "exori_mas", label: "Exori Mas", accentColor: "#7c3aed" },
-  { keyLabel: "4", skillId: "avalanche", label: "Avalanche", accentColor: "#0ea5e9" }
+  { keyLabel: "3", skillId: "exori_mas", label: "Exori Mas", accentColor: "#7c3aed" }
 ] as const;
 
 export type StatusSkillSlotViewModel = Readonly<{
@@ -27,6 +27,8 @@ export type StatusSkillSlotViewModel = Readonly<{
   blockedByGlobalCooldown: boolean;
   disabled: boolean;
   isLocked: boolean;
+  /** True for the fourth free (rune) slot — styled distinctly from the 3 fixed slots. */
+  isFreeSlot: boolean;
 }>;
 
 export type StatusBuffViewModel = Readonly<{
@@ -64,7 +66,7 @@ export function mapStatusSkillSlots(
     return {
       keyLabel: binding.keyLabel,
       skillId: binding.skillId,
-      label: binding.label,
+      label: state?.displayName ?? binding.label,
       accentColor: binding.accentColor,
       cooldownRemainingMs: remainingMs,
       cooldownTotalMs: totalMs,
@@ -72,9 +74,54 @@ export function mapStatusSkillSlots(
       cooldownText,
       blockedByGlobalCooldown: blockedByGcd,
       disabled: isLocked || remainingMs > 0 || blockedByGcd,
-      isLocked
+      isLocked,
+      isFreeSlot: false
     };
   });
+}
+
+/**
+ * Builds the view-model for the free (rune) weapon slot.
+ * When freeSlotWeaponName is null the slot is rendered as empty/locked.
+ * When a rune weapon is equipped the server populates both the name and
+ * a matching entry in the skills array so cooldown data flows naturally.
+ */
+export function buildFreeSlotViewModel(
+  freeSlotWeaponName: string | null | undefined,
+  skillStates: ReadonlyArray<ArenaSkillState> = [],
+  globalCooldownRemainingMs = 0
+): StatusSkillSlotViewModel {
+  const isLocked = !freeSlotWeaponName;
+  const label = freeSlotWeaponName ?? "—";
+  const accentColor = "#64748b";
+  const gcdRemaining = Math.max(0, globalCooldownRemainingMs);
+
+  // When the rune system adds the free-slot skill to the snapshot, surface its cooldown.
+  // For now FreeSlotWeaponId is always null so remainingMs / totalMs stay 0.
+  const state = skillStates.find((s) => s.displayName === freeSlotWeaponName);
+  const remainingMs = Math.max(0, state?.cooldownRemainingMs ?? 0);
+  const totalMs = Math.max(0, state?.cooldownTotalMs ?? 0);
+  const blockedByGcd = !isLocked && isReadyButBlockedByGcd(remainingMs, gcdRemaining);
+  const cooldownText = remainingMs > 0
+    ? formatCooldownSeconds(remainingMs)
+    : blockedByGcd
+      ? `GCD ${formatCooldownSeconds(gcdRemaining)}`
+      : "";
+
+  return {
+    keyLabel: "4",
+    skillId: freeSlotWeaponName ?? "__free_slot__",
+    label,
+    accentColor,
+    cooldownRemainingMs: remainingMs,
+    cooldownTotalMs: totalMs,
+    cooldownFraction: computeCooldownFraction(remainingMs, totalMs),
+    cooldownText,
+    blockedByGlobalCooldown: blockedByGcd,
+    disabled: isLocked || remainingMs > 0 || blockedByGcd,
+    isLocked,
+    isFreeSlot: true
+  };
 }
 
 export function mapStatusBuffs(activeBuffs: ReadonlyArray<ArenaBuffState>): StatusBuffViewModel[] {

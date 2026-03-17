@@ -18,21 +18,23 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         MobArchetype.MeleeDemon,
         MobArchetype.RangedDragon
     ];
+    // Offensive priority for the Assist: ExoriMas → Exori → ExoriMin → [FreeSlotWeaponId if set].
+    // Avalanche is no longer in this fixed list — it returns automatically once the rune system
+    // sets StoredBattle.FreeSlotWeaponId = ArenaConfig.WeaponIds.Avalanche.
+    // Heal and Guard are excluded — defensive survivability is now passive-card-only.
     private static readonly string[] AssistOffenseSkillPriority =
     [
-        ArenaConfig.AvalancheSkillId,
         ArenaConfig.ExoriMasSkillId,
         ArenaConfig.ExoriSkillId,
         ArenaConfig.ExoriMinSkillId
     ];
+    // Heal and Guard removed: not in the starting kit.
+    // Avalanche removed: upgrades for the free slot will be handled separately once the rune system lands.
     private static readonly string[] RunLevelSkillUpgradeOrder =
     [
-        ArenaConfig.HealSkillId,
-        ArenaConfig.GuardSkillId,
         ArenaConfig.ExoriSkillId,
         ArenaConfig.ExoriMinSkillId,
-        ArenaConfig.ExoriMasSkillId,
-        ArenaConfig.AvalancheSkillId
+        ArenaConfig.ExoriMasSkillId
     ];
     private static readonly IReadOnlyDictionary<string, bool> DefaultAssistAutoSkills =
         new Dictionary<string, bool>(StringComparer.Ordinal)
@@ -45,10 +47,10 @@ public sealed partial class InMemoryBattleStore : IBattleStore
     private static readonly IReadOnlyDictionary<MobArchetype, string> SpeciesByArchetype =
         new Dictionary<MobArchetype, string>
         {
-            [MobArchetype.MeleeBrute] = "melee_brute",
-            [MobArchetype.RangedArcher] = "ranged_archer",
-            [MobArchetype.MeleeDemon] = "melee_demon",
-            [MobArchetype.RangedDragon] = "ranged_dragon"
+            [MobArchetype.MeleeBrute]   = ArenaConfig.SpeciesIds.MeleeBrute,
+            [MobArchetype.RangedArcher] = ArenaConfig.SpeciesIds.RangedArcher,
+            [MobArchetype.MeleeDemon]   = ArenaConfig.SpeciesIds.MeleeDemon,
+            [MobArchetype.RangedDragon] = ArenaConfig.SpeciesIds.RangedDragon,
         };
     private static readonly IReadOnlySet<string> IncompatibleCardPairs =
         new HashSet<string>(StringComparer.Ordinal)
@@ -907,9 +909,41 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                 continue;
             }
 
+            if (string.Equals(commandType, ArenaConfig.SetGroundTargetCommandType, StringComparison.Ordinal))
+            {
+                if (command.GroundTileX is null && command.GroundTileY is null)
+                {
+                    state.GroundTargetTileX = null;
+                    state.GroundTargetTileY = null;
+                    commandResults.Add(new CommandResultDto(index, commandType, true, null));
+                    continue;
+                }
+
+                var gx = command.GroundTileX ?? 0;
+                var gy = command.GroundTileY ?? 0;
+                if (!IsInBounds(gx, gy))
+                {
+                    commandResults.Add(new CommandResultDto(index, commandType, false, ArenaConfig.InvalidGroundTargetReason));
+                    continue;
+                }
+
+                state.GroundTargetTileX = gx;
+                state.GroundTargetTileY = gy;
+                var player = GetPlayerActor(state);
+                if (player is not null)
+                {
+                    state.PlayerFacingDirection = ResolveFacingDirectionTowardTile(
+                        player.TileX, player.TileY, gx, gy, state.PlayerFacingDirection);
+                }
+
+                hasExplicitFacingCommand = true;
+                commandResults.Add(new CommandResultDto(index, commandType, true, null));
+                continue;
+            }
+
             if (string.Equals(commandType, ArenaConfig.MovePlayerCommandType, StringComparison.Ordinal))
             {
-                // move_player commands are consumed in the pre-mob movement phase.
+                // move_player commands are disabled — player is fixed at the center tile.
                 commandResults.Add(new CommandResultDto(index, commandType, false, ArenaConfig.UnknownCommandReason));
                 continue;
             }
@@ -1116,12 +1150,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         var castsRemaining = Math.Max(0, assist.MaxAutoCastsPerTick);
         while (castsRemaining > 0)
         {
-            if (TryApplyAssistDefensiveCast(state, events, player, assist, ref pendingLifeLeechHeal))
-            {
-                castsRemaining -= 1;
-                continue;
-            }
-
+            // Defensive heal/guard branch removed: survivability is now passive-card-only.
             if (TryApplyAssistOffensiveCast(state, events, player, assist, ref pendingLifeLeechHeal))
             {
                 castsRemaining -= 1;
@@ -1132,33 +1161,8 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         }
     }
 
-    private static bool TryApplyAssistDefensiveCast(
-        StoredBattle state,
-        List<BattleEventDto> events,
-        StoredActor player,
-        StoredAssistConfig assist,
-        ref int pendingLifeLeechHeal)
-    {
-        var hpPercent = (int)Math.Floor((player.Hp * 100.0d) / player.MaxHp);
-
-        if (assist.AutoGuardEnabled && hpPercent <= assist.GuardAtHpPercent)
-        {
-            if (TryApplyAssistSkillCast(state, events, ArenaConfig.GuardSkillId, ArenaConfig.AssistReasonAutoGuard, ref pendingLifeLeechHeal))
-            {
-                return true;
-            }
-        }
-
-        if (assist.AutoHealEnabled && hpPercent <= assist.HealAtHpPercent)
-        {
-            if (TryApplyAssistSkillCast(state, events, ArenaConfig.HealSkillId, ArenaConfig.AssistReasonAutoHeal, ref pendingLifeLeechHeal))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
+    // Defensive cast path (Heal / Guard) is intentionally absent from the Assist.
+    // Heal and Guard skill implementations are preserved for future use as free-slot runes.
 
     private static bool TryApplyAssistOffensiveCast(
         StoredBattle state,
@@ -1185,6 +1189,19 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             }
 
             if (TryApplyAssistSkillCast(state, events, skillId, ArenaConfig.AssistReasonAutoOffense, ref pendingLifeLeechHeal))
+            {
+                return true;
+            }
+        }
+
+        // Free slot: if a rune weapon is equipped, try to auto-cast it last.
+        // The free slot fires whenever AutoOffenseEnabled is true — no separate AutoSkills entry needed.
+        // Avalanche re-enters here automatically once FreeSlotWeaponId = WeaponIds.Avalanche.
+        if (state.FreeSlotWeaponId is string freeWeaponId)
+        {
+            var freeSkillId = ArenaConfig.GetSkillIdForWeaponId(freeWeaponId);
+            if (freeSkillId is not null
+                && TryApplyAssistSkillCast(state, events, freeSkillId, ArenaConfig.AssistReasonAutoOffense, ref pendingLifeLeechHeal))
             {
                 return true;
             }
@@ -1370,7 +1387,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             durationMs: ArenaConfig.MeleeSwingDurationMs);
 
         events.Add(new FxSpawnEventDto(
-            FxId: "fx.hit.small",
+            FxId: ArenaConfig.HitSmallFxId,
             TileX: targetMob.TileX,
             TileY: targetMob.TileY,
             Layer: "hitFx",
@@ -1496,7 +1513,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                 durationMs: attackFxDuration);
 
             events.Add(new FxSpawnEventDto(
-                FxId: "fx.hit.small",
+                FxId: ArenaConfig.HitSmallFxId,
                 TileX: player.TileX,
                 TileY: player.TileY,
                 Layer: "hitFx",
@@ -2226,7 +2243,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         AddCorpseDecal(state, mob);
 
         events.Add(new FxSpawnEventDto(
-            FxId: "fx.hit.small",
+            FxId: ArenaConfig.HitSmallFxId,
             TileX: mob.TileX,
             TileY: mob.TileY,
             Layer: "hitFx",
@@ -3911,6 +3928,12 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         public int NextCardChoiceSequence { get; set; }
 
         public List<BattleReplayActionDto> ReplayActions { get; }
+
+        /// <summary>
+        /// The weapon in the free (rune) slot. Null until the rune system assigns a weapon.
+        /// When set to a WeaponIds constant, the Assist System auto-casts it after the 3 fixed skills.
+        /// </summary>
+        public string? FreeSlotWeaponId { get; set; }
     }
 
     private sealed record SpawnPacingDirector(

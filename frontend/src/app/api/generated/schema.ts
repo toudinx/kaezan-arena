@@ -1025,6 +1025,8 @@ export interface components {
             pendingChoiceId?: string | null;
             offeredCards?: components["schemas"]["BattleCardOfferDto"][] | null;
             selectedCards?: components["schemas"]["BattleCardOfferDto"][] | null;
+            freeSlotWeaponId?: string | null;
+            freeSlotWeaponName?: string | null;
         };
         BattleStepRequestDto: {
             battleId?: string | null;
@@ -1098,6 +1100,8 @@ export interface components {
             selectedCards?: components["schemas"]["BattleCardOfferDto"][] | null;
             events?: (components["schemas"]["FxSpawnEventDto"] | components["schemas"]["DamageNumberEventDto"] | components["schemas"]["AttackFxEventDto"] | components["schemas"]["DeathEventDto"] | components["schemas"]["HealNumberEventDto"] | components["schemas"]["ReflectEventDto"] | components["schemas"]["AssistCastEventDto"] | components["schemas"]["PoiInteractedEventDto"] | components["schemas"]["InteractFailedEventDto"] | components["schemas"]["BuffAppliedEventDto"] | components["schemas"]["AltarActivatedEventDto"] | components["schemas"]["SpeciesChestSpawnedEventDto"] | components["schemas"]["SpeciesChestOpenedEventDto"] | components["schemas"]["CritTextEventDto"] | components["schemas"]["LevelUpEventDto"] | components["schemas"]["XpGainedEventDto"] | components["schemas"]["CardChoiceOfferedEventDto"] | components["schemas"]["CardChosenEventDto"] | components["schemas"]["EliteSpawnedEventDto"] | components["schemas"]["EliteBuffAppliedEventDto"] | components["schemas"]["EliteBuffRemovedEventDto"] | components["schemas"]["EliteDiedEventDto"] | components["schemas"]["RunEndedEventDto"])[] | null;
             commandResults?: components["schemas"]["CommandResultDto"][] | null;
+            freeSlotWeaponId?: string | null;
+            freeSlotWeaponName?: string | null;
         };
         BattleTilePosDto: {
             /** Format: int32 */
@@ -1544,6 +1548,7 @@ export interface components {
         };
         SkillStateDto: {
             skillId?: string | null;
+            displayName?: string | null;
             /** Format: int32 */
             cooldownRemainingMs?: number;
             /** Format: int32 */
