@@ -164,9 +164,14 @@ Auto-attack melee single-target removido — substituído pelas armas do kit fix
 
 Kits de personagem:
 
-Kina / Velvet:
+Kina:
   Fixos: Exori Min (frontal, 800ms) + Exori (AoE quadrado r=1, 1200ms) + Exori Mas (AoE diamond r=2, 2000ms)
   Livre: 1 arma de ataque escolhida por run via carta
+
+Ranged Prototype:
+  Fixos: Sigil Bolt (single-target ranged, 800ms) + Shotgun (cone AoE estilo dragon wave, 800ms) + Void Ricochet (ricochete com pierce por segmento, 2000ms)
+  Livre: 1 arma de ataque escolhida por run via carta
+  Status atual de produto: selecionavel na Characters page como "Prototype" (Ranged Kit [WIP]) para testes de ranged
 
 Archer (futuro):
   Fixos: AA Ranged + Shotgun + Pierce Bolt
@@ -187,7 +192,9 @@ Todas as armas disparam automaticamente via Assist System — sem casting manual
 
 Ordem de prioridade do Assist (apenas ofensivo):
 
-Exori Mas → Exori → Exori Min → [FreeSlotWeaponId se definido]
+Ordem potency-first baseada no kit fixo da classe ativa -> [FreeSlotWeaponId se definido]
+  - Kina: Exori Mas -> Exori -> Exori Min
+  - Ranged Prototype: Void Ricochet -> Shotgun -> Sigil Bolt
 
 Máx 1 auto-cast por tick.
 
@@ -195,12 +202,12 @@ Estado atual: slot livre começa null a cada run. Avalanche não está mais na p
 do Assist — retorna automaticamente quando o sistema de runes definir
 StoredBattle.FreeSlotWeaponId = ArenaConfig.WeaponIds.Avalanche.
 
-Armas ranged (planejadas, implementação futura):
+Armas ranged:
 
-AA Ranged — single target, alta cadência
-Shotgun — cone AoE
-Pierce Bolt — atravessa mobs
-Void Ricochet — ricocheteia nas bordas do grid
+Sigil Bolt - implementada (single target ranged auto-attack)
+Shotgun - implementada (cone AoE estilo dragon wave; todos os mobs no cone tomam dano; knockback de 1 tile na direcao primaria quando destino livre)
+Void Ricochet - implementada (reflexao em bordas, pierce em todos os mobs por segmento, 1 evento de projetil por segmento)
+Pierce Bolt - futuro
 
 Obstáculos destrutíveis: planejados após implementação de ranged.
 
@@ -471,6 +478,11 @@ Componentes principais:
 BattleV1Controller
 InMemoryBattleStore (partials: MovementRules, PoiSystem, SkillLeveling, etc.)
 ArenaConfig (todas as constantes — damage, timings, scaling curves, IDs)
+Ranged foundation compartilhada (infraestrutura):
+RangedProjectileFiredEventDto (evento polimorfico `ranged_projectile_fired`)
+HasLineOfSight (stubado por enquanto, ativa com obstaculos destrutiveis)
+ResolveRangedTarget (lock target primeiro, fallback nearest mob, filtro de range/LOS)
+ApplyRangedDamageToMob (reusa pipeline existente RollDamageForAttacker + ApplyDamageToMob)
 Frontend
 Angular
 snapshot renderer
@@ -538,6 +550,12 @@ assist system (armas fixas disparam automaticamente; slot livre incluído quando
 POI interaction: left-click (chests, altar)
 right-click target lock
 ArenaConfig com todos os constants (clean config system)
+ranged foundation compartilhada pronta (evento de projetil, evento de knockback, LOS stub, target helper, damage helper)
+ProjectileAnimator visual no frontend (projetil puramente visual; sem simulacao de gameplay no cliente)
+animacao visual de knockback no frontend (slide curto por evento; sem simulacao de gameplay no cliente)
+LOS preparado para obstaculos destrutiveis futuros (stub ativo hoje)
+Sigil Bolt, Shotgun e Void Ricochet ativas para classes de kit ranged; Kina permanece sem Sigil Bolt/Shotgun/Void Ricochet
+Ranged Prototype selecionavel na Characters page (personagem provisoria de teste)
 HTTP batch step (MAX_TICK_DEBT = 0 atualmente)
 inventory + characters page + bestiary page
 replay system
@@ -550,7 +568,7 @@ A base técnica está pronta para expansão.
 
 Planejados:
 
-armas ranged (AA Ranged, Shotgun, Pierce Bolt, Void Ricochet)
+armas ranged restantes (AA Ranged, Pierce Bolt) sobre a fundacao compartilhada ja implementada
 grid 9x7 (expansão planejada após ranged)
 obstáculos destrutíveis (após ranged implementado)
 rune system (cada personagem tem rune equipável no slot livre de outros)

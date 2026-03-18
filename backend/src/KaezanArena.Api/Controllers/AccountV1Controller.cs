@@ -28,6 +28,10 @@ public sealed class AccountV1Controller : ControllerBase
 
         return Ok(new AccountStateResponseDto(
             Account: ToAccountDto(account),
+            CharacterCatalog: AccountCatalog.CharacterDefinitions
+                .OrderBy(definition => definition.CharacterId, StringComparer.Ordinal)
+                .Select(ToCharacterCatalogDefinitionDto)
+                .ToList(),
             ItemCatalog: AccountCatalog.ItemDefinitions
                 .OrderBy(definition => definition.ItemId, StringComparer.Ordinal)
                 .Select(ToItemDefinitionDto)
@@ -340,6 +344,17 @@ public sealed class AccountV1Controller : ControllerBase
             WeaponClass: definition.WeaponClass,
             WeaponElement: definition.WeaponElement,
             GameplayModifiers: modifiers);
+    }
+
+    private static CharacterCatalogDefinitionDto ToCharacterCatalogDefinitionDto(CharacterCatalogDefinition definition)
+    {
+        return new CharacterCatalogDefinitionDto(
+            CharacterId: definition.CharacterId,
+            DisplayName: definition.DisplayName,
+            Subtitle: definition.Subtitle,
+            IsProvisional: definition.IsProvisional,
+            FixedWeaponIds: definition.FixedWeaponIds.ToList(),
+            FixedWeaponNames: definition.FixedWeaponNames.ToList());
     }
 
     private static DropEventDto ToDropEventDto(DropEvent dropEvent)

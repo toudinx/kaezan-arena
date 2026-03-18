@@ -25,5 +25,7 @@ namespace KaezanArena.Api.Contracts.Battle;
 [JsonDerivedType(typeof(EliteBuffAppliedEventDto), "elite_buff_applied")]
 [JsonDerivedType(typeof(EliteBuffRemovedEventDto), "elite_buff_removed")]
 [JsonDerivedType(typeof(EliteDiedEventDto), "elite_died")]
+[JsonDerivedType(typeof(RangedProjectileFiredEventDto), "ranged_projectile_fired")]
+[JsonDerivedType(typeof(MobKnockedBackEventDto), "mob_knocked_back")]
 [JsonDerivedType(typeof(RunEndedEventDto), "run_ended")]
 public abstract record BattleEventDto;

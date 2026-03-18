@@ -76,6 +76,16 @@ public sealed class ApiEndpointsTests : IClassFixture<ApiTestWebApplicationFacto
         Assert.NotNull(payload.Account);
         Assert.Equal("dev_account", payload.Account.AccountId);
         Assert.True(payload.Account.Characters.Count >= 2);
+        Assert.True(payload.Account.Characters.ContainsKey(ArenaConfig.CharacterIds.Kina));
+        Assert.True(payload.Account.Characters.ContainsKey(ArenaConfig.CharacterIds.RangedPrototype));
+        Assert.Contains(
+            payload.CharacterCatalog,
+            definition =>
+                string.Equals(definition.CharacterId, ArenaConfig.CharacterIds.RangedPrototype, StringComparison.Ordinal) &&
+                string.Equals(definition.DisplayName, ArenaConfig.DisplayNames[ArenaConfig.CharacterIds.RangedPrototype], StringComparison.Ordinal) &&
+                definition.FixedWeaponNames.SequenceEqual(
+                    ArenaConfig.GetFixedWeaponKitForCharacterId(ArenaConfig.CharacterIds.RangedPrototype)
+                        .Select(weaponId => ArenaConfig.DisplayNames[weaponId])));
         Assert.True(payload.ItemCatalog.Count >= 1);
         Assert.True(payload.EquipmentCatalog.Count >= 1);
         Assert.True(payload.Account.Characters.ContainsKey(payload.Account.ActiveCharacterId));
@@ -4271,6 +4281,101 @@ public sealed class ApiEndpointsTests : IClassFixture<ApiTestWebApplicationFacto
         }
 
         throw new Xunit.Sdk.XunitException("Expected assist auto-offense to cast a single skill.");
+    }
+
+    [Fact]
+    public async Task PostBattleStep_SigilBoltFiresForRangedPrototype_ProjectileIsBeyondMeleeRange()
+    {
+        var playerId = ArenaConfig.CharacterIds.RangedPrototype;
+        var start = await StartBattleAsync("arena-sigil-bolt-ranged-prototype", playerId, 1337);
+        AssertArenaInvariants(start.Actors, playerId);
+        Assert.Contains(start.Skills, skill => string.Equals(skill.SkillId, ArenaConfig.SigilBoltSkillId, StringComparison.Ordinal));
+        Assert.DoesNotContain(start.Skills, skill => string.Equals(skill.SkillId, ArenaConfig.ExoriMinSkillId, StringComparison.Ordinal));
+
+        var configured = await StepBattleAsync(
+            start.BattleId,
+            start.Tick,
+            [
+                new BattleCommandDto(
+                    ArenaConfig.SetAssistConfigCommandType,
+                    AssistConfig: new AssistConfigDto(
+                        Enabled: true,
+                        AutoHealEnabled: false,
+                        HealAtHpPercent: 40,
+                        AutoGuardEnabled: false,
+                        GuardAtHpPercent: 60,
+                        AutoOffenseEnabled: true,
+                        OffenseMode: ArenaConfig.AssistOffenseModeCooldownSpam,
+                        AutoSkills: new Dictionary<string, bool>(StringComparer.Ordinal)
+                        {
+                            [ArenaConfig.ExoriSkillId] = false,
+                            [ArenaConfig.ExoriMasSkillId] = false,
+                            [ArenaConfig.ShotgunSkillId] = false,
+                            [ArenaConfig.VoidRicochetSkillId] = false,
+                            [ArenaConfig.SigilBoltSkillId] = true
+                        },
+                        MaxAutoCastsPerTick: 1))
+            ]);
+        AssertArenaInvariants(configured.Actors, playerId);
+
+        var currentTick = configured.Tick;
+        for (var stepIndex = 0; stepIndex < 24; stepIndex += 1)
+        {
+            var step = stepIndex == 0
+                ? configured
+                : await StepBattleAsync(start.BattleId, currentTick, []);
+            currentTick = step.Tick;
+            AssertArenaInvariants(step.Actors, playerId);
+
+            var projectile = step.Events
+                .OfType<RangedProjectileFiredEventDto>()
+                .FirstOrDefault(evt => string.Equals(evt.WeaponId, ArenaConfig.WeaponIds.SigilBolt, StringComparison.Ordinal));
+            if (projectile is null)
+            {
+                continue;
+            }
+
+            Assert.Contains(
+                step.Events.OfType<AssistCastEventDto>(),
+                evt => string.Equals(evt.SkillId, ArenaConfig.SigilBoltSkillId, StringComparison.Ordinal));
+            Assert.Equal(ArenaConfig.WeaponIds.SigilBolt, projectile.WeaponId);
+            Assert.False(projectile.Pierces);
+            var chebyshevToTarget = ComputeChebyshevDistance(
+                projectile.ToTile.X,
+                projectile.ToTile.Y,
+                PlayerTileX,
+                PlayerTileY);
+            Assert.True(chebyshevToTarget > 1);
+            Assert.Equal(ArenaConfig.SigilBoltCooldownMs, GetSkill(step, ArenaConfig.SigilBoltSkillId).CooldownRemainingMs);
+            Assert.Equal(GlobalCooldownMs, step.GlobalCooldownRemainingMs);
+            return;
+        }
+
+        throw new Xunit.Sdk.XunitException("Expected Sigil Bolt to fire for ranged prototype and emit a projectile event.");
+    }
+
+    [Fact]
+    public async Task PostBattleStep_SigilBoltDoesNotFireForKina()
+    {
+        var playerId = ArenaConfig.CharacterIds.Kina;
+        var start = await StartBattleAsync("arena-sigil-bolt-kina", playerId, 1337);
+        AssertArenaInvariants(start.Actors, playerId);
+        Assert.DoesNotContain(start.Skills, skill => string.Equals(skill.SkillId, ArenaConfig.SigilBoltSkillId, StringComparison.Ordinal));
+
+        var currentTick = start.Tick;
+        for (var stepIndex = 0; stepIndex < 30; stepIndex += 1)
+        {
+            var step = await StepBattleAsync(start.BattleId, currentTick, []);
+            currentTick = step.Tick;
+            AssertArenaInvariants(step.Actors, playerId);
+
+            Assert.DoesNotContain(
+                step.Events.OfType<AssistCastEventDto>(),
+                evt => string.Equals(evt.SkillId, ArenaConfig.SigilBoltSkillId, StringComparison.Ordinal));
+            Assert.DoesNotContain(
+                step.Events.OfType<RangedProjectileFiredEventDto>(),
+                evt => string.Equals(evt.WeaponId, ArenaConfig.WeaponIds.SigilBolt, StringComparison.Ordinal));
+        }
     }
 
     [Fact]

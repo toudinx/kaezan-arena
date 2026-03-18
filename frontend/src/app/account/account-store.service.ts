@@ -7,6 +7,7 @@ import {
   type BestiaryCraftSlot,
   type BestiaryOverviewResponse,
   type BestiarySpecies,
+  type CharacterCatalogEntry,
   type CharacterState,
   type DropSource,
   type EquipmentDefinition,
@@ -18,18 +19,22 @@ import {
 import { AccountSessionService } from "./account-session.service";
 
 export type AccountCatalogs = Readonly<{
+  characterCatalog: ReadonlyArray<CharacterCatalogEntry>;
   itemCatalog: ReadonlyArray<ItemDefinition>;
   equipmentCatalog: ReadonlyArray<EquipmentDefinition>;
   speciesCatalog: ReadonlyArray<BestiarySpecies>;
+  characterById: Readonly<Record<string, CharacterCatalogEntry>>;
   itemById: Readonly<Record<string, ItemDefinition>>;
   equipmentById: Readonly<Record<string, EquipmentDefinition>>;
   speciesById: Readonly<Record<string, BestiarySpecies>>;
 }>;
 
 const EMPTY_CATALOGS: AccountCatalogs = {
+  characterCatalog: [],
   itemCatalog: [],
   equipmentCatalog: [],
   speciesCatalog: [],
+  characterById: {},
   itemById: {},
   equipmentById: {},
   speciesById: {}
@@ -232,6 +237,7 @@ export class AccountStore {
       this.stateSignal.set(normalizedState);
       this.catalogsSignal.set(
         this.buildCatalogs(
+          stateResponse.characterCatalog ?? [],
           stateResponse.itemCatalog,
           stateResponse.equipmentCatalog,
           bestiaryOverview?.speciesCatalog ?? this.catalogsSignal().speciesCatalog
@@ -318,10 +324,16 @@ export class AccountStore {
   }
 
   private buildCatalogs(
+    characterCatalog: ReadonlyArray<CharacterCatalogEntry>,
     itemCatalog: ReadonlyArray<ItemDefinition>,
     equipmentCatalog: ReadonlyArray<EquipmentDefinition>,
     speciesCatalog: ReadonlyArray<BestiarySpecies>
   ): AccountCatalogs {
+    const characterById: Record<string, CharacterCatalogEntry> = {};
+    for (const character of characterCatalog) {
+      characterById[character.characterId] = character;
+    }
+
     const itemById: Record<string, ItemDefinition> = {};
     for (const item of itemCatalog) {
       itemById[item.itemId] = item;
@@ -338,9 +350,11 @@ export class AccountStore {
     }
 
     return {
+      characterCatalog,
       itemCatalog,
       equipmentCatalog,
       speciesCatalog,
+      characterById,
       itemById,
       equipmentById,
       speciesById

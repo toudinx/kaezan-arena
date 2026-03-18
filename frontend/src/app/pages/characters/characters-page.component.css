@@ -113,11 +113,34 @@
   cursor: pointer;
 }
 
-.character-card__title {
+.character-card__identity {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
+  align-items: center;
   gap: 0.6rem;
+}
+
+.character-card__avatar {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  border: 1px solid #334155;
+  background: linear-gradient(160deg, #0ea5e9, #1d4ed8);
+  color: #f8fafc;
+  font-size: 0.85rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+
+.character-card__avatar--provisional {
+  background: linear-gradient(160deg, #f59e0b, #dc2626);
+}
+
+.character-card__title {
+  display: grid;
+  gap: 0.1rem;
 }
 
 .character-card__title strong {
@@ -135,6 +158,12 @@
   gap: 0.5rem;
   color: #334155;
   font-size: 0.78rem;
+}
+
+.character-card__kit {
+  margin: 0.45rem 0 0;
+  font-size: 0.77rem;
+  color: #1f2937;
 }
 
 .character-card__equipment {
@@ -224,4 +253,3 @@
     grid-template-columns: 1fr;
   }
 }
-

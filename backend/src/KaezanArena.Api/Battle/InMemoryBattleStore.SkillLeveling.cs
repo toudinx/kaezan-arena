@@ -2,30 +2,24 @@ namespace KaezanArena.Api.Battle;
 
 public sealed partial class InMemoryBattleStore
 {
-    // Fixed 3-slot offensive kit. Heal and Guard are preserved as implementations
-    // but are no longer seeded at run start — they return as free-slot runes in a future step.
-    private static readonly string[] InitialSkillOrder =
-    [
-        ArenaConfig.ExoriMinSkillId,
-        ArenaConfig.ExoriSkillId,
-        ArenaConfig.ExoriMasSkillId
-    ];
-
     private static readonly IReadOnlyDictionary<string, int> SkillBaseCooldownTotalMsById =
         new Dictionary<string, int>(StringComparer.Ordinal)
         {
             [ArenaConfig.ExoriSkillId] = ArenaConfig.ExoriCooldownTotalMs,
             [ArenaConfig.ExoriMasSkillId] = ArenaConfig.ExoriMasCooldownTotalMs,
             [ArenaConfig.ExoriMinSkillId] = ArenaConfig.ExoriMinCooldownTotalMs,
+            [ArenaConfig.SigilBoltSkillId] = ArenaConfig.SigilBoltCooldownTotalMs,
+            [ArenaConfig.ShotgunSkillId] = ArenaConfig.ShotgunCooldownTotalMs,
+            [ArenaConfig.VoidRicochetSkillId] = ArenaConfig.VoidRicochetCooldownTotalMs,
             [ArenaConfig.HealSkillId] = ArenaConfig.HealCooldownTotalMs,
             [ArenaConfig.GuardSkillId] = ArenaConfig.GuardCooldownTotalMs,
             [ArenaConfig.AvalancheSkillId] = ArenaConfig.AvalancheCooldownTotalMs
         };
 
-    private static Dictionary<string, StoredSkill> BuildInitialSkills()
+    private static Dictionary<string, StoredSkill> BuildInitialSkills(string playerClassId)
     {
         var skills = new Dictionary<string, StoredSkill>(StringComparer.Ordinal);
-        foreach (var skillId in InitialSkillOrder)
+        foreach (var skillId in ResolveFixedSkillIdsForPlayerClass(playerClassId))
         {
             skills[skillId] = new StoredSkill(
                 skillId: skillId,
@@ -55,7 +49,7 @@ public sealed partial class InMemoryBattleStore
 
     private static void ApplyDeterministicSkillUpgradeForRunLevel(StoredBattle state)
     {
-        var upgradedSkillId = ResolveDeterministicUpgradeSkillId(state.RunLevel);
+        var upgradedSkillId = ResolveDeterministicUpgradeSkillId(state, state.RunLevel);
         if (upgradedSkillId is null || !state.Skills.TryGetValue(upgradedSkillId, out var upgradedSkill))
         {
             return;
@@ -67,15 +61,16 @@ public sealed partial class InMemoryBattleStore
             ResolveSkillCooldownTotalMs(state, upgradedSkill));
     }
 
-    private static string? ResolveDeterministicUpgradeSkillId(int runLevel)
+    private static string? ResolveDeterministicUpgradeSkillId(StoredBattle state, int runLevel)
     {
-        if (runLevel <= ArenaConfig.RunInitialLevel || RunLevelSkillUpgradeOrder.Length == 0)
+        var upgradeOrder = ResolveRunLevelSkillUpgradeOrder(state);
+        if (runLevel <= ArenaConfig.RunInitialLevel || upgradeOrder.Count == 0)
         {
             return null;
         }
 
-        var upgradeIndex = (runLevel - ArenaConfig.RunInitialLevel - 1) % RunLevelSkillUpgradeOrder.Length;
-        return RunLevelSkillUpgradeOrder[upgradeIndex];
+        var upgradeIndex = (runLevel - ArenaConfig.RunInitialLevel - 1) % upgradeOrder.Count;
+        return upgradeOrder[upgradeIndex];
     }
 
     private static int ResolveSkillBonusLevels(StoredSkill skill)

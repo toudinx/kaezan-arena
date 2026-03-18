@@ -33,6 +33,7 @@ public sealed record BattleStepResponseDto(
     string? LockedTargetEntityId,
     BattleTilePosDto? GroundTargetPos,
     AssistConfigDto AssistConfig,
+    BattleRangedConfigDto RangedConfig,
     ElementType PlayerBaseElement,
     ElementType? WeaponElement,
     IReadOnlyList<BattleDecalDto> Decals,

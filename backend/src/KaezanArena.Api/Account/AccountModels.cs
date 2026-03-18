@@ -82,6 +82,14 @@ public sealed record SpeciesDefinition(
     string SpeciesId,
     string DisplayName);
 
+public sealed record CharacterCatalogDefinition(
+    string CharacterId,
+    string DisplayName,
+    string Subtitle,
+    bool IsProvisional,
+    IReadOnlyList<string> FixedWeaponIds,
+    IReadOnlyList<string> FixedWeaponNames);
+
 public sealed record EquipmentDefinition(
     string ItemId,
     string Slot,

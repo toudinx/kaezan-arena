@@ -45,6 +45,8 @@ builder.Services.AddSwaggerGen(options =>
                 typeof(EliteBuffAppliedEventDto),
                 typeof(EliteBuffRemovedEventDto),
                 typeof(EliteDiedEventDto),
+                typeof(RangedProjectileFiredEventDto),
+                typeof(MobKnockedBackEventDto),
                 typeof(RunEndedEventDto)
             ];
         }
@@ -163,6 +165,16 @@ builder.Services.AddSwaggerGen(options =>
         if (subType == typeof(EliteDiedEventDto))
         {
             return "elite_died";
+        }
+
+        if (subType == typeof(RangedProjectileFiredEventDto))
+        {
+            return "ranged_projectile_fired";
+        }
+
+        if (subType == typeof(MobKnockedBackEventDto))
+        {
+            return "mob_knocked_back";
         }
 
         if (subType == typeof(RunEndedEventDto))

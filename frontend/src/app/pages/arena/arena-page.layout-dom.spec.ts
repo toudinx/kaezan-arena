@@ -111,8 +111,8 @@ describe("ArenaPageComponent layout DOM", () => {
     fixture.componentInstance.runAwardedDropEventsCount = 15;
     fixture.componentInstance.runAwardedItemDropCount = 4;
     fixture.componentInstance.selectedCards = [
-      { id: "colossus_heart", name: "Colossus Heart", description: "" },
-      { id: "avenger_instinct", name: "Avenger Instinct", description: "" }
+      { id: "colossus_heart", name: "Colossus Heart", description: "", isSkillCard: false, currentStacks: 1 },
+      { id: "avenger_instinct", name: "Avenger Instinct", description: "", isSkillCard: false, currentStacks: 1 }
     ];
     fixture.detectChanges();
 

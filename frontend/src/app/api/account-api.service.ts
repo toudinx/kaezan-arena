@@ -39,6 +39,15 @@ export interface AccountState {
   characters: Record<string, CharacterState>;
 }
 
+export interface CharacterCatalogEntry {
+  characterId: string;
+  displayName: string;
+  subtitle: string;
+  isProvisional: boolean;
+  fixedWeaponIds: string[];
+  fixedWeaponNames: string[];
+}
+
 export interface ItemDefinition {
   itemId: string;
   displayName: string;
@@ -80,6 +89,7 @@ export interface DropEvent {
 
 export interface AccountStateResponse {
   account: AccountState;
+  characterCatalog: CharacterCatalogEntry[];
   itemCatalog: ItemDefinition[];
   equipmentCatalog: EquipmentDefinition[];
 }

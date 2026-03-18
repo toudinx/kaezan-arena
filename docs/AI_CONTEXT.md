@@ -188,9 +188,14 @@ Auto-attack single-target melee is removed — kit melee weapons replace it.
 
 Character kits (3 fixed slots + 1 free slot):
 
-Kina / Velvet:
+Kina:
   Fixed: Exori Min (frontal melee, 800ms) + Exori (square AoE r=1, 1200ms) + Exori Mas (diamond AoE r=2, 2000ms)
   Free: 1 attack weapon chosen per run via card
+
+Ranged Prototype:
+  Fixed: Sigil Bolt (single-target ranged, 800ms) + Shotgun (dragon-wave cone AoE, 800ms) + Void Ricochet (bounce + pierce, 2000ms)
+  Free: 1 attack weapon chosen per run via card
+  Current product status: selectable on Characters page as provisional "Prototype" (subtitle: "Ranged Kit [WIP]") for ranged testing
 
 Archer (future):
   Fixed: AA Ranged + Shotgun + Pierce Bolt
@@ -212,7 +217,9 @@ All weapons fire automatically via the Assist System.
 
 Assist priority order (offensive only):
 
-Exori Mas → Exori → Exori Min → [FreeSlotWeaponId if set]
+Class-kit-driven potency-first order (resolved from active class fixed kit) -> [FreeSlotWeaponId if set]
+  - Kina: Exori Mas -> Exori -> Exori Min
+  - Ranged Prototype: Void Ricochet -> Shotgun -> Sigil Bolt
 
 Max 1 auto-cast per tick.
 
@@ -220,12 +227,12 @@ Current state: free slot starts null every run. Avalanche is no longer in the fi
 priority — it re-enters automatically once the rune system sets StoredBattle.FreeSlotWeaponId
 = ArenaConfig.WeaponIds.Avalanche.
 
-Ranged weapons (planned, future implementation):
+Ranged weapons:
 
-AA Ranged — single target, high cadence
-Shotgun — cone AoE
-Pierce Bolt — pierces through mobs
-Void Ricochet — bounces off grid borders
+Sigil Bolt - implemented (single target, ranged auto-attack)
+Shotgun - implemented (dragon-wave cone AoE; all mobs in cone take damage; knockback 1 tile in primary cone direction when destination is free)
+Void Ricochet - implemented (reflects on arena borders, pierces all mobs per segment, emits one projectile event per segment)
+Pierce Bolt - future
 
 Destructible obstacles: planned after ranged weapons are implemented.
 
@@ -419,6 +426,23 @@ Advance Simulation
 Return Snapshot
 ↓
 Render
+
+Ranged foundation status (infrastructure + active ranged weapons):
+
+- Shared ranged projectile event exists: `ranged_projectile_fired` (`RangedProjectileFiredEventDto`)
+- Shared knockback event exists: `mob_knocked_back` (`MobKnockedBackEventDto`)
+- Shared backend ranged helpers now exist:
+  - `HasLineOfSight(TilePos from, TilePos to, StoredBattle state)`
+  - `ResolveRangedTarget(StoredBattle state, int maxRange, bool requireLOS)`
+  - `ApplyRangedDamageToMob(StoredBattle state, StoredActor target, int damage, string weaponId, List<BattleEventDto> events)`
+- LOS is intentionally stubbed now (returns true) and documented to be populated when destructible obstacles are implemented
+- Frontend projectile visuals are driven by the ranged event and ranged snapshot config (`ProjectileAnimator`)
+- Frontend knockback visuals are driven by `mob_knocked_back` via short actor slide interpolation (render-only)
+- Shotgun uses cone AoE damage and also emits 5 representative visual projectile lines per cast for cone readability
+- Sigil Bolt, Shotgun, and Void Ricochet are active for ranged-kit characters
+- Void Ricochet emits one projectile event per bounce segment and frontend renders segments sequentially
+- Kina remains unchanged and never casts Sigil Bolt, Shotgun, or Void Ricochet
+
 15. Determinism Rules
 
 Determinism is critical.
@@ -519,6 +543,8 @@ Arena page (player fixed at center, Vampire Survivors skill unlock, assist auto-
 Home page
 
 Characters page
+  - Kina + Prototype are selectable
+  - Prototype is explicitly marked as provisional ranged test character ("Ranged Kit [WIP]")
 
 Bestiary page
 
@@ -715,6 +741,8 @@ passive card caps: max 4 distinct types, max 3 stacks per type
 runes can only be equipped in the free weapon slot; prerequisites apply
 
 all constants are in ArenaConfig.cs — never hardcode simulation values
+
+ranged infrastructure exists (projectile + knockback events, LOS stub, shared helpers); Sigil Bolt, Shotgun, and Void Ricochet are active for ranged-kit characters, and Kina remains unchanged
 
 short-run fun matters more than large-system complexity
 

@@ -9,6 +9,13 @@ export interface TilePos {
   y: number;
 }
 
+export interface ArenaRangedConfig {
+  autoAttackRangedMaxRange: number;
+  rangedProjectileSpeedTiles: number;
+  rangedDefaultCooldownMs: number;
+  projectileColorByWeaponId: Record<string, string>;
+}
+
 export interface TileEntity {
   semanticId: string;
   tilePos: TilePos;
@@ -104,6 +111,33 @@ export interface DamageNumberInstance {
   tilePos: TilePos;
   stackIndex: number;
   spawnOrder: number;
+  elapsedMs: number;
+  durationMs: number;
+}
+
+export interface QueuedDamageNumberInstance {
+  entry: Omit<DamageNumberInstance, "stackIndex" | "spawnOrder" | "elapsedMs">;
+  delayRemainingMs: number;
+}
+
+export interface RangedProjectileInstance {
+  weaponId: string;
+  fromPos: TilePos;
+  impactPos: TilePos;
+  visualEndPos: TilePos;
+  targetActorId?: string | null;
+  pierces: boolean;
+  colorHex: string;
+  startDelayRemainingMs?: number;
+  elapsedMs: number;
+  impactDurationMs: number;
+  totalDurationMs: number;
+}
+
+export interface MobKnockbackSlideInstance {
+  actorId: string;
+  fromPos: TilePos;
+  toPos: TilePos;
   elapsedMs: number;
   durationMs: number;
 }
@@ -227,6 +261,22 @@ export interface ArenaDeathEvent {
   tickIndex: number;
 }
 
+export interface ArenaRangedProjectileFiredEvent {
+  type: "ranged_projectile_fired";
+  weaponId: string;
+  fromTile: TilePos;
+  toTile: TilePos;
+  targetActorId?: string | null;
+  pierces: boolean;
+}
+
+export interface ArenaMobKnockedBackEvent {
+  type: "mob_knocked_back";
+  actorId: string;
+  fromTile: TilePos;
+  toTile: TilePos;
+}
+
 export interface ArenaHealNumberEvent {
   type: "heal_number";
   actorId: string;
@@ -251,7 +301,9 @@ export type ArenaBattleEvent =
   | ArenaAttackFxEvent
   | ArenaDeathEvent
   | ArenaHealNumberEvent
-  | ArenaReflectNumberEvent;
+  | ArenaReflectNumberEvent
+  | ArenaRangedProjectileFiredEvent
+  | ArenaMobKnockedBackEvent;
 
 export interface ApplyBattleStepResult {
   scene: ArenaScene;
@@ -274,10 +326,15 @@ export interface ArenaScene {
   decals: DecalInstance[];
   activeBuffs: ArenaBuffState[];
   activePois: ArenaPoiState[];
+  rangedConfig?: ArenaRangedConfig;
   hoveredMobEntityId?: string | null;
   threatMobEntityId?: string | null;
   fxInstances: FxInstance[];
   attackFxInstances: AttackFxInstance[];
+  projectileInstances: RangedProjectileInstance[];
+  mobKnockbackSlidesByActorId?: Record<string, MobKnockbackSlideInstance>;
+  queuedDamageNumbers: QueuedDamageNumberInstance[];
+  nextDamageSpawnOrder: number;
   damageNumbers: DamageNumberInstance[];
   floatingTexts: FloatingTextInstance[];
 }

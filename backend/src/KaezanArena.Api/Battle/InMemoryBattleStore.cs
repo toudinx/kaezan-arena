@@ -22,27 +22,38 @@ public sealed partial class InMemoryBattleStore : IBattleStore
     // Avalanche is no longer in this fixed list — it returns automatically once the rune system
     // sets StoredBattle.FreeSlotWeaponId = ArenaConfig.WeaponIds.Avalanche.
     // Heal and Guard are excluded — defensive survivability is now passive-card-only.
-    private static readonly string[] AssistOffenseSkillPriority =
-    [
-        ArenaConfig.ExoriMasSkillId,
-        ArenaConfig.ExoriSkillId,
-        ArenaConfig.ExoriMinSkillId
-    ];
-    // Heal and Guard removed: not in the starting kit.
-    // Avalanche removed: upgrades for the free slot will be handled separately once the rune system lands.
-    private static readonly string[] RunLevelSkillUpgradeOrder =
-    [
-        ArenaConfig.ExoriSkillId,
-        ArenaConfig.ExoriMinSkillId,
-        ArenaConfig.ExoriMasSkillId
-    ];
-    private static readonly IReadOnlyDictionary<string, bool> DefaultAssistAutoSkills =
-        new Dictionary<string, bool>(StringComparer.Ordinal)
+    private static readonly IReadOnlyDictionary<string, IReadOnlyList<string>> FixedWeaponKitByPlayerClassId =
+        new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal)
         {
-            [ArenaConfig.ExoriSkillId] = true,
-            [ArenaConfig.ExoriMinSkillId] = true,
-            [ArenaConfig.ExoriMasSkillId] = true,
-            [ArenaConfig.AvalancheSkillId] = true
+            [ArenaConfig.PlayerClassKina] =
+                ArenaConfig.GetFixedWeaponKitForCharacterId(ArenaConfig.CharacterIds.Kina),
+            [ArenaConfig.PlayerClassRangedPrototype] =
+                ArenaConfig.GetFixedWeaponKitForCharacterId(ArenaConfig.CharacterIds.RangedPrototype)
+        };
+    private static readonly string[] AssistOffenseWeaponPriority =
+    [
+        ArenaConfig.WeaponIds.VoidRicochetId,
+        ArenaConfig.WeaponIds.ExoriMas,
+        ArenaConfig.WeaponIds.Exori,
+        ArenaConfig.WeaponIds.ExoriMin,
+        ArenaConfig.WeaponIds.ShotgunId,
+        ArenaConfig.WeaponIds.SigilBolt
+    ];
+    private static readonly IReadOnlyDictionary<string, IReadOnlyList<string>> RunLevelSkillUpgradeOrderByPlayerClassId =
+        new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal)
+        {
+            [ArenaConfig.PlayerClassKina] =
+            [
+                ArenaConfig.ExoriSkillId,
+                ArenaConfig.ExoriMinSkillId,
+                ArenaConfig.ExoriMasSkillId
+            ],
+            [ArenaConfig.PlayerClassRangedPrototype] =
+            [
+                ArenaConfig.VoidRicochetSkillId,
+                ArenaConfig.SigilBoltSkillId,
+                ArenaConfig.ShotgunSkillId
+            ]
         };
     private static readonly IReadOnlyDictionary<MobArchetype, string> SpeciesByArchetype =
         new Dictionary<MobArchetype, string>
@@ -295,12 +306,13 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         var critRng = new Random(GenerateCritSeed(resolvedSeed));
         var mobSlots = BuildMobSlots();
         var bestiary = BuildInitialBestiaryEntries(mobSlots, bestiaryRng);
+        var resolvedPlayerClassId = ResolvePlayerClassId(normalizedPlayer);
 
         var state = new StoredBattle(
             battleId: battleId,
             arenaId: normalizedArena,
             playerActorId: normalizedPlayer,
-            playerClassId: ResolvePlayerClassId(normalizedPlayer),
+            playerClassId: resolvedPlayerClassId,
             seed: resolvedSeed,
             rng: battleRng,
             poiRng: poiRng,
@@ -328,7 +340,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             lockedTargetEntityId: null,
             groundTargetTileX: null,
             groundTargetTileY: null,
-            assistConfig: BuildDefaultAssistConfig(),
+            assistConfig: BuildDefaultAssistConfig(resolvedPlayerClassId),
             actors: new Dictionary<string, StoredActor>(StringComparer.Ordinal)
             {
                 [normalizedPlayer] = new StoredActor(
@@ -346,7 +358,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                     maxShield: ComputePlayerMaxShield(maxHp: ArenaConfig.PlayerBaseHp),
                     mobSlotIndex: null)
             },
-            skills: BuildInitialSkills(),
+            skills: BuildInitialSkills(resolvedPlayerClassId),
             equippedWeaponElement: null,
             decals: [],
             activeBuffs: new Dictionary<string, StoredBuff>(StringComparer.Ordinal),
@@ -704,13 +716,83 @@ public sealed partial class InMemoryBattleStore : IBattleStore
 
     private static string ResolvePlayerClassId(string playerActorId)
     {
-        // MVP: every current run uses Kina. Keep this hook to make class selection explicit/extensible.
-        _ = playerActorId;
+        if (string.Equals(playerActorId, ArenaConfig.CharacterIds.RangedPrototype, StringComparison.Ordinal))
+        {
+            return ArenaConfig.PlayerClassRangedPrototype;
+        }
+
         return ArenaConfig.PlayerClassKina;
     }
 
-    private static StoredAssistConfig BuildDefaultAssistConfig()
+    private static IReadOnlyList<string> ResolveFixedWeaponKitForPlayerClass(string playerClassId)
     {
+        if (FixedWeaponKitByPlayerClassId.TryGetValue(playerClassId, out var fixedWeaponKit))
+        {
+            return fixedWeaponKit;
+        }
+
+        return FixedWeaponKitByPlayerClassId[ArenaConfig.PlayerClassKina];
+    }
+
+    private static IReadOnlyList<string> ResolveFixedSkillIdsForPlayerClass(string playerClassId)
+    {
+        var fixedSkillIds = new List<string>();
+        foreach (var weaponId in ResolveFixedWeaponKitForPlayerClass(playerClassId))
+        {
+            var skillId = ArenaConfig.GetSkillIdForWeaponId(weaponId);
+            if (string.IsNullOrWhiteSpace(skillId))
+            {
+                throw new InvalidOperationException(
+                    $"Fixed-kit weapon '{weaponId}' has no mapped skill id for class '{playerClassId}'.");
+            }
+
+            fixedSkillIds.Add(skillId);
+        }
+
+        return fixedSkillIds;
+    }
+
+    private static IReadOnlyList<string> ResolveAssistOffenseSkillPriority(StoredBattle state)
+    {
+        var fixedWeaponKit = ResolveFixedWeaponKitForPlayerClass(state.PlayerClassId);
+        var fixedWeaponSet = new HashSet<string>(fixedWeaponKit, StringComparer.Ordinal);
+        var resolvedPriority = new List<string>(capacity: fixedWeaponSet.Count);
+
+        foreach (var weaponId in AssistOffenseWeaponPriority)
+        {
+            if (!fixedWeaponSet.Contains(weaponId))
+            {
+                continue;
+            }
+
+            var skillId = ArenaConfig.GetSkillIdForWeaponId(weaponId);
+            if (string.IsNullOrWhiteSpace(skillId))
+            {
+                throw new InvalidOperationException(
+                    $"Assist priority weapon '{weaponId}' has no mapped skill id for class '{state.PlayerClassId}'.");
+            }
+
+            resolvedPriority.Add(skillId);
+        }
+
+        return resolvedPriority;
+    }
+
+    private static IReadOnlyList<string> ResolveRunLevelSkillUpgradeOrder(StoredBattle state)
+    {
+        if (RunLevelSkillUpgradeOrderByPlayerClassId.TryGetValue(state.PlayerClassId, out var order))
+        {
+            return order;
+        }
+
+        return RunLevelSkillUpgradeOrderByPlayerClassId[ArenaConfig.PlayerClassKina];
+    }
+
+    private static StoredAssistConfig BuildDefaultAssistConfig(string playerClassId)
+    {
+        var defaultAutoSkills = ResolveFixedSkillIdsForPlayerClass(playerClassId)
+            .ToDictionary(skillId => skillId, _ => true, StringComparer.Ordinal);
+
         return new StoredAssistConfig(
             enabled: true,
             autoHealEnabled: true,
@@ -719,7 +801,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             guardAtHpPercent: ArenaConfig.AssistDefaultGuardAtHpPercent,
             autoOffenseEnabled: true,
             offenseMode: ArenaConfig.AssistOffenseModeCooldownSpam,
-            autoSkills: CopyAutoSkillMap(DefaultAssistAutoSkills),
+            autoSkills: defaultAutoSkills,
             maxAutoCastsPerTick: ArenaConfig.AssistDefaultMaxAutoCastsPerTick);
     }
 
@@ -737,7 +819,10 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             MaxAutoCastsPerTick: config.MaxAutoCastsPerTick);
     }
 
-    private static StoredAssistConfig SanitizeAssistConfig(AssistConfigDto? requested, StoredAssistConfig fallback)
+    private static StoredAssistConfig SanitizeAssistConfig(
+        StoredBattle state,
+        AssistConfigDto? requested,
+        StoredAssistConfig fallback)
     {
         if (requested is null)
         {
@@ -745,7 +830,8 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         }
 
         var offenseMode = NormalizeAssistOffenseMode(requested.OffenseMode) ?? fallback.OffenseMode;
-        var autoSkills = SanitizeAssistAutoSkills(requested.AutoSkills, fallback.AutoSkills);
+        var offenseSkillPriority = ResolveAssistOffenseSkillPriority(state);
+        var autoSkills = SanitizeAssistAutoSkills(requested.AutoSkills, fallback.AutoSkills, offenseSkillPriority);
 
         return new StoredAssistConfig(
             enabled: requested.Enabled ?? fallback.Enabled,
@@ -761,10 +847,11 @@ public sealed partial class InMemoryBattleStore : IBattleStore
 
     private static IReadOnlyDictionary<string, bool> SanitizeAssistAutoSkills(
         IReadOnlyDictionary<string, bool>? requested,
-        IReadOnlyDictionary<string, bool> fallback)
+        IReadOnlyDictionary<string, bool> fallback,
+        IReadOnlyList<string> offenseSkillPriority)
     {
         var sanitized = new Dictionary<string, bool>(StringComparer.Ordinal);
-        foreach (var skillId in AssistOffenseSkillPriority)
+        foreach (var skillId in offenseSkillPriority)
         {
             if (requested is not null && requested.TryGetValue(skillId, out var requestedEnabled))
             {
@@ -977,7 +1064,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
 
             if (string.Equals(commandType, ArenaConfig.SetAssistConfigCommandType, StringComparison.Ordinal))
             {
-                state.AssistConfig = SanitizeAssistConfig(command.AssistConfig, state.AssistConfig);
+                state.AssistConfig = SanitizeAssistConfig(state, command.AssistConfig, state.AssistConfig);
                 commandResults.Add(new CommandResultDto(index, commandType, true, null));
                 continue;
             }
@@ -1181,10 +1268,80 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             return false;
         }
 
-        foreach (var skillId in AssistOffenseSkillPriority)
+        var offenseSkillPriority = ResolveAssistOffenseSkillPriority(state);
+        if (string.Equals(state.PlayerClassId, ArenaConfig.PlayerClassKina, StringComparison.Ordinal))
+        {
+            if (offenseSkillPriority.Contains(ArenaConfig.SigilBoltSkillId, StringComparer.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    "Critical invariant violation: Sigil Bolt entered Kina assist priority.");
+            }
+
+            if (offenseSkillPriority.Contains(ArenaConfig.ShotgunSkillId, StringComparer.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    "Critical invariant violation: Shotgun entered Kina assist priority.");
+            }
+
+            if (offenseSkillPriority.Contains(ArenaConfig.VoidRicochetSkillId, StringComparer.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    "Critical invariant violation: Void Ricochet entered Kina assist priority.");
+            }
+        }
+
+        foreach (var skillId in offenseSkillPriority)
         {
             if (!assist.AutoSkills.TryGetValue(skillId, out var isEnabled) || !isEnabled)
             {
+                continue;
+            }
+
+            if (string.Equals(skillId, ArenaConfig.SigilBoltSkillId, StringComparison.Ordinal))
+            {
+                if (string.Equals(state.PlayerClassId, ArenaConfig.PlayerClassKina, StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException(
+                        "Critical invariant violation: Sigil Bolt entered Kina assist priority.");
+                }
+
+                if (TryExecuteSigilBolt(state, events))
+                {
+                    return true;
+                }
+
+                continue;
+            }
+
+            if (string.Equals(skillId, ArenaConfig.ShotgunSkillId, StringComparison.Ordinal))
+            {
+                if (string.Equals(state.PlayerClassId, ArenaConfig.PlayerClassKina, StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException(
+                        "Critical invariant violation: Shotgun entered Kina assist priority.");
+                }
+
+                if (TryExecuteShotgun(state, events))
+                {
+                    return true;
+                }
+
+                continue;
+            }
+
+            if (string.Equals(skillId, ArenaConfig.VoidRicochetSkillId, StringComparison.Ordinal))
+            {
+                if (string.Equals(state.PlayerClassId, ArenaConfig.PlayerClassKina, StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException(
+                        "Critical invariant violation: Void Ricochet entered Kina assist priority.");
+                }
+
+                if (TryExecuteVoidRicochet(state, events))
+                {
+                    return true;
+                }
+
                 continue;
             }
 

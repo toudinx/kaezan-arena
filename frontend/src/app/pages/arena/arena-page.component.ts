@@ -18,6 +18,7 @@ import {
   ArenaBestiaryEntry,
   ArenaBuffState,
   ArenaPoiState,
+  ArenaRangedConfig,
   DecalInstance,
   ArenaScene,
   ArenaSkillState,
@@ -2709,6 +2710,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         this.updatePlayerHudFromActorStates(response.actors);
         this.applySkillStates(response.skills);
         this.applyDecals(response.decals);
+        this.applyRangedConfigFromSnapshot(response);
         this.applyTargetingStateFromSnapshot(response);
         this.applyAssistConfigFromSnapshot(response);
         this.applyActiveBuffsFromSnapshot(response);
@@ -3209,6 +3211,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     const actors = this.toEngineActors(response.actors);
     const skills = this.toEngineSkills(response.skills);
     const decals = this.toEngineDecals(response.decals);
+    this.applyRangedConfigFromSnapshot(response);
     const events = this.toEngineEvents(response.events);
     const applied = this.engine.applyBattleStep(this.scene, actors, skills, decals, events);
 
@@ -3282,6 +3285,20 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     }
 
     this.assistConfig = mapped;
+  }
+
+  private applyRangedConfigFromSnapshot(snapshot: StartBattleResponse | StepBattleResponse): void {
+    if (!this.scene) {
+      return;
+    }
+
+    const record = snapshot as Record<string, unknown>;
+    const mapped = this.toEngineRangedConfig(record["rangedConfig"]);
+    if (!mapped) {
+      return;
+    }
+
+    this.scene = this.engine.applyRangedConfig(this.scene, mapped);
   }
 
   private applyActivePoisFromSnapshot(snapshot: StartBattleResponse | StepBattleResponse): void {
@@ -3506,6 +3523,32 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     }
 
     return mapped;
+  }
+
+  private toEngineRangedConfig(value: unknown): ArenaRangedConfig | null {
+    if (!value || typeof value !== "object") {
+      return null;
+    }
+
+    const record = value as Record<string, unknown>;
+    const autoAttackRangedMaxRange = this.readNumber(record["autoAttackRangedMaxRange"]);
+    const rangedProjectileSpeedTiles = this.readNumber(record["rangedProjectileSpeedTiles"]);
+    const rangedDefaultCooldownMs = this.readNumber(record["rangedDefaultCooldownMs"]);
+    const projectileColorByWeaponId = this.readStringMap(record["projectileColorByWeaponId"]);
+    if (
+      autoAttackRangedMaxRange === null ||
+      rangedProjectileSpeedTiles === null ||
+      rangedDefaultCooldownMs === null
+    ) {
+      return null;
+    }
+
+    return {
+      autoAttackRangedMaxRange,
+      rangedProjectileSpeedTiles,
+      rangedDefaultCooldownMs,
+      projectileColorByWeaponId
+    };
   }
 
   private toEnginePois(value: unknown): ArenaPoiState[] {
@@ -3736,6 +3779,59 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
           createdAtTick,
           eventId,
           elementType: elementType ?? undefined
+        });
+        continue;
+      }
+
+      if (eventType === "ranged_projectile_fired") {
+        const weaponId = this.readString(value["weaponId"]);
+        const fromTile = this.readRecord(value["fromTile"]);
+        const toTile = this.readRecord(value["toTile"]);
+        const fromX = this.readNumber(fromTile?.["x"]);
+        const fromY = this.readNumber(fromTile?.["y"]);
+        const toX = this.readNumber(toTile?.["x"]);
+        const toY = this.readNumber(toTile?.["y"]);
+        const targetActorId = this.readString(value["targetActorId"]);
+        const pierces = this.readBoolean(value["pierces"]);
+        if (
+          !weaponId ||
+          fromX === null ||
+          fromY === null ||
+          toX === null ||
+          toY === null ||
+          pierces === null
+        ) {
+          continue;
+        }
+
+        mapped.push({
+          type: "ranged_projectile_fired",
+          weaponId,
+          fromTile: { x: fromX, y: fromY },
+          toTile: { x: toX, y: toY },
+          targetActorId: targetActorId ?? undefined,
+          pierces
+        });
+        continue;
+      }
+
+      if (eventType === "mob_knocked_back") {
+        const actorId = this.readString(value["actorId"]);
+        const fromTile = this.readRecord(value["fromTile"]);
+        const toTile = this.readRecord(value["toTile"]);
+        const fromX = this.readNumber(fromTile?.["x"]);
+        const fromY = this.readNumber(fromTile?.["y"]);
+        const toX = this.readNumber(toTile?.["x"]);
+        const toY = this.readNumber(toTile?.["y"]);
+        if (!actorId || fromX === null || fromY === null || toX === null || toY === null) {
+          continue;
+        }
+
+        mapped.push({
+          type: "mob_knocked_back",
+          actorId,
+          fromTile: { x: fromX, y: fromY },
+          toTile: { x: toX, y: toY }
         });
         continue;
       }
@@ -5324,6 +5420,22 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
 
   private readBoolean(value: unknown): boolean | null {
     return typeof value === "boolean" ? value : null;
+  }
+
+  private readStringMap(value: unknown): Record<string, string> {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      return {};
+    }
+
+    const record = value as Record<string, unknown>;
+    const mapped: Record<string, string> = {};
+    for (const [key, rawValue] of Object.entries(record)) {
+      if (typeof rawValue === "string" && key.trim().length > 0 && rawValue.trim().length > 0) {
+        mapped[key] = rawValue;
+      }
+    }
+
+    return mapped;
   }
 
   private readRecord(value: unknown): Record<string, unknown> | null {

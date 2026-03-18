@@ -53,6 +53,7 @@ function buildAccountStateResponse(): AccountStateResponse {
       echoFragmentsBalance: 0,
       characters: {}
     },
+    characterCatalog: [],
     itemCatalog: [],
     equipmentCatalog: []
   };

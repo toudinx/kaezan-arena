@@ -54,6 +54,7 @@ describe("ArenaPageComponent pre-run account loading", () => {
           }
         }
       },
+      characterCatalog: [],
       itemCatalog: [
         { itemId: "bronze_sword", displayName: "Bronze Sword", kind: "equipment", stackable: false, rarity: "common" },
         { itemId: "steel_axe", displayName: "Steel Axe", kind: "equipment", stackable: false, rarity: "rare" }
@@ -91,6 +92,7 @@ describe("ArenaPageComponent pre-run account loading", () => {
           }
         }
       },
+      characterCatalog: [],
       itemCatalog: [],
       equipmentCatalog: []
     }));
@@ -110,6 +112,7 @@ describe("ArenaPageComponent pre-run account loading", () => {
         echoFragmentsBalance: 0,
         characters: {}
       },
+      characterCatalog: [],
       itemCatalog: [],
       equipmentCatalog: []
     }));

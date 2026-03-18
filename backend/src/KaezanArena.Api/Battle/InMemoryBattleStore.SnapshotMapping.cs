@@ -147,6 +147,7 @@ public sealed partial class InMemoryBattleStore
             LockedTargetEntityId: state.LockedTargetEntityId,
             GroundTargetPos: groundTargetPos,
             AssistConfig: ToAssistConfigDto(state.AssistConfig),
+            RangedConfig: BuildRangedConfigDto(),
             PlayerBaseElement: GetPlayerBaseElement(state),
             WeaponElement: state.EquippedWeaponElement,
             Decals: decals,
@@ -167,6 +168,15 @@ public sealed partial class InMemoryBattleStore
                 && ArenaConfig.DisplayNames.TryGetValue(freeId, out var freeName)
                     ? freeName
                     : null);
+    }
+
+    private static BattleRangedConfigDto BuildRangedConfigDto()
+    {
+        return new BattleRangedConfigDto(
+            AutoAttackRangedMaxRange: ArenaConfig.AutoAttackRangedMaxRange,
+            RangedProjectileSpeedTiles: ArenaConfig.RangedProjectileSpeedTiles,
+            RangedDefaultCooldownMs: ArenaConfig.RangedDefaultCooldownMs,
+            ProjectileColorByWeaponId: new Dictionary<string, string>(ArenaConfig.RangedProjectileColorByWeaponId, StringComparer.Ordinal));
     }
 
     private static string? ResolveLegacyEndReason(string? runEndReason)

@@ -22,10 +22,10 @@ describe("ArenaPageComponent skill snapshot mapping", () => {
     ]);
 
     expect(mapped).toEqual([
-      { skillId: "heal", cooldownRemainingMs: 3250, cooldownTotalMs: 7000 },
-      { skillId: "guard", cooldownRemainingMs: 9750, cooldownTotalMs: 10000 },
-      { skillId: "avalanche", cooldownRemainingMs: 1800, cooldownTotalMs: 2500 },
-      { skillId: "exori", cooldownRemainingMs: 0, cooldownTotalMs: 1200 }
+      { skillId: "heal", displayName: null, cooldownRemainingMs: 3250, cooldownTotalMs: 7000 },
+      { skillId: "guard", displayName: null, cooldownRemainingMs: 9750, cooldownTotalMs: 10000 },
+      { skillId: "avalanche", displayName: null, cooldownRemainingMs: 1800, cooldownTotalMs: 2500 },
+      { skillId: "exori", displayName: null, cooldownRemainingMs: 0, cooldownTotalMs: 1200 }
     ]);
 
     (component as any).updateVisibleSkills(mapped);

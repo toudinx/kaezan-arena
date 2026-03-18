@@ -1245,6 +1245,552 @@ public sealed class InMemoryBattleStoreDeterminismTests
         }
     }
 
+    [Fact]
+    public void ResolveRangedTarget_ReturnsLockedTargetThenNearestThenNull()
+    {
+        var store = new InMemoryBattleStore();
+        var start = store.StartBattle("arena-ranged-target-resolution", "player-ranged-target-resolution", 1337);
+        var player = Assert.Single(start.Actors, actor => string.Equals(actor.Kind, "player", StringComparison.Ordinal));
+        var mobs = start.Actors
+            .Where(actor => string.Equals(actor.Kind, "mob", StringComparison.Ordinal))
+            .OrderBy(actor => actor.ActorId, StringComparer.Ordinal)
+            .ToList();
+        Assert.True(mobs.Count >= 2, "Expected at least two mobs to validate ranged target fallback behavior.");
+
+        var lockedTarget = mobs[0];
+        var fallbackNearest = mobs[1];
+
+        SetActorTile(store, start.BattleId, lockedTarget.ActorId, player.TileX + 1, player.TileY);
+        SetActorTile(store, start.BattleId, fallbackNearest.ActorId, player.TileX + 2, player.TileY);
+        for (var index = 2; index < mobs.Count; index += 1)
+        {
+            SetActorTile(store, start.BattleId, mobs[index].ActorId, 0, 0);
+        }
+
+        SetLockedTargetEntityId(store, start.BattleId, lockedTarget.ActorId);
+        var resolvedLocked = ResolveRangedTargetActorIdViaReflection(
+            store,
+            start.BattleId,
+            ArenaConfig.AutoAttackRangedMaxRange,
+            requireLos: true);
+        Assert.Equal(lockedTarget.ActorId, resolvedLocked);
+
+        SetLockedTargetEntityId(store, start.BattleId, null);
+        SetActorTile(store, start.BattleId, lockedTarget.ActorId, player.TileX + 3, player.TileY);
+        SetActorTile(store, start.BattleId, fallbackNearest.ActorId, player.TileX + 1, player.TileY);
+        var resolvedFallback = ResolveRangedTargetActorIdViaReflection(
+            store,
+            start.BattleId,
+            ArenaConfig.AutoAttackRangedMaxRange,
+            requireLos: true);
+        Assert.Equal(fallbackNearest.ActorId, resolvedFallback);
+
+        RemoveAllMobs(store, start.BattleId);
+        var resolvedEmpty = ResolveRangedTargetActorIdViaReflection(
+            store,
+            start.BattleId,
+            ArenaConfig.AutoAttackRangedMaxRange,
+            requireLos: true);
+        Assert.Null(resolvedEmpty);
+    }
+
+    [Fact]
+    public void BuildShotgunConeTiles_ProducesExpectedTileSets_ExcludesOutOfBounds_AndUsesUpForDegenerateTarget()
+    {
+        var from = new TilePos(ArenaConfig.PlayerTileX, ArenaConfig.PlayerTileY);
+
+        var upwardCone = BuildShotgunConeTilesViaReflection(
+            from,
+            new TilePos(ArenaConfig.PlayerTileX, ArenaConfig.PlayerTileY - 2),
+            maxRange: 3);
+        Assert.Equal(
+            new HashSet<TilePos>
+            {
+                new(3, 2),
+                new(2, 1), new(3, 1), new(4, 1),
+                new(1, 0), new(2, 0), new(3, 0), new(4, 0), new(5, 0)
+            },
+            upwardCone.ToHashSet());
+
+        var diagonalCone = BuildShotgunConeTilesViaReflection(
+            from,
+            new TilePos(ArenaConfig.PlayerTileX + 2, ArenaConfig.PlayerTileY - 2),
+            maxRange: 2);
+        Assert.Equal(
+            new HashSet<TilePos>
+            {
+                new(4, 2),
+                new(5, 1), new(4, 1), new(5, 2)
+            },
+            diagonalCone.ToHashSet());
+
+        var clippedCone = BuildShotgunConeTilesViaReflection(
+            new TilePos(1, 1),
+            new TilePos(1, -1),
+            maxRange: 3);
+        Assert.Single(clippedCone);
+        Assert.Equal(new TilePos(1, 0), clippedCone[0]);
+        Assert.All(clippedCone, tile =>
+        {
+            Assert.InRange(tile.X, 0, ArenaConfig.Width - 1);
+            Assert.InRange(tile.Y, 0, ArenaConfig.Height - 1);
+        });
+
+        var degenerateCone = BuildShotgunConeTilesViaReflection(from, from, maxRange: 2);
+        Assert.Equal(
+            new HashSet<TilePos>
+            {
+                new(3, 2),
+                new(2, 1), new(3, 1), new(4, 1)
+            },
+            degenerateCone.ToHashSet());
+    }
+
+    [Fact]
+    public void Shotgun_AssistCast_HitsAllMobsInCone_LeavesOutsideMobsUntouched_AndAppliesPrimaryDirectionKnockback()
+    {
+        var store = new InMemoryBattleStore();
+        var start = store.StartBattle("arena-shotgun-cone-aoe", ArenaConfig.CharacterIds.RangedPrototype, 1337);
+        Assert.Contains(start.Skills, skill => string.Equals(skill.SkillId, ArenaConfig.ShotgunSkillId, StringComparison.Ordinal));
+        Assert.DoesNotContain(start.Skills, skill => string.Equals(skill.SkillId, ArenaConfig.ExoriSkillId, StringComparison.Ordinal));
+
+        SpawnAllMobSlotsViaReflection(store, start.BattleId);
+        SetAllMobMoveCooldownViaReflection(store, start.BattleId, cooldownRemainingMs: 10_000);
+
+        var mobIds = GetMobActorIds(store, start.BattleId);
+        Assert.True(mobIds.Count >= 7, "Expected at least seven mobs for cone-hit, block, and outside-cone validation.");
+
+        var frontMobId = mobIds[0];
+        var leftMidMobId = mobIds[1];
+        var blockerMidMobId = mobIds[2];
+        var rightMidMobId = mobIds[3];
+        var leftFarMobId = mobIds[4];
+        var fragileFarMobId = mobIds[5];
+        var outsideMobId = mobIds[6];
+
+        var hitMobIds = new[]
+        {
+            frontMobId,
+            leftMidMobId,
+            blockerMidMobId,
+            rightMidMobId,
+            leftFarMobId,
+            fragileFarMobId
+        };
+
+        SetActorTile(store, start.BattleId, frontMobId, 3, 2);
+        SetActorTile(store, start.BattleId, leftMidMobId, 2, 1);
+        SetActorTile(store, start.BattleId, blockerMidMobId, 3, 1);
+        SetActorTile(store, start.BattleId, rightMidMobId, 4, 1);
+        SetActorTile(store, start.BattleId, leftFarMobId, 1, 0);
+        SetActorTile(store, start.BattleId, fragileFarMobId, 5, 0);
+        SetActorTile(store, start.BattleId, outsideMobId, 0, 6);
+        SetActorHp(store, start.BattleId, fragileFarMobId, 1);
+
+        var stagingTiles = new[]
+        {
+            new TilePos(1, 6),
+            new TilePos(2, 6),
+            new TilePos(3, 6),
+            new TilePos(4, 6),
+            new TilePos(5, 6),
+            new TilePos(6, 6),
+            new TilePos(6, 5),
+            new TilePos(0, 5)
+        };
+        for (var index = 7; index < mobIds.Count; index += 1)
+        {
+            var tile = stagingTiles[(index - 7) % stagingTiles.Length];
+            SetActorTile(store, start.BattleId, mobIds[index], tile.X, tile.Y);
+        }
+
+        SetLockedTargetEntityId(store, start.BattleId, blockerMidMobId);
+
+        var assistConfigCommand = new BattleCommandDto(
+            ArenaConfig.SetAssistConfigCommandType,
+            AssistConfig: new AssistConfigDto(
+                Enabled: true,
+                AutoHealEnabled: false,
+                HealAtHpPercent: 40,
+                AutoGuardEnabled: false,
+                GuardAtHpPercent: 60,
+                AutoOffenseEnabled: true,
+                OffenseMode: ArenaConfig.AssistOffenseModeCooldownSpam,
+                AutoSkills: new Dictionary<string, bool>(StringComparer.Ordinal)
+                {
+                    [ArenaConfig.ExoriMasSkillId] = false,
+                    [ArenaConfig.ShotgunSkillId] = true,
+                    [ArenaConfig.VoidRicochetSkillId] = false,
+                    [ArenaConfig.SigilBoltSkillId] = false
+                },
+                MaxAutoCastsPerTick: 1));
+
+        var step = store.StepBattle(start.BattleId, start.Tick, [assistConfigCommand]);
+
+        Assert.Contains(
+            step.Events.OfType<AssistCastEventDto>(),
+            evt => string.Equals(evt.SkillId, ArenaConfig.ShotgunSkillId, StringComparison.Ordinal));
+
+        var shotgunProjectiles = step.Events
+            .OfType<RangedProjectileFiredEventDto>()
+            .Where(evt => string.Equals(evt.WeaponId, ArenaConfig.WeaponIds.ShotgunId, StringComparison.Ordinal))
+            .ToList();
+        Assert.All(shotgunProjectiles, evt => Assert.False(evt.Pierces));
+        Assert.Equal(ArenaConfig.ShotgunVisualProjectileCount, shotgunProjectiles.Count(evt => evt.TargetActorId is null));
+        Assert.Equal(hitMobIds.Length, shotgunProjectiles.Count(evt => evt.TargetActorId is not null));
+
+        var damageNumbers = step.Events.OfType<DamageNumberEventDto>().ToList();
+        foreach (var hitMobId in hitMobIds)
+        {
+            Assert.Contains(
+                damageNumbers,
+                evt => string.Equals(evt.TargetEntityId, hitMobId, StringComparison.Ordinal));
+        }
+        Assert.DoesNotContain(
+            damageNumbers,
+            evt => string.Equals(evt.TargetEntityId, outsideMobId, StringComparison.Ordinal));
+
+        var knockedBackEvents = step.Events.OfType<MobKnockedBackEventDto>().ToList();
+        Assert.DoesNotContain(knockedBackEvents, evt => string.Equals(evt.ActorId, frontMobId, StringComparison.Ordinal));
+        Assert.DoesNotContain(knockedBackEvents, evt => string.Equals(evt.ActorId, fragileFarMobId, StringComparison.Ordinal));
+        Assert.All(knockedBackEvents, evt =>
+        {
+            Assert.Equal(evt.FromTile.X, evt.ToTile.X);
+            Assert.Equal(evt.FromTile.Y - 1, evt.ToTile.Y);
+        });
+
+        AssertActorTile(step, frontMobId, 3, 2);
+        AssertActorTile(step, leftMidMobId, 2, 0);
+        AssertActorTile(step, blockerMidMobId, 3, 0);
+        AssertActorTile(step, rightMidMobId, 4, 0);
+        AssertActorTile(step, leftFarMobId, 1, 0);
+        Assert.DoesNotContain(
+            step.Actors,
+            actor => string.Equals(actor.ActorId, fragileFarMobId, StringComparison.Ordinal));
+        AssertActorTile(step, outsideMobId, 0, 6);
+
+        var shotgunSkill = Assert.Single(step.Skills, skill =>
+            string.Equals(skill.SkillId, ArenaConfig.ShotgunSkillId, StringComparison.Ordinal));
+        Assert.Equal(ArenaConfig.ShotgunCooldownMs, shotgunSkill.CooldownRemainingMs);
+        Assert.Equal(ArenaConfig.PlayerGlobalCooldownMs, step.GlobalCooldownRemainingMs);
+    }
+
+    [Fact]
+    public void Shotgun_NoTarget_DoesNotConsumeCooldownOrGlobalCooldown()
+    {
+        var store = new InMemoryBattleStore();
+        var start = store.StartBattle("arena-shotgun-no-target", ArenaConfig.CharacterIds.RangedPrototype, 1337);
+        Assert.Contains(start.Skills, skill => string.Equals(skill.SkillId, ArenaConfig.ShotgunSkillId, StringComparison.Ordinal));
+
+        RemoveAllMobs(store, start.BattleId);
+        var step = store.StepBattle(
+            start.BattleId,
+            start.Tick,
+            [
+                new BattleCommandDto(
+                    ArenaConfig.SetAssistConfigCommandType,
+                    AssistConfig: new AssistConfigDto(
+                        Enabled: true,
+                        AutoHealEnabled: false,
+                        HealAtHpPercent: 40,
+                        AutoGuardEnabled: false,
+                        GuardAtHpPercent: 60,
+                        AutoOffenseEnabled: true,
+                        OffenseMode: ArenaConfig.AssistOffenseModeCooldownSpam,
+                        AutoSkills: new Dictionary<string, bool>(StringComparer.Ordinal)
+                        {
+                            [ArenaConfig.ExoriMasSkillId] = false,
+                            [ArenaConfig.ShotgunSkillId] = true,
+                            [ArenaConfig.VoidRicochetSkillId] = false,
+                            [ArenaConfig.SigilBoltSkillId] = false
+                        },
+                        MaxAutoCastsPerTick: 1))
+            ]);
+
+        Assert.DoesNotContain(
+            step.Events.OfType<AssistCastEventDto>(),
+            evt => string.Equals(evt.SkillId, ArenaConfig.ShotgunSkillId, StringComparison.Ordinal));
+        Assert.DoesNotContain(
+            step.Events.OfType<RangedProjectileFiredEventDto>(),
+            evt => string.Equals(evt.WeaponId, ArenaConfig.WeaponIds.ShotgunId, StringComparison.Ordinal));
+
+        var shotgunSkill = Assert.Single(step.Skills, skill =>
+            string.Equals(skill.SkillId, ArenaConfig.ShotgunSkillId, StringComparison.Ordinal));
+        Assert.Equal(0, shotgunSkill.CooldownRemainingMs);
+        Assert.Equal(0, step.GlobalCooldownRemainingMs);
+    }
+
+    [Fact]
+    public void Shotgun_DoesNotFireForKina()
+    {
+        var store = new InMemoryBattleStore();
+        var start = store.StartBattle("arena-shotgun-kina", ArenaConfig.CharacterIds.Kina, 1337);
+        Assert.DoesNotContain(start.Skills, skill => string.Equals(skill.SkillId, ArenaConfig.ShotgunSkillId, StringComparison.Ordinal));
+
+        var currentTick = start.Tick;
+        for (var stepIndex = 0; stepIndex < 30; stepIndex += 1)
+        {
+            var step = store.StepBattle(start.BattleId, currentTick, []);
+            currentTick = step.Tick;
+
+            Assert.DoesNotContain(
+                step.Events.OfType<AssistCastEventDto>(),
+                evt => string.Equals(evt.SkillId, ArenaConfig.ShotgunSkillId, StringComparison.Ordinal));
+            Assert.DoesNotContain(
+                step.Events.OfType<RangedProjectileFiredEventDto>(),
+                evt => string.Equals(evt.WeaponId, ArenaConfig.WeaponIds.ShotgunId, StringComparison.Ordinal));
+        }
+    }
+
+    [Fact]
+    public void BuildVoidRicochetPath_PathNeverLeavesBounds()
+    {
+        var from = new TilePos(ArenaConfig.PlayerTileX, ArenaConfig.PlayerTileY);
+        var segments = BuildVoidRicochetPathViaReflection(
+            from,
+            new TilePos(ArenaConfig.PlayerTileX, ArenaConfig.PlayerTileY - 1),
+            ArenaConfig.VoidRicochetMaxBounces,
+            ArenaConfig.VoidRicochetMaxTotalTiles);
+
+        Assert.NotEmpty(segments);
+        foreach (var segment in segments)
+        {
+            var tiles = ReadRicochetSegmentTiles(segment);
+            Assert.NotEmpty(tiles);
+            foreach (var tile in tiles)
+            {
+                Assert.InRange(tile.X, 0, ArenaConfig.Width - 1);
+                Assert.InRange(tile.Y, 0, ArenaConfig.Height - 1);
+            }
+        }
+    }
+
+    [Fact]
+    public void BuildVoidRicochetPath_BounceCountNeverExceedsConfiguredMax()
+    {
+        var from = new TilePos(ArenaConfig.PlayerTileX, ArenaConfig.PlayerTileY);
+        var segments = BuildVoidRicochetPathViaReflection(
+            from,
+            new TilePos(ArenaConfig.PlayerTileX + 1, ArenaConfig.PlayerTileY - 1),
+            maxBounces: ArenaConfig.VoidRicochetMaxBounces,
+            maxTotalTiles: ArenaConfig.VoidRicochetMaxTotalTiles);
+
+        Assert.NotEmpty(segments);
+        Assert.InRange(segments.Count - 1, 0, ArenaConfig.VoidRicochetMaxBounces);
+    }
+
+    [Fact]
+    public void BuildVoidRicochetPath_TotalTilesNeverExceedsSafetyCap()
+    {
+        var from = new TilePos(ArenaConfig.PlayerTileX, ArenaConfig.PlayerTileY);
+        var segments = BuildVoidRicochetPathViaReflection(
+            from,
+            new TilePos(ArenaConfig.PlayerTileX, ArenaConfig.PlayerTileY - 1),
+            maxBounces: ArenaConfig.VoidRicochetMaxBounces,
+            maxTotalTiles: 5);
+
+        Assert.Equal(5, segments.Sum(segment => ReadRicochetSegmentTiles(segment).Count));
+    }
+
+    [Fact]
+    public void BuildVoidRicochetPath_DegenerateFromEqualsTarget_UsesUpAsInitialDirection()
+    {
+        var from = new TilePos(ArenaConfig.PlayerTileX, ArenaConfig.PlayerTileY);
+        var segments = BuildVoidRicochetPathViaReflection(
+            from,
+            from,
+            maxBounces: ArenaConfig.VoidRicochetMaxBounces,
+            maxTotalTiles: ArenaConfig.VoidRicochetMaxTotalTiles);
+
+        Assert.NotEmpty(segments);
+        var firstSegmentTiles = ReadRicochetSegmentTiles(segments[0]);
+        Assert.NotEmpty(firstSegmentTiles);
+        Assert.Equal(new TilePos(from.X, from.Y - 1), firstSegmentTiles[0]);
+    }
+
+    [Fact]
+    public void BuildVoidRicochetPath_SameInputAcrossTwentyRuns_IsNotAlwaysIdentical()
+    {
+        var from = new TilePos(ArenaConfig.PlayerTileX, ArenaConfig.PlayerTileY);
+        var target = new TilePos(ArenaConfig.PlayerTileX, ArenaConfig.PlayerTileY - 1);
+        var signatures = new HashSet<string>(StringComparer.Ordinal);
+
+        for (var runIndex = 0; runIndex < 20; runIndex += 1)
+        {
+            var segments = BuildVoidRicochetPathViaReflection(
+                from,
+                target,
+                maxBounces: ArenaConfig.VoidRicochetMaxBounces,
+                maxTotalTiles: ArenaConfig.VoidRicochetMaxTotalTiles);
+            var signature = string.Join(
+                "|",
+                segments.Select(segment => string.Join(
+                    ";",
+                    ReadRicochetSegmentTiles(segment).Select(tile => $"{tile.X},{tile.Y}"))));
+            signatures.Add(signature);
+        }
+
+        Assert.True(signatures.Count > 1, "Expected non-deterministic ricochet paths, but all 20 runs were identical.");
+    }
+
+    [Fact]
+    public void VoidRicochet_AssistCast_HitsMobsAcrossSegments_AndEmitsOneProjectilePerSegment()
+    {
+        var store = new InMemoryBattleStore();
+        var start = store.StartBattle("arena-void-ricochet-segments", ArenaConfig.CharacterIds.RangedPrototype, 1337);
+        Assert.Contains(start.Skills, skill => string.Equals(skill.SkillId, ArenaConfig.VoidRicochetSkillId, StringComparison.Ordinal));
+
+        SpawnAllMobSlotsViaReflection(store, start.BattleId);
+        SetAllMobMoveCooldownViaReflection(store, start.BattleId, cooldownRemainingMs: 10_000);
+
+        var mobIds = GetMobActorIds(store, start.BattleId);
+        Assert.True(mobIds.Count >= 6, "Expected at least six mobs for ricochet segment validation.");
+
+        var targetMobId = mobIds[0];
+        var midLaneMobId = mobIds[1];
+        var topBorderMobId = mobIds[2];
+        var bottomBorderMobId = mobIds[3];
+        var outsideConeMobId = mobIds[4];
+
+        SetActorTile(store, start.BattleId, targetMobId, 3, 2);
+        SetActorTile(store, start.BattleId, midLaneMobId, 3, 1);
+        SetActorTile(store, start.BattleId, topBorderMobId, 3, 0);
+        SetActorTile(store, start.BattleId, bottomBorderMobId, 3, 6);
+        SetActorTile(store, start.BattleId, outsideConeMobId, 0, 6);
+
+        var stagingTiles = new[]
+        {
+            new TilePos(1, 6),
+            new TilePos(2, 6),
+            new TilePos(4, 6),
+            new TilePos(5, 6),
+            new TilePos(6, 6)
+        };
+        for (var index = 5; index < mobIds.Count; index += 1)
+        {
+            var tile = stagingTiles[(index - 5) % stagingTiles.Length];
+            SetActorTile(store, start.BattleId, mobIds[index], tile.X, tile.Y);
+        }
+
+        SetLockedTargetEntityId(store, start.BattleId, targetMobId);
+
+        var assistConfigCommand = new BattleCommandDto(
+            ArenaConfig.SetAssistConfigCommandType,
+            AssistConfig: new AssistConfigDto(
+                Enabled: true,
+                AutoHealEnabled: false,
+                HealAtHpPercent: 40,
+                AutoGuardEnabled: false,
+                GuardAtHpPercent: 60,
+                AutoOffenseEnabled: true,
+                OffenseMode: ArenaConfig.AssistOffenseModeCooldownSpam,
+                AutoSkills: new Dictionary<string, bool>(StringComparer.Ordinal)
+                {
+                    [ArenaConfig.VoidRicochetSkillId] = true,
+                    [ArenaConfig.ShotgunSkillId] = false,
+                    [ArenaConfig.SigilBoltSkillId] = false
+                },
+                MaxAutoCastsPerTick: 1));
+
+        var step = store.StepBattle(start.BattleId, start.Tick, [assistConfigCommand]);
+
+        Assert.Contains(
+            step.Events.OfType<AssistCastEventDto>(),
+            evt => string.Equals(evt.SkillId, ArenaConfig.VoidRicochetSkillId, StringComparison.Ordinal));
+
+        var projectileSegments = step.Events
+            .OfType<RangedProjectileFiredEventDto>()
+            .Where(evt => string.Equals(evt.WeaponId, ArenaConfig.WeaponIds.VoidRicochetId, StringComparison.Ordinal))
+            .ToList();
+        Assert.InRange(projectileSegments.Count, 1, ArenaConfig.VoidRicochetMaxBounces + 1);
+
+        foreach (var projectileSegment in projectileSegments)
+        {
+            Assert.Null(projectileSegment.TargetActorId);
+            Assert.True(projectileSegment.Pierces);
+            Assert.InRange(projectileSegment.FromTile.X, 0, ArenaConfig.Width - 1);
+            Assert.InRange(projectileSegment.FromTile.Y, 0, ArenaConfig.Height - 1);
+            Assert.InRange(projectileSegment.ToTile.X, 0, ArenaConfig.Width - 1);
+            Assert.InRange(projectileSegment.ToTile.Y, 0, ArenaConfig.Height - 1);
+        }
+
+        var damageNumbers = step.Events.OfType<DamageNumberEventDto>().ToList();
+        Assert.Contains(damageNumbers, evt => string.Equals(evt.TargetEntityId, targetMobId, StringComparison.Ordinal));
+        Assert.Contains(damageNumbers, evt => string.Equals(evt.TargetEntityId, midLaneMobId, StringComparison.Ordinal));
+        Assert.Contains(damageNumbers, evt => string.Equals(evt.TargetEntityId, topBorderMobId, StringComparison.Ordinal));
+        Assert.True(damageNumbers.Count >= 3, "Expected at least three deterministic hits on the initial upward segment.");
+
+        var skill = Assert.Single(step.Skills, entry => string.Equals(entry.SkillId, ArenaConfig.VoidRicochetSkillId, StringComparison.Ordinal));
+        Assert.Equal(ArenaConfig.VoidRicochetCooldownMs, skill.CooldownRemainingMs);
+        Assert.Equal(ArenaConfig.PlayerGlobalCooldownMs, step.GlobalCooldownRemainingMs);
+    }
+
+    [Fact]
+    public void VoidRicochet_NoTarget_DoesNotConsumeCooldownOrGlobalCooldown()
+    {
+        var store = new InMemoryBattleStore();
+        var start = store.StartBattle("arena-void-ricochet-no-target", ArenaConfig.CharacterIds.RangedPrototype, 1337);
+        Assert.Contains(start.Skills, skill => string.Equals(skill.SkillId, ArenaConfig.VoidRicochetSkillId, StringComparison.Ordinal));
+
+        RemoveAllMobs(store, start.BattleId);
+        var step = store.StepBattle(
+            start.BattleId,
+            start.Tick,
+            [
+                new BattleCommandDto(
+                    ArenaConfig.SetAssistConfigCommandType,
+                    AssistConfig: new AssistConfigDto(
+                        Enabled: true,
+                        AutoHealEnabled: false,
+                        HealAtHpPercent: 40,
+                        AutoGuardEnabled: false,
+                        GuardAtHpPercent: 60,
+                        AutoOffenseEnabled: true,
+                        OffenseMode: ArenaConfig.AssistOffenseModeCooldownSpam,
+                        AutoSkills: new Dictionary<string, bool>(StringComparer.Ordinal)
+                        {
+                            [ArenaConfig.VoidRicochetSkillId] = true,
+                            [ArenaConfig.ShotgunSkillId] = false,
+                            [ArenaConfig.SigilBoltSkillId] = false
+                        },
+                        MaxAutoCastsPerTick: 1))
+            ]);
+
+        Assert.DoesNotContain(
+            step.Events.OfType<AssistCastEventDto>(),
+            evt => string.Equals(evt.SkillId, ArenaConfig.VoidRicochetSkillId, StringComparison.Ordinal));
+        Assert.DoesNotContain(
+            step.Events.OfType<RangedProjectileFiredEventDto>(),
+            evt => string.Equals(evt.WeaponId, ArenaConfig.WeaponIds.VoidRicochetId, StringComparison.Ordinal));
+
+        var skill = Assert.Single(step.Skills, entry =>
+            string.Equals(entry.SkillId, ArenaConfig.VoidRicochetSkillId, StringComparison.Ordinal));
+        Assert.Equal(0, skill.CooldownRemainingMs);
+        Assert.Equal(0, step.GlobalCooldownRemainingMs);
+    }
+
+    [Fact]
+    public void VoidRicochet_DoesNotFireForKina()
+    {
+        var store = new InMemoryBattleStore();
+        var start = store.StartBattle("arena-void-ricochet-kina", ArenaConfig.CharacterIds.Kina, 1337);
+        Assert.DoesNotContain(start.Skills, skill => string.Equals(skill.SkillId, ArenaConfig.VoidRicochetSkillId, StringComparison.Ordinal));
+
+        var currentTick = start.Tick;
+        for (var stepIndex = 0; stepIndex < 30; stepIndex += 1)
+        {
+            var step = store.StepBattle(start.BattleId, currentTick, []);
+            currentTick = step.Tick;
+
+            Assert.DoesNotContain(
+                step.Events.OfType<AssistCastEventDto>(),
+                evt => string.Equals(evt.SkillId, ArenaConfig.VoidRicochetSkillId, StringComparison.Ordinal));
+            Assert.DoesNotContain(
+                step.Events.OfType<RangedProjectileFiredEventDto>(),
+                evt => string.Equals(evt.WeaponId, ArenaConfig.WeaponIds.VoidRicochetId, StringComparison.Ordinal));
+        }
+    }
+
     private static BattleSnapshot WaitForCardChoiceStep(InMemoryBattleStore store, string battleId, int initialTick)
     {
         var tick = initialTick;
@@ -1637,6 +2183,201 @@ public sealed class InMemoryBattleStoreDeterminismTests
         var tileYProperty = actor.GetType().GetProperty("TileY");
         Assert.NotNull(tileYProperty);
         tileYProperty.SetValue(actor, tileY);
+    }
+
+    private static void SetLockedTargetEntityId(InMemoryBattleStore store, string battleId, string? targetEntityId)
+    {
+        var state = GetStoredBattle(store, battleId);
+        var lockedTargetProperty = state.GetType().GetProperty("LockedTargetEntityId");
+        Assert.NotNull(lockedTargetProperty);
+        lockedTargetProperty.SetValue(state, targetEntityId);
+    }
+
+    private static string? ResolveRangedTargetActorIdViaReflection(
+        InMemoryBattleStore store,
+        string battleId,
+        int maxRange,
+        bool requireLos)
+    {
+        var state = GetStoredBattle(store, battleId);
+        var resolveMethod = typeof(InMemoryBattleStore).GetMethod(
+            "ResolveRangedTarget",
+            BindingFlags.Static | BindingFlags.NonPublic);
+        Assert.NotNull(resolveMethod);
+
+        var resolved = resolveMethod.Invoke(null, [state, maxRange, requireLos]);
+        if (resolved is null)
+        {
+            return null;
+        }
+
+        var actorIdProperty = resolved.GetType().GetProperty("ActorId");
+        Assert.NotNull(actorIdProperty);
+        var actorId = actorIdProperty.GetValue(resolved);
+        Assert.NotNull(actorId);
+        return Assert.IsType<string>(actorId);
+    }
+
+    private static IReadOnlyList<TilePos> BuildShotgunConeTilesViaReflection(
+        TilePos from,
+        TilePos target,
+        int maxRange)
+    {
+        var buildMethod = typeof(InMemoryBattleStore).GetMethod(
+            "BuildShotgunConeTiles",
+            BindingFlags.Static | BindingFlags.NonPublic);
+        Assert.NotNull(buildMethod);
+
+        var coneTiles = buildMethod.Invoke(null, [from, target, maxRange]);
+        Assert.NotNull(coneTiles);
+        return Assert.IsAssignableFrom<IReadOnlyList<TilePos>>(coneTiles);
+    }
+
+    private static IReadOnlyList<object> BuildVoidRicochetPathViaReflection(
+        TilePos from,
+        TilePos target,
+        int maxBounces,
+        int maxTotalTiles)
+    {
+        var buildMethod = typeof(InMemoryBattleStore).GetMethod(
+            "BuildVoidRicochetPath",
+            BindingFlags.Static | BindingFlags.NonPublic);
+        Assert.NotNull(buildMethod);
+
+        var segments = buildMethod.Invoke(null, [from, target, maxBounces, maxTotalTiles]);
+        Assert.NotNull(segments);
+
+        var enumerable = Assert.IsAssignableFrom<IEnumerable>(segments);
+        return enumerable.Cast<object>().ToList();
+    }
+
+    private static TilePos ReadRicochetSegmentDirection(object segment)
+    {
+        var directionProperty = segment.GetType().GetProperty("Direction");
+        Assert.NotNull(directionProperty);
+        var direction = directionProperty.GetValue(segment);
+        Assert.NotNull(direction);
+        return Assert.IsType<TilePos>(direction);
+    }
+
+    private static IReadOnlyList<TilePos> ReadRicochetSegmentTiles(object segment)
+    {
+        var tilesProperty = segment.GetType().GetProperty("Tiles");
+        Assert.NotNull(tilesProperty);
+        var tiles = tilesProperty.GetValue(segment);
+        Assert.NotNull(tiles);
+
+        var enumerable = Assert.IsAssignableFrom<IEnumerable>(tiles);
+        var resolvedTiles = new List<TilePos>();
+        foreach (var entry in enumerable)
+        {
+            Assert.NotNull(entry);
+            resolvedTiles.Add(Assert.IsType<TilePos>(entry));
+        }
+
+        return resolvedTiles;
+    }
+
+    private static void SpawnAllMobSlotsViaReflection(InMemoryBattleStore store, string battleId)
+    {
+        var state = GetStoredBattle(store, battleId);
+        var mobSlotsProperty = state.GetType().GetProperty("MobSlots");
+        Assert.NotNull(mobSlotsProperty);
+        var mobSlots = mobSlotsProperty.GetValue(state) as IDictionary;
+        Assert.NotNull(mobSlots);
+
+        var spawnMethod = typeof(InMemoryBattleStore).GetMethod(
+            "TrySpawnMobInSlot",
+            BindingFlags.Static | BindingFlags.NonPublic);
+        Assert.NotNull(spawnMethod);
+
+        foreach (DictionaryEntry entry in mobSlots)
+        {
+            var slot = entry.Value;
+            Assert.NotNull(slot);
+            _ = spawnMethod.Invoke(null, [state, slot, null]);
+        }
+    }
+
+    private static void SetAllMobMoveCooldownViaReflection(
+        InMemoryBattleStore store,
+        string battleId,
+        int cooldownRemainingMs)
+    {
+        var state = GetStoredBattle(store, battleId);
+        var mobSlotsProperty = state.GetType().GetProperty("MobSlots");
+        Assert.NotNull(mobSlotsProperty);
+        var mobSlots = mobSlotsProperty.GetValue(state) as IDictionary;
+        Assert.NotNull(mobSlots);
+
+        foreach (DictionaryEntry entry in mobSlots)
+        {
+            var slot = entry.Value;
+            Assert.NotNull(slot);
+            var moveCooldownProperty = slot.GetType().GetProperty("MoveCooldownRemainingMs");
+            Assert.NotNull(moveCooldownProperty);
+            moveCooldownProperty.SetValue(slot, Math.Max(0, cooldownRemainingMs));
+        }
+    }
+
+    private static List<string> GetMobActorIds(InMemoryBattleStore store, string battleId)
+    {
+        var state = GetStoredBattle(store, battleId);
+        var actorsProperty = state.GetType().GetProperty("Actors");
+        Assert.NotNull(actorsProperty);
+        var actors = actorsProperty.GetValue(state) as IDictionary;
+        Assert.NotNull(actors);
+
+        var mobActorIds = new List<string>();
+        foreach (DictionaryEntry entry in actors)
+        {
+            var actor = entry.Value;
+            Assert.NotNull(actor);
+            var kindProperty = actor.GetType().GetProperty("Kind");
+            Assert.NotNull(kindProperty);
+            var kind = Assert.IsType<string>(kindProperty.GetValue(actor));
+            if (!string.Equals(kind, "mob", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var actorId = entry.Key as string;
+            Assert.False(string.IsNullOrWhiteSpace(actorId));
+            mobActorIds.Add(actorId!);
+        }
+
+        mobActorIds.Sort(StringComparer.Ordinal);
+        return mobActorIds;
+    }
+
+    private static void RemoveAllMobs(InMemoryBattleStore store, string battleId)
+    {
+        var state = GetStoredBattle(store, battleId);
+        var actorsProperty = state.GetType().GetProperty("Actors");
+        Assert.NotNull(actorsProperty);
+        var actors = actorsProperty.GetValue(state) as IDictionary;
+        Assert.NotNull(actors);
+
+        var mobIds = new List<string>();
+        foreach (DictionaryEntry entry in actors)
+        {
+            var actor = entry.Value;
+            Assert.NotNull(actor);
+            var kindProperty = actor.GetType().GetProperty("Kind");
+            Assert.NotNull(kindProperty);
+            var kind = kindProperty.GetValue(actor) as string;
+            if (string.Equals(kind, "mob", StringComparison.Ordinal))
+            {
+                var actorId = entry.Key as string;
+                Assert.False(string.IsNullOrWhiteSpace(actorId));
+                mobIds.Add(actorId!);
+            }
+        }
+
+        foreach (var mobId in mobIds)
+        {
+            actors.Remove(mobId);
+        }
     }
 
     private static void AssertCommandResult(

@@ -13,3 +13,11 @@ public sealed record EquipmentDefinitionDto(
     string WeaponClass,
     string? WeaponElement,
     IReadOnlyDictionary<string, string> GameplayModifiers);
+
+public sealed record CharacterCatalogDefinitionDto(
+    string CharacterId,
+    string DisplayName,
+    string Subtitle,
+    bool IsProvisional,
+    IReadOnlyList<string> FixedWeaponIds,
+    IReadOnlyList<string> FixedWeaponNames);

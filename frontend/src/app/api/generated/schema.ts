@@ -734,6 +734,7 @@ export interface components {
         };
         AccountStateResponseDto: {
             account?: components["schemas"]["AccountStateDto"];
+            characterCatalog?: components["schemas"]["CharacterCatalogDefinitionDto"][] | null;
             itemCatalog?: components["schemas"]["ItemDefinitionDto"][] | null;
             equipmentCatalog?: components["schemas"]["EquipmentDefinitionDto"][] | null;
         };
@@ -870,6 +871,7 @@ export interface components {
             /** Format: int32 */
             currentStacks?: number;
             scalingParams?: components["schemas"]["BattleCardScalingParamsDto"];
+            isSkillCard?: boolean;
         };
         BattleCardScalingParamsDto: {
             /** Format: int32 */
@@ -921,10 +923,23 @@ export interface components {
                 [key: string]: string;
             } | null;
         };
+        BattleRangedConfigDto: {
+            /** Format: int32 */
+            autoAttackRangedMaxRange?: number;
+            /** Format: float */
+            rangedProjectileSpeedTiles?: number;
+            /** Format: int32 */
+            rangedDefaultCooldownMs?: number;
+            projectileColorByWeaponId?: {
+                [key: string]: string;
+            } | null;
+        };
         BattleReplayActionDto: {
             type?: string | null;
             /** Format: int32 */
             clientTick?: number | null;
+            /** Format: int32 */
+            stepCount?: number | null;
             commands?: components["schemas"]["BattleCommandDto"][] | null;
             choiceId?: string | null;
             selectedCardId?: string | null;
@@ -1014,6 +1029,7 @@ export interface components {
             lockedTargetEntityId?: string | null;
             groundTargetPos?: components["schemas"]["BattleTilePosDto"];
             assistConfig?: components["schemas"]["AssistConfigDto"];
+            rangedConfig?: components["schemas"]["BattleRangedConfigDto"];
             playerBaseElement?: components["schemas"]["ElementType"];
             weaponElement?: components["schemas"]["ElementType"];
             decals?: components["schemas"]["BattleDecalDto"][] | null;
@@ -1087,6 +1103,7 @@ export interface components {
             lockedTargetEntityId?: string | null;
             groundTargetPos?: components["schemas"]["BattleTilePosDto"];
             assistConfig?: components["schemas"]["AssistConfigDto"];
+            rangedConfig?: components["schemas"]["BattleRangedConfigDto"];
             playerBaseElement?: components["schemas"]["ElementType"];
             weaponElement?: components["schemas"]["ElementType"];
             decals?: components["schemas"]["BattleDecalDto"][] | null;
@@ -1098,7 +1115,7 @@ export interface components {
             pendingChoiceId?: string | null;
             offeredCards?: components["schemas"]["BattleCardOfferDto"][] | null;
             selectedCards?: components["schemas"]["BattleCardOfferDto"][] | null;
-            events?: (components["schemas"]["FxSpawnEventDto"] | components["schemas"]["DamageNumberEventDto"] | components["schemas"]["AttackFxEventDto"] | components["schemas"]["DeathEventDto"] | components["schemas"]["HealNumberEventDto"] | components["schemas"]["ReflectEventDto"] | components["schemas"]["AssistCastEventDto"] | components["schemas"]["PoiInteractedEventDto"] | components["schemas"]["InteractFailedEventDto"] | components["schemas"]["BuffAppliedEventDto"] | components["schemas"]["AltarActivatedEventDto"] | components["schemas"]["SpeciesChestSpawnedEventDto"] | components["schemas"]["SpeciesChestOpenedEventDto"] | components["schemas"]["CritTextEventDto"] | components["schemas"]["LevelUpEventDto"] | components["schemas"]["XpGainedEventDto"] | components["schemas"]["CardChoiceOfferedEventDto"] | components["schemas"]["CardChosenEventDto"] | components["schemas"]["EliteSpawnedEventDto"] | components["schemas"]["EliteBuffAppliedEventDto"] | components["schemas"]["EliteBuffRemovedEventDto"] | components["schemas"]["EliteDiedEventDto"] | components["schemas"]["RunEndedEventDto"])[] | null;
+            events?: (components["schemas"]["FxSpawnEventDto"] | components["schemas"]["DamageNumberEventDto"] | components["schemas"]["AttackFxEventDto"] | components["schemas"]["DeathEventDto"] | components["schemas"]["HealNumberEventDto"] | components["schemas"]["ReflectEventDto"] | components["schemas"]["AssistCastEventDto"] | components["schemas"]["PoiInteractedEventDto"] | components["schemas"]["InteractFailedEventDto"] | components["schemas"]["BuffAppliedEventDto"] | components["schemas"]["AltarActivatedEventDto"] | components["schemas"]["SpeciesChestSpawnedEventDto"] | components["schemas"]["SpeciesChestOpenedEventDto"] | components["schemas"]["CritTextEventDto"] | components["schemas"]["LevelUpEventDto"] | components["schemas"]["XpGainedEventDto"] | components["schemas"]["CardChoiceOfferedEventDto"] | components["schemas"]["CardChosenEventDto"] | components["schemas"]["EliteSpawnedEventDto"] | components["schemas"]["EliteBuffAppliedEventDto"] | components["schemas"]["EliteBuffRemovedEventDto"] | components["schemas"]["EliteDiedEventDto"] | components["schemas"]["RangedProjectileFiredEventDto"] | components["schemas"]["MobKnockedBackEventDto"] | components["schemas"]["RunEndedEventDto"])[] | null;
             commandResults?: components["schemas"]["CommandResultDto"][] | null;
             freeSlotWeaponId?: string | null;
             freeSlotWeaponName?: string | null;
@@ -1176,6 +1193,14 @@ export interface components {
             primalCoreBySpecies?: {
                 [key: string]: number;
             } | null;
+        };
+        CharacterCatalogDefinitionDto: {
+            characterId?: string | null;
+            displayName?: string | null;
+            subtitle?: string | null;
+            isProvisional?: boolean;
+            fixedWeaponIds?: string[] | null;
+            fixedWeaponNames?: string[] | null;
         };
         CharacterEquipmentDto: {
             weaponInstanceId?: string | null;
@@ -1487,6 +1512,17 @@ export interface components {
          * @enum {integer}
          */
         MobArchetype: 1 | 2 | 3 | 4;
+        MobKnockedBackEventDto: Omit<components["schemas"]["BattleEventDto"], "type"> & {
+            actorId?: string | null;
+            fromTile?: components["schemas"]["TilePos"];
+            toTile?: components["schemas"]["TilePos"];
+        } & {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "mob_knocked_back";
+        };
         OwnedEquipmentInstanceDto: {
             instanceId?: string | null;
             definitionId?: string | null;
@@ -1508,6 +1544,19 @@ export interface components {
              * @enum {string}
              */
             type: "poi_interacted";
+        };
+        RangedProjectileFiredEventDto: Omit<components["schemas"]["BattleEventDto"], "type"> & {
+            weaponId?: string | null;
+            fromTile?: components["schemas"]["TilePos"];
+            toTile?: components["schemas"]["TilePos"];
+            targetActorId?: string | null;
+            pierces?: boolean;
+        } & {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "ranged_projectile_fired";
         };
         ReflectEventDto: Omit<components["schemas"]["BattleEventDto"], "type"> & {
             sourceEntityId?: string | null;
@@ -1579,6 +1628,12 @@ export interface components {
              * @enum {string}
              */
             type: "species_chest_spawned";
+        };
+        TilePos: {
+            /** Format: int32 */
+            x?: number;
+            /** Format: int32 */
+            y?: number;
         };
         XpGainedEventDto: Omit<components["schemas"]["BattleEventDto"], "type"> & {
             /** Format: int32 */

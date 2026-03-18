@@ -2,6 +2,7 @@ namespace KaezanArena.Api.Contracts.Account;
 
 public sealed record AccountStateResponseDto(
     AccountStateDto Account,
+    IReadOnlyList<CharacterCatalogDefinitionDto> CharacterCatalog,
     IReadOnlyList<ItemDefinitionDto> ItemCatalog,
     IReadOnlyList<EquipmentDefinitionDto> EquipmentCatalog);
 

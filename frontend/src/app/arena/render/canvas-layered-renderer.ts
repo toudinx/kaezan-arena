@@ -9,6 +9,7 @@ import {
 import { computeDecalFadeAlpha } from "../engine/decal.helpers";
 import { PreloadedAsset } from "../assets/asset-manifest.types";
 import { getMobArchetypeAccentColor } from "../engine/mob-visuals";
+import { ProjectileAnimator } from "./projectile-animator";
 const PHYSICAL_ELEMENT: ElementTypeValue = 6;
 const FLOATING_NUMBER_PALETTE = {
   damageReceivedRed: "#ef4444",
@@ -37,6 +38,7 @@ export class CanvasLayeredRenderer {
   private readonly pipeline: RenderLayer[] = ["ground", "groundFx", "actors", "hitFx", "ui"];
   private readonly warnedMissingAssetIds = new Set<string>();
   private readonly missingAssetIds = new Set<string>();
+  private readonly projectileAnimator = new ProjectileAnimator();
 
   constructor(private readonly context: CanvasRenderingContext2D) {}
 
@@ -117,6 +119,20 @@ export class CanvasLayeredRenderer {
         if (layer === "hitFx") {
           for (const attackFx of scene.attackFxInstances) {
             this.drawAttackFx(scene, viewport, attackFx);
+          }
+
+          for (const projectile of scene.projectileInstances) {
+            if ((projectile.startDelayRemainingMs ?? 0) > 0) {
+              continue;
+            }
+
+            this.projectileAnimator.draw(
+              this.context,
+              scene,
+              viewport.originX,
+              viewport.originY,
+              projectile
+            );
           }
         }
 

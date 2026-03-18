@@ -7,9 +7,12 @@ import { AccountStore } from "../../account/account-store.service";
 type CharacterRow = Readonly<{
   characterId: string;
   name: string;
+  subtitle: string;
   level: number;
   xp: number;
   isActive: boolean;
+  isProvisional: boolean;
+  fixedKitLabel: string;
   equippedWeaponName: string;
   equippedArmorName: string;
   equippedRelicName: string;
@@ -151,12 +154,20 @@ export class CharactersPageComponent implements OnInit, OnDestroy {
   }
 
   private toCharacterRow(character: CharacterState, account: AccountState): CharacterRow {
+    const catalogEntry = this.accountStore.catalogs().characterById[character.characterId];
+    const fixedKitLabel = catalogEntry?.fixedWeaponNames?.length
+      ? catalogEntry.fixedWeaponNames.join(", ")
+      : "Unknown";
+
     return {
       characterId: character.characterId,
-      name: character.name,
+      name: catalogEntry?.displayName ?? character.name,
+      subtitle: catalogEntry?.subtitle ?? "",
       level: character.level,
       xp: character.xp,
       isActive: account.activeCharacterId === character.characterId,
+      isProvisional: catalogEntry?.isProvisional ?? false,
+      fixedKitLabel,
       equippedWeaponName: this.resolveEquippedItemName(character, "weapon"),
       equippedArmorName: this.resolveEquippedItemName(character, "armor"),
       equippedRelicName: this.resolveEquippedItemName(character, "relic")
@@ -194,4 +205,3 @@ export class CharactersPageComponent implements OnInit, OnDestroy {
     return error instanceof Error ? error.message : String(error);
   }
 }
-

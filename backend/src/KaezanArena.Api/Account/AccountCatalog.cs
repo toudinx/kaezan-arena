@@ -12,6 +12,18 @@ public static class AccountCatalog
         new SpeciesDefinition(ArenaConfig.SpeciesIds.RangedDragon, ArenaConfig.DisplayNames[ArenaConfig.SpeciesIds.RangedDragon]),
     ];
 
+    public static IReadOnlyList<CharacterCatalogDefinition> CharacterDefinitions { get; } =
+    [
+        BuildCharacterDefinition(
+            ArenaConfig.CharacterIds.Kina,
+            ArenaConfig.CharacterSubtitleKina,
+            isProvisional: false),
+        BuildCharacterDefinition(
+            ArenaConfig.CharacterIds.RangedPrototype,
+            ArenaConfig.CharacterSubtitleRangedPrototype,
+            isProvisional: true)
+    ];
+
     public static IReadOnlyList<ItemDefinition> ItemDefinitions { get; } =
     [
         new ItemDefinition("wpn.iron_blade", "Iron Blade", "equipment", false, "common"),
@@ -220,6 +232,31 @@ public static class AccountCatalog
                     new DropEntry("rel.astral_codex", Weight: 1, MinQuantity: 1, MaxQuantity: 1)
                 ])
         };
+
+    private static CharacterCatalogDefinition BuildCharacterDefinition(
+        string characterId,
+        string subtitle,
+        bool isProvisional)
+    {
+        var fixedWeaponIds = ArenaConfig.GetFixedWeaponKitForCharacterId(characterId)
+            .ToArray();
+        var fixedWeaponNames = fixedWeaponIds
+            .Select(weaponId => ArenaConfig.DisplayNames.TryGetValue(weaponId, out var weaponName)
+                ? weaponName
+                : weaponId)
+            .ToArray();
+        var displayName = ArenaConfig.DisplayNames.TryGetValue(characterId, out var name)
+            ? name
+            : characterId;
+
+        return new CharacterCatalogDefinition(
+            CharacterId: characterId,
+            DisplayName: displayName,
+            Subtitle: subtitle,
+            IsProvisional: isProvisional,
+            FixedWeaponIds: fixedWeaponIds,
+            FixedWeaponNames: fixedWeaponNames);
+    }
 
     public static bool TryGetItem(string itemId, out ItemDefinition definition)
     {

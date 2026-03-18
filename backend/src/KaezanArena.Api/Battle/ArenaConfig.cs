@@ -33,6 +33,37 @@ public static class ArenaConfig
     public const int CriticalHitChancePercent = 20;
     #endregion
 
+    #region Ranged Weapon Config
+    public const int AutoAttackRangedMaxRange = 7;
+    public const float RangedProjectileSpeedTiles = 10.0f;
+    public const int RangedDefaultCooldownMs = 800;
+    #endregion
+
+    #region Sigil Bolt
+    public const int SigilBoltDamageBase = 15;
+    public const int SigilBoltCooldownMs = 800;
+    public const int SigilBoltMaxRange = AutoAttackRangedMaxRange;
+    public const bool SigilBoltRequiresLOS = true;
+    #endregion
+
+    #region Shotgun
+    public const int ShotgunDamageBase = SigilBoltDamageBase;
+    public const int ShotgunCooldownMs = SigilBoltCooldownMs;
+    public const int ShotgunVisualProjectileCount = 5;
+    public const int ShotgunMaxRange = AutoAttackRangedMaxRange;
+    public const bool ShotgunRequiresLOS = true;
+    public const int ShotgunKnockbackTiles = 1;
+    #endregion
+
+    #region Void Ricochet
+    public const int VoidRicochetDamageBase = SigilBoltDamageBase;
+    public const int VoidRicochetCooldownMs = 2000;
+    // VoidRicochetMaxBounces: base value, can be increased by passive cards.
+    public const int VoidRicochetMaxBounces = 3;
+    public const int VoidRicochetMaxTotalTiles = 40;
+    public const bool VoidRicochetRequiresLOS = false;
+    #endregion
+
     #region Visual / FX Timing
     public const int CritTextDurationMs = 800;
     public const string CritTextLabel = "CRIT!";
@@ -60,6 +91,9 @@ public static class ArenaConfig
     public const string ExoriSkillId = "exori";
     public const string ExoriMasSkillId = "exori_mas";
     public const string ExoriMinSkillId = "exori_min";
+    public const string SigilBoltSkillId = "sigil_bolt";
+    public const string ShotgunSkillId = "shotgun";
+    public const string VoidRicochetSkillId = "void_ricochet";
     public const string HealSkillId = "heal";
     public const string GuardSkillId = "guard";
     public const string AvalancheSkillId = "avalanche";
@@ -96,6 +130,9 @@ public static class ArenaConfig
     public const int ExoriCooldownTotalMs = 1200;
     public const int ExoriMasCooldownTotalMs = 2000;
     public const int ExoriMinCooldownTotalMs = 800;
+    public const int SigilBoltCooldownTotalMs = SigilBoltCooldownMs;
+    public const int ShotgunCooldownTotalMs = ShotgunCooldownMs;
+    public const int VoidRicochetCooldownTotalMs = VoidRicochetCooldownMs;
     public const int HealCooldownTotalMs = 7000;
     public const int GuardCooldownTotalMs = 10000;
     public const int AvalancheCooldownTotalMs = 2500;
@@ -119,6 +156,9 @@ public static class ArenaConfig
     public const int KinaReflectPercent = 20;
     public const int KinaRangedReflectMultiplier = 2;
     public const string PlayerClassKina = "kina";
+    public const string PlayerClassRangedPrototype = "ranged_prototype";
+    public const string CharacterSubtitleKina = "Melee Kit";
+    public const string CharacterSubtitleRangedPrototype = "Ranged Kit [WIP]";
     #endregion
 
     #region Run Progression
@@ -326,15 +366,69 @@ public static class ArenaConfig
         public const string ExoriMin  = "weapon:exori_min";
         public const string Exori     = "weapon:exori";
         public const string ExoriMas  = "weapon:exori_mas";
+        public const string SigilBolt = "weapon:sigil_bolt";
+        public const string ShotgunId = "weapon:shotgun";
+        public const string VoidRicochetId = "weapon:void_ricochet";
         public const string Avalanche = "weapon:avalanche";
         public const string Heal      = "weapon:heal";
         public const string Guard     = "weapon:guard";
     }
 
+    /// <summary>
+    /// Single source of truth for projectile tint colors used by ranged weapon visuals.
+    /// Keys are stable IDs from <see cref="WeaponIds"/>.
+    /// </summary>
+    public static readonly IReadOnlyDictionary<string, string> RangedProjectileColorByWeaponId =
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [WeaponIds.ExoriMin] = "#7dd3fc",
+            [WeaponIds.Exori] = "#ff9f2d",
+            [WeaponIds.ExoriMas] = "#a78bfa",
+            [WeaponIds.SigilBolt] = "#22d3ee",
+            [WeaponIds.ShotgunId] = "#fb7185",
+            [WeaponIds.VoidRicochetId] = "#8b5cf6",
+            [WeaponIds.Avalanche] = "#93c5fd",
+            [WeaponIds.Heal] = "#fde68a",
+            [WeaponIds.Guard] = "#93c5fd"
+        };
+
     /// <summary>Stable character IDs. Values are the authoritative keys for display name lookup.</summary>
     public static class CharacterIds
     {
         public const string Kina = "character:kina";
+        public const string RangedPrototype = "character:ranged_prototype";
+    }
+
+    /// <summary>
+    /// Single source of truth for fixed-kit weapon IDs by character.
+    /// The list order represents fixed slot order.
+    /// </summary>
+    public static readonly IReadOnlyDictionary<string, IReadOnlyList<string>> FixedWeaponKitByCharacterId =
+        new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal)
+        {
+            [CharacterIds.Kina] =
+            [
+                WeaponIds.ExoriMin,
+                WeaponIds.Exori,
+                WeaponIds.ExoriMas
+            ],
+            [CharacterIds.RangedPrototype] =
+            [
+                WeaponIds.SigilBolt,
+                WeaponIds.ShotgunId,
+                WeaponIds.VoidRicochetId
+            ]
+        };
+
+    /// <summary>Returns fixed-kit weapon IDs for a character, defaulting to Kina when unknown.</summary>
+    public static IReadOnlyList<string> GetFixedWeaponKitForCharacterId(string characterId)
+    {
+        if (FixedWeaponKitByCharacterId.TryGetValue(characterId, out var fixedKit))
+        {
+            return fixedKit;
+        }
+
+        return FixedWeaponKitByCharacterId[CharacterIds.Kina];
     }
 
     /// <summary>Stable mob species ID strings. Values match the protocol species field used in snapshots.</summary>
@@ -358,10 +452,14 @@ public static class ArenaConfig
             [WeaponIds.ExoriMin]        = "Exori Min",
             [WeaponIds.Exori]           = "Exori",
             [WeaponIds.ExoriMas]        = "Exori Mas",
+            [WeaponIds.SigilBolt]       = "Sigil Bolt",
+            [WeaponIds.ShotgunId]       = "Shotgun",
+            [WeaponIds.VoidRicochetId]  = "Void Ricochet",
             [WeaponIds.Avalanche]       = "Avalanche",
             [WeaponIds.Heal]            = "Heal",
             [WeaponIds.Guard]           = "Guard",
             [CharacterIds.Kina]         = "Kina",
+            [CharacterIds.RangedPrototype] = "Prototype",
             [SpeciesIds.MeleeBrute]     = "Melee Brute",
             [SpeciesIds.RangedArcher]   = "Ranged Archer",
             [SpeciesIds.MeleeDemon]     = "Melee Demon",
@@ -375,6 +473,9 @@ public static class ArenaConfig
             [ExoriSkillId]     = WeaponIds.Exori,
             [ExoriMinSkillId]  = WeaponIds.ExoriMin,
             [ExoriMasSkillId]  = WeaponIds.ExoriMas,
+            [SigilBoltSkillId] = WeaponIds.SigilBolt,
+            [ShotgunSkillId]   = WeaponIds.ShotgunId,
+            [VoidRicochetSkillId] = WeaponIds.VoidRicochetId,
             [AvalancheSkillId] = WeaponIds.Avalanche,
             [HealSkillId]      = WeaponIds.Heal,
             [GuardSkillId]     = WeaponIds.Guard,
@@ -394,6 +495,9 @@ public static class ArenaConfig
             [WeaponIds.Exori]     = ExoriSkillId,
             [WeaponIds.ExoriMin]  = ExoriMinSkillId,
             [WeaponIds.ExoriMas]  = ExoriMasSkillId,
+            [WeaponIds.SigilBolt] = SigilBoltSkillId,
+            [WeaponIds.ShotgunId] = ShotgunSkillId,
+            [WeaponIds.VoidRicochetId] = VoidRicochetSkillId,
             [WeaponIds.Avalanche] = AvalancheSkillId,
             [WeaponIds.Heal]      = HealSkillId,
             [WeaponIds.Guard]     = GuardSkillId,

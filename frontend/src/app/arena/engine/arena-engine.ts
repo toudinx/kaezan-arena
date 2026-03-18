@@ -9,6 +9,7 @@ import {
   ArenaBattleEvent,
   ArenaBuffState,
   ArenaPoiState,
+  ArenaRangedConfig,
   ArenaScene,
   ArenaSkillMap,
   ArenaSkillState,
@@ -17,6 +18,8 @@ import {
   FloatingTextInstance,
   FxPlanSpawn,
   FxSpawnRequest,
+  QueuedDamageNumberInstance,
+  RangedProjectileInstance,
   SpriteEntity,
   TileEntity,
   TilePos
@@ -30,6 +33,7 @@ const PLAYER_RUN_SPRITE_ID = "sprite.player.run";
 const PLAYER_HIT_SPRITE_ID = "sprite.player.hit";
 const HIT_VISUAL_DURATION_MS = 200;
 const RUN_VISUAL_DURATION_MS = 300;
+const MOB_KNOCKBACK_SLIDE_DURATION_MS = 100;
 const PHYSICAL_ELEMENT = 6;
 
 export class ArenaEngine {
@@ -76,8 +80,13 @@ export class ArenaEngine {
       decals: [],
       activeBuffs: [],
       activePois: [],
+      rangedConfig: undefined,
       fxInstances: [],
       attackFxInstances: [],
+      projectileInstances: [],
+      mobKnockbackSlidesByActorId: {},
+      queuedDamageNumbers: [],
+      nextDamageSpawnOrder: 0,
       damageNumbers: [],
       floatingTexts: []
     };
@@ -130,10 +139,20 @@ export class ArenaEngine {
     const spawnedDamageNumbers: DamageNumberInstance[] = [];
     const spawnedAttackFx: AttackFxInstance[] = [];
     const spawnedFloatingTexts: FloatingTextInstance[] = [];
+    const spawnedProjectiles: RangedProjectileInstance[] = [];
+    const queuedDamageNumbers: QueuedDamageNumberInstance[] = [...nextScene.queuedDamageNumbers];
+    const mobKnockbackSlidesByActorId = { ...(nextScene.mobKnockbackSlidesByActorId ?? {}) };
     const stackIndexByTile = new Map<string, number>();
-    let spawnOrder = 0;
+    let spawnOrder = nextScene.nextDamageSpawnOrder;
     const playerActorId = this.resolvePlayerActorId(nextScene, scene);
     let threatMobEntityId = scene.threatMobEntityId ?? null;
+    const pendingProjectileImpacts: Array<{
+      targetActorId?: string | null;
+      tileX: number;
+      tileY: number;
+      delayMs: number;
+    }> = [];
+    let chainedProjectileStartDelayMs = 0;
 
     for (const event of events) {
       if (event.type === "fx_spawn") {
@@ -152,6 +171,40 @@ export class ArenaEngine {
         continue;
       }
 
+      if (event.type === "ranged_projectile_fired") {
+        const shouldChainProjectile = this.shouldChainProjectileSegments(event);
+        if (!shouldChainProjectile) {
+          chainedProjectileStartDelayMs = 0;
+        }
+
+        const projectileStartDelayMs = shouldChainProjectile
+          ? chainedProjectileStartDelayMs
+          : 0;
+        const projectile = this.toRangedProjectileInstance(event, nextScene, projectileStartDelayMs);
+        spawnedProjectiles.push(projectile);
+        pendingProjectileImpacts.push({
+          targetActorId: event.targetActorId ?? null,
+          tileX: event.toTile.x,
+          tileY: event.toTile.y,
+          delayMs: projectileStartDelayMs + projectile.impactDurationMs
+        });
+        if (shouldChainProjectile) {
+          chainedProjectileStartDelayMs += projectile.impactDurationMs;
+        }
+        continue;
+      }
+
+      if (event.type === "mob_knocked_back") {
+        mobKnockbackSlidesByActorId[event.actorId] = {
+          actorId: event.actorId,
+          fromPos: { x: event.fromTile.x, y: event.fromTile.y },
+          toPos: { x: event.toTile.x, y: event.toTile.y },
+          elapsedMs: 0,
+          durationMs: MOB_KNOCKBACK_SLIDE_DURATION_MS
+        };
+        continue;
+      }
+
       if (event.type === "damage_number") {
         const threatSourceMobId = this.resolveThreatSourceMobEntityId(event, playerActorId, nextScene);
         if (threatSourceMobId) {
@@ -159,6 +212,12 @@ export class ArenaEngine {
         }
 
         const entries = this.toDamageNumberInstances(event, playerActorId);
+        const projectileArrivalDelayMs = this.consumePendingProjectileArrivalDelayMs(event, pendingProjectileImpacts);
+        if (projectileArrivalDelayMs > 0) {
+          this.queueDamageNumberEntries(entries, projectileArrivalDelayMs, queuedDamageNumbers);
+          continue;
+        }
+
         for (const entry of entries) {
           spawnedDamageNumbers.push({
             ...entry,
@@ -220,9 +279,15 @@ export class ArenaEngine {
       ...nextScene,
       threatMobEntityId,
       attackFxInstances: [...nextScene.attackFxInstances, ...spawnedAttackFx],
+      projectileInstances: [...nextScene.projectileInstances, ...spawnedProjectiles],
+      mobKnockbackSlidesByActorId,
+      queuedDamageNumbers,
+      nextDamageSpawnOrder: spawnOrder,
       damageNumbers: [...nextScene.damageNumbers, ...spawnedDamageNumbers],
       floatingTexts: [...nextScene.floatingTexts, ...spawnedFloatingTexts]
     };
+
+    nextScene = this.applyMobKnockbackSlidesToSprites(nextScene);
 
     return {
       scene: nextScene,
@@ -255,6 +320,13 @@ export class ArenaEngine {
     return {
       ...scene,
       activeBuffs: [...buffs]
+    };
+  }
+
+  applyRangedConfig(scene: ArenaScene, rangedConfig: ArenaRangedConfig): ArenaScene {
+    return {
+      ...scene,
+      rangedConfig
     };
   }
 
@@ -303,10 +375,14 @@ export class ArenaEngine {
   update(scene: ArenaScene, deltaMs: number): ArenaScene {
     const safeDelta = Math.max(0, deltaMs);
     const sceneWithVisuals = this.tickActorVisuals(scene, safeDelta);
-    const sceneWithFx = tickFx(sceneWithVisuals, safeDelta);
+    const sceneWithKnockbackSlides = this.tickMobKnockbackSlides(sceneWithVisuals, safeDelta);
+    const sceneWithAdjustedSprites = this.applyMobKnockbackSlidesToSprites(sceneWithKnockbackSlides);
+    const sceneWithFx = tickFx(sceneWithAdjustedSprites, safeDelta);
     const sceneWithAttackFx = this.tickAttackFx(sceneWithFx, safeDelta);
-    const sceneWithDamageNumbers = this.tickDamageNumbers(sceneWithAttackFx, safeDelta);
-    return this.tickFloatingTexts(sceneWithDamageNumbers, safeDelta);
+    const sceneWithProjectiles = this.tickProjectiles(sceneWithAttackFx, safeDelta);
+    const sceneWithDamageNumbers = this.tickDamageNumbers(sceneWithProjectiles, safeDelta);
+    const sceneWithQueuedDamage = this.tickQueuedDamageNumbers(sceneWithDamageNumbers, safeDelta);
+    return this.tickFloatingTexts(sceneWithQueuedDamage, safeDelta);
   }
 
   tick(scene: ArenaScene, deltaMs: number): ArenaScene {
@@ -315,6 +391,74 @@ export class ArenaEngine {
 
   private normalizeFxLayer(layer: string): "groundFx" | "hitFx" {
     return layer === "groundFx" ? "groundFx" : "hitFx";
+  }
+
+  private tickMobKnockbackSlides(scene: ArenaScene, deltaMs: number): ArenaScene {
+    const activeSlides = scene.mobKnockbackSlidesByActorId ?? {};
+    const activeSlideIds = Object.keys(activeSlides);
+    if (activeSlideIds.length === 0) {
+      return scene;
+    }
+
+    const nextSlides: Record<string, NonNullable<ArenaScene["mobKnockbackSlidesByActorId"]>[string]> = {};
+    for (const actorId of activeSlideIds) {
+      const slide = activeSlides[actorId];
+      if (!slide) {
+        continue;
+      }
+
+      if (!scene.actorsById[actorId]) {
+        continue;
+      }
+
+      const elapsedMs = slide.elapsedMs + deltaMs;
+      if (elapsedMs >= slide.durationMs) {
+        continue;
+      }
+
+      nextSlides[actorId] = {
+        ...slide,
+        elapsedMs
+      };
+    }
+
+    return {
+      ...scene,
+      mobKnockbackSlidesByActorId: nextSlides
+    };
+  }
+
+  private applyMobKnockbackSlidesToSprites(scene: ArenaScene): ArenaScene {
+    const activeSlides = scene.mobKnockbackSlidesByActorId ?? {};
+    if (Object.keys(activeSlides).length === 0 || scene.sprites.length === 0) {
+      return scene;
+    }
+
+    const adjustedSprites = scene.sprites.map((sprite) => {
+      if (sprite.layer !== "actors") {
+        return sprite;
+      }
+
+      const slide = activeSlides[sprite.actorId];
+      if (!slide) {
+        return sprite;
+      }
+
+      const durationMs = Math.max(1, slide.durationMs);
+      const progress = Math.max(0, Math.min(1, slide.elapsedMs / durationMs));
+      return {
+        ...sprite,
+        tilePos: {
+          x: slide.fromPos.x + ((slide.toPos.x - slide.fromPos.x) * progress),
+          y: slide.fromPos.y + ((slide.toPos.y - slide.fromPos.y) * progress)
+        }
+      };
+    });
+
+    return {
+      ...scene,
+      sprites: adjustedSprites
+    };
   }
 
   private createOrUpdateVisualState(
@@ -638,6 +782,184 @@ export class ArenaEngine {
     };
   }
 
+  private toRangedProjectileInstance(
+    event: Extract<ArenaBattleEvent, { type: "ranged_projectile_fired" }>,
+    scene: ArenaScene,
+    startDelayMs = 0
+  ): RangedProjectileInstance {
+    const fromPos: TilePos = { x: event.fromTile.x, y: event.fromTile.y };
+    const impactPos: TilePos = { x: event.toTile.x, y: event.toTile.y };
+    const visualEndPos = event.pierces
+      ? this.computePierceVisualEndTile(fromPos, impactPos, scene.columns, scene.rows)
+      : impactPos;
+    const speedTilesPerSecond = this.normalizeProjectileSpeedTilesPerSecond(scene.rangedConfig?.rangedProjectileSpeedTiles);
+    const impactDistance = this.computeTileDistance(fromPos, impactPos);
+    const totalDistance = this.computeTileDistance(fromPos, visualEndPos);
+    const impactDurationMs = Math.max(1, Math.round((impactDistance / speedTilesPerSecond) * 1000));
+    const totalDurationMs = Math.max(impactDurationMs, Math.round((totalDistance / speedTilesPerSecond) * 1000));
+
+    return {
+      weaponId: event.weaponId,
+      fromPos,
+      impactPos,
+      visualEndPos,
+      targetActorId: event.targetActorId ?? null,
+      pierces: event.pierces,
+      colorHex: this.resolveProjectileColorHex(scene.rangedConfig, event.weaponId),
+      startDelayRemainingMs: Math.max(0, Math.round(startDelayMs)),
+      elapsedMs: 0,
+      impactDurationMs,
+      totalDurationMs
+    };
+  }
+
+  private shouldChainProjectileSegments(
+    event: Extract<ArenaBattleEvent, { type: "ranged_projectile_fired" }>
+  ): boolean {
+    return event.pierces && !event.targetActorId;
+  }
+
+  private resolveProjectileColorHex(rangedConfig: ArenaRangedConfig | undefined, weaponId: string): string {
+    const mappedColor = rangedConfig?.projectileColorByWeaponId?.[weaponId];
+    if (typeof mappedColor === "string" && mappedColor.trim().length > 0) {
+      return mappedColor;
+    }
+
+    return "#f8fafc";
+  }
+
+  private normalizeProjectileSpeedTilesPerSecond(value: number | undefined): number {
+    if (typeof value !== "number" || !Number.isFinite(value)) {
+      return 1;
+    }
+
+    return Math.max(0.001, value);
+  }
+
+  private computeTileDistance(from: TilePos, to: TilePos): number {
+    return Math.hypot(to.x - from.x, to.y - from.y);
+  }
+
+  private computePierceVisualEndTile(from: TilePos, to: TilePos, columns: number, rows: number): TilePos {
+    const deltaX = to.x - from.x;
+    const deltaY = to.y - from.y;
+    if (deltaX === 0 && deltaY === 0) {
+      return to;
+    }
+
+    let currentX = to.x;
+    let currentY = to.y;
+    const stepX = Math.sign(deltaX);
+    const stepY = Math.sign(deltaY);
+
+    while (true) {
+      const nextX = currentX + stepX;
+      const nextY = currentY + stepY;
+      if (nextX < 0 || nextY < 0 || nextX >= columns || nextY >= rows) {
+        return { x: currentX, y: currentY };
+      }
+
+      currentX = nextX;
+      currentY = nextY;
+    }
+  }
+
+  private consumePendingProjectileArrivalDelayMs(
+    event: Extract<ArenaBattleEvent, { type: "damage_number" }>,
+    pendingProjectileImpacts: Array<{
+      targetActorId?: string | null;
+      tileX: number;
+      tileY: number;
+      delayMs: number;
+    }>
+  ): number {
+    if (pendingProjectileImpacts.length === 0) {
+      return 0;
+    }
+
+    const targetEntityId = event.targetEntityId;
+    const projectileByActorIndex = pendingProjectileImpacts.findIndex((projectile) =>
+      projectile.targetActorId && projectile.targetActorId === targetEntityId);
+    if (projectileByActorIndex >= 0) {
+      const [projectile] = pendingProjectileImpacts.splice(projectileByActorIndex, 1);
+      return projectile?.delayMs ?? 0;
+    }
+
+    const projectileByTileIndex = pendingProjectileImpacts.findIndex((projectile) =>
+      projectile.tileX === event.targetTileX && projectile.tileY === event.targetTileY);
+    if (projectileByTileIndex >= 0) {
+      const [projectile] = pendingProjectileImpacts.splice(projectileByTileIndex, 1);
+      return projectile?.delayMs ?? 0;
+    }
+
+    return 0;
+  }
+
+  private queueDamageNumberEntries(
+    entries: ReadonlyArray<DamageNumberInstance>,
+    delayMs: number,
+    queuedDamageNumbers: QueuedDamageNumberInstance[]
+  ): void {
+    const delayRemainingMs = Math.max(1, Math.round(delayMs));
+    for (const entry of entries) {
+      queuedDamageNumbers.push({
+        entry: {
+          actorId: entry.actorId,
+          amount: entry.amount,
+          isCrit: entry.isCrit,
+          kind: entry.kind,
+          isHeal: entry.isHeal,
+          isShieldChange: entry.isShieldChange,
+          shieldChangeDirection: entry.shieldChangeDirection,
+          isDamageReceived: entry.isDamageReceived,
+          sourceEntityId: entry.sourceEntityId,
+          targetEntityId: entry.targetEntityId,
+          element: entry.element,
+          tilePos: entry.tilePos,
+          durationMs: entry.durationMs
+        },
+        delayRemainingMs
+      });
+    }
+  }
+
+  private tickProjectiles(scene: ArenaScene, deltaMs: number): ArenaScene {
+    if (scene.projectileInstances.length === 0) {
+      return scene;
+    }
+
+    const activeProjectiles: RangedProjectileInstance[] = [];
+    for (const projectile of scene.projectileInstances) {
+      let elapsedMs = projectile.elapsedMs;
+      const startDelayRemainingMs = projectile.startDelayRemainingMs ?? 0;
+      let nextStartDelayRemainingMs = startDelayRemainingMs;
+      if (startDelayRemainingMs > 0) {
+        nextStartDelayRemainingMs = Math.max(0, startDelayRemainingMs - deltaMs);
+        const overflowMs = deltaMs - startDelayRemainingMs;
+        if (overflowMs > 0) {
+          elapsedMs += overflowMs;
+        }
+      } else {
+        elapsedMs += deltaMs;
+      }
+
+      if (elapsedMs >= projectile.totalDurationMs) {
+        continue;
+      }
+
+      activeProjectiles.push({
+        ...projectile,
+        startDelayRemainingMs: nextStartDelayRemainingMs,
+        elapsedMs
+      });
+    }
+
+    return {
+      ...scene,
+      projectileInstances: activeProjectiles
+    };
+  }
+
   private tickAttackFx(scene: ArenaScene, deltaMs: number): ArenaScene {
     if (scene.attackFxInstances.length === 0) {
       return scene;
@@ -684,6 +1006,44 @@ export class ArenaEngine {
     return {
       ...scene,
       damageNumbers: activeDamageNumbers
+    };
+  }
+
+  private tickQueuedDamageNumbers(scene: ArenaScene, deltaMs: number): ArenaScene {
+    if (scene.queuedDamageNumbers.length === 0) {
+      return scene;
+    }
+
+    const queue: QueuedDamageNumberInstance[] = [];
+    const stackIndexByTile = new Map<string, number>();
+    const spawnedDamageNumbers: DamageNumberInstance[] = [];
+    let spawnOrder = scene.nextDamageSpawnOrder;
+
+    for (const queuedEntry of scene.queuedDamageNumbers) {
+      const delayRemainingMs = queuedEntry.delayRemainingMs - deltaMs;
+      if (delayRemainingMs > 0) {
+        queue.push({
+          ...queuedEntry,
+          delayRemainingMs
+        });
+        continue;
+      }
+
+      const entry = queuedEntry.entry;
+      spawnedDamageNumbers.push({
+        ...entry,
+        stackIndex: this.nextStackIndexForTile(entry.tilePos.x, entry.tilePos.y, stackIndexByTile),
+        spawnOrder,
+        elapsedMs: 0
+      });
+      spawnOrder += 1;
+    }
+
+    return {
+      ...scene,
+      queuedDamageNumbers: queue,
+      nextDamageSpawnOrder: spawnOrder,
+      damageNumbers: [...scene.damageNumbers, ...spawnedDamageNumbers]
     };
   }
 

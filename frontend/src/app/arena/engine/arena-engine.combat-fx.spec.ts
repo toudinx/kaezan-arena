@@ -178,4 +178,108 @@ describe("ArenaEngine combat fx mapping", () => {
     const expired = engine.update(active, 120);
     expect(expired.floatingTexts).toHaveLength(0);
   });
+
+  it("maps mob_knocked_back events into short slide visuals without changing gameplay authority", () => {
+    const engine = new ArenaEngine();
+    const scene = engine.createTestScene(7, 7, 32);
+    const actors: ArenaActorState[] = [
+      {
+        actorId: "player.test",
+        kind: "player",
+        tileX: 3,
+        tileY: 3,
+        hp: 100,
+        maxHp: 100
+      },
+      {
+        actorId: "mob.test.01",
+        kind: "mob",
+        mobType: 2,
+        tileX: 6,
+        tileY: 4,
+        hp: 20,
+        maxHp: 20
+      }
+    ];
+    const applied = engine.applyBattleStep(scene, actors, [], [], [
+      {
+        type: "mob_knocked_back",
+        actorId: "mob.test.01",
+        fromTile: { x: 5, y: 4 },
+        toTile: { x: 6, y: 4 }
+      }
+    ]);
+
+    const initialSprite = applied.scene.sprites.find((entry) => entry.actorId === "mob.test.01");
+    expect(initialSprite?.tilePos).toEqual({ x: 5, y: 4 });
+
+    const mid = engine.update(applied.scene, 50);
+    const midSprite = mid.sprites.find((entry) => entry.actorId === "mob.test.01");
+    expect(midSprite?.tilePos.x ?? 0).toBeGreaterThan(5);
+    expect(midSprite?.tilePos.x ?? 0).toBeLessThan(6);
+
+    const completed = engine.update(mid, 60);
+    const completedSprite = completed.sprites.find((entry) => entry.actorId === "mob.test.01");
+    expect(completedSprite?.tilePos).toEqual({ x: 6, y: 4 });
+    expect(completed.mobKnockbackSlidesByActorId?.["mob.test.01"]).toBeUndefined();
+  });
+
+  it("chains piercing segment projectiles sequentially so each segment starts on previous impact", () => {
+    const engine = new ArenaEngine();
+    const baseScene = engine.createTestScene(7, 7, 32);
+    const scene = engine.applyRangedConfig(baseScene, {
+      autoAttackRangedMaxRange: 7,
+      rangedProjectileSpeedTiles: 10,
+      rangedDefaultCooldownMs: 800,
+      projectileColorByWeaponId: {}
+    });
+    const actors = createActors();
+    const events: ArenaBattleEvent[] = [
+      {
+        type: "ranged_projectile_fired",
+        weaponId: "weapon:void_ricochet",
+        fromTile: { x: 4, y: 2 },
+        toTile: { x: 6, y: 0 },
+        targetActorId: null,
+        pierces: true
+      },
+      {
+        type: "ranged_projectile_fired",
+        weaponId: "weapon:void_ricochet",
+        fromTile: { x: 5, y: 1 },
+        toTile: { x: 0, y: 6 },
+        targetActorId: null,
+        pierces: true
+      },
+      {
+        type: "ranged_projectile_fired",
+        weaponId: "weapon:void_ricochet",
+        fromTile: { x: 1, y: 5 },
+        toTile: { x: 0, y: 4 },
+        targetActorId: null,
+        pierces: true
+      }
+    ];
+
+    const applied = engine.applyBattleStep(scene, actors, [], [], events);
+    expect(applied.scene.projectileInstances).toHaveLength(3);
+
+    const [first, second, third] = applied.scene.projectileInstances;
+    expect(first?.startDelayRemainingMs ?? 0).toBe(0);
+    expect(second?.startDelayRemainingMs ?? 0).toBe(first?.impactDurationMs ?? 0);
+    expect(third?.startDelayRemainingMs ?? 0).toBe((first?.impactDurationMs ?? 0) + (second?.impactDurationMs ?? 0));
+
+    const afterFirstImpact = engine.update(applied.scene, first?.impactDurationMs ?? 0);
+    const secondAfterFirst = afterFirstImpact.projectileInstances.find((projectile) =>
+      projectile.fromPos.x === 5 && projectile.fromPos.y === 1);
+    const thirdAfterFirst = afterFirstImpact.projectileInstances.find((projectile) =>
+      projectile.fromPos.x === 1 && projectile.fromPos.y === 5);
+    expect(secondAfterFirst?.startDelayRemainingMs ?? 0).toBe(0);
+    expect(thirdAfterFirst?.startDelayRemainingMs ?? 0).toBe(second?.impactDurationMs ?? 0);
+
+    const afterSecondImpact = engine.update(afterFirstImpact, second?.impactDurationMs ?? 0);
+    const thirdAfterSecond = afterSecondImpact.projectileInstances.find((projectile) =>
+      projectile.fromPos.x === 1 && projectile.fromPos.y === 5);
+    expect(thirdAfterSecond?.startDelayRemainingMs ?? 0).toBe(0);
+  });
 });

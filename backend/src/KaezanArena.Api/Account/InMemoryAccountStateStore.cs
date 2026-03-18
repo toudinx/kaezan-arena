@@ -863,21 +863,65 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
     private StoredAccount GetOrCreateAccount(string accountId)
     {
         var normalizedAccountId = string.IsNullOrWhiteSpace(accountId) ? "dev_account" : accountId.Trim();
-        return _accounts.GetOrAdd(
+        var account = _accounts.GetOrAdd(
             normalizedAccountId,
             static id => new StoredAccount(
                 state: CreateSeededAccount(id),
                 awardedBySourceKeyByCharacter: new Dictionary<string, Dictionary<string, IReadOnlyList<DropEvent>>>(
                     StringComparer.Ordinal)));
+        EnsureCatalogCharacters(account);
+        return account;
+    }
+
+    private void EnsureCatalogCharacters(StoredAccount account)
+    {
+        lock (account.Sync)
+        {
+            var seededAccount = CreateSeededAccount(account.State.AccountId);
+            var characters = new Dictionary<string, CharacterState>(account.State.Characters, StringComparer.Ordinal);
+            var changed = false;
+            foreach (var characterDefinition in AccountCatalog.CharacterDefinitions)
+            {
+                if (characters.ContainsKey(characterDefinition.CharacterId))
+                {
+                    continue;
+                }
+
+                if (seededAccount.Characters.TryGetValue(characterDefinition.CharacterId, out var seededCharacter))
+                {
+                    characters[characterDefinition.CharacterId] = seededCharacter;
+                    changed = true;
+                }
+            }
+
+            if (!changed)
+            {
+                return;
+            }
+
+            var nextActiveCharacterId = account.State.ActiveCharacterId;
+            if (string.IsNullOrWhiteSpace(nextActiveCharacterId) || !characters.ContainsKey(nextActiveCharacterId))
+            {
+                nextActiveCharacterId = AccountCatalog.CharacterDefinitions[0].CharacterId;
+            }
+
+            account.State = account.State with
+            {
+                ActiveCharacterId = nextActiveCharacterId,
+                Version = account.State.Version + 1,
+                Characters = characters
+            };
+            PersistAccount(account);
+        }
     }
 
     private static AccountState CreateSeededAccount(string accountId)
     {
-        var kaelisOneId = "kaelis_01";
-        var kaelisTwoId = "kaelis_02";
+        var kaelisOneId = ArenaConfig.CharacterIds.Kina;
+        var kaelisTwoId = ArenaConfig.CharacterIds.RangedPrototype;
         var kaelisOne = new CharacterState(
             CharacterId: kaelisOneId,
-            Name: "Kaelis Dawn",
+            Name: ArenaConfig.DisplayNames[kaelisOneId],
             Level: 6,
             Xp: 1840,
             Inventory: new CharacterInventory(
@@ -900,7 +944,7 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
 
         var kaelisTwo = new CharacterState(
             CharacterId: kaelisTwoId,
-            Name: "Kaelis Ember",
+            Name: ArenaConfig.DisplayNames[kaelisTwoId],
             Level: 4,
             Xp: 820,
             Inventory: new CharacterInventory(

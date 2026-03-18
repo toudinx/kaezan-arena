@@ -1,4 +1,4 @@
-<section class="characters-shell">
+﻿<section class="characters-shell">
   <header class="characters-shell__header">
     <div>
       <h1>Characters</h1>
@@ -30,14 +30,20 @@
           @for (row of characterRows; track row.characterId) {
             <li class="character-card" [class.character-card--selected]="selectedCharacterId === row.characterId">
               <button type="button" class="character-card__main" (click)="viewCharacter(row.characterId)">
-                <div class="character-card__title">
-                  <strong>{{ row.name }}</strong>
-                  <span>{{ row.characterId }}</span>
+                <div class="character-card__identity">
+                  <span class="character-card__avatar" [class.character-card__avatar--provisional]="row.isProvisional">
+                    {{ row.name.slice(0, 1) }}
+                  </span>
+                  <div class="character-card__title">
+                    <strong>{{ row.name }}</strong>
+                    <span>{{ row.subtitle || row.characterId }}</span>
+                  </div>
                 </div>
                 <div class="character-card__stats">
                   <span>Level {{ row.level }}</span>
                   <span>XP {{ row.xp }}</span>
                 </div>
+                <p class="character-card__kit"><strong>Fixed Kit:</strong> {{ row.fixedKitLabel }}</p>
                 <div class="character-card__equipment">
                   <span><strong>Weapon:</strong> {{ row.equippedWeaponName }}</span>
                   <span><strong>Armor:</strong> {{ row.equippedArmorName }}</span>
@@ -68,12 +74,13 @@
         @if (selectedCharacter) {
           <header class="character-details__header">
             <h2>{{ selectedCharacter.name }}</h2>
-            <p>{{ selectedCharacter.characterId }} • Level {{ selectedCharacter.level }} • XP {{ selectedCharacter.xp }}</p>
+            <p>{{ selectedCharacter.subtitle || selectedCharacter.characterId }} - Level {{ selectedCharacter.level }} - XP {{ selectedCharacter.xp }}</p>
           </header>
 
           <div class="character-details__paperdoll">
             <h3>Paperdoll Summary</h3>
             <p><span>Status</span><strong>{{ selectedCharacter.isActive ? "Active" : "Inactive" }}</strong></p>
+            <p><span>Fixed Kit</span><strong>{{ selectedCharacter.fixedKitLabel }}</strong></p>
             <p><span>Weapon Slot</span><strong>{{ selectedCharacter.equippedWeaponName }}</strong></p>
             <p><span>Armor Slot</span><strong>{{ selectedCharacter.equippedArmorName }}</strong></p>
             <p><span>Relic Slot</span><strong>{{ selectedCharacter.equippedRelicName }}</strong></p>
@@ -93,4 +100,3 @@
     </div>
   }
 </section>
-
