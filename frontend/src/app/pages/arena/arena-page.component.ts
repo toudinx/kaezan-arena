@@ -78,7 +78,10 @@ import { EquipmentPaperdollWindowComponent } from "./equipment-paperdoll-window.
 import type { BackpackFilter } from "./backpack-inventory.helpers";
 import { DockLayoutService, type DockModuleId, type DockModuleState } from "./dock-layout.service";
 import { HelperAssistWindowComponent, type AssistSkillToggleChangedEvent } from "./helper-assist-window.component";
-import { RunResultLogger, type RunResultFinalizeMetrics } from "../../shared/run-results/run-result-logger";
+import {
+  RunResultLogger,
+  type RunResultFinalizeMetrics
+} from "../../shared/run-results/run-result-logger";
 import { ReplayIoService } from "../../shared/replay/replay-io.service";
 import {
   type DamageConsoleEntry,
@@ -202,6 +205,7 @@ type ArenaCardOffer = Readonly<{
   isSkillCard: boolean;
   currentStacks: number;
 }>;
+type ShieldHudVisualState = "active" | "low" | "depleted";
 type RunRecordingBatch = Readonly<{
   tick: number;
   stepCount: number;
@@ -238,12 +242,13 @@ const COMBAT_DETAILS_MAX_LINES = 200;
 const ANALYZER_WINDOW_MS = 10_000;
 const ANALYZER_SAMPLE_RETENTION_MS = 45_000;
 const ECONOMY_LOOT_PREVIEW_MAX_ENTRIES = 8;
+const SHIELD_LOW_THRESHOLD_PERCENT = 30;
+const SHIELD_BREAK_PULSE_DURATION_MS = 260;
 const CRAFTED_EQUIPMENT_ITEM_IDS = new Set<string>([
   "wpn.primal_forged_blade",
   "arm.primal_forged_mail",
   "rel.primal_forged_emblem"
 ]);
-const EARLY_MOB_CONCURRENT_CAP = 6;
 
 /*
 MAX_TICK_DEBT = 0 → comportamento original, request a cada 250ms, 100% fluido mas 4 req/s
@@ -254,8 +259,6 @@ MAX_TICK_DEBT = 8 → request a cada 2s, ~0.5 req/s
 */
 const MAX_TICK_DEBT = 0; 
 
-const MAX_MOB_CONCURRENT_CAP = 10;
-const EARLY_MOB_CAP_DURATION_MS = 75_000;
 const ASSIST_SKILL_IDS: readonly AssistSkillId[] = ["exori", "exori_min", "exori_mas", "avalanche"];
 type ArenaAssistConfig = Readonly<{
   enabled: boolean;
@@ -417,6 +420,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   runLootSourceChestCount = 0;
   runAwardedDropEventsCount = 0;
   runAwardedItemDropCount = 0;
+  runPlayerMinHp = 0;
   runEchoFragmentsBalanceStart = 0;
   runEchoFragmentsBalanceCurrent = 0;
   runEchoFragmentsSpend = 0;
@@ -430,6 +434,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   isRunEnded = false;
   runEndReason: string | null = null;
   runEndedAtMs: number | null = null;
+  shieldBreakPulseActive = false;
   runTimeMs = 0;
   runDurationMs = DEFAULT_RUN_DURATION_MS;
   timeSurvivedMs = 0;
@@ -493,6 +498,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   private queuedCommands: StepCommand[] = [];
   private autoStepTimerId: ReturnType<typeof setTimeout> | null = null;
   private assistConfigDebounceTimerId: ReturnType<typeof setTimeout> | null = null;
+  private shieldBreakPulseTimeoutId: ReturnType<typeof setTimeout> | null = null;
   private autoStepWasEnabledBeforePause = false;
   private autoStepWasEnabledBeforeCardChoice = false;
   private autoStepLoopRunId = 0;
@@ -561,16 +567,57 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   }
 
   get playerShieldPercentOfMaxHp(): number {
-    const shield = Math.max(0, Math.min(this.ui.player.shield, this.ui.player.maxShield));
-    return computeUnifiedVitalsPercent(shield, this.ui.player.maxHp);
+    return this.playerShieldPercent;
   }
 
   get playerHpPercentRounded(): number {
     return Math.round(this.playerHpPercent);
   }
 
+  get playerShieldPercent(): number {
+    return computeUnifiedVitalsPercent(this.playerShieldCurrent, this.playerShieldMax);
+  }
+
   get playerShieldPercentRounded(): number {
-    return Math.round(this.playerShieldPercentOfMaxHp);
+    return Math.round(this.playerShieldPercent);
+  }
+
+  get playerHpCurrent(): number {
+    return Math.max(0, this.ui.player.hp);
+  }
+
+  get playerHpMax(): number {
+    return Math.max(1, this.ui.player.maxHp);
+  }
+
+  get playerShieldCurrent(): number {
+    return Math.max(0, Math.min(this.ui.player.shield, this.ui.player.maxShield));
+  }
+
+  get playerShieldMax(): number {
+    return Math.max(0, this.ui.player.maxShield);
+  }
+
+  get playerShieldVisualState(): ShieldHudVisualState {
+    if (this.playerShieldCurrent <= 0 || this.playerShieldMax <= 0) {
+      return "depleted";
+    }
+
+    const percent = this.playerShieldPercent;
+    if (percent <= SHIELD_LOW_THRESHOLD_PERCENT) {
+      return "low";
+    }
+
+    return "active";
+  }
+
+  get lockedTargetLabel(): string | null {
+    const lockedId = this.scene?.lockedTargetEntityId ?? null;
+    if (!lockedId) return null;
+    const actor = this.scene?.actorsById[lockedId];
+    if (!actor || actor.kind !== "mob" || !actor.mobType) return null;
+    const species = this.mapMobArchetypeToSpecies(actor.mobType);
+    return species ? this.formatSpeciesLabel(species) : null;
   }
 
   get playerExpPercent(): number {
@@ -982,10 +1029,24 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
 
   get pacingTelemetryRows(): ReadonlyArray<Readonly<{ label: string; value: string }>> {
     const displayedRunTimeMs = this.resolveDisplayedRunTimeMs();
+    const pacing = this.runResultLogger.getPacingTelemetry(displayedRunTimeMs);
+    const lowHpSummary = pacing
+      ? `${pacing.lowHp.windows} windows, ${formatRunTimer(pacing.lowHp.totalDurationMs)} total (longest ${formatRunTimer(pacing.lowHp.longestWindowMs)}) @ <=${pacing.lowHp.thresholdPercent}%`
+      : "n/a";
+
     return [
       { label: "Time survived", value: formatRunTimer(this.timeSurvivedMs) },
       { label: "Run time", value: `${formatRunTimer(displayedRunTimeMs)} / ${formatRunTimer(this.runDurationMs)}` },
-      { label: "Derived mob cap", value: String(this.resolveDerivedMobCap()) },
+      { label: "Alive mobs (now)", value: pacing ? String(pacing.currentAliveMobs) : "n/a" },
+      { label: "Peak simultaneous mobs", value: pacing ? String(pacing.peakSimultaneousMobs) : "n/a" },
+      { label: "Spawn cap (director)", value: this.formatOptionalTelemetryNumber(pacing?.spawnPacing.maxAliveMobs ?? null) },
+      { label: "Elite chance (director)", value: this.formatOptionalPercent(pacing?.spawnPacing.eliteSpawnChancePercent ?? null) },
+      { label: "First damage taken", value: this.formatOptionalRunTime(pacing?.timeToFirstDamageTakenMs ?? null) },
+      { label: "First elite", value: this.formatOptionalRunTime(pacing?.timeToFirstEliteMs ?? null) },
+      { label: "First chest spawn", value: this.formatOptionalRunTime(pacing?.timeToFirstChestSpawnMs ?? null) },
+      { label: "First chest opened", value: this.formatOptionalRunTime(pacing?.timeToFirstChestOpenedMs ?? null) },
+      { label: "First card offer", value: this.formatOptionalRunTime(pacing?.timeToFirstCardChoiceMs ?? null) },
+      { label: "Low-HP danger", value: lowHpSummary },
       { label: "Kills", value: String(this.runTotalKills) },
       { label: "Elite kills", value: String(this.runEliteKills) },
       { label: "Chests opened", value: String(this.runChestsOpened) }
@@ -1089,6 +1150,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
 
     this.clearAssistConfigDebounce();
     this.stopAutoStepLoop();
+    this.clearShieldBreakPulse();
 
   }
 
@@ -1683,6 +1745,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   private async beginNewRun(options: BeginRunOptions): Promise<void> {
     this.stopAutoStepLoop();
     this.clearAssistConfigDebounce();
+    this.clearShieldBreakPulse();
 
     this.clearReplaySessionState();
     this.activeRunRecording = null;
@@ -1714,6 +1777,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.runLootSourceChestCount = 0;
     this.runAwardedDropEventsCount = 0;
     this.runAwardedItemDropCount = 0;
+    this.runPlayerMinHp = 0;
     this.runEchoFragmentsIncome = 0;
     this.runEchoFragmentsSpend = 0;
     this.runEchoFragmentsBalanceStart = Math.max(0, this.accountState?.echoFragmentsBalance ?? 0);
@@ -3605,7 +3669,9 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         tileX: typedActor.tileX ?? 0,
         tileY: typedActor.tileY ?? 0,
         hp: typedActor.hp ?? 0,
-        maxHp: typedActor.maxHp ?? 1
+        maxHp: typedActor.maxHp ?? 1,
+        shield: typedActor.shield ?? 0,
+        maxShield: typedActor.maxShield ?? 0
       });
     }
 
@@ -3934,6 +4000,36 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         continue;
       }
 
+      if (eventType === "assist_cast") {
+        const skillId = this.readString(value["skillId"]);
+        const reason = this.readString(value["reason"]);
+        if (!skillId || !reason) {
+          continue;
+        }
+
+        mapped.push({
+          type: "assist_cast",
+          skillId,
+          reason
+        });
+        continue;
+      }
+
+      if (eventType === "elite_spawned" || eventType === "elite_died") {
+        const eliteEntityId = this.readString(value["eliteEntityId"]);
+        const mobType = this.readMobArchetypeValue(value["mobType"]);
+        if (!eliteEntityId || !mobType) {
+          continue;
+        }
+
+        mapped.push({
+          type: eventType,
+          eliteEntityId,
+          mobType
+        });
+        continue;
+      }
+
       if (eventType === "ranged_projectile_fired") {
         const weaponId = this.readString(value["weaponId"]);
         const fromTile = this.readRecord(value["fromTile"]);
@@ -4177,6 +4273,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
 
     const hp = this.readNumber(player.hp) ?? 0;
     const maxHp = Math.max(1, this.readNumber(player.maxHp) ?? 100);
+    const previousShield = Math.max(0, Math.min(this.ui.player.shield, this.ui.player.maxShield));
     const maxShield = Math.max(0, this.readNumber((player as Record<string, unknown>)["maxShield"]) ?? Math.floor(maxHp * 0.8));
     const shield = Math.max(0, Math.min(maxShield, this.readNumber((player as Record<string, unknown>)["shield"]) ?? 0));
 
@@ -4193,6 +4290,10 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       ...this.ui,
       player: playerState
     };
+
+    if (previousShield > 0 && shield <= 0) {
+      this.triggerShieldBreakPulse();
+    }
   }
 
   private updateGlobalCooldownFromSnapshot(
@@ -4540,6 +4641,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     const rollingRates = computeCombatRollingRates(rollingTotals, rollingWindowSeconds);
     const eliteSummary = this.combatEliteSummary;
     const series = buildCombatRateSeries(this.combatMetricSamples, this.runTimeMs, ANALYZER_WINDOW_MS, 10);
+    const pacing = this.runResultLogger.getPacingTelemetry(this.runTimeMs);
 
     return {
       version: 1,
@@ -4569,6 +4671,26 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         hitDealt: this.combatPeakHitDealt,
         hitTaken: this.combatPeakHitTaken
       },
+      pacing: pacing ? {
+        timeToFirstDamageTakenMs: pacing.timeToFirstDamageTakenMs,
+        timeToFirstEliteMs: pacing.timeToFirstEliteMs,
+        timeToFirstChestSpawnMs: pacing.timeToFirstChestSpawnMs,
+        timeToFirstChestOpenedMs: pacing.timeToFirstChestOpenedMs,
+        timeToFirstCardChoiceMs: pacing.timeToFirstCardChoiceMs,
+        currentAliveMobs: pacing.currentAliveMobs,
+        peakSimultaneousMobs: pacing.peakSimultaneousMobs,
+        spawnPacing: {
+          maxAliveMobs: pacing.spawnPacing.maxAliveMobs,
+          eliteSpawnChancePercent: pacing.spawnPacing.eliteSpawnChancePercent
+        },
+        lowHp: {
+          thresholdPercent: pacing.lowHp.thresholdPercent,
+          firstEnteredAtMs: pacing.lowHp.firstEnteredAtMs,
+          windows: pacing.lowHp.windows,
+          totalDurationMs: pacing.lowHp.totalDurationMs,
+          longestWindowMs: pacing.lowHp.longestWindowMs
+        }
+      } : null,
       elite: {
         encounters: eliteSummary.encounters,
         kills: eliteSummary.kills,
@@ -5295,6 +5417,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   private returnToPreRun(): void {
     this.stopAutoStepLoop();
     this.clearAssistConfigDebounce();
+    this.clearShieldBreakPulse();
 
     this.clearReplaySessionState();
     this.activeRunRecording = null;
@@ -5346,6 +5469,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.runLootSourceChestCount = 0;
     this.runAwardedDropEventsCount = 0;
     this.runAwardedItemDropCount = 0;
+    this.runPlayerMinHp = 0;
     this.runEchoFragmentsIncome = 0;
     this.runEchoFragmentsSpend = 0;
     this.runEchoFragmentsBalanceStart = 0;
@@ -5365,6 +5489,30 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.expLogSequence = 0;
     this.isInRun = false;
     this.syncUiMetaState();
+  }
+
+  private triggerShieldBreakPulse(): void {
+    if (this.shieldBreakPulseTimeoutId) {
+      clearTimeout(this.shieldBreakPulseTimeoutId);
+      this.shieldBreakPulseTimeoutId = null;
+    }
+
+    this.shieldBreakPulseActive = true;
+    this.shieldBreakPulseTimeoutId = setTimeout(() => {
+      this.runInAngularZone(() => {
+        this.shieldBreakPulseActive = false;
+      });
+      this.shieldBreakPulseTimeoutId = null;
+    }, SHIELD_BREAK_PULSE_DURATION_MS);
+  }
+
+  private clearShieldBreakPulse(): void {
+    if (this.shieldBreakPulseTimeoutId) {
+      clearTimeout(this.shieldBreakPulseTimeoutId);
+      this.shieldBreakPulseTimeoutId = null;
+    }
+
+    this.shieldBreakPulseActive = false;
   }
 
   private canIssueBattleCommand(): boolean {
@@ -5473,6 +5621,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       return;
     }
 
+    this.runPlayerMinHp = finalized.playerMinHp;
     this.runResultCopyMessage = "Run result logged and stored.";
   }
 
@@ -5731,10 +5880,28 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     return this.resolveRunEndedAtMsForDisplay();
   }
 
-  private resolveDerivedMobCap(): number {
-    return this.runTimeMs < EARLY_MOB_CAP_DURATION_MS
-      ? EARLY_MOB_CONCURRENT_CAP
-      : MAX_MOB_CONCURRENT_CAP;
+  private formatOptionalRunTime(value: number | null): string {
+    if (value === null || !Number.isFinite(value)) {
+      return "n/a";
+    }
+
+    return formatRunTimer(Math.max(0, Math.floor(value)));
+  }
+
+  private formatOptionalTelemetryNumber(value: number | null): string {
+    if (value === null || !Number.isFinite(value)) {
+      return "n/a";
+    }
+
+    return String(Math.max(0, Math.floor(value)));
+  }
+
+  private formatOptionalPercent(value: number | null): string {
+    if (value === null || !Number.isFinite(value)) {
+      return "n/a";
+    }
+
+    return `${Math.max(0, Math.floor(value))}%`;
   }
 
   private formatMultiplier(value: number): string {

@@ -23,6 +23,14 @@ export type BackpackEquipRequest = Readonly<{
 
 export type BackpackEquipMode = "weapon" | "armor" | "relic" | null;
 
+type EquippedBackpackSlotViewModel = Readonly<{
+  slot: "weapon" | "armor" | "relic";
+  slotLabel: string;
+  item: BackpackSlot | null;
+}>;
+
+const EQUIPPED_SLOT_ORDER: readonly ("weapon" | "armor" | "relic")[] = ["weapon", "armor", "relic"];
+
 @Component({
   selector: "app-backpack-window",
   standalone: true,
@@ -87,6 +95,30 @@ export class BackpackWindowComponent implements OnChanges, OnDestroy {
     return filterBackpackSlots(this.allSlots, this.selectedFilter);
   }
 
+  get visibleStoredSlots(): BackpackSlot[] {
+    return this.visibleSlots.filter((slot) => !slot.isEquipped);
+  }
+
+  get equippedSlots(): ReadonlyArray<EquippedBackpackSlotViewModel> {
+    return EQUIPPED_SLOT_ORDER.map((slot) => {
+      const item = this.allSlots.find((entry) => entry.isEquipped && entry.slot === slot) ?? null;
+      const slotLabel = slot === "weapon"
+        ? "Weapon"
+        : slot === "armor"
+          ? "Armor"
+          : "Relic";
+      return { slot, slotLabel, item };
+    });
+  }
+
+  get equippedCount(): number {
+    return this.equippedSlots.filter((entry) => !!entry.item).length;
+  }
+
+  get selectedSlotRarityClass(): string {
+    return this.resolveRarityClass(this.selectedSlot?.rarity ?? "common");
+  }
+
   get selectedSlot(): BackpackSlot | null {
     if (!this.selectedSlotId) {
       return null;
@@ -119,6 +151,16 @@ export class BackpackWindowComponent implements OnChanges, OnDestroy {
     }
 
     this.selectedSlotId = slotId;
+  }
+
+  selectEquippedSlot(slot: EquippedBackpackSlotViewModel): void {
+    if (!slot.item) {
+      return;
+    }
+
+    this.selectedSlotId = slot.item.slotId;
+    this.inspectSlotId = null;
+    this.closeContextMenu();
   }
 
   onGridContextMenu(event: MouseEvent): void {
@@ -196,6 +238,48 @@ export class BackpackWindowComponent implements OnChanges, OnDestroy {
     return "";
   }
 
+  get slotCountLabel(): string {
+    const count = this.visibleStoredSlots.length;
+    return count === 1 ? "1 stored item" : `${count} stored items`;
+  }
+
+  get selectedSlotTypeLabel(): string {
+    if (!this.selectedSlot) {
+      return "Equipment";
+    }
+
+    return this.selectedSlot.slotLabel;
+  }
+
+  get selectedSlotStateLabel(): string {
+    return this.selectedSlot?.isEquipped ? "Equipped" : "Stored";
+  }
+
+  get selectedSlotComparisonLine(): string | null {
+    const selectedSlot = this.selectedSlot;
+    if (!selectedSlot) {
+      return null;
+    }
+
+    if (selectedSlot.slot !== "weapon" && selectedSlot.slot !== "armor" && selectedSlot.slot !== "relic") {
+      return null;
+    }
+
+    const currentlyEquipped = this.allSlots.find((slot) =>
+      slot.isEquipped && slot.slot === selectedSlot.slot
+    ) ?? null;
+
+    if (selectedSlot.isEquipped) {
+      return `Currently equipped in ${selectedSlot.slotLabel}.`;
+    }
+
+    if (currentlyEquipped) {
+      return `Replaces equipped: ${currentlyEquipped.displayName}.`;
+    }
+
+    return `No ${selectedSlot.slotLabel.toLowerCase()} equipped right now.`;
+  }
+
   canEquip(slot: BackpackSlot | null): boolean {
     return !!slot && !!this.resolveEquipSlot(slot) && !slot.isEquipped && !this.equipInFlight;
   }
@@ -241,6 +325,27 @@ export class BackpackWindowComponent implements OnChanges, OnDestroy {
 
   trackSlotById(_index: number, slot: BackpackSlot): string {
     return slot.slotId;
+  }
+
+  resolveRarityClass(rarity: string): string {
+    const normalized = (rarity ?? "").trim().toLowerCase();
+    if (normalized === "ascendant") {
+      return "ascendant";
+    }
+
+    if (normalized === "legendary") {
+      return "legendary";
+    }
+
+    if (normalized === "epic") {
+      return "epic";
+    }
+
+    if (normalized === "rare") {
+      return "rare";
+    }
+
+    return "common";
   }
 
   @HostListener("document:mousedown", ["$event"])

@@ -155,6 +155,44 @@ describe("CanvasLayeredRenderer crit text", () => {
     (renderer as any).drawFloatingTexts(expiredScene, viewport);
     expect(context.fillTextCallCount).toBe(0);
   });
+
+  it("draws combat callout text variants for shield/assist moments", () => {
+    const context = createContextStub();
+    const renderer = new CanvasLayeredRenderer(context.context as unknown as CanvasRenderingContext2D);
+    const viewport = {
+      canvasWidth: 480,
+      canvasHeight: 420,
+      originX: 0,
+      originY: 0
+    };
+    const scene = createScene();
+    scene.floatingTexts = [
+      {
+        kind: "combat_callout",
+        tone: "shield_break",
+        text: "SHATTER",
+        tilePos: { x: 3, y: 3 },
+        startAtMs: 0,
+        elapsedMs: 120,
+        durationMs: 560,
+        fontScale: 1
+      },
+      {
+        kind: "combat_callout",
+        tone: "assist",
+        text: "VOID RICOCHET",
+        tilePos: { x: 3, y: 3 },
+        startAtMs: 0,
+        elapsedMs: 80,
+        durationMs: 520,
+        fontScale: 1
+      }
+    ];
+
+    (renderer as any).drawFloatingTexts(scene, viewport);
+    expect(context.fillTextValues).toContain("SHATTER");
+    expect(context.fillTextValues).toContain("VOID RICOCHET");
+  });
 });
 
 function createContextStub(): ContextStub {

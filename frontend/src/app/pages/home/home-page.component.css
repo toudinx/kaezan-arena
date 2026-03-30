@@ -311,15 +311,6 @@
   background: #0c1420;
 }
 
-.hub-cta__label {
-  margin: 0;
-  font-size: 0.6rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-  color: #2e4a62;
-}
-
 .hub-cta__btn {
   display: block;
   width: 100%;
@@ -344,8 +335,20 @@
 
 .hub-cta__hint {
   margin: 0;
-  font-size: 0.62rem;
-  color: #1e3040;
+  font-size: 0.66rem;
+  color: #4a6a88;
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.hub-cta__hint-char {
+  color: #c5d8ec;
+  font-weight: 600;
+}
+
+.hub-cta__hint-sep {
+  color: #2e4a62;
 }
 
 /* Last run */
@@ -398,7 +401,7 @@
 
 .hub-lastrun__stats {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 0.5rem;
 }
 
@@ -427,6 +430,9 @@
   letter-spacing: 0.06em;
   color: #2e4a62;
 }
+
+.hub-lastrun__stat-value--pos { color: #4ade80; }
+.hub-lastrun__stat-value--neg { color: #f87171; }
 
 .hub-lastrun__cards {
   display: flex;
@@ -501,6 +507,13 @@
   font-weight: 700;
   color: #fcd34d;
   line-height: 1.1;
+}
+
+.hub-echo__sublabel {
+  margin: 0;
+  font-size: 0.52rem;
+  color: #2e4a62;
+  letter-spacing: 0.06em;
 }
 
 /* Bestiary */

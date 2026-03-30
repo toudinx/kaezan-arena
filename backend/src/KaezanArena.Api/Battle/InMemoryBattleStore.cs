@@ -1307,6 +1307,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
 
                 if (TryExecuteSigilBolt(state, events))
                 {
+                    events.Add(new AssistCastEventDto(ArenaConfig.SigilBoltSkillId, ArenaConfig.AssistReasonAutoOffense));
                     return true;
                 }
 
@@ -1323,6 +1324,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
 
                 if (TryExecuteShotgun(state, events))
                 {
+                    events.Add(new AssistCastEventDto(ArenaConfig.ShotgunSkillId, ArenaConfig.AssistReasonAutoOffense));
                     return true;
                 }
 
@@ -1339,6 +1341,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
 
                 if (TryExecuteVoidRicochet(state, events))
                 {
+                    events.Add(new AssistCastEventDto(ArenaConfig.VoidRicochetSkillId, ArenaConfig.AssistReasonAutoOffense));
                     return true;
                 }
 

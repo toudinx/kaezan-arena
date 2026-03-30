@@ -25,6 +25,8 @@ public sealed record BattleStartResponseDto(
     long TimeSurvivedMs,
     long RunTimeMs,
     long RunDurationMs,
+    int AliveMobs,
+    BattleSpawnPacingDto SpawnPacing,
     int StepDeltaMs,
     double CurrentMobHpMult,
     double CurrentMobDmgMult,

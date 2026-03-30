@@ -5,7 +5,20 @@ import { AccountStore } from "../../account/account-store.service";
 import type { RunResultV1 } from "../../shared/run-results/run-result-logger";
 
 const RUN_RESULT_STORAGE_KEY = "kaezan_run_results_v1";
-const KILL_MILESTONE_STEP = 25;
+const RANK_THRESHOLDS: ReadonlyArray<number> = [0, 10, 30, 60, 100];
+const MAX_RANK = RANK_THRESHOLDS.length;
+
+function computeRank(killsTotal: number): number {
+  const kills = Math.max(0, killsTotal);
+  let rank = 1;
+  for (let i = RANK_THRESHOLDS.length - 1; i >= 0; i--) {
+    if (kills >= RANK_THRESHOLDS[i]) {
+      rank = i + 1;
+      break;
+    }
+  }
+  return rank;
+}
 
 const CHARACTER_PORTRAIT_COLORS: Readonly<Record<string, string>> = {
   "character:kina": "amber",
@@ -134,12 +147,15 @@ export class HomePageComponent implements OnInit {
     return Object.entries(char.bestiaryKillsBySpecies ?? {})
       .map(([speciesId, kills]) => {
         const killsTotal = Math.max(0, kills ?? 0);
-        const tier = Math.floor(killsTotal / KILL_MILESTONE_STEP);
-        const nextMilestone = Math.max(KILL_MILESTONE_STEP, (tier + 1) * KILL_MILESTONE_STEP);
-        const previousMilestone = Math.max(0, nextMilestone - KILL_MILESTONE_STEP);
-        const progressPercent = Math.max(0, Math.min(100, ((killsTotal - previousMilestone) / KILL_MILESTONE_STEP) * 100));
+        const rank = computeRank(killsTotal);
+        const isMaxRank = rank >= MAX_RANK;
+        const nextMilestone = isMaxRank ? RANK_THRESHOLDS[MAX_RANK - 1] : RANK_THRESHOLDS[rank];
+        const currentRankStart = RANK_THRESHOLDS[rank - 1];
+        const bandSize = isMaxRank ? 1 : (nextMilestone - currentRankStart);
+        const progressInBand = isMaxRank ? 1 : Math.max(0, killsTotal - currentRankStart);
+        const progressPercent = Math.min(100, Math.max(0, (progressInBand / bandSize) * 100));
         const speciesName = speciesById[speciesId]?.displayName ?? formatTokenId(speciesId);
-        return { speciesName, killsTotal, killsToNext: nextMilestone - killsTotal, progressPercent };
+        return { speciesName, killsTotal, killsToNext: isMaxRank ? 0 : Math.max(0, nextMilestone - killsTotal), progressPercent };
       })
       .filter(row => row.killsTotal > 0)
       .sort((a, b) => b.killsTotal - a.killsTotal)
@@ -156,9 +172,11 @@ export class HomePageComponent implements OnInit {
     for (const [speciesId, kills] of Object.entries(char.bestiaryKillsBySpecies ?? {})) {
       const killsTotal = Math.max(0, kills ?? 0);
       if (killsTotal === 0) continue;
-      const tier = Math.floor(killsTotal / KILL_MILESTONE_STEP);
-      const nextMilestone = Math.max(KILL_MILESTONE_STEP, (tier + 1) * KILL_MILESTONE_STEP);
-      const killsToNext = nextMilestone - killsTotal;
+      const rank = computeRank(killsTotal);
+      const isMaxRank = rank >= MAX_RANK;
+      if (isMaxRank) continue;
+      const nextMilestone = RANK_THRESHOLDS[rank];
+      const killsToNext = Math.max(0, nextMilestone - killsTotal);
       const speciesName = speciesById[speciesId]?.displayName ?? formatTokenId(speciesId);
       if (!best || killsToNext < best.killsToNext) {
         best = { speciesName, killsToNext };
@@ -169,6 +187,14 @@ export class HomePageComponent implements OnInit {
 
   get hasLastRunSummary(): boolean {
     return this.lastRunSummary !== null;
+  }
+
+  get lastRunXpGained(): number {
+    return this.lastRunSummary?.xpTotalGained ?? 0;
+  }
+
+  get lastRunEchoFragmentsDelta(): number {
+    return this.lastRunSummary?.echoFragmentsDelta ?? 0;
   }
 
   get lastRunDurationLabel(): string {

@@ -27,6 +27,8 @@ public sealed record BattleSnapshot(
     long TimeSurvivedMs,
     long RunTimeMs,
     long RunDurationMs,
+    int AliveMobs,
+    BattleSpawnPacingDto SpawnPacing,
     double CurrentMobHpMult,
     double CurrentMobDmgMult,
     BattleScalingDto Scaling,

@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(grep -v \"^$\")"
+      "Bash(grep -v \"^$\")",
+      "Bash(npx vitest:*)",
+      "Bash(python -c \"import sys,json;d=json.load\\(sys.stdin\\);print\\(json.dumps\\(d.get\\(''''projects'''',{}\\).get\\(''''arena'''',{}\\).get\\(''''architect'''',{}\\).get\\(''''test'''',{}\\),indent=2\\)\\)\")"
     ]
   }
 }

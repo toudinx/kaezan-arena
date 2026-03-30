@@ -64,7 +64,9 @@ public sealed partial class InMemoryBattleStore
         var isGameOver = isRunEnded;
         var endReason = ResolveLegacyEndReason(state.RunEndReason);
         var timeSurvivedMs = state.RunEndedAtMs ?? nowMs;
+        var spawnPacing = ResolveSpawnPacingDirector(state);
         var scaling = ResolveScalingDirectorV2(nowMs, state.RunLevel);
+        var aliveMobs = state.Actors.Values.Count(actor => string.Equals(actor.Kind, "mob", StringComparison.Ordinal));
         var currentMobHpMult = scaling.NormalHpMult;
         var currentMobDmgMult = scaling.NormalDmgMult;
         var activeBuffs = state.ActiveBuffs.Values
@@ -134,6 +136,10 @@ public sealed partial class InMemoryBattleStore
             TimeSurvivedMs: timeSurvivedMs,
             RunTimeMs: nowMs,
             RunDurationMs: ArenaConfig.RunDurationMs,
+            AliveMobs: aliveMobs,
+            SpawnPacing: new BattleSpawnPacingDto(
+                MaxAliveMobs: spawnPacing.MaxAliveMobs,
+                EliteSpawnChancePercent: spawnPacing.EliteSpawnChancePercent),
             CurrentMobHpMult: currentMobHpMult,
             CurrentMobDmgMult: currentMobDmgMult,
             Scaling: new BattleScalingDto(

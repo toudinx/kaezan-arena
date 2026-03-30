@@ -105,12 +105,15 @@ The Arena Preparation lobby (pre-run screen) was also redesigned as a full-width
 
 After each run ends (`isRunEnded`), a full-screen dark overlay replaces the arena:
 
-- **Section A — Outcome header:** Large "VICTORY" (teal) or "DEFEAT" (coral), subtitle reason, duration as "Xm Ys", "Reached Level N", kills/elites/chests summary line.
-- **Section B — Run stats:** Two-column grid — Combat (Kills / Elites / Chests / Cards / Damage) and Rewards (Echo Fragments net color-coded, Primal Core, Equipment Drops). Cards chosen appear as pills below the grid.
-- **Section C — Bestiary Progress:** Top 3 species by kills gained this run, each row showing kills delta and a "NEW RANK N" amber pill when a milestone was crossed. Hidden if no kills were registered.
+- **Section A — Outcome header:** Large "VICTORY" (teal) or "DEFEAT" (coral), subtitle reason, inline meta line showing duration, level, kills, and elites.
+- **Section B — Key stats grid:** Responsive 4-column grid of stat tiles covering Kills, Elites, Damage Dealt, Damage Taken, Min HP, XP Gained, Echo Fragments (net, color-coded), Primal Core. Chests and Equipment tiles are shown conditionally when non-zero.
+- **Section C — Build summary:** Section header "Build · N cards" with all chosen card names as pills. Hidden when no cards were selected.
+- **Section D — Bestiary Progress:** Top 3 species by kills gained this run, each row showing kills delta and a "NEW RANK N" amber pill when a milestone was crossed. Hidden if no kills were registered.
 - **Actions:** "RUN AGAIN" (teal primary) and "EXIT TO HOME" (muted secondary).
 - **[DEV] disclosure:** Collapsed `<details>` element containing Export Replay, Import Replay, Play Imported Replay, Copy Last/All Run JSON, Export Runs. Collapsed by default; native HTML toggle — no Angular state needed.
 - Subtle footer: "Run result logged and stored."
+
+Data source: all stats are read from existing component properties (`combatTotalDamageDealt`, `combatTotalDamageTaken`, `economyTotalXpGained`, etc.). `runPlayerMinHp` is captured from `RunResultLogger.finalizeIfEnded()` in `tryFinalizeRunResult()` and reset alongside other run counters.
 
 Bestiary delta calculation: `runStartBestiaryKills` is captured from the account state at `beginNewRun()` before resetting `bestiaryEntries`. Post-run delta = `bestiaryEntry.killsTotal − runStartBestiaryKills[species]`.
 

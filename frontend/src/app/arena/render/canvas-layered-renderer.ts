@@ -146,6 +146,8 @@ export class CanvasLayeredRenderer {
         this.drawLockedTargetMarker(scene, viewport);
         this.drawMobReadabilityMarkers(scene, viewport);
         this.drawThreatTargetMarker(scene, viewport);
+        this.drawLowHealthDangerOverlay(scene, viewport);
+        this.drawMomentCues(scene, viewport);
         this.drawDamageNumbers(scene, viewport);
         this.drawFloatingTexts(scene, viewport);
       }
@@ -560,30 +562,61 @@ export class CanvasLayeredRenderer {
 
   private drawFloatingTexts(scene: ArenaScene, viewport: RenderViewport): void {
     for (const entry of scene.floatingTexts) {
-      if (entry.kind !== "crit_text") {
+      if (entry.kind !== "crit_text" && entry.kind !== "combat_callout") {
         continue;
       }
 
       const life = Math.max(0, Math.min(1, entry.elapsedMs / entry.durationMs));
       const riseOffset = life * scene.tileSize * 0.45;
       const x = viewport.originX + (entry.tilePos.x + 0.5) * scene.tileSize;
-      const y = viewport.originY + entry.tilePos.y * scene.tileSize - scene.tileSize * 0.12 - riseOffset;
-      const baseFontPx = Math.max(16, Math.min(24, scene.tileSize * 0.42));
-      const fontSizePx = Math.round(baseFontPx * (1 + (1 - life) * 0.08));
+      const baseY = entry.kind === "combat_callout"
+        ? viewport.originY + entry.tilePos.y * scene.tileSize - scene.tileSize * 0.28
+        : viewport.originY + entry.tilePos.y * scene.tileSize - scene.tileSize * 0.12;
+      const y = baseY - riseOffset;
+      const baseFontPx = entry.kind === "combat_callout"
+        ? Math.max(13, Math.min(19, scene.tileSize * 0.34))
+        : Math.max(16, Math.min(24, scene.tileSize * 0.42));
+      const entryScale = Math.max(0.6, entry.fontScale ?? 1);
+      const fontSizePx = Math.round(baseFontPx * entryScale * (1 + (1 - life) * 0.08));
+      const palette = this.resolveFloatingTextPalette(entry);
 
       this.context.save();
       this.context.globalAlpha = Math.max(0.1, 1 - life);
       this.context.textAlign = "center";
       this.context.textBaseline = "middle";
       this.context.font = `bold ${fontSizePx}px Arial`;
-      this.context.fillStyle = CRIT_TEXT_PALETTE.fill;
-      this.context.strokeStyle = CRIT_TEXT_PALETTE.outline;
+      this.context.fillStyle = palette.fill;
+      this.context.strokeStyle = palette.outline;
       this.context.lineWidth = Math.max(2, Math.round(fontSizePx * 0.18));
       this.context.lineJoin = "round";
       this.context.strokeText(entry.text, x, y);
       this.context.fillText(entry.text, x, y);
       this.context.restore();
     }
+  }
+
+  private resolveFloatingTextPalette(entry: ArenaScene["floatingTexts"][number]): { fill: string; outline: string } {
+    if (entry.kind !== "combat_callout") {
+      return CRIT_TEXT_PALETTE;
+    }
+
+    if (entry.tone === "elite") {
+      return { fill: "#fbbf24", outline: "rgba(69, 26, 3, 0.96)" };
+    }
+
+    if (entry.tone === "assist") {
+      return { fill: "#67e8f9", outline: "rgba(12, 74, 110, 0.95)" };
+    }
+
+    if (entry.tone === "shield_break") {
+      return { fill: "#dbeafe", outline: "rgba(30, 64, 175, 0.96)" };
+    }
+
+    if (entry.tone === "danger") {
+      return { fill: "#fca5a5", outline: "rgba(69, 10, 10, 0.96)" };
+    }
+
+    return CRIT_TEXT_PALETTE;
   }
 
   private computeDamageNumberFontSizePx(scene: ArenaScene): number {
@@ -962,17 +995,25 @@ export class CanvasLayeredRenderer {
     const radius = tileSize * 0.46;
     const iconRadius = tileSize * 0.09;
     const iconCenterY = centerY - radius - tileSize * 0.12;
+    const pulseNowMs = typeof performance !== "undefined" ? performance.now() : Date.now();
+    const pulse = 0.86 + (0.14 * Math.sin(pulseNowMs / 220));
 
     this.context.save();
-    this.context.fillStyle = "rgba(245, 158, 11, 0.14)";
+    this.context.fillStyle = "rgba(245, 158, 11, 0.18)";
     this.context.beginPath();
     this.context.arc(centerX, centerY, radius, 0, Math.PI * 2);
     this.context.fill();
 
     this.context.strokeStyle = "rgba(245, 158, 11, 0.95)";
-    this.context.lineWidth = Math.max(2, tileSize * 0.05);
+    this.context.lineWidth = Math.max(2.2, tileSize * 0.055);
     this.context.beginPath();
     this.context.arc(centerX, centerY, radius, 0, Math.PI * 2);
+    this.context.stroke();
+
+    this.context.strokeStyle = `rgba(254, 215, 170, ${Math.max(0.2, pulse)})`;
+    this.context.lineWidth = Math.max(1.2, tileSize * 0.03);
+    this.context.beginPath();
+    this.context.arc(centerX, centerY, radius * (1.08 + ((1 - pulse) * 0.16)), 0, Math.PI * 2);
     this.context.stroke();
 
     this.context.fillStyle = "rgba(254, 243, 199, 0.95)";
@@ -1031,6 +1072,120 @@ export class CanvasLayeredRenderer {
     this.context.arc(centerX, markerY, radius, 0, Math.PI * 2);
     this.context.fill();
     this.context.restore();
+  }
+
+  private drawLowHealthDangerOverlay(scene: ArenaScene, viewport: RenderViewport): void {
+    const player = Object.values(scene.actorsById).find((actor) => actor.kind === "player");
+    if (!player || player.maxHp <= 0) {
+      return;
+    }
+
+    const hpRatio = Math.max(0, Math.min(1, player.hp / Math.max(1, player.maxHp)));
+    const shield = Math.max(0, player.shield ?? 0);
+    const maxShield = Math.max(0, player.maxShield ?? 0);
+    const effectiveRatio = maxShield > 0
+      ? Math.max(0, Math.min(1, (player.hp + shield) / Math.max(1, player.maxHp + maxShield)))
+      : hpRatio;
+    if (hpRatio > 0.42 && effectiveRatio > 0.5) {
+      return;
+    }
+
+    const severityFromHp = Math.max(0, Math.min(1, (0.42 - hpRatio) / 0.42));
+    const severityFromEffective = Math.max(0, Math.min(1, (0.5 - effectiveRatio) / 0.5));
+    const severity = Math.max(severityFromHp, severityFromEffective * 0.8);
+    if (severity <= 0) {
+      return;
+    }
+
+    const pulseNowMs = typeof performance !== "undefined" ? performance.now() : Date.now();
+    const pulse = 0.76 + (0.24 * Math.sin(pulseNowMs / 150));
+    const alpha = Math.max(0.06, Math.min(0.32, (0.08 + (severity * 0.22)) * pulse));
+    const centerX = viewport.originX + (scene.columns * scene.tileSize) / 2;
+    const centerY = viewport.originY + (scene.rows * scene.tileSize) / 2;
+    const radius = Math.max(scene.columns, scene.rows) * scene.tileSize * 0.72;
+    const boardWidth = scene.columns * scene.tileSize;
+    const boardHeight = scene.rows * scene.tileSize;
+    const vignette = this.context.createRadialGradient(centerX, centerY, radius * 0.42, centerX, centerY, radius);
+    vignette.addColorStop(0, "rgba(127, 29, 29, 0)");
+    vignette.addColorStop(1, `rgba(127, 29, 29, ${alpha})`);
+
+    this.context.save();
+    this.context.fillStyle = vignette;
+    this.context.fillRect(viewport.originX, viewport.originY, boardWidth, boardHeight);
+    this.context.restore();
+  }
+
+  private drawMomentCues(scene: ArenaScene, viewport: RenderViewport): void {
+    const cues = scene.momentCues ?? [];
+    if (cues.length === 0) {
+      return;
+    }
+
+    for (const cue of cues) {
+      const life = Math.max(0, Math.min(1, cue.elapsedMs / cue.durationMs));
+      const centerX = viewport.originX + (cue.tilePos.x + 0.5) * scene.tileSize;
+      const centerY = viewport.originY + (cue.tilePos.y + 0.5) * scene.tileSize;
+      const startRadius = scene.tileSize * 0.12;
+      let endRadius = scene.tileSize * 0.62;
+      let strokeColor = "rgba(226, 232, 240, 0.8)";
+      let fillColor = "rgba(148, 163, 184, 0.14)";
+      let lineWidth = Math.max(2, scene.tileSize * 0.06);
+
+      if (cue.kind === "elite_spawn") {
+        endRadius = scene.tileSize * 0.76;
+        strokeColor = "rgba(251, 191, 36, 0.92)";
+        fillColor = "rgba(245, 158, 11, 0.2)";
+      } else if (cue.kind === "elite_died") {
+        endRadius = scene.tileSize * 0.68;
+        strokeColor = "rgba(45, 212, 191, 0.88)";
+        fillColor = "rgba(20, 184, 166, 0.18)";
+      } else if (cue.kind === "shield_break") {
+        endRadius = scene.tileSize * 0.7;
+        strokeColor = "rgba(191, 219, 254, 0.95)";
+        fillColor = "rgba(96, 165, 250, 0.2)";
+        lineWidth = Math.max(2.2, scene.tileSize * 0.07);
+      } else if (cue.kind === "assist_cast") {
+        endRadius = scene.tileSize * 0.56;
+        strokeColor = "rgba(56, 189, 248, 0.9)";
+        fillColor = "rgba(14, 165, 233, 0.16)";
+      } else if (cue.kind === "danger_hit") {
+        endRadius = scene.tileSize * 0.6;
+        strokeColor = "rgba(248, 113, 113, 0.9)";
+        fillColor = "rgba(239, 68, 68, 0.16)";
+      } else if (cue.kind === "player_death") {
+        endRadius = scene.tileSize * 1.05;
+        strokeColor = "rgba(248, 113, 113, 0.95)";
+        fillColor = "rgba(127, 29, 29, 0.24)";
+        lineWidth = Math.max(2.8, scene.tileSize * 0.085);
+      }
+
+      const radius = interpolateLinear(startRadius, endRadius, life);
+      const alpha = Math.max(0.06, 1 - life);
+      this.context.save();
+      this.context.globalAlpha = alpha;
+      this.context.fillStyle = fillColor;
+      this.context.beginPath();
+      this.context.arc(centerX, centerY, radius * 0.82, 0, Math.PI * 2);
+      this.context.fill();
+
+      this.context.strokeStyle = strokeColor;
+      this.context.lineWidth = lineWidth;
+      this.context.beginPath();
+      this.context.arc(centerX, centerY, radius, 0, Math.PI * 2);
+      this.context.stroke();
+
+      if (cue.kind === "player_death") {
+        const cross = scene.tileSize * (0.18 + (0.14 * (1 - life)));
+        this.context.beginPath();
+        this.context.moveTo(centerX - cross, centerY - cross);
+        this.context.lineTo(centerX + cross, centerY + cross);
+        this.context.moveTo(centerX + cross, centerY - cross);
+        this.context.lineTo(centerX - cross, centerY + cross);
+        this.context.stroke();
+      }
+
+      this.context.restore();
+    }
   }
 
   private drawGroundTargetReticle(scene: ArenaScene, viewport: RenderViewport): void {

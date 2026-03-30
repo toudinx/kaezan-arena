@@ -42,6 +42,8 @@ export interface ArenaActorState {
   tileY: number;
   hp: number;
   maxHp: number;
+  shield?: number;
+  maxShield?: number;
 }
 
 export type MobArchetypeValue = 1 | 2 | 3 | 4;
@@ -143,10 +145,19 @@ export interface MobKnockbackSlideInstance {
 }
 
 export interface FloatingTextInstance {
-  kind: "crit_text";
+  kind: "crit_text" | "combat_callout";
+  tone?: "crit" | "elite" | "assist" | "shield_break" | "danger";
   text: string;
   tilePos: TilePos;
   startAtMs: number;
+  elapsedMs: number;
+  durationMs: number;
+  fontScale?: number;
+}
+
+export interface ArenaCombatMomentCue {
+  kind: "elite_spawn" | "elite_died" | "shield_break" | "assist_cast" | "danger_hit" | "player_death";
+  tilePos: TilePos;
   elapsedMs: number;
   durationMs: number;
 }
@@ -294,6 +305,24 @@ export interface ArenaReflectNumberEvent {
   elementType?: ElementTypeValue;
 }
 
+export interface ArenaAssistCastEvent {
+  type: "assist_cast";
+  skillId: string;
+  reason: string;
+}
+
+export interface ArenaEliteSpawnedEvent {
+  type: "elite_spawned";
+  eliteEntityId: string;
+  mobType: MobArchetypeValue;
+}
+
+export interface ArenaEliteDiedEvent {
+  type: "elite_died";
+  eliteEntityId: string;
+  mobType: MobArchetypeValue;
+}
+
 export type ArenaBattleEvent =
   | ArenaFxSpawnEvent
   | ArenaDamageNumberEvent
@@ -302,6 +331,9 @@ export type ArenaBattleEvent =
   | ArenaDeathEvent
   | ArenaHealNumberEvent
   | ArenaReflectNumberEvent
+  | ArenaAssistCastEvent
+  | ArenaEliteSpawnedEvent
+  | ArenaEliteDiedEvent
   | ArenaRangedProjectileFiredEvent
   | ArenaMobKnockedBackEvent;
 
@@ -337,4 +369,5 @@ export interface ArenaScene {
   nextDamageSpawnOrder: number;
   damageNumbers: DamageNumberInstance[];
   floatingTexts: FloatingTextInstance[];
+  momentCues?: ArenaCombatMomentCue[];
 }

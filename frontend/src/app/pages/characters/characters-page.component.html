@@ -41,9 +41,19 @@
                   <span>{{ row.name.slice(0, 1) }}</span>
                 </div>
                 <div class="roster-card__body">
-                  <strong class="roster-card__name">{{ row.name }}</strong>
-                  <span class="roster-card__kit-badge roster-card__kit-badge--{{ row.kitBadge }}">{{ row.kitTypeLabel }}</span>
-                  <span class="roster-card__level">Lv {{ row.level }}</span>
+                  <div class="roster-card__name-row">
+                    <strong class="roster-card__name">{{ row.name }}</strong>
+                    <span class="roster-card__level">Lv {{ row.level }}</span>
+                  </div>
+                  <div class="roster-card__badges">
+                    <span class="roster-card__kit-badge roster-card__kit-badge--{{ row.kitBadge }}">{{ row.kitTypeLabel }}</span>
+                    @if (row.isProvisional) {
+                      <span class="roster-card__wip-badge">WIP</span>
+                    }
+                  </div>
+                  @if (row.subtitle) {
+                    <span class="roster-card__subtitle">{{ row.subtitle }}</span>
+                  }
                   <div class="roster-card__pills">
                     @for (weapon of row.fixedWeaponNames; track weapon) {
                       <span class="roster-card__pill">{{ weapon }}</span>
@@ -59,25 +69,33 @@
       <!-- RIGHT: detail panel -->
       <section class="detail">
         @if (selectedCharacter) {
-          <div class="detail__portrait detail__portrait--{{ selectedCharacter.portraitColor }}" aria-hidden="true">
-            <span>{{ selectedCharacter.name.slice(0, 1) }}</span>
+          <div class="detail__header">
+            <div class="detail__portrait detail__portrait--{{ selectedCharacter.portraitColor }}" aria-hidden="true">
+              <span>{{ selectedCharacter.name.slice(0, 1) }}</span>
+            </div>
+
+            <div class="detail__identity">
+              <h2 class="detail__name">{{ selectedCharacter.name }}</h2>
+              @if (selectedCharacter.subtitle) {
+                <p class="detail__subtitle">{{ selectedCharacter.subtitle }}</p>
+              }
+              <div class="detail__identity-badges">
+                <span class="detail__kit-badge detail__kit-badge--{{ selectedCharacter.kitBadge }}">{{ selectedCharacter.kitTypeLabel }}</span>
+                @if (selectedCharacter.isProvisional) {
+                  <span class="detail__wip">WIP</span>
+                }
+              </div>
+            </div>
           </div>
 
-          <div class="detail__identity">
-            <h2 class="detail__name">{{ selectedCharacter.name }}</h2>
-            <p class="detail__kit-line">
-              {{ selectedCharacter.kitTypeLabel }}
-              @if (selectedCharacter.isProvisional) {
-                <span class="detail__wip">[WIP]</span>
-              }
-              <span class="detail__kit-sep">·</span> Lv {{ selectedCharacter.level }}
-            </p>
-          </div>
+          @if (selectedCharacter.playstyle) {
+            <p class="detail__playstyle">{{ selectedCharacter.playstyle }}</p>
+          }
 
           <div class="detail__xp">
             <div class="detail__xp-header">
-              <span>XP</span>
-              <span>{{ selectedCharacter.xp }}</span>
+              <span>Level {{ selectedCharacter.level }}</span>
+              <span>{{ selectedCharacter.xp }} XP</span>
             </div>
             <div class="detail__xp-track">
               <div class="detail__xp-fill" [style.width.%]="selectedCharacter.xpProgressPercent"></div>
@@ -90,7 +108,9 @@
               @for (weapon of selectedCharacter.fixedWeaponNames; track weapon) {
                 <div class="weapon-card">
                   <strong class="weapon-card__name">{{ weapon }}</strong>
-                  <span class="weapon-card__desc">—</span>
+                  @if (weaponDescription(weapon)) {
+                    <span class="weapon-card__desc">{{ weaponDescription(weapon) }}</span>
+                  }
                 </div>
               }
               @if (selectedCharacter.fixedWeaponNames.length === 0) {
@@ -100,12 +120,12 @@
           </section>
 
           <section class="detail__section">
-            <h3 class="detail__section-title">Rune Slot</h3>
+            <h3 class="detail__section-title">Free Slot</h3>
             <div class="rune-slot">
               <span class="rune-slot__lock" aria-hidden="true">&#x2B21;</span>
               <div>
                 <p class="rune-slot__label">Rune Slot</p>
-                <p class="rune-slot__hint">Complete character mastery to unlock</p>
+                <p class="rune-slot__hint">One additional weapon chosen during each run</p>
               </div>
             </div>
           </section>
@@ -113,39 +133,53 @@
           <section class="detail__section">
             <h3 class="detail__section-title">Equipped Gear</h3>
             <div class="gear-slots">
-              <div class="gear-slot">
-                <span class="gear-slot__icon gear-slot__icon--weapon" aria-hidden="true"></span>
-                <div class="gear-slot__info">
-                  <span class="gear-slot__label">Weapon</span>
-                  <span class="gear-slot__value" [class.gear-slot__value--empty]="selectedCharacter.equippedWeaponName === 'None'">
-                    {{ selectedCharacter.equippedWeaponName === 'None' ? 'Empty slot' : selectedCharacter.equippedWeaponName }}
-                  </span>
-                </div>
-              </div>
-              <div class="gear-slot">
-                <span class="gear-slot__icon gear-slot__icon--armor" aria-hidden="true"></span>
-                <div class="gear-slot__info">
-                  <span class="gear-slot__label">Armor</span>
-                  <span class="gear-slot__value" [class.gear-slot__value--empty]="selectedCharacter.equippedArmorName === 'None'">
-                    {{ selectedCharacter.equippedArmorName === 'None' ? 'Empty slot' : selectedCharacter.equippedArmorName }}
-                  </span>
-                </div>
-              </div>
-              <div class="gear-slot">
-                <span class="gear-slot__icon gear-slot__icon--relic" aria-hidden="true"></span>
-                <div class="gear-slot__info">
-                  <span class="gear-slot__label">Relic</span>
-                  <span class="gear-slot__value" [class.gear-slot__value--empty]="selectedCharacter.equippedRelicName === 'None'">
-                    {{ selectedCharacter.equippedRelicName === 'None' ? 'Empty slot' : selectedCharacter.equippedRelicName }}
-                  </span>
-                </div>
-              </div>
+              @for (gear of selectedCharacter.equippedGearSlots; track gear.slot) {
+                <article
+                  class="gear-slot"
+                  [class.gear-slot--equipped]="gear.stateLabel === 'Equipped'"
+                  [class.gear-slot--empty]="gear.stateLabel === 'Empty'"
+                  [class.gear-slot--missing]="gear.stateLabel === 'Missing'"
+                >
+                  <span class="gear-slot__icon gear-slot__icon--{{ gear.slot }}" aria-hidden="true"></span>
+                  <div class="gear-slot__info">
+                    <div class="gear-slot__top">
+                      <span class="gear-slot__label">{{ gear.slotLabel }}</span>
+                      <span
+                        class="gear-slot__state"
+                        [class.gear-slot__state--equipped]="gear.stateLabel === 'Equipped'"
+                        [class.gear-slot__state--empty]="gear.stateLabel === 'Empty'"
+                        [class.gear-slot__state--missing]="gear.stateLabel === 'Missing'"
+                      >
+                        {{ gear.stateLabel }}
+                      </span>
+                    </div>
+
+                    <strong class="gear-slot__name" [class.gear-slot__name--muted]="gear.stateLabel !== 'Equipped'">
+                      {{ gear.displayName }}
+                    </strong>
+
+                    @if (gear.stateLabel === 'Equipped') {
+                      <div class="gear-slot__meta">
+                        <span class="gear-slot__rarity gear-slot__rarity--{{ gear.rarityClass }}">
+                          {{ gear.rarityLabel }}
+                        </span>
+                        <span class="gear-slot__type">{{ gear.typeLabel }}</span>
+                      </div>
+                    }
+
+                    <span class="gear-slot__impact" [class.gear-slot__impact--muted]="gear.stateLabel !== 'Equipped'">
+                      {{ gear.impactSummary }}
+                    </span>
+                  </div>
+                </article>
+              }
             </div>
           </section>
 
           <div class="detail__actions">
             @if (selectedCharacter.isActive) {
               <span class="detail__active-status">Active Character</span>
+              <a class="detail__enter-arena detail__enter-arena--primary" routerLink="/arena">Enter Arena</a>
             } @else {
               <button
                 type="button"
@@ -155,8 +189,8 @@
               >
                 {{ isSetActiveInFlight(selectedCharacter.characterId) ? 'Setting...' : 'Set Active' }}
               </button>
+              <a class="detail__enter-arena" routerLink="/arena">Enter Arena</a>
             }
-            <a class="detail__enter-arena" routerLink="/arena">Enter Arena</a>
           </div>
         } @else {
           <p class="detail__placeholder">Select a character from the roster.</p>

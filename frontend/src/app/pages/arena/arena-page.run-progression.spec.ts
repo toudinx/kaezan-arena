@@ -199,6 +199,38 @@ describe("ArenaPageComponent run progression", () => {
     expect(messages.some((message) => message.includes("Card chosen: Colossus Heart"))).toBe(true);
   });
 
+  it("flags a short shield-break pulse only when shield crosses from positive to zero", () => {
+    vi.useFakeTimers();
+    try {
+      const component = createComponent();
+      (component as any).ui = {
+        ...(component as any).ui,
+        player: {
+          ...(component as any).ui.player,
+          hp: 75,
+          maxHp: 100,
+          shield: 12,
+          maxShield: 80
+        }
+      };
+
+      (component as any).updatePlayerHudFromActorStates([
+        { kind: "player", hp: 74, maxHp: 100, shield: 0, maxShield: 80 }
+      ]);
+      expect((component as any).shieldBreakPulseActive).toBe(true);
+
+      vi.advanceTimersByTime(260);
+      expect((component as any).shieldBreakPulseActive).toBe(false);
+
+      (component as any).updatePlayerHudFromActorStates([
+        { kind: "player", hp: 74, maxHp: 100, shield: 0, maxShield: 80 }
+      ]);
+      expect((component as any).shieldBreakPulseActive).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("choosing a card clears awaiting state and restarts auto-step loop", async () => {
     const chooseCardResponse = {
       battleId: "battle-card",

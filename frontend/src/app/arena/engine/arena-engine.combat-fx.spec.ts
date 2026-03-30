@@ -224,6 +224,112 @@ describe("ArenaEngine combat fx mapping", () => {
     expect(completed.mobKnockbackSlidesByActorId?.["mob.test.01"]).toBeUndefined();
   });
 
+  it("applies hit reaction visuals even when damage is fully absorbed by shield", () => {
+    const engine = new ArenaEngine();
+    const scene = engine.createTestScene(7, 7, 32);
+    const actors = createActors();
+    const events: ArenaBattleEvent[] = [
+      {
+        type: "damage_number",
+        sourceEntityId: "player.test",
+        targetEntityId: "mob.test.01",
+        targetTileX: 5,
+        targetTileY: 4,
+        damageAmount: 5,
+        isKill: false,
+        isCrit: false,
+        hitId: 93,
+        shieldDamageAmount: 5,
+        hpDamageAmount: 0,
+        elementType: 6
+      }
+    ];
+
+    const applied = engine.applyBattleStep(scene, actors, [], [], events);
+    expect(applied.scene.actorVisualsById["mob.test.01"]?.mode).toBe("hit");
+  });
+
+  it("emits shield-break and high-impact assist combat callouts from existing events", () => {
+    const engine = new ArenaEngine();
+    const scene = engine.createTestScene(7, 7, 32);
+    const actors = createActors();
+    const skills: ArenaSkillState[] = [
+      {
+        skillId: "void_ricochet",
+        displayName: "Void Ricochet",
+        cooldownRemainingMs: 0,
+        cooldownTotalMs: 2000
+      }
+    ];
+    const events: ArenaBattleEvent[] = [
+      {
+        type: "damage_number",
+        sourceEntityId: "mob.test.01",
+        targetEntityId: "player.test",
+        targetTileX: 3,
+        targetTileY: 3,
+        damageAmount: 18,
+        isKill: false,
+        isCrit: false,
+        hitId: 94,
+        shieldDamageAmount: 6,
+        hpDamageAmount: 12,
+        elementType: 6
+      },
+      {
+        type: "assist_cast",
+        skillId: "void_ricochet",
+        reason: "auto_offense"
+      }
+    ];
+
+    const applied = engine.applyBattleStep(scene, actors, skills, [], events);
+    const labels = applied.scene.floatingTexts.map((entry) => entry.text);
+    const cueKinds = (applied.scene.momentCues ?? []).map((cue) => cue.kind);
+
+    expect(labels).toContain("SHATTER");
+    expect(labels).toContain("VOID RICOCHET");
+    expect(cueKinds).toContain("shield_break");
+    expect(cueKinds).toContain("assist_cast");
+    expect(cueKinds).toContain("danger_hit");
+  });
+
+  it("creates elite spawn/readability cues directly from elite lifecycle events", () => {
+    const engine = new ArenaEngine();
+    const scene = engine.createTestScene(7, 7, 32);
+    const actors: ArenaActorState[] = [
+      {
+        actorId: "player.test",
+        kind: "player",
+        tileX: 3,
+        tileY: 3,
+        hp: 100,
+        maxHp: 100
+      },
+      {
+        actorId: "elite.mob.01",
+        kind: "mob",
+        mobType: 4,
+        isElite: true,
+        tileX: 5,
+        tileY: 2,
+        hp: 40,
+        maxHp: 40
+      }
+    ];
+
+    const applied = engine.applyBattleStep(scene, actors, [], [], [
+      {
+        type: "elite_spawned",
+        eliteEntityId: "elite.mob.01",
+        mobType: 4
+      }
+    ]);
+
+    expect((applied.scene.momentCues ?? []).some((cue) => cue.kind === "elite_spawn")).toBeTrue();
+    expect(applied.scene.floatingTexts.some((entry) => entry.text === "ELITE!")).toBeTrue();
+  });
+
   it("chains piercing segment projectiles sequentially so each segment starts on previous impact", () => {
     const engine = new ArenaEngine();
     const baseScene = engine.createTestScene(7, 7, 32);

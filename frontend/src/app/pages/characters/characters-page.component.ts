@@ -3,12 +3,27 @@ import { RouterLink, ActivatedRoute, Router } from "@angular/router";
 import { Subscription } from "rxjs";
 import { type AccountState, type CharacterState } from "../../api/account-api.service";
 import { AccountStore } from "../../account/account-store.service";
+import { mapInventoryToBackpackSlots, type BackpackSlot } from "../../shared/backpack/backpack-inventory.helpers";
 
 const CHARACTER_PORTRAIT_COLORS: Readonly<Record<string, string>> = {
   "character:kina": "amber",
   "character:ranged_prototype": "teal",
   "kaelis_01": "purple",
   "kaelis_02": "green"
+};
+
+const CHARACTER_PLAYSTYLE: Readonly<Record<string, string>> = {
+  "character:kina": "Controls space with escalating melee AoE. A fast frontal strike leads into wider pulses — pressure builds as the arena fills.",
+  "character:ranged_prototype": "Fires from distance using projectiles that bounce, pierce, and scatter. Trades melee pressure for reach and multi-target coverage."
+};
+
+const WEAPON_DESCRIPTIONS: Readonly<Record<string, string>> = {
+  "Exori Min": "Fast frontal strike — hits the tile directly ahead",
+  "Exori": "Square burst — damages all tiles within range 1",
+  "Exori Mas": "Wide pulse — diamond area, range 2, slow cooldown",
+  "Sigil Bolt": "Single-target ranged shot — fast and reliable",
+  "Shotgun": "Cone blast — damages a spread of tiles, pushes mobs back",
+  "Void Ricochet": "Bouncing bolt — reflects off borders, pierces every mob per segment"
 };
 
 function resolveKitType(fixedWeaponNames: ReadonlyArray<string>): { kitTypeLabel: string; kitBadge: "melee" | "ranged" | "unknown" } {
@@ -25,20 +40,34 @@ type CharacterRow = Readonly<{
   characterId: string;
   name: string;
   subtitle: string;
+  playstyle: string;
   level: number;
   xp: number;
   isActive: boolean;
   isProvisional: boolean;
   fixedKitLabel: string;
-  equippedWeaponName: string;
-  equippedArmorName: string;
-  equippedRelicName: string;
+  equippedGearSlots: ReadonlyArray<CharacterGearSlotRow>;
   fixedWeaponNames: ReadonlyArray<string>;
   kitTypeLabel: string;
   kitBadge: "melee" | "ranged" | "unknown";
   portraitColor: string;
   xpProgressPercent: number;
 }>;
+
+type CharacterGearSlot = "weapon" | "armor" | "relic";
+
+type CharacterGearSlotRow = Readonly<{
+  slot: CharacterGearSlot;
+  slotLabel: string;
+  displayName: string;
+  typeLabel: string;
+  rarityLabel: string;
+  rarityClass: "common" | "rare" | "epic" | "legendary" | "ascendant";
+  impactSummary: string;
+  stateLabel: "Equipped" | "Empty" | "Missing";
+}>;
+
+const CHARACTER_GEAR_SLOT_ORDER: readonly CharacterGearSlot[] = ["weapon", "armor", "relic"];
 
 @Component({
   selector: "app-characters-page",
@@ -197,14 +226,13 @@ export class CharactersPageComponent implements OnInit, OnDestroy {
       characterId: character.characterId,
       name: catalogEntry?.displayName ?? character.name,
       subtitle: catalogEntry?.subtitle ?? "",
+      playstyle: CHARACTER_PLAYSTYLE[character.characterId] ?? "",
       level: character.level,
       xp: character.xp,
       isActive: account.activeCharacterId === character.characterId,
       isProvisional: catalogEntry?.isProvisional ?? false,
       fixedKitLabel,
-      equippedWeaponName: this.resolveEquippedItemName(character, "weapon"),
-      equippedArmorName: this.resolveEquippedItemName(character, "armor"),
-      equippedRelicName: this.resolveEquippedItemName(character, "relic"),
+      equippedGearSlots: this.resolveEquippedGearSlots(character),
       fixedWeaponNames,
       kitTypeLabel,
       kitBadge,
@@ -213,23 +241,103 @@ export class CharactersPageComponent implements OnInit, OnDestroy {
     };
   }
 
-  private resolveEquippedItemName(character: CharacterState, slot: "weapon" | "armor" | "relic"): string {
-    const instanceId = slot === "weapon"
-      ? character.equipment.weaponInstanceId
-      : slot === "armor"
-        ? character.equipment.armorInstanceId
-        : character.equipment.relicInstanceId;
-    if (!instanceId) {
-      return "None";
+  weaponDescription(weaponName: string): string {
+    return WEAPON_DESCRIPTIONS[weaponName] ?? "";
+  }
+
+  private resolveEquippedGearSlots(character: CharacterState): ReadonlyArray<CharacterGearSlotRow> {
+    const catalog = this.accountStore.catalogs();
+    const allSlots = mapInventoryToBackpackSlots(character, catalog.itemById, catalog.equipmentById);
+
+    return CHARACTER_GEAR_SLOT_ORDER.map((slot) => {
+      const equippedSlot = allSlots.find((entry) => entry.isEquipped && entry.slot === slot) ?? null;
+      if (equippedSlot) {
+        return this.createEquippedGearSlotRow(equippedSlot);
+      }
+
+      const missingInstanceId = this.resolveEquipmentInstanceId(character, slot);
+      if (missingInstanceId) {
+        return {
+          slot,
+          slotLabel: this.resolveSlotLabel(slot),
+          displayName: "Missing item",
+          typeLabel: `Instance ${missingInstanceId}`,
+          rarityLabel: "Unknown",
+          rarityClass: "common",
+          impactSummary: "Configured but missing from inventory",
+          stateLabel: "Missing"
+        };
+      }
+
+      return {
+        slot,
+        slotLabel: this.resolveSlotLabel(slot),
+        displayName: "Empty slot",
+        typeLabel: "No item equipped",
+        rarityLabel: "None",
+        rarityClass: "common",
+        impactSummary: "Equip an item from Backpack",
+        stateLabel: "Empty"
+      };
+    });
+  }
+
+  private createEquippedGearSlotRow(slot: BackpackSlot): CharacterGearSlotRow {
+    return {
+      slot: slot.slot === "weapon" || slot.slot === "armor" || slot.slot === "relic" ? slot.slot : "weapon",
+      slotLabel: slot.slotLabel,
+      displayName: slot.displayName,
+      typeLabel: slot.typeLabel,
+      rarityLabel: slot.rarityLabel,
+      rarityClass: this.resolveRarityClass(slot.rarity),
+      impactSummary: slot.impactBadges.length > 0 ? slot.impactBadges.slice(0, 2).join(" • ") : slot.shortStatSummary,
+      stateLabel: "Equipped"
+    };
+  }
+
+  private resolveEquipmentInstanceId(character: CharacterState, slot: CharacterGearSlot): string | null {
+    if (slot === "weapon") {
+      return character.equipment.weaponInstanceId ?? null;
     }
 
-    const instance = character.inventory.equipmentInstances[instanceId];
-    if (!instance) {
-      return `${instanceId} (missing)`;
+    if (slot === "armor") {
+      return character.equipment.armorInstanceId ?? null;
     }
 
-    const itemDefinition = this.accountStore.catalogs().itemById[instance.definitionId];
-    return itemDefinition?.displayName ?? instance.definitionId;
+    return character.equipment.relicInstanceId ?? null;
+  }
+
+  private resolveSlotLabel(slot: CharacterGearSlot): string {
+    if (slot === "weapon") {
+      return "Weapon";
+    }
+
+    if (slot === "armor") {
+      return "Armor";
+    }
+
+    return "Relic";
+  }
+
+  private resolveRarityClass(rarity: string): "common" | "rare" | "epic" | "legendary" | "ascendant" {
+    const normalized = (rarity ?? "").trim().toLowerCase();
+    if (normalized === "rare") {
+      return "rare";
+    }
+
+    if (normalized === "epic") {
+      return "epic";
+    }
+
+    if (normalized === "legendary") {
+      return "legendary";
+    }
+
+    if (normalized === "ascendant") {
+      return "ascendant";
+    }
+
+    return "common";
   }
 
   private resolveCharacterName(characterId: string): string {

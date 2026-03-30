@@ -3,12 +3,36 @@ import type { StartBattleResponse, StepBattleResponse } from "../../api/battle-a
 
 const RUN_RESULT_STORAGE_KEY = "kaezan_run_results_v1";
 const RUN_RESULT_STORAGE_CAP = 30;
+const LOW_HP_DANGER_THRESHOLD_PERCENT = 35;
 
 type SnapshotLike = StartBattleResponse | StepBattleResponse;
 
 export type RunResultFinalizeMetrics = Readonly<{
   healingDoneTotal: number;
   echoFragmentsDelta: number;
+}>;
+
+export type RunLowHpTelemetry = Readonly<{
+  thresholdPercent: number;
+  firstEnteredAtMs: number | null;
+  windows: number;
+  totalDurationMs: number;
+  longestWindowMs: number;
+}>;
+
+export type RunPacingTelemetry = Readonly<{
+  timeToFirstDamageTakenMs: number | null;
+  timeToFirstEliteMs: number | null;
+  timeToFirstChestSpawnMs: number | null;
+  timeToFirstChestOpenedMs: number | null;
+  timeToFirstCardChoiceMs: number | null;
+  currentAliveMobs: number;
+  peakSimultaneousMobs: number;
+  spawnPacing: Readonly<{
+    maxAliveMobs: number | null;
+    eliteSpawnChancePercent: number | null;
+  }>;
+  lowHp: RunLowHpTelemetry;
 }>;
 
 export type RunResultV1 = Readonly<{
@@ -37,6 +61,7 @@ export type RunResultV1 = Readonly<{
     dropsBySpecies: Record<string, number>;
     totalsBySpecies: Record<string, number>;
   }>;
+  pacing: RunPacingTelemetry;
 }>;
 
 type ActiveRunState = {
@@ -56,6 +81,22 @@ type ActiveRunState = {
   xpGained: number;
   damageDealtTotal: number;
   damageTakenTotal: number;
+  lastRunTimeMs: number;
+  currentAliveMobs: number;
+  peakSimultaneousMobs: number;
+  spawnPacingMaxAliveMobs: number | null;
+  spawnPacingEliteSpawnChancePercent: number | null;
+  firstDamageTakenAtMs: number | null;
+  firstEliteAtMs: number | null;
+  firstChestSpawnAtMs: number | null;
+  firstChestOpenedAtMs: number | null;
+  firstCardChoiceAtMs: number | null;
+  lowHpFirstEnteredAtMs: number | null;
+  lowHpWindowStartAtMs: number | null;
+  lowHpWindowCount: number;
+  lowHpTotalDurationMs: number;
+  lowHpLongestWindowMs: number;
+  seenChestPoiIds: Set<string>;
 };
 
 export class RunResultLogger {
@@ -79,7 +120,23 @@ export class RunResultLogger {
       chestsOpenedTotal: 0,
       xpGained: 0,
       damageDealtTotal: 0,
-      damageTakenTotal: 0
+      damageTakenTotal: 0,
+      lastRunTimeMs: 0,
+      currentAliveMobs: 0,
+      peakSimultaneousMobs: 0,
+      spawnPacingMaxAliveMobs: null,
+      spawnPacingEliteSpawnChancePercent: null,
+      firstDamageTakenAtMs: null,
+      firstEliteAtMs: null,
+      firstChestSpawnAtMs: null,
+      firstChestOpenedAtMs: null,
+      firstCardChoiceAtMs: null,
+      lowHpFirstEnteredAtMs: null,
+      lowHpWindowStartAtMs: null,
+      lowHpWindowCount: 0,
+      lowHpTotalDurationMs: 0,
+      lowHpLongestWindowMs: 0,
+      seenChestPoiIds: new Set<string>()
     };
 
     if (params.snapshot) {
@@ -104,29 +161,103 @@ export class RunResultLogger {
       run.stepDeltaMs = Math.max(1, Math.floor(snapshotStepDeltaMs));
     }
 
+    const runTimeMs = Math.max(0, Math.floor(this.readNumber(record["runTimeMs"]) ?? run.lastRunTimeMs));
+    run.lastRunTimeMs = runTimeMs;
+
     const actors = Array.isArray(record["actors"]) ? record["actors"] : [];
-    const player = actors
-      .map((entry) => this.readRecord(entry))
-      .find((actor) => this.readString(actor?.["kind"]) === "player");
-    if (!player) {
-      return;
+    let player: Record<string, unknown> | null = null;
+    let aliveMobs = 0;
+    let hasEliteAlive = false;
+    for (const entry of actors) {
+      const actor = this.readRecord(entry);
+      if (!actor) {
+        continue;
+      }
+
+      const kind = this.readString(actor["kind"]);
+      if (kind === "player") {
+        player = actor;
+        continue;
+      }
+
+      if (kind !== "mob") {
+        continue;
+      }
+
+      aliveMobs += 1;
+      if (this.readBoolean(actor["isElite"]) === true) {
+        hasEliteAlive = true;
+      }
     }
 
-    const hp = this.readNumber(player["hp"]);
-    if (hp !== null) {
-      run.playerMinHp = Math.min(run.playerMinHp, Math.max(0, Math.floor(hp)));
+    run.currentAliveMobs = aliveMobs;
+    run.peakSimultaneousMobs = Math.max(run.peakSimultaneousMobs, aliveMobs);
+    if (hasEliteAlive && run.firstEliteAtMs === null) {
+      run.firstEliteAtMs = runTimeMs;
     }
 
-    const maxHp = this.readNumber(player["maxHp"]);
-    if (maxHp !== null) {
-      run.playerMaxHpObserved = Math.max(run.playerMaxHpObserved, Math.max(0, Math.floor(maxHp)));
-    } else if (hp !== null) {
-      run.playerMaxHpObserved = Math.max(run.playerMaxHpObserved, Math.max(0, Math.floor(hp)));
+    const spawnPacing = this.readRecord(record["spawnPacing"]);
+    const spawnPacingMaxAliveMobs = this.readNumber(spawnPacing?.["maxAliveMobs"]);
+    if (spawnPacingMaxAliveMobs !== null) {
+      run.spawnPacingMaxAliveMobs = Math.max(0, Math.floor(spawnPacingMaxAliveMobs));
     }
 
-    const shield = this.readNumber(player["shield"]);
-    if (shield !== null) {
-      run.playerMinShield = Math.min(run.playerMinShield, Math.max(0, Math.floor(shield)));
+    const spawnPacingEliteChance = this.readNumber(spawnPacing?.["eliteSpawnChancePercent"]);
+    if (spawnPacingEliteChance !== null) {
+      run.spawnPacingEliteSpawnChancePercent = Math.max(0, Math.floor(spawnPacingEliteChance));
+    }
+
+    const activePois = Array.isArray(record["activePois"]) ? record["activePois"] : [];
+    for (const rawPoi of activePois) {
+      const poi = this.readRecord(rawPoi);
+      if (!poi) {
+        continue;
+      }
+
+      const poiType = this.readString(poi["type"]);
+      if (!this.isChestPoiType(poiType)) {
+        continue;
+      }
+
+      const poiId = this.readString(poi["poiId"]);
+      if (!poiId || run.seenChestPoiIds.has(poiId)) {
+        continue;
+      }
+
+      run.seenChestPoiIds.add(poiId);
+      if (run.firstChestSpawnAtMs === null) {
+        run.firstChestSpawnAtMs = runTimeMs;
+      }
+    }
+
+    if (player) {
+      const hp = this.readNumber(player["hp"]);
+      const maxHp = this.readNumber(player["maxHp"]);
+      const normalizedHp = hp !== null ? Math.max(0, Math.floor(hp)) : null;
+      const normalizedMaxHp = maxHp !== null
+        ? Math.max(1, Math.floor(maxHp))
+        : normalizedHp;
+      if (normalizedHp !== null) {
+        run.playerMinHp = Math.min(run.playerMinHp, normalizedHp);
+      }
+
+      if (normalizedMaxHp !== null) {
+        run.playerMaxHpObserved = Math.max(run.playerMaxHpObserved, normalizedMaxHp);
+      }
+
+      const shield = this.readNumber(player["shield"]);
+      if (shield !== null) {
+        run.playerMinShield = Math.min(run.playerMinShield, Math.max(0, Math.floor(shield)));
+      }
+
+      if (normalizedHp !== null && normalizedMaxHp !== null && normalizedMaxHp > 0) {
+        const hpPercent = (normalizedHp / normalizedMaxHp) * 100;
+        this.updateLowHpWindow(run, runTimeMs, hpPercent <= LOW_HP_DANGER_THRESHOLD_PERCENT);
+      } else {
+        this.updateLowHpWindow(run, runTimeMs, false);
+      }
+    } else {
+      this.updateLowHpWindow(run, runTimeMs, false);
     }
 
     const kills = this.readNumber(record["totalKills"]);
@@ -138,7 +269,7 @@ export class RunResultLogger {
     const chestsOpened = this.readNumber(record["chestsOpened"]);
     if (chestsOpened !== null) run.chestsOpenedTotal = Math.max(0, Math.floor(chestsOpened));
 
-    const playerActorId = this.readString(player["actorId"]);
+    const playerActorId = player ? this.readString(player["actorId"]) : null;
     const eventsValue = record["events"];
     if (Array.isArray(eventsValue)) {
       for (const rawEvent of eventsValue) {
@@ -149,6 +280,30 @@ export class RunResultLogger {
         if (evType === "xp_gained") {
           const amt = this.readNumber(ev["amount"]);
           if (amt !== null && amt > 0) run.xpGained += Math.floor(amt);
+          continue;
+        }
+
+        if (evType === "elite_spawned" && run.firstEliteAtMs === null) {
+          run.firstEliteAtMs = runTimeMs;
+          continue;
+        }
+
+        if (evType === "card_choice_offered" && run.firstCardChoiceAtMs === null) {
+          run.firstCardChoiceAtMs = runTimeMs;
+          continue;
+        }
+
+        if ((evType === "species_chest_opened" || evType === "chest_opened") && run.firstChestOpenedAtMs === null) {
+          run.firstChestOpenedAtMs = runTimeMs;
+          continue;
+        }
+
+        if (evType === "poi_interacted" && run.firstChestOpenedAtMs === null) {
+          const poiType = this.readString(ev["poiType"]);
+          if (this.isChestPoiType(poiType)) {
+            run.firstChestOpenedAtMs = runTimeMs;
+          }
+          continue;
         }
 
         if (evType === "damage_number") {
@@ -159,6 +314,9 @@ export class RunResultLogger {
           const amount = Math.floor(dmg);
           if (playerActorId && targetId === playerActorId && sourceId !== playerActorId) {
             run.damageTakenTotal += amount;
+            if (run.firstDamageTakenAtMs === null) {
+              run.firstDamageTakenAtMs = runTimeMs;
+            }
           } else if (playerActorId && targetId !== playerActorId) {
             run.damageDealtTotal += amount;
           }
@@ -229,12 +387,15 @@ export class RunResultLogger {
       return null;
     }
 
+    const durationMs = Math.max(0, Math.floor(this.readNumber(record["runTimeMs"]) ?? run.lastRunTimeMs));
+    const pacing = this.buildPacingTelemetry(run, durationMs);
+
     const result: RunResultV1 = {
       schemaVersion: 1,
       recordedAtIso: new Date().toISOString(),
       battleSeed: run.battleSeed,
       stepDeltaMs: run.stepDeltaMs,
-      durationMs: Math.max(0, Math.floor(this.readNumber(record["runTimeMs"]) ?? 0)),
+      durationMs,
       endReason: this.readString(record["runEndReason"]) ??
         this.readString(record["endReason"]) ??
         battleStatus ??
@@ -259,7 +420,8 @@ export class RunResultLogger {
       speciesCores: {
         dropsBySpecies: this.mapToSortedRecord(run.speciesCoreDrops),
         totalsBySpecies: this.normalizeSpeciesCoreTotals(run.speciesCoreTotals)
-      }
+      },
+      pacing
     };
 
     this.lastFinalized = result;
@@ -289,6 +451,19 @@ export class RunResultLogger {
 
   getAllResults(): RunResultV1[] {
     return this.getStoredResults();
+  }
+
+  getPacingTelemetry(currentRunTimeMs: number): RunPacingTelemetry | null {
+    if (this.activeRun) {
+      const nowMs = Math.max(
+        Math.max(0, Math.floor(Number.isFinite(currentRunTimeMs) ? currentRunTimeMs : 0)),
+        Math.max(0, Math.floor(this.activeRun.lastRunTimeMs))
+      );
+      return this.buildPacingTelemetry(this.activeRun, nowMs);
+    }
+
+    const finalized = this.lastFinalized ?? this.getLastStoredResult();
+    return finalized?.pacing ?? null;
   }
 
   private persistResult(result: RunResultV1): void {
@@ -376,12 +551,13 @@ export class RunResultLogger {
 
   private normalizeStoredResult(entry: Record<string, unknown>): RunResultV1 {
     const speciesCoresRaw = this.readRecord(entry["speciesCores"]);
+    const durationMs = Math.max(0, Math.floor(this.readNumber(entry["durationMs"]) ?? 0));
     return {
       schemaVersion: 1,
       recordedAtIso: this.readString(entry["recordedAtIso"]) ?? new Date(0).toISOString(),
       battleSeed: Math.max(0, Math.floor(this.readNumber(entry["battleSeed"]) ?? 0)),
       stepDeltaMs: Math.max(1, Math.floor(this.readNumber(entry["stepDeltaMs"]) ?? 250)),
-      durationMs: Math.max(0, Math.floor(this.readNumber(entry["durationMs"]) ?? 0)),
+      durationMs,
       endReason: this.readString(entry["endReason"]) ?? "unknown",
       runLevelFinal: Math.max(1, Math.floor(this.readNumber(entry["runLevelFinal"]) ?? 1)),
       xpTotalGained: Math.max(0, Math.floor(this.readNumber(entry["xpTotalGained"]) ?? 0)),
@@ -405,8 +581,112 @@ export class RunResultLogger {
       speciesCores: {
         dropsBySpecies: this.readRecord(speciesCoresRaw?.["dropsBySpecies"]) as Record<string, number> ?? {},
         totalsBySpecies: this.readRecord(speciesCoresRaw?.["totalsBySpecies"]) as Record<string, number> ?? {}
+      },
+      pacing: this.normalizeStoredPacingTelemetry(entry["pacing"])
+    };
+  }
+
+  private updateLowHpWindow(run: ActiveRunState, runTimeMs: number, isLowHp: boolean): void {
+    const safeRunTimeMs = Math.max(0, Math.floor(runTimeMs));
+    if (isLowHp) {
+      if (run.lowHpWindowStartAtMs === null) {
+        run.lowHpWindowStartAtMs = safeRunTimeMs;
+        run.lowHpWindowCount += 1;
+        if (run.lowHpFirstEnteredAtMs === null) {
+          run.lowHpFirstEnteredAtMs = safeRunTimeMs;
+        }
+      }
+      return;
+    }
+
+    if (run.lowHpWindowStartAtMs === null) {
+      return;
+    }
+
+    const durationMs = Math.max(0, safeRunTimeMs - run.lowHpWindowStartAtMs);
+    run.lowHpTotalDurationMs += durationMs;
+    run.lowHpLongestWindowMs = Math.max(run.lowHpLongestWindowMs, durationMs);
+    run.lowHpWindowStartAtMs = null;
+  }
+
+  private buildPacingTelemetry(run: ActiveRunState, nowMs: number): RunPacingTelemetry {
+    const safeNowMs = Math.max(0, Math.floor(nowMs));
+    const activeWindowDurationMs = run.lowHpWindowStartAtMs === null
+      ? 0
+      : Math.max(0, safeNowMs - run.lowHpWindowStartAtMs);
+
+    return {
+      timeToFirstDamageTakenMs: run.firstDamageTakenAtMs,
+      timeToFirstEliteMs: run.firstEliteAtMs,
+      timeToFirstChestSpawnMs: run.firstChestSpawnAtMs,
+      timeToFirstChestOpenedMs: run.firstChestOpenedAtMs,
+      timeToFirstCardChoiceMs: run.firstCardChoiceAtMs,
+      currentAliveMobs: Math.max(0, Math.floor(run.currentAliveMobs)),
+      peakSimultaneousMobs: Math.max(0, Math.floor(run.peakSimultaneousMobs)),
+      spawnPacing: {
+        maxAliveMobs: run.spawnPacingMaxAliveMobs,
+        eliteSpawnChancePercent: run.spawnPacingEliteSpawnChancePercent
+      },
+      lowHp: {
+        thresholdPercent: LOW_HP_DANGER_THRESHOLD_PERCENT,
+        firstEnteredAtMs: run.lowHpFirstEnteredAtMs,
+        windows: Math.max(0, Math.floor(run.lowHpWindowCount)),
+        totalDurationMs: Math.max(0, Math.floor(run.lowHpTotalDurationMs + activeWindowDurationMs)),
+        longestWindowMs: Math.max(0, Math.floor(Math.max(run.lowHpLongestWindowMs, activeWindowDurationMs)))
       }
     };
+  }
+
+  private normalizeStoredPacingTelemetry(value: unknown): RunPacingTelemetry {
+    const pacing = this.readRecord(value);
+    const spawnPacing = this.readRecord(pacing?.["spawnPacing"]);
+
+    return {
+      timeToFirstDamageTakenMs: this.normalizeNullableMs(pacing?.["timeToFirstDamageTakenMs"]),
+      timeToFirstEliteMs: this.normalizeNullableMs(pacing?.["timeToFirstEliteMs"]),
+      timeToFirstChestSpawnMs: this.normalizeNullableMs(pacing?.["timeToFirstChestSpawnMs"]),
+      timeToFirstChestOpenedMs: this.normalizeNullableMs(pacing?.["timeToFirstChestOpenedMs"]),
+      timeToFirstCardChoiceMs: this.normalizeNullableMs(pacing?.["timeToFirstCardChoiceMs"]),
+      currentAliveMobs: Math.max(0, Math.floor(this.readNumber(pacing?.["currentAliveMobs"]) ?? 0)),
+      peakSimultaneousMobs: Math.max(0, Math.floor(this.readNumber(pacing?.["peakSimultaneousMobs"]) ?? 0)),
+      spawnPacing: {
+        maxAliveMobs: this.normalizeNullableMs(spawnPacing?.["maxAliveMobs"]),
+        eliteSpawnChancePercent: this.normalizeNullableMs(spawnPacing?.["eliteSpawnChancePercent"])
+      },
+      lowHp: this.normalizeStoredLowHpTelemetry(pacing?.["lowHp"])
+    };
+  }
+
+  private normalizeStoredLowHpTelemetry(value: unknown): RunLowHpTelemetry {
+    const lowHp = this.readRecord(value);
+    const thresholdPercent = Math.max(
+      1,
+      Math.floor(this.readNumber(lowHp?.["thresholdPercent"]) ?? LOW_HP_DANGER_THRESHOLD_PERCENT)
+    );
+
+    return {
+      thresholdPercent,
+      firstEnteredAtMs: this.normalizeNullableMs(lowHp?.["firstEnteredAtMs"]),
+      windows: Math.max(0, Math.floor(this.readNumber(lowHp?.["windows"]) ?? 0)),
+      totalDurationMs: Math.max(0, Math.floor(this.readNumber(lowHp?.["totalDurationMs"]) ?? 0)),
+      longestWindowMs: Math.max(
+        0,
+        Math.floor(this.readNumber(lowHp?.["longestWindowMs"]) ?? 0)
+      )
+    };
+  }
+
+  private normalizeNullableMs(value: unknown): number | null {
+    const numeric = this.readNumber(value);
+    if (numeric === null) {
+      return null;
+    }
+
+    return Math.max(0, Math.floor(numeric));
+  }
+
+  private isChestPoiType(value: string | null): boolean {
+    return value === "chest" || value === "species_chest";
   }
 
   private readString(value: unknown): string | null {

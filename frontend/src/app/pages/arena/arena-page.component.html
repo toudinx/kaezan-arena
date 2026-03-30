@@ -307,38 +307,45 @@
           <button type="button" class="dev-toggle-btn" (click)="toggleRunIntelPanel()" [title]="showRunIntelPanel ? 'Hide Run Intel panel' : 'Show Run Intel panel'">[DEV]</button>
         </div>
         <div class="top-hud__bars">
-          <div class="top-hud__vitals-track">
-            <div class="top-hud__vitals-fill top-hud__vitals-fill--hp" [style.width.%]="playerHpPercent"></div>
-            <div class="top-hud__vitals-fill top-hud__vitals-fill--shield" [style.width.%]="playerShieldPercentOfMaxHp"></div>
+          <div class="top-hud__vitals">
+            <div class="top-hud__vital-row">
+              <span class="top-hud__vital-label top-hud__vital-label--hp">HP</span>
+              <div class="top-hud__vitals-track">
+                <div class="top-hud__vitals-fill top-hud__vitals-fill--hp" [style.width.%]="playerHpPercent"></div>
+              </div>
+              <span class="top-hud__vital-value">{{ playerHpCurrent }} / {{ playerHpMax }}</span>
+            </div>
+            <div
+              class="top-hud__vital-row top-hud__vital-row--shield"
+              [class.top-hud__vital-row--shield-active]="playerShieldVisualState === 'active'"
+              [class.top-hud__vital-row--shield-low]="playerShieldVisualState === 'low'"
+              [class.top-hud__vital-row--shield-depleted]="playerShieldVisualState === 'depleted'"
+              [class.top-hud__vital-row--shield-break-pulse]="shieldBreakPulseActive"
+              [attr.data-shield-state]="playerShieldVisualState"
+            >
+              <span class="top-hud__vital-label top-hud__vital-label--sh">SH</span>
+              <div class="top-hud__vitals-track top-hud__vitals-track--shield">
+                <div class="top-hud__vitals-fill top-hud__vitals-fill--shield" [style.width.%]="playerShieldPercent"></div>
+              </div>
+              <span class="top-hud__vital-value top-hud__vital-value--sh">{{ playerShieldCurrent }} / {{ playerShieldMax }}</span>
+            </div>
           </div>
           <div class="top-hud__meta-row">
-            <div class="top-hud__vitals-text">HP {{ playerHpPercentRounded }}% SH {{ playerShieldPercentRounded }}%</div>
             <div class="top-hud__timer" aria-label="Run timer">
               <span>{{ runHudTimerElapsedLabel }}</span>
               <span class="top-hud__timer-total">/ {{ runHudTimerTotalLabel }}</span>
             </div>
-            <div class="top-hud__cooldowns" aria-label="Skill cooldowns">
-              @for (slot of bottomBarSkillSlots; track trackSkillSlotBySkillId($index, slot)) {
-                <span
-                  class="top-hud__cooldown"
-                  [class.top-hud__cooldown--ready]="!slot.cooldownText && !slot.isLocked"
-                  [class.top-hud__cooldown--free]="slot.isFreeSlot"
-                >
-                  <span class="top-hud__cooldown-key">{{ slot.keyLabel }}</span>
-                  <span>{{ slot.isLocked ? slot.label : (slot.cooldownText || "Ready") }}</span>
-                </span>
-              }
-            </div>
+            @if (lockedTargetLabel) {
+              <span class="top-hud__target-lock">&#8857; {{ lockedTargetLabel }}</span>
+            }
           </div>
-          <div class="top-hud__buffs" aria-label="Active buffs">
-            @if (topHudBuffs.length === 0) {
-              <span class="top-hud__buff-empty">No active buffs</span>
-            } @else {
+          @if (topHudBuffs.length > 0) {
+            <div class="top-hud__buffs" aria-label="Active buffs">
               @for (buff of topHudBuffs; track buff.buffId) {
                 <span class="top-hud__buff">{{ buff.label }} {{ buff.remainingSeconds }}s</span>
               }
-            }
-          </div>
+            </div>
+          }
         </div>
       </header>
 
@@ -370,6 +377,35 @@
       </div>
 
       <footer class="bottom-hotbar">
+        <div class="bottom-hotbar__skills-grid">
+          @for (slot of bottomBarSkillSlots; track trackSkillSlotBySkillId($index, slot)) {
+            <div
+              class="bottom-hotbar__skill"
+              [class.bottom-hotbar__skill--disabled]="slot.disabled"
+              [class.bottom-hotbar__skill--locked]="slot.isLocked"
+              [class.bottom-hotbar__skill--ready]="!slot.disabled && !slot.isLocked"
+              [class.bottom-hotbar__skill--free]="slot.isFreeSlot"
+              [title]="slot.isLocked ? (slot.isFreeSlot ? 'Free slot — no rune equipped' : 'Locked') : slot.label"
+            >
+              @if (!slot.isLocked) {
+                <span class="bottom-hotbar__skill-key">{{ slot.keyLabel }}</span>
+                <span class="bottom-hotbar__skill-name">{{ slot.label }}</span>
+                @if (slot.cooldownText) {
+                  <span class="bottom-hotbar__skill-cd">{{ slot.cooldownText }}</span>
+                }
+                @if (slot.cooldownFraction > 0) {
+                  <span
+                    class="bottom-hotbar__skill-mask"
+                    [style.transform]="'scaleY(' + slot.cooldownFraction + ')'"
+                  ></span>
+                }
+              } @else if (slot.isFreeSlot) {
+                <span class="bottom-hotbar__skill-key">{{ slot.keyLabel }}</span>
+                <span class="bottom-hotbar__skill-name bottom-hotbar__skill-name--muted">Rune Slot</span>
+              }
+            </div>
+          }
+        </div>
         <div class="bottom-hotbar__exp-track" aria-label="Experience bar">
           <div class="bottom-hotbar__exp-fill" [style.width.%]="playerExpPercent"></div>
         </div>
@@ -634,52 +670,60 @@
           </div>
         </header>
 
-        <!-- Section B: Run stats -->
-        <div class="run-complete__stats-grid">
-          <div class="run-complete__stats-col">
-            <p class="run-complete__stats-label">Combat</p>
-            <div class="run-complete__stat-tile">
-              <strong>{{ runTotalKills }}</strong><span>Kills</span>
-            </div>
-            <div class="run-complete__stat-tile">
-              <strong>{{ runEliteKills }}</strong><span>Elites</span>
-            </div>
+        <!-- Section B: Key stats -->
+        <div class="run-complete__key-stats">
+          <div class="run-complete__stat-tile">
+            <strong>{{ runTotalKills }}</strong><span>Kills</span>
+          </div>
+          <div class="run-complete__stat-tile">
+            <strong>{{ runEliteKills }}</strong><span>Elites</span>
+          </div>
+          <div class="run-complete__stat-tile">
+            <strong>{{ combatTotalDamageDealt }}</strong><span>Damage Dealt</span>
+          </div>
+          <div class="run-complete__stat-tile">
+            <strong>{{ combatTotalDamageTaken }}</strong><span>Damage Taken</span>
+          </div>
+          <div class="run-complete__stat-tile">
+            <strong>{{ runPlayerMinHp }}</strong><span>Min HP</span>
+          </div>
+          <div class="run-complete__stat-tile">
+            <strong>{{ economyTotalXpGained }}</strong><span>XP Gained</span>
+          </div>
+          <div class="run-complete__stat-tile">
+            <strong [class.run-complete__stat-tile-val--pos]="runEchoFragmentsNet >= 0" [class.run-complete__stat-tile-val--neg]="runEchoFragmentsNet < 0">
+              {{ runEchoFragmentsNet >= 0 ? '+' : '' }}{{ runEchoFragmentsNet }}
+            </strong>
+            <span>Echo Fragments</span>
+          </div>
+          <div class="run-complete__stat-tile">
+            <strong>{{ economyTotalPrimalCore }}</strong><span>Primal Core</span>
+          </div>
+          @if (runChestsOpened > 0) {
             <div class="run-complete__stat-tile">
               <strong>{{ runChestsOpened }}</strong><span>Chests</span>
             </div>
+          }
+          @if (runAwardedItemDropCount > 0) {
             <div class="run-complete__stat-tile">
-              <strong>{{ selectedCards.length }}</strong><span>Cards</span>
+              <strong>{{ runAwardedItemDropCount }}</strong><span>Equipment</span>
             </div>
-            <div class="run-complete__stat-tile">
-              <strong>{{ combatTotalDamageDealt }}</strong><span>Damage</span>
-            </div>
-          </div>
-          <div class="run-complete__stats-col">
-            <p class="run-complete__stats-label">Rewards</p>
-            <div class="run-complete__stat-tile">
-              <strong [class.run-complete__stat-tile-val--pos]="runEchoFragmentsNet >= 0" [class.run-complete__stat-tile-val--neg]="runEchoFragmentsNet < 0">
-                {{ runEchoFragmentsNet >= 0 ? '+' : '' }}{{ runEchoFragmentsNet }}
-              </strong>
-              <span>Echo Fragments</span>
-            </div>
-            <div class="run-complete__stat-tile">
-              <strong>{{ economyTotalPrimalCore }}</strong><span>Primal Core</span>
-            </div>
-            <div class="run-complete__stat-tile">
-              <strong>{{ runAwardedItemDropCount }}</strong><span>Equipment Drops</span>
-            </div>
-          </div>
+          }
         </div>
 
+        <!-- Section C: Build (cards chosen) -->
         @if (selectedCards.length > 0) {
-          <div class="run-complete__cards">
-            @for (card of selectedCards; track card.id) {
-              <span class="run-complete__card-pill">{{ card.name }}</span>
-            }
+          <div class="run-complete__build">
+            <p class="run-complete__section-label">Build &middot; {{ selectedCards.length }} card{{ selectedCards.length !== 1 ? 's' : '' }}</p>
+            <div class="run-complete__cards">
+              @for (card of selectedCards; track card.id) {
+                <span class="run-complete__card-pill">{{ card.name }}</span>
+              }
+            </div>
           </div>
         }
 
-        <!-- Section C: Bestiary progress + actions -->
+        <!-- Section D: Bestiary progress -->
         @if (runBestiaryProgressRows.length > 0) {
           <div class="run-complete__bestiary">
             <p class="run-complete__section-label">Bestiary Progress</p>

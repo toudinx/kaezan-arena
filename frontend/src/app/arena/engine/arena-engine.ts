@@ -8,6 +8,7 @@ import {
   ArenaActorState,
   ArenaBattleEvent,
   ArenaBuffState,
+  ArenaCombatMomentCue,
   ArenaPoiState,
   ArenaRangedConfig,
   ArenaScene,
@@ -35,6 +36,17 @@ const HIT_VISUAL_DURATION_MS = 200;
 const RUN_VISUAL_DURATION_MS = 300;
 const MOB_KNOCKBACK_SLIDE_DURATION_MS = 100;
 const PHYSICAL_ELEMENT = 6;
+const SHIELD_BREAK_CUE_DURATION_MS = 560;
+const ELITE_CUE_DURATION_MS = 760;
+const ASSIST_CUE_DURATION_MS = 520;
+const DANGER_HIT_CUE_DURATION_MS = 420;
+const PLAYER_DEATH_CUE_DURATION_MS = 1200;
+const HIGH_IMPACT_ASSIST_SKILL_IDS = new Set<string>([
+  "exori_mas",
+  "avalanche",
+  "shotgun",
+  "void_ricochet"
+]);
 
 export class ArenaEngine {
   createTestScene(columns = 7, rows = 7, tileSize = 48): ArenaScene {
@@ -88,7 +100,8 @@ export class ArenaEngine {
       queuedDamageNumbers: [],
       nextDamageSpawnOrder: 0,
       damageNumbers: [],
-      floatingTexts: []
+      floatingTexts: [],
+      momentCues: []
     };
   }
 
@@ -139,12 +152,16 @@ export class ArenaEngine {
     const spawnedDamageNumbers: DamageNumberInstance[] = [];
     const spawnedAttackFx: AttackFxInstance[] = [];
     const spawnedFloatingTexts: FloatingTextInstance[] = [];
+    const spawnedMomentCues: ArenaCombatMomentCue[] = [];
     const spawnedProjectiles: RangedProjectileInstance[] = [];
     const queuedDamageNumbers: QueuedDamageNumberInstance[] = [...nextScene.queuedDamageNumbers];
     const mobKnockbackSlidesByActorId = { ...(nextScene.mobKnockbackSlidesByActorId ?? {}) };
     const stackIndexByTile = new Map<string, number>();
     let spawnOrder = nextScene.nextDamageSpawnOrder;
     const playerActorId = this.resolvePlayerActorId(nextScene, scene);
+    const actorsHitThisStep = new Set<string>();
+    const shieldBreakTargets = new Set<string>();
+    let playerMajorHitQueued = false;
     let threatMobEntityId = scene.threatMobEntityId ?? null;
     const pendingProjectileImpacts: Array<{
       targetActorId?: string | null;
@@ -206,9 +223,27 @@ export class ArenaEngine {
       }
 
       if (event.type === "damage_number") {
+        if (event.damageAmount > 0) {
+          actorsHitThisStep.add(event.targetEntityId);
+        }
+
         const threatSourceMobId = this.resolveThreatSourceMobEntityId(event, playerActorId, nextScene);
         if (threatSourceMobId) {
           threatMobEntityId = threatSourceMobId;
+        }
+
+        const isShieldBreak = this.isShieldBreakEvent(event);
+        if (isShieldBreak && !shieldBreakTargets.has(event.targetEntityId)) {
+          shieldBreakTargets.add(event.targetEntityId);
+          spawnedMomentCues.push(this.createMomentCue("shield_break", event.targetTileX, event.targetTileY, SHIELD_BREAK_CUE_DURATION_MS));
+          spawnedFloatingTexts.push(
+            this.createCombatCalloutText("SHATTER", event.targetTileX, event.targetTileY, "shield_break", SHIELD_BREAK_CUE_DURATION_MS)
+          );
+        }
+
+        if (!playerMajorHitQueued && this.isMajorIncomingHit(event, playerActorId, nextScene)) {
+          playerMajorHitQueued = true;
+          spawnedMomentCues.push(this.createMomentCue("danger_hit", event.targetTileX, event.targetTileY, DANGER_HIT_CUE_DURATION_MS));
         }
 
         const entries = this.toDamageNumberInstances(event, playerActorId);
@@ -235,6 +270,56 @@ export class ArenaEngine {
       }
 
       if (event.type === "death") {
+        if (event.entityType === "player") {
+          spawnedMomentCues.push(this.createMomentCue("player_death", event.tileX, event.tileY, PLAYER_DEATH_CUE_DURATION_MS));
+          spawnedFloatingTexts.push(
+            this.createCombatCalloutText("DEFEAT", event.tileX, event.tileY, "danger", PLAYER_DEATH_CUE_DURATION_MS, 1.06)
+          );
+        }
+        continue;
+      }
+
+      if (event.type === "assist_cast") {
+        if (!playerActorId || !this.isHighImpactAssistSkill(event.skillId)) {
+          continue;
+        }
+
+        const playerActor = nextScene.actorsById[playerActorId] ?? scene.actorsById[playerActorId];
+        if (!playerActor) {
+          continue;
+        }
+
+        const label = this.resolveAssistCastLabel(event.skillId, nextScene);
+        spawnedMomentCues.push(this.createMomentCue("assist_cast", playerActor.tileX, playerActor.tileY, ASSIST_CUE_DURATION_MS));
+        spawnedFloatingTexts.push(
+          this.createCombatCalloutText(label, playerActor.tileX, playerActor.tileY, "assist", ASSIST_CUE_DURATION_MS)
+        );
+        continue;
+      }
+
+      if (event.type === "elite_spawned") {
+        const eliteActor = nextScene.actorsById[event.eliteEntityId] ?? scene.actorsById[event.eliteEntityId];
+        if (!eliteActor) {
+          continue;
+        }
+
+        spawnedMomentCues.push(this.createMomentCue("elite_spawn", eliteActor.tileX, eliteActor.tileY, ELITE_CUE_DURATION_MS));
+        spawnedFloatingTexts.push(
+          this.createCombatCalloutText("ELITE!", eliteActor.tileX, eliteActor.tileY, "elite", ELITE_CUE_DURATION_MS, 1.04)
+        );
+        continue;
+      }
+
+      if (event.type === "elite_died") {
+        const eliteActor = scene.actorsById[event.eliteEntityId] ?? nextScene.actorsById[event.eliteEntityId];
+        if (!eliteActor) {
+          continue;
+        }
+
+        spawnedMomentCues.push(this.createMomentCue("elite_died", eliteActor.tileX, eliteActor.tileY, ELITE_CUE_DURATION_MS));
+        spawnedFloatingTexts.push(
+          this.createCombatCalloutText("ELITE DOWN", eliteActor.tileX, eliteActor.tileY, "elite", ELITE_CUE_DURATION_MS, 0.94)
+        );
         continue;
       }
 
@@ -268,6 +353,8 @@ export class ArenaEngine {
       }
     }
 
+    nextScene = this.applyDamageHitReactions(nextScene, actorsHitThisStep);
+
     if (threatMobEntityId) {
       const threatActor = nextScene.actorsById[threatMobEntityId];
       if (!threatActor || threatActor.kind !== "mob") {
@@ -284,7 +371,8 @@ export class ArenaEngine {
       queuedDamageNumbers,
       nextDamageSpawnOrder: spawnOrder,
       damageNumbers: [...nextScene.damageNumbers, ...spawnedDamageNumbers],
-      floatingTexts: [...nextScene.floatingTexts, ...spawnedFloatingTexts]
+      floatingTexts: [...nextScene.floatingTexts, ...spawnedFloatingTexts],
+      momentCues: [...(nextScene.momentCues ?? []), ...spawnedMomentCues]
     };
 
     nextScene = this.applyMobKnockbackSlidesToSprites(nextScene);
@@ -382,7 +470,8 @@ export class ArenaEngine {
     const sceneWithProjectiles = this.tickProjectiles(sceneWithAttackFx, safeDelta);
     const sceneWithDamageNumbers = this.tickDamageNumbers(sceneWithProjectiles, safeDelta);
     const sceneWithQueuedDamage = this.tickQueuedDamageNumbers(sceneWithDamageNumbers, safeDelta);
-    return this.tickFloatingTexts(sceneWithQueuedDamage, safeDelta);
+    const sceneWithFloatingTexts = this.tickFloatingTexts(sceneWithQueuedDamage, safeDelta);
+    return this.tickMomentCues(sceneWithFloatingTexts, safeDelta);
   }
 
   tick(scene: ArenaScene, deltaMs: number): ArenaScene {
@@ -541,6 +630,71 @@ export class ArenaEngine {
       actorVisualsById: nextVisualsById,
       sprites: nextSprites
     };
+  }
+
+  private applyDamageHitReactions(scene: ArenaScene, actorIds: ReadonlySet<string>): ArenaScene {
+    if (actorIds.size === 0) {
+      return scene;
+    }
+
+    const nextVisualsById: ActorVisualStateMap = { ...scene.actorVisualsById };
+    let changed = false;
+    for (const actorId of actorIds) {
+      const actor = scene.actorsById[actorId];
+      if (!actor) {
+        continue;
+      }
+
+      const previousVisual = nextVisualsById[actorId];
+      const runRemainingMs = previousVisual?.runRemainingMs ?? 0;
+      const hitRemainingMs = Math.max(HIT_VISUAL_DURATION_MS, previousVisual?.hitRemainingMs ?? 0);
+      const mode = this.resolveVisualMode(hitRemainingMs, runRemainingMs);
+      const currentAnimId = this.resolveSpriteSemanticId(actor, mode);
+      const elapsedMs = previousVisual && previousVisual.currentAnimId === currentAnimId
+        ? previousVisual.elapsedMs
+        : 0;
+
+      nextVisualsById[actorId] = {
+        actorId,
+        currentAnimId,
+        mode,
+        elapsedMs,
+        hitRemainingMs,
+        runRemainingMs
+      };
+      changed = true;
+    }
+
+    if (!changed) {
+      return scene;
+    }
+
+    return {
+      ...scene,
+      actorVisualsById: nextVisualsById,
+      sprites: this.rebuildActorSpritesFromVisuals(scene.actorsById, nextVisualsById)
+    };
+  }
+
+  private rebuildActorSpritesFromVisuals(actorsById: ArenaActorMap, visualsById: ActorVisualStateMap): SpriteEntity[] {
+    const actors = Object.values(actorsById).sort((left, right) => left.actorId.localeCompare(right.actorId));
+    const sprites: SpriteEntity[] = [];
+    for (const actor of actors) {
+      const visual = visualsById[actor.actorId];
+      if (!visual) {
+        continue;
+      }
+
+      sprites.push({
+        actorId: actor.actorId,
+        semanticId: visual.currentAnimId,
+        tilePos: { x: actor.tileX, y: actor.tileY },
+        layer: "actors",
+        animationElapsedMs: visual.elapsedMs
+      });
+    }
+
+    return sprites;
   }
 
   private resolveVisualMode(hitRemainingMs: number, runRemainingMs: number): ActorAnimationMode {
@@ -753,6 +907,82 @@ export class ArenaEngine {
     }
 
     return sourceEntityId;
+  }
+
+  private isShieldBreakEvent(event: Extract<ArenaBattleEvent, { type: "damage_number" }>): boolean {
+    const shieldDamage = Math.max(0, event.shieldDamageAmount ?? 0);
+    if (shieldDamage <= 0) {
+      return false;
+    }
+
+    const hpDamage = Math.max(0, event.hpDamageAmount ?? (event.damageAmount - shieldDamage));
+    return hpDamage > 0;
+  }
+
+  private isMajorIncomingHit(
+    event: Extract<ArenaBattleEvent, { type: "damage_number" }>,
+    playerActorId: string | null,
+    scene: ArenaScene
+  ): boolean {
+    if (!playerActorId || event.targetEntityId !== playerActorId) {
+      return false;
+    }
+
+    const playerActor = scene.actorsById[playerActorId];
+    const maxHp = Math.max(1, playerActor?.maxHp ?? 100);
+    const damageThreshold = Math.max(8, Math.round(maxHp * 0.18));
+    return event.isCrit || event.damageAmount >= damageThreshold;
+  }
+
+  private createMomentCue(
+    kind: ArenaCombatMomentCue["kind"],
+    tileX: number,
+    tileY: number,
+    durationMs: number
+  ): ArenaCombatMomentCue {
+    return {
+      kind,
+      tilePos: { x: tileX, y: tileY },
+      elapsedMs: 0,
+      durationMs: Math.max(1, durationMs)
+    };
+  }
+
+  private createCombatCalloutText(
+    text: string,
+    tileX: number,
+    tileY: number,
+    tone: NonNullable<FloatingTextInstance["tone"]>,
+    durationMs: number,
+    fontScale = 1
+  ): FloatingTextInstance {
+    return {
+      kind: "combat_callout",
+      tone,
+      text,
+      tilePos: { x: tileX, y: tileY },
+      startAtMs: 0,
+      elapsedMs: 0,
+      durationMs: Math.max(1, durationMs),
+      fontScale: Math.max(0.6, fontScale)
+    };
+  }
+
+  private isHighImpactAssistSkill(skillId: string): boolean {
+    return HIGH_IMPACT_ASSIST_SKILL_IDS.has(skillId);
+  }
+
+  private resolveAssistCastLabel(skillId: string, scene: ArenaScene): string {
+    const mapped = scene.skillsById[skillId]?.displayName;
+    if (typeof mapped === "string" && mapped.trim().length > 0) {
+      return mapped.trim().toUpperCase();
+    }
+
+    return skillId
+      .split("_")
+      .map((token) => (token.length > 0 ? token[0].toUpperCase() + token.slice(1) : token))
+      .join(" ")
+      .toUpperCase();
   }
 
   private toAttackFxInstance(event: Extract<ArenaBattleEvent, { type: "attack_fx" }>): AttackFxInstance {
@@ -1062,6 +1292,25 @@ export class ArenaEngine {
     return {
       ...scene,
       floatingTexts: activeFloatingTexts
+    };
+  }
+
+  private tickMomentCues(scene: ArenaScene, deltaMs: number): ArenaScene {
+    const activeCues = scene.momentCues ?? [];
+    if (activeCues.length === 0) {
+      return scene;
+    }
+
+    const nextCues = activeCues
+      .map((cue) => ({
+        ...cue,
+        elapsedMs: cue.elapsedMs + deltaMs
+      }))
+      .filter((cue) => cue.elapsedMs < cue.durationMs);
+
+    return {
+      ...scene,
+      momentCues: nextCues
     };
   }
 

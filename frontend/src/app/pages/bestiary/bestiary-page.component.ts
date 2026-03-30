@@ -16,6 +16,7 @@ type BestiaryRow = Readonly<{
   killsToNextMilestone: number;
   progressPercent: number;
   rank: number;
+  isMaxRank: boolean;
 }>;
 
 type InventoryRow = Readonly<{
@@ -42,7 +43,20 @@ type RefineRule = Readonly<{
   echoFragmentsCost: number;
 }>;
 
-const KILL_MILESTONE_STEP = 25;
+const RANK_THRESHOLDS: ReadonlyArray<number> = [0, 10, 30, 60, 100];
+const MAX_RANK = RANK_THRESHOLDS.length; // 5
+
+function computeRank(killsTotal: number): number {
+  const kills = Math.max(0, killsTotal);
+  let rank = 1;
+  for (let i = RANK_THRESHOLDS.length - 1; i >= 0; i--) {
+    if (kills >= RANK_THRESHOLDS[i]) {
+      rank = i + 1;
+      break;
+    }
+  }
+  return rank;
+}
 
 @Component({
   selector: "app-bestiary-page",
@@ -109,14 +123,20 @@ export class BestiaryPageComponent implements OnInit {
 
   get filteredSpeciesRows(): BestiaryRow[] {
     const query = this.searchQuery.trim().toLowerCase();
-    if (query.length === 0) {
-      return this.speciesRows;
-    }
-
-    return this.speciesRows.filter((row) =>
-      row.displayName.toLowerCase().includes(query) ||
-      row.speciesId.toLowerCase().includes(query)
-    );
+    const filtered = query.length === 0
+      ? this.speciesRows
+      : this.speciesRows.filter((row) =>
+          row.displayName.toLowerCase().includes(query) ||
+          row.speciesId.toLowerCase().includes(query)
+        );
+    return [...filtered].sort((a, b) => {
+      const aHasKills = a.killsTotal > 0 ? 1 : 0;
+      const bHasKills = b.killsTotal > 0 ? 1 : 0;
+      if (aHasKills !== bHasKills) return bHasKills - aHasKills;
+      if (a.rank !== b.rank) return b.rank - a.rank;
+      if (a.killsTotal !== b.killsTotal) return b.killsTotal - a.killsTotal;
+      return a.displayName.localeCompare(b.displayName);
+    });
   }
 
   get selectedSpecies(): BestiaryRow | null {
@@ -156,6 +176,16 @@ export class BestiaryPageComponent implements OnInit {
     }
 
     return selected.primalCoreBalance >= this.primalCoreCost && this.echoFragmentsBalance >= this.echoFragmentsCost;
+  }
+
+  get primalCoreDeficit(): number {
+    const selected = this.selectedSpecies;
+    if (!selected) return 0;
+    return Math.max(0, this.primalCoreCost - selected.primalCoreBalance);
+  }
+
+  get echoFragmentsDeficit(): number {
+    return Math.max(0, this.echoFragmentsCost - this.echoFragmentsBalance);
   }
 
   get inventoryRows(): InventoryRow[] {
@@ -359,13 +389,13 @@ export class BestiaryPageComponent implements OnInit {
     primalCoreBySpecies: Record<string, number>
   ): BestiaryRow {
     const killsTotal = Math.max(0, killsBySpecies[speciesId] ?? 0);
-    const nextKillMilestone = this.resolveNextKillMilestone(killsTotal);
-    const previousMilestone = Math.max(0, nextKillMilestone - KILL_MILESTONE_STEP);
-    const progressInTier = Math.max(0, killsTotal - previousMilestone);
-    const progressPercent = Math.max(
-      0,
-      Math.min(100, (progressInTier / KILL_MILESTONE_STEP) * 100)
-    );
+    const rank = computeRank(killsTotal);
+    const isMaxRank = rank >= MAX_RANK;
+    const nextKillMilestone = isMaxRank ? RANK_THRESHOLDS[MAX_RANK - 1] : RANK_THRESHOLDS[rank];
+    const currentRankStart = RANK_THRESHOLDS[rank - 1];
+    const bandSize = isMaxRank ? 1 : (nextKillMilestone - currentRankStart);
+    const progressInBand = isMaxRank ? 1 : Math.max(0, killsTotal - currentRankStart);
+    const progressPercent = Math.min(100, Math.max(0, (progressInBand / bandSize) * 100));
 
     return {
       speciesId,
@@ -373,15 +403,11 @@ export class BestiaryPageComponent implements OnInit {
       killsTotal,
       primalCoreBalance: Math.max(0, primalCoreBySpecies[speciesId] ?? 0),
       nextKillMilestone,
-      killsToNextMilestone: Math.max(0, nextKillMilestone - killsTotal),
+      killsToNextMilestone: isMaxRank ? 0 : Math.max(0, nextKillMilestone - killsTotal),
       progressPercent,
-      rank: Math.floor(killsTotal / KILL_MILESTONE_STEP)
+      rank,
+      isMaxRank
     };
-  }
-
-  private resolveNextKillMilestone(killsTotal: number): number {
-    const tier = Math.floor(Math.max(0, killsTotal) / KILL_MILESTONE_STEP);
-    return Math.max(KILL_MILESTONE_STEP, (tier + 1) * KILL_MILESTONE_STEP);
   }
 
   private resolveRefineRule(rarity: string): RefineRule | null {

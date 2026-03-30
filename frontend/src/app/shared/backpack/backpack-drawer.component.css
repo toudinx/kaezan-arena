@@ -2,126 +2,153 @@
   position: fixed;
   inset: 0;
   z-index: 120;
-  background: rgba(2, 6, 23, 0.56);
+  background: rgba(2, 6, 23, 0.72);
   display: flex;
   justify-content: flex-end;
 }
 
 .backpack-drawer {
-  width: min(360px, 92vw);
+  width: min(900px, 96vw);
   height: 100%;
-  background: #0b1220;
-  border-left: 1px solid #334155;
-  color: #e2e8f0;
+  background: #080f19;
+  border-left: 1px solid #243549;
+  color: #dbe4f0;
   display: flex;
   flex-direction: column;
+  box-shadow: -14px 0 28px rgba(2, 6, 23, 0.45);
 }
 
 .backpack-drawer__header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  padding: 0.7rem 0.8rem;
-  border-bottom: 1px solid #334155;
+  gap: 0.8rem;
+  padding: 0.9rem 1rem 0.8rem;
+  border-bottom: 1px solid #1e2d42;
+  background: #0b1422;
 }
 
 .backpack-drawer__header h2 {
   margin: 0;
-  font-size: 0.92rem;
+  font-size: 1rem;
+  color: #f0f7ff;
+}
+
+.backpack-drawer__header p {
+  margin: 0.16rem 0 0;
+  font-size: 0.66rem;
+  color: #6b8caa;
 }
 
 .backpack-drawer__header button {
-  border: 1px solid #475569;
-  border-radius: 0.3rem;
-  background: #1e293b;
-  color: #f8fafc;
-  padding: 0.3rem 0.5rem;
+  border: 1px solid #334155;
+  border-radius: 0.34rem;
+  background: #122438;
+  color: #dbe4f0;
+  padding: 0.34rem 0.55rem;
   cursor: pointer;
-  font-size: 0.74rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.backpack-drawer__header button:hover {
+  border-color: #4a6585;
 }
 
 .backpack-drawer__body {
-  padding: 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  padding: 0.9rem 1rem;
   font-size: 0.76rem;
   color: #cbd5e1;
   overflow: auto;
+  min-height: 0;
+}
+
+.backpack-drawer__hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+  border: 1px solid #1f3147;
+  border-radius: 0.52rem;
+  background: #0d1828;
+  padding: 0.55rem 0.65rem;
+}
+
+.backpack-drawer__character-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
 }
 
 .backpack-drawer__character {
-  margin: 0 0 0.6rem;
-  font-size: 0.86rem;
+  margin: 0;
+  font-size: 0.92rem;
   color: #f8fafc;
 }
 
-.backpack-drawer__equipment-summary h4,
-.backpack-drawer__inventory h4 {
-  margin: 0 0 0.45rem;
-  font-size: 0.74rem;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  color: #94a3b8;
+.backpack-drawer__character-meta {
+  margin: 0;
+  font-size: 0.64rem;
+  color: #7f9bb7;
 }
 
-.backpack-drawer__summary-grid {
-  display: grid;
-  gap: 0.28rem;
-  margin-bottom: 0.7rem;
-}
-
-.backpack-drawer__summary-row {
+.backpack-drawer__stats {
   display: flex;
-  justify-content: space-between;
-  gap: 0.5rem;
-  border: 1px solid #334155;
-  border-radius: 0.3rem;
-  background: #111827;
-  padding: 0.3rem 0.4rem;
-}
-
-.backpack-drawer__summary-row strong {
-  color: #e2e8f0;
-  text-align: right;
-}
-
-.backpack-drawer__inventory-list {
-  display: grid;
-  gap: 0.22rem;
-}
-
-.backpack-drawer__inventory-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 0.8fr);
-  gap: 0.4rem;
-  border: 1px solid #334155;
-  border-radius: 0.28rem;
-  background: #111827;
-  padding: 0.28rem 0.36rem;
   align-items: center;
+  gap: 0.32rem;
+  flex-wrap: wrap;
 }
 
-.backpack-drawer__inventory-row span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.backpack-drawer__inventory-row--header {
-  background: #172132;
-  color: #93c5fd;
-  font-size: 0.68rem;
+.backpack-drawer__chip {
+  border: 1px solid #2a3d55;
+  border-radius: 999px;
+  background: #0f1e30;
+  color: #a9bfd5;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
+  padding: 0.12rem 0.44rem;
+}
+
+.backpack-drawer__chip--echo {
+  border-color: rgba(245, 158, 11, 0.45);
+  background: rgba(120, 53, 15, 0.25);
+  color: #fde68a;
 }
 
 .backpack-drawer__status {
-  margin: 0.3rem 0 0;
-  color: #cbd5e1;
+  margin: 0;
+  border: 1px solid #2a3d55;
+  border-radius: 0.4rem;
+  background: #0f1e30;
+  padding: 0.45rem 0.55rem;
+  color: #dbe4f0;
+  font-size: 0.7rem;
 }
 
 .backpack-drawer__status--error {
-  color: #fca5a5;
+  border-color: rgba(220, 38, 38, 0.5);
+  background: rgba(127, 29, 29, 0.2);
+  color: #fecaca;
 }
 
 .backpack-drawer__backpack {
   display: block;
-  margin-top: 0.5rem;
+  min-height: 0;
+  flex: 1;
+}
+
+@media (max-width: 900px) {
+  .backpack-drawer {
+    width: 100vw;
+  }
+
+  .backpack-drawer__body {
+    padding: 0.75rem;
+  }
 }

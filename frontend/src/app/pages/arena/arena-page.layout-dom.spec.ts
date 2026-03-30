@@ -93,6 +93,58 @@ describe("ArenaPageComponent layout DOM", () => {
     expect(rightTabs).toBeNull();
   });
 
+  it("keeps the shield bar visible when shield is zero and renders depleted state", () => {
+    const fixture = createFixture();
+    fixture.componentInstance.ui = {
+      ...fixture.componentInstance.ui,
+      player: {
+        ...fixture.componentInstance.ui.player,
+        hp: 84,
+        maxHp: 100,
+        shield: 0,
+        maxShield: 80
+      }
+    };
+    fixture.detectChanges();
+
+    const host = fixture.nativeElement as HTMLElement;
+    const shieldRow = host.querySelector(".top-hud__vital-row--shield") as HTMLElement | null;
+    const shieldFill = host.querySelector(".top-hud__vitals-fill--shield") as HTMLElement | null;
+
+    expect(shieldRow).not.toBeNull();
+    expect(shieldRow?.classList.contains("top-hud__vital-row--shield-depleted")).toBe(true);
+    expect(shieldRow?.textContent).toContain("0 / 80");
+    expect(shieldFill?.style.width).toBe("0%");
+  });
+
+  it("uses low and active shield visual classes from current shield percent", () => {
+    const fixture = createFixture();
+
+    fixture.componentInstance.ui = {
+      ...fixture.componentInstance.ui,
+      player: {
+        ...fixture.componentInstance.ui.player,
+        shield: 20,
+        maxShield: 80
+      }
+    };
+    fixture.detectChanges();
+    let shieldRow = fixture.nativeElement.querySelector(".top-hud__vital-row--shield") as HTMLElement | null;
+    expect(shieldRow?.classList.contains("top-hud__vital-row--shield-low")).toBe(true);
+
+    fixture.componentInstance.ui = {
+      ...fixture.componentInstance.ui,
+      player: {
+        ...fixture.componentInstance.ui.player,
+        shield: 68,
+        maxShield: 80
+      }
+    };
+    fixture.detectChanges();
+    shieldRow = fixture.nativeElement.querySelector(".top-hud__vital-row--shield") as HTMLElement | null;
+    expect(shieldRow?.classList.contains("top-hud__vital-row--shield-active")).toBe(true);
+  });
+
   it("renders run complete summary metrics and selected cards", () => {
     const fixture = TestBed.createComponent(ArenaPageComponent);
     fixture.componentInstance.isInRun = true;

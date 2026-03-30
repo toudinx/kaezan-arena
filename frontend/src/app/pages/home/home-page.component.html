@@ -21,8 +21,8 @@
 
           <div class="hub-char__xp">
             <div class="hub-char__xp-header">
-              <span>XP</span>
-              <span>{{ activeCharacter?.xp ?? 0 }} / Lv {{ activeCharacter?.level ?? 0 }}</span>
+              <span>Level {{ activeCharacter?.level ?? 0 }}</span>
+              <span>{{ activeCharacter?.xp ?? 0 }} XP</span>
             </div>
             <div class="hub-char__xp-track">
               <div class="hub-char__xp-fill" [style.width.%]="activeCharacterXpProgressPercent"></div>
@@ -86,9 +86,14 @@
       <!-- CENTER: Enter Arena CTA + Last Run summary -->
       <main class="hub-center">
         <div class="hub-cta">
-          <p class="hub-cta__label">ENTER ARENA</p>
-          <a class="hub-cta__btn" routerLink="/arena">Enter Arena</a>
-          <p class="hub-cta__hint">Head to Arena to begin</p>
+          <a class="hub-cta__btn" routerLink="/arena">Start Run</a>
+          @if (hasActiveCharacter) {
+            <p class="hub-cta__hint">
+              <span class="hub-cta__hint-char">{{ activeCharacterName }}</span>
+              <span class="hub-cta__hint-sep" aria-hidden="true"> · </span>
+              <span>{{ activeCharacterKitTypeLabel }}</span>
+            </p>
+          }
         </div>
 
         @if (hasLastRunSummary) {
@@ -110,12 +115,24 @@
                 <span class="hub-lastrun__stat-label">Elites</span>
               </div>
               <div class="hub-lastrun__stat">
+                <span class="hub-lastrun__stat-value">{{ lastRunSummary?.chestsOpened ?? 0 }}</span>
+                <span class="hub-lastrun__stat-label">Chests</span>
+              </div>
+              <div class="hub-lastrun__stat">
                 <span class="hub-lastrun__stat-value">{{ lastRunSummary?.damageDealtTotal ?? 0 }}</span>
                 <span class="hub-lastrun__stat-label">Damage</span>
               </div>
               <div class="hub-lastrun__stat">
-                <span class="hub-lastrun__stat-value">{{ lastRunSummary?.chestsOpened ?? 0 }}</span>
-                <span class="hub-lastrun__stat-label">Chests</span>
+                <span class="hub-lastrun__stat-value">{{ lastRunXpGained }}</span>
+                <span class="hub-lastrun__stat-label">XP</span>
+              </div>
+              <div class="hub-lastrun__stat">
+                <span class="hub-lastrun__stat-value"
+                      [class.hub-lastrun__stat-value--pos]="lastRunEchoFragmentsDelta > 0"
+                      [class.hub-lastrun__stat-value--neg]="lastRunEchoFragmentsDelta < 0">
+                  {{ lastRunEchoFragmentsDelta >= 0 ? '+' : '' }}{{ lastRunEchoFragmentsDelta }}
+                </span>
+                <span class="hub-lastrun__stat-label">Echo</span>
               </div>
             </div>
             @if (lastRunCardsFormatted.length > 0) {
@@ -132,7 +149,7 @@
         } @else {
           <div class="hub-lastrun hub-lastrun--empty">
             <p class="hub-lastrun__heading">Last Run</p>
-            <p class="hub-lastrun__none">No runs recorded yet.</p>
+            <p class="hub-lastrun__none">Complete your first run to see results here.</p>
           </div>
         }
       </main>
@@ -142,6 +159,7 @@
         <div class="hub-echo">
           <p class="hub-echo__label">Echo Fragments</p>
           <p class="hub-echo__value">{{ echoFragmentsBalance }}</p>
+          <p class="hub-echo__sublabel">Fragmentos de Eco</p>
         </div>
 
         <div class="hub-bestiary">

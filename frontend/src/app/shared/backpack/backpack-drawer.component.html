@@ -1,11 +1,27 @@
 <div class="backpack-drawer__overlay" *ngIf="isOpen" (click)="requestClose()">
   <aside class="backpack-drawer" role="dialog" aria-modal="true" aria-label="Backpack drawer" (click)="onPanelClick($event)">
     <header class="backpack-drawer__header">
-      <h2>Backpack</h2>
+      <div>
+        <h2>Backpack</h2>
+        <p>Progression loadout and stored gear</p>
+      </div>
       <button type="button" (click)="requestClose()">Close</button>
     </header>
     <div class="backpack-drawer__body">
-      <h3 class="backpack-drawer__character">{{ activeCharacterName }}</h3>
+      @if (activeCharacter) {
+        <section class="backpack-drawer__hero">
+          <div class="backpack-drawer__character-block">
+            <h3 class="backpack-drawer__character">{{ activeCharacterName }}</h3>
+            <p class="backpack-drawer__character-meta">Level {{ activeCharacterLevel }} | {{ activeCharacterXp }} XP</p>
+          </div>
+          <div class="backpack-drawer__stats">
+            <span class="backpack-drawer__chip">Equipped {{ equippedItemsCount }}/3</span>
+            <span class="backpack-drawer__chip">Stored {{ storedItemsCount }}</span>
+            <span class="backpack-drawer__chip backpack-drawer__chip--echo">Echo {{ echoFragmentsBalance }}</span>
+          </div>
+        </section>
+      }
+
       @if (equipFeedbackMessage) {
         <p class="backpack-drawer__status" [class.backpack-drawer__status--error]="equipFeedbackIsError">{{ equipFeedbackMessage }}</p>
       }
@@ -23,8 +39,9 @@
           [itemCatalogById]="itemCatalogById"
           [equipmentCatalogByItemId]="equipmentCatalogByItemId"
           [equipInFlight]="equipInFlight"
-          [salvageInFlight]="false"
+          [salvageInFlight]="salvageInFlight"
           (equipRequested)="onEquipRequested($event)"
+          (salvageRequested)="onSalvageRequested($event)"
         ></app-backpack-window>
       }
     </div>

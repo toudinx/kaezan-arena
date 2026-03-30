@@ -15,6 +15,7 @@ export class BackpackDrawerComponent implements OnInit, OnChanges {
   @Input() isOpen = false;
   @Output() readonly closed = new EventEmitter<void>();
   equipInFlight = false;
+  salvageInFlight = false;
   equipFeedbackMessage = "";
   equipFeedbackIsError = false;
 
@@ -46,6 +47,50 @@ export class BackpackDrawerComponent implements OnInit, OnChanges {
     return this.activeCharacter?.name ?? "No active character";
   }
 
+  get activeCharacterLevel(): number {
+    return Math.max(0, this.activeCharacter?.level ?? 0);
+  }
+
+  get activeCharacterXp(): number {
+    return Math.max(0, this.activeCharacter?.xp ?? 0);
+  }
+
+  get echoFragmentsBalance(): number {
+    return Math.max(0, this.accountStore.state()?.echoFragmentsBalance ?? 0);
+  }
+
+  get equippedItemsCount(): number {
+    const character = this.activeCharacter;
+    if (!character) {
+      return 0;
+    }
+
+    let total = 0;
+    if (character.equipment.weaponInstanceId) {
+      total += 1;
+    }
+
+    if (character.equipment.armorInstanceId) {
+      total += 1;
+    }
+
+    if (character.equipment.relicInstanceId) {
+      total += 1;
+    }
+
+    return total;
+  }
+
+  get storedItemsCount(): number {
+    const character = this.activeCharacter;
+    if (!character) {
+      return 0;
+    }
+
+    const totalInstances = Object.keys(character.inventory.equipmentInstances).length;
+    return Math.max(0, totalInstances - this.equippedItemsCount);
+  }
+
   get itemCatalogById(): Readonly<Record<string, ItemDefinition>> {
     return this.accountStore.catalogs().itemById;
   }
@@ -75,6 +120,30 @@ export class BackpackDrawerComponent implements OnInit, OnChanges {
       this.equipFeedbackIsError = true;
     } finally {
       this.equipInFlight = false;
+    }
+  }
+
+  async onSalvageRequested(instanceId: string): Promise<void> {
+    const character = this.activeCharacter;
+    if (!character || this.salvageInFlight) {
+      return;
+    }
+
+    this.salvageInFlight = true;
+    this.equipFeedbackMessage = "";
+    this.equipFeedbackIsError = false;
+
+    try {
+      const result = await this.accountStore.salvageItem(instanceId);
+      await this.accountStore.refresh();
+      this.equipFeedbackMessage = `Item salvaged: +${result.primalCoreAwarded} Primal Core`;
+      this.equipFeedbackIsError = false;
+    } catch (error) {
+      const storeError = this.accountStore.error();
+      this.equipFeedbackMessage = storeError ?? String(error);
+      this.equipFeedbackIsError = true;
+    } finally {
+      this.salvageInFlight = false;
     }
   }
 
