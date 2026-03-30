@@ -1,86 +1,182 @@
-<section class="home-shell">
-  <header class="home-shell__header">
-    <div>
-      <h1>Kaezan Arena</h1>
-      <p>Dashboard hub for character progression, economy, and your latest run.</p>
-    </div>
-    <div class="home-shell__account">
-      <span>Account</span>
-      <strong>{{ accountId }}</strong>
-    </div>
-  </header>
-
-  <nav class="home-shell__actions" aria-label="Main navigation">
-    <a routerLink="/arena">Enter Arena</a>
-    <a routerLink="/characters">Characters</a>
-    <a routerLink="/bestiary">Bestiary</a>
-  </nav>
+<section class="home-hub">
 
   @if (isLoading) {
-    <p class="home-shell__state">Loading account session...</p>
+    <p class="home-hub__state">Loading account session...</p>
   } @else if (loadError) {
-    <p class="home-shell__state home-shell__state--error">{{ loadError }}</p>
+    <p class="home-hub__state home-hub__state--error">{{ loadError }}</p>
   } @else {
-    <div class="home-shell__grid">
-      <article class="home-card">
-        <h2>Active Character</h2>
+    <div class="home-hub__layout">
+
+      <!-- LEFT: Active character card -->
+      <aside class="hub-char">
         @if (hasActiveCharacter) {
-          <div class="home-card__character-head">
-            <strong>{{ activeCharacterName }}</strong>
-            <span>{{ activeCharacterId }}</span>
+          <div class="hub-char__portrait hub-char__portrait--{{ activeCharacterPortraitColor }}" aria-hidden="true">
+            <span>{{ activeCharacterName.slice(0, 1) }}</span>
           </div>
 
-          <div class="home-card__stats">
-            @for (stat of keyStats; track stat.label) {
-              <p><span>{{ stat.label }}</span><strong>{{ stat.value }}</strong></p>
+          <div class="hub-char__identity">
+            <strong class="hub-char__name">{{ activeCharacterName }}</strong>
+            <span class="hub-char__kit-badge hub-char__kit-badge--{{ activeCharacterKitBadge }}">{{ activeCharacterKitTypeLabel }}</span>
+          </div>
+
+          <div class="hub-char__xp">
+            <div class="hub-char__xp-header">
+              <span>XP</span>
+              <span>{{ activeCharacter?.xp ?? 0 }} / Lv {{ activeCharacter?.level ?? 0 }}</span>
+            </div>
+            <div class="hub-char__xp-track">
+              <div class="hub-char__xp-fill" [style.width.%]="activeCharacterXpProgressPercent"></div>
+            </div>
+          </div>
+
+          <div class="hub-char__section">
+            <p class="hub-char__section-title">Fixed Kit</p>
+            <div class="hub-char__pills">
+              @for (weapon of activeCharacterFixedWeaponNames; track weapon) {
+                <span class="hub-char__pill">{{ weapon }}</span>
+              }
+              @if (activeCharacterFixedWeaponNames.length === 0) {
+                <span class="hub-char__pill hub-char__pill--empty">No kit data</span>
+              }
+            </div>
+          </div>
+
+          <div class="hub-char__section">
+            <p class="hub-char__section-title">Rune Slot</p>
+            <div class="hub-char__rune-slot">
+              <span class="hub-char__rune-lock" aria-hidden="true">&#x2B21;</span>
+              <span class="hub-char__rune-label">Locked</span>
+            </div>
+          </div>
+
+          <div class="hub-char__section">
+            <p class="hub-char__section-title">Gear</p>
+            <div class="hub-char__gear">
+              <div class="hub-char__gear-row">
+                <span class="hub-char__gear-icon hub-char__gear-icon--weapon" aria-hidden="true"></span>
+                <span class="hub-char__gear-label">Weapon</span>
+                <span class="hub-char__gear-value" [class.hub-char__gear-value--empty]="equippedWeaponName === 'None'">
+                  {{ equippedWeaponName === 'None' ? 'Empty' : equippedWeaponName }}
+                </span>
+              </div>
+              <div class="hub-char__gear-row">
+                <span class="hub-char__gear-icon hub-char__gear-icon--armor" aria-hidden="true"></span>
+                <span class="hub-char__gear-label">Armor</span>
+                <span class="hub-char__gear-value" [class.hub-char__gear-value--empty]="equippedArmorName === 'None'">
+                  {{ equippedArmorName === 'None' ? 'Empty' : equippedArmorName }}
+                </span>
+              </div>
+              <div class="hub-char__gear-row">
+                <span class="hub-char__gear-icon hub-char__gear-icon--relic" aria-hidden="true"></span>
+                <span class="hub-char__gear-label">Relic</span>
+                <span class="hub-char__gear-value" [class.hub-char__gear-value--empty]="equippedRelicName === 'None'">
+                  {{ equippedRelicName === 'None' ? 'Empty' : equippedRelicName }}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <a class="hub-char__view-link" routerLink="/characters">View Characters</a>
+        } @else {
+          <p class="hub-char__empty">No active character.</p>
+          <a class="hub-char__view-link" routerLink="/characters">Choose Character</a>
+        }
+      </aside>
+
+      <!-- CENTER: Enter Arena CTA + Last Run summary -->
+      <main class="hub-center">
+        <div class="hub-cta">
+          <p class="hub-cta__label">ENTER ARENA</p>
+          <a class="hub-cta__btn" routerLink="/arena">Enter Arena</a>
+          <p class="hub-cta__hint">Head to Arena to begin</p>
+        </div>
+
+        @if (hasLastRunSummary) {
+          <div class="hub-lastrun">
+            <p class="hub-lastrun__heading">Last Run</p>
+            <div class="hub-lastrun__outcome">
+              <span class="hub-lastrun__reason hub-lastrun__reason--{{ lastRunEndReasonClass }}">
+                {{ lastRunEndReasonLabel }}
+              </span>
+              <span class="hub-lastrun__duration">{{ lastRunDurationLabel }}</span>
+            </div>
+            <div class="hub-lastrun__stats">
+              <div class="hub-lastrun__stat">
+                <span class="hub-lastrun__stat-value">{{ lastRunSummary?.killsTotal ?? 0 }}</span>
+                <span class="hub-lastrun__stat-label">Kills</span>
+              </div>
+              <div class="hub-lastrun__stat">
+                <span class="hub-lastrun__stat-value">{{ lastRunSummary?.eliteKills ?? 0 }}</span>
+                <span class="hub-lastrun__stat-label">Elites</span>
+              </div>
+              <div class="hub-lastrun__stat">
+                <span class="hub-lastrun__stat-value">{{ lastRunSummary?.damageDealtTotal ?? 0 }}</span>
+                <span class="hub-lastrun__stat-label">Damage</span>
+              </div>
+              <div class="hub-lastrun__stat">
+                <span class="hub-lastrun__stat-value">{{ lastRunSummary?.chestsOpened ?? 0 }}</span>
+                <span class="hub-lastrun__stat-label">Chests</span>
+              </div>
+            </div>
+            @if (lastRunCardsFormatted.length > 0) {
+              <div class="hub-lastrun__cards">
+                <p class="hub-lastrun__cards-label">Cards Chosen</p>
+                <div class="hub-lastrun__card-pills">
+                  @for (card of lastRunCardsFormatted; track card) {
+                    <span class="hub-lastrun__card-pill">{{ card }}</span>
+                  }
+                </div>
+              </div>
             }
           </div>
-
-          <div class="home-card__paperdoll">
-            <h3>Paperdoll Summary</h3>
-            <p><span>Weapon</span><strong>{{ equippedWeaponName }}</strong></p>
-            <p><span>Armor</span><strong>{{ equippedArmorName }}</strong></p>
-            <p><span>Relic</span><strong>{{ equippedRelicName }}</strong></p>
-          </div>
         } @else {
-          <p class="home-card__empty">No active character selected.</p>
-          <a class="home-card__link" routerLink="/characters">Choose Character</a>
+          <div class="hub-lastrun hub-lastrun--empty">
+            <p class="hub-lastrun__heading">Last Run</p>
+            <p class="hub-lastrun__none">No runs recorded yet.</p>
+          </div>
         }
-      </article>
+      </main>
 
-      <article class="home-card">
-        <h2>Currencies</h2>
-        <div class="home-card__stats">
-          @for (currency of currencyRows; track currency.label) {
-            <p><span>{{ currency.label }}</span><strong>{{ currency.amount }}</strong></p>
+      <!-- RIGHT: Progression snapshot -->
+      <aside class="hub-progress">
+        <div class="hub-echo">
+          <p class="hub-echo__label">Echo Fragments</p>
+          <p class="hub-echo__value">{{ echoFragmentsBalance }}</p>
+        </div>
+
+        <div class="hub-bestiary">
+          <p class="hub-bestiary__heading">Bestiary</p>
+
+          @if (bestiaryNextMilestone) {
+            <div class="hub-bestiary__milestone">
+              <span class="hub-bestiary__milestone-label">Closest milestone</span>
+              <span class="hub-bestiary__milestone-species">{{ bestiaryNextMilestone.speciesName }}</span>
+              <span class="hub-bestiary__milestone-kills">{{ bestiaryNextMilestone.killsToNext }} kills to next</span>
+            </div>
+          }
+
+          @if (bestiaryTopRows.length > 0) {
+            <ul class="hub-bestiary__list">
+              @for (row of bestiaryTopRows; track row.speciesName) {
+                <li class="hub-bestiary__row">
+                  <div class="hub-bestiary__row-header">
+                    <span class="hub-bestiary__species">{{ row.speciesName }}</span>
+                    <span class="hub-bestiary__kills">{{ row.killsTotal }}</span>
+                  </div>
+                  <div class="hub-bestiary__track">
+                    <div class="hub-bestiary__fill" [style.width.%]="row.progressPercent"></div>
+                  </div>
+                  <span class="hub-bestiary__next">{{ row.killsToNext }} to next</span>
+                </li>
+              }
+            </ul>
+          } @else {
+            <p class="hub-bestiary__empty">No kills recorded.</p>
           }
         </div>
-        @if (materialCurrencyRows.length === 0) {
-          <p class="home-card__empty">No additional currency balances yet.</p>
-        }
-      </article>
+      </aside>
 
-      <article class="home-card">
-        <h2>Last Run</h2>
-        @if (hasLastRunSummary && lastRunSummary) {
-          <div class="home-card__run-head">
-            <strong>{{ lastRunSummary.endReason }}</strong>
-            <span>{{ lastRunRecordedAtLabel }}</span>
-          </div>
-          <div class="home-card__stats">
-            <p><span>Seed</span><strong>{{ lastRunSummary.battleSeed }}</strong></p>
-            <p><span>Duration</span><strong>{{ lastRunSummary.durationMs }} ms</strong></p>
-            <p><span>Run Level</span><strong>{{ lastRunSummary.runLevelFinal }}</strong></p>
-            <p><span>XP Gained</span><strong>{{ lastRunSummary.xpTotalGained }}</strong></p>
-            <p><span>Kills</span><strong>{{ lastRunSummary.killsTotal }}</strong></p>
-            <p><span>Elite Kills</span><strong>{{ lastRunSummary.eliteKills }}</strong></p>
-            <p><span>Chests</span><strong>{{ lastRunSummary.chestsOpened }}</strong></p>
-            <p><span>Echo Delta</span><strong>{{ lastRunSummary.echoFragmentsDelta }}</strong></p>
-          </div>
-        } @else {
-          <p class="home-card__empty">No runs yet.</p>
-        }
-      </article>
     </div>
   }
+
 </section>

@@ -15,6 +15,7 @@ type BestiaryRow = Readonly<{
   nextKillMilestone: number;
   killsToNextMilestone: number;
   progressPercent: number;
+  rank: number;
 }>;
 
 type InventoryRow = Readonly<{
@@ -84,7 +85,10 @@ export class BestiaryPageComponent implements OnInit {
   }
 
   get characterName(): string {
-    return this.activeCharacter?.name ?? "";
+    const char = this.activeCharacter;
+    if (!char) return "";
+    const catalogEntry = this.accountStore.catalogs().characterById[char.characterId];
+    return catalogEntry?.displayName ?? char.name;
   }
 
   get characterId(): string {
@@ -370,7 +374,8 @@ export class BestiaryPageComponent implements OnInit {
       primalCoreBalance: Math.max(0, primalCoreBySpecies[speciesId] ?? 0),
       nextKillMilestone,
       killsToNextMilestone: Math.max(0, nextKillMilestone - killsTotal),
-      progressPercent
+      progressPercent,
+      rank: Math.floor(killsTotal / KILL_MILESTONE_STEP)
     };
   }
 

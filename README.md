@@ -70,6 +70,50 @@ docker compose up --build
 
 Current `docker-compose.yml` is a development skeleton with backend (`5080`) and frontend (`4200`) services.
 
+## Navigation
+
+The app uses a single navbar provided by `AppShellComponent` (Home / Characters / Bestiary / Arena + Backpack). The root `App` component (`app.html`) contains only the `<router-outlet>` — no secondary nav. The Arena page renders outside the shell (no nav intentional — full-screen game view).
+
+## Home Page Hub
+
+The Home page is a full-page dark hub (`#080d14`) with a three-column layout at wide viewports (stacks single-column at `<900px`, center column first):
+
+- **LEFT — Active character card:** Portrait placeholder (color-coded), name, kit badge, XP progress bar, Fixed Kit pills, locked Rune Slot, Gear summary (Weapon / Armor / Relic), "View Characters" link.
+- **CENTER — Enter Arena CTA + Last Run:** Dominant "Start Run" link button (teal), last run outcome (Victory/Defeat color-coded), duration, Kills / Elites / Damage / Chests stat tiles, card pills chosen.
+- **RIGHT — Progression snapshot:** Echo Fragments balance (large number, gold), Bestiary section with closest-to-milestone callout and top-3 species progress bars with kills-to-next.
+
+## Bestiary Page
+
+The Bestiary is a dark-themed (`#080d14`) two-column page matching the Home and Characters pages:
+
+- **Header:** "Bestiary" heading + active character display name subtitle + Echo Fragments balance (gold, top-right).
+- **Stats row:** Tracked species / Unlocked / Total kills — numbers large, labels small, in dark tiles.
+- **LEFT — Species list:** Each row shows display name, optional "Rank N" amber pill (rank > 0), kill count, kills-to-next label, and a progress bar (`linear-gradient` teal). Selected species highlighted with teal border.
+- **RIGHT — Detail panel:** Large species name heading, prominent "Rank N" badge (amber when earned), Kills + Primal Core stat tiles, large 8px progress bar toward next milestone labeled "Progress to Rank N+1", "AVAILABLE ACTIONS" section with Craft Weapon / Craft Armor / Craft Relic buttons. Refine and Salvage subsections only appear when there are actual items — empty state messages are hidden.
+- No raw species IDs visible; catalog display names are shown for all known species.
+
+## Characters Page
+
+The Characters page is a dark-themed character selection screen with two columns:
+
+- **LEFT — Roster list:** Each character card shows a large portrait placeholder (color-coded per character: amber for Kina, teal for Ranged Prototype, purple for Kaelis Dawn, green for Kaelis Ember), character name, a kit type badge ("Melee Kit" / "Ranged Kit"), level, and fixed weapon pills. The active character has a teal border and an "ACTIVE" badge. Clicking a card selects it in the detail panel.
+- **RIGHT — Detail panel:** Large portrait, character name heading, kit identity line with optional "[WIP]" tag, XP progress bar, Fixed Kit as three weapon cards, a locked Rune Slot section, Equipped Gear (Weapon / Armor / Relic with empty state), and action buttons ("Set Active" CTA or "Active Character" badge, plus "Enter Arena" link).
+
+The Arena Preparation lobby (pre-run screen) was also redesigned as a full-width two-column overlay with character arrow navigation, kit pills, portrait placeholder, bestiary milestone teaser, Echo Fragments balance, and an absorbed "Start Run" CTA.
+
+## Run Results Screen
+
+After each run ends (`isRunEnded`), a full-screen dark overlay replaces the arena:
+
+- **Section A — Outcome header:** Large "VICTORY" (teal) or "DEFEAT" (coral), subtitle reason, duration as "Xm Ys", "Reached Level N", kills/elites/chests summary line.
+- **Section B — Run stats:** Two-column grid — Combat (Kills / Elites / Chests / Cards / Damage) and Rewards (Echo Fragments net color-coded, Primal Core, Equipment Drops). Cards chosen appear as pills below the grid.
+- **Section C — Bestiary Progress:** Top 3 species by kills gained this run, each row showing kills delta and a "NEW RANK N" amber pill when a milestone was crossed. Hidden if no kills were registered.
+- **Actions:** "RUN AGAIN" (teal primary) and "EXIT TO HOME" (muted secondary).
+- **[DEV] disclosure:** Collapsed `<details>` element containing Export Replay, Import Replay, Play Imported Replay, Copy Last/All Run JSON, Export Runs. Collapsed by default; native HTML toggle — no Angular state needed.
+- Subtle footer: "Run result logged and stored."
+
+Bestiary delta calculation: `runStartBestiaryKills` is captured from the account state at `beginNewRun()` before resetting `bestiaryEntries`. Post-run delta = `bestiaryEntry.killsTotal − runStartBestiaryKills[species]`.
+
 ## Current Gameplay
 
 - Player is fixed at the center tile (3,3) - no WASD movement
@@ -104,7 +148,7 @@ Current `docker-compose.yml` is a development skeleton with backend (`5080`) and
 All weapon, character, and species IDs are defined as named constants in `backend/src/KaezanArena.Api/Battle/ArenaConfig.cs`:
 
 - `ArenaConfig.WeaponIds` - stable weapon/skill IDs (e.g. `WeaponIds.ExoriMin = "weapon:exori_min"`)
-- `ArenaConfig.CharacterIds` - stable character IDs (e.g. `CharacterIds.Kina = "character:kina"`)
+- `ArenaConfig.CharacterIds` - stable character IDs (e.g. `CharacterIds.Kina = "character:kina"`); also includes legacy IDs `KaelisDawn = "kaelis_01"` and `KaelisEmber = "kaelis_02"` for accounts persisted before the stable ID migration
 - `ArenaConfig.SpeciesIds` - mob species ID strings used in snapshots and the account bestiary
 
 `ArenaConfig.DisplayNames` is the **single source of truth** for all entity display names, keyed by the stable IDs above. No display name strings should appear anywhere else in the codebase.

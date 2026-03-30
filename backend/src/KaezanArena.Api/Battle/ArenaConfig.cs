@@ -397,6 +397,10 @@ public static class ArenaConfig
     {
         public const string Kina = "character:kina";
         public const string RangedPrototype = "character:ranged_prototype";
+        /// <summary>Legacy character ID for Kaelis Dawn (persisted before stable ID migration). Maps to the Kina melee kit.</summary>
+        public const string KaelisDawn = "kaelis_01";
+        /// <summary>Legacy character ID for Kaelis Ember (persisted before stable ID migration). Maps to the Ranged Prototype kit.</summary>
+        public const string KaelisEmber = "kaelis_02";
     }
 
     /// <summary>
@@ -413,6 +417,18 @@ public static class ArenaConfig
                 WeaponIds.ExoriMas
             ],
             [CharacterIds.RangedPrototype] =
+            [
+                WeaponIds.SigilBolt,
+                WeaponIds.ShotgunId,
+                WeaponIds.VoidRicochetId
+            ],
+            [CharacterIds.KaelisDawn] =
+            [
+                WeaponIds.ExoriMin,
+                WeaponIds.Exori,
+                WeaponIds.ExoriMas
+            ],
+            [CharacterIds.KaelisEmber] =
             [
                 WeaponIds.SigilBolt,
                 WeaponIds.ShotgunId,
@@ -458,8 +474,10 @@ public static class ArenaConfig
             [WeaponIds.Avalanche]       = "Avalanche",
             [WeaponIds.Heal]            = "Heal",
             [WeaponIds.Guard]           = "Guard",
-            [CharacterIds.Kina]         = "Kina",
+            [CharacterIds.Kina]            = "Kina",
             [CharacterIds.RangedPrototype] = "Prototype",
+            [CharacterIds.KaelisDawn]      = "Kaelis Dawn",
+            [CharacterIds.KaelisEmber]     = "Kaelis Ember",
             [SpeciesIds.MeleeBrute]     = "Melee Brute",
             [SpeciesIds.RangedArcher]   = "Ranged Archer",
             [SpeciesIds.MeleeDemon]     = "Melee Demon",

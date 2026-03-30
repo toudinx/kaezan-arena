@@ -5,11 +5,35 @@ import { AccountStore } from "../../account/account-store.service";
 import type { RunResultV1 } from "../../shared/run-results/run-result-logger";
 
 const RUN_RESULT_STORAGE_KEY = "kaezan_run_results_v1";
+const KILL_MILESTONE_STEP = 25;
 
-type CurrencyRow = Readonly<{
-  label: string;
-  amount: number;
-}>;
+const CHARACTER_PORTRAIT_COLORS: Readonly<Record<string, string>> = {
+  "character:kina": "amber",
+  "character:ranged_prototype": "teal",
+  "kaelis_01": "purple",
+  "kaelis_02": "green"
+};
+
+function resolveHubKitType(fixedWeaponNames: ReadonlyArray<string>): { label: string; badge: "melee" | "ranged" | "unknown" } {
+  if (fixedWeaponNames.includes("Exori Min")) return { label: "Melee Kit", badge: "melee" };
+  if (fixedWeaponNames.includes("Sigil Bolt")) return { label: "Ranged Kit", badge: "ranged" };
+  return { label: "Unknown Kit", badge: "unknown" };
+}
+
+function formatMs(ms: number): string {
+  const totalSec = Math.floor(ms / 1000);
+  const minutes = Math.floor(totalSec / 60);
+  const seconds = totalSec % 60;
+  if (minutes > 0) return `${minutes}m ${seconds}s`;
+  return `${seconds}s`;
+}
+
+function formatTokenId(id: string): string {
+  return id
+    .split("_")
+    .map(token => token.length > 0 ? token[0].toUpperCase() + token.slice(1) : token)
+    .join(" ");
+}
 
 @Component({
   selector: "app-home-page",
@@ -33,10 +57,6 @@ export class HomePageComponent implements OnInit {
     this.lastRunSummary = this.readLastRunSummary();
   }
 
-  get accountId(): string {
-    return this.accountStore.accountId();
-  }
-
   get isLoading(): boolean {
     return this.accountStore.isLoading();
   }
@@ -54,29 +74,39 @@ export class HomePageComponent implements OnInit {
   }
 
   get activeCharacterName(): string {
-    return this.activeCharacter?.name ?? "No active character";
+    const char = this.activeCharacter;
+    if (!char) return "No active character";
+    const catalogEntry = this.accountStore.catalogs().characterById[char.characterId];
+    return catalogEntry?.displayName ?? char.name;
   }
 
-  get activeCharacterId(): string {
-    return this.activeCharacter?.characterId ?? "";
+  get activeCharacterPortraitColor(): string {
+    const charId = this.activeCharacter?.characterId ?? "";
+    return CHARACTER_PORTRAIT_COLORS[charId] ?? "gray";
   }
 
-  get keyStats(): ReadonlyArray<Readonly<{ label: string; value: string }>> {
-    const character = this.activeCharacter;
-    if (!character) {
-      return [];
-    }
+  get activeCharacterFixedWeaponNames(): ReadonlyArray<string> {
+    const charId = this.activeCharacter?.characterId ?? "";
+    return this.accountStore.catalogs().characterById[charId]?.fixedWeaponNames ?? [];
+  }
 
-    const inventoryEquipmentCount = Object.keys(character.inventory.equipmentInstances ?? {}).length;
-    const bestiaryKillsTotal = Object.values(character.bestiaryKillsBySpecies ?? {})
-      .reduce((sum, value) => sum + Math.max(0, value ?? 0), 0);
+  get activeCharacterKitTypeLabel(): string {
+    return resolveHubKitType(this.activeCharacterFixedWeaponNames).label;
+  }
 
-    return [
-      { label: "Level", value: String(Math.max(1, character.level)) },
-      { label: "XP", value: String(Math.max(0, character.xp)) },
-      { label: "Inventory Equipment", value: String(inventoryEquipmentCount) },
-      { label: "Bestiary Kills", value: String(bestiaryKillsTotal) }
-    ];
+  get activeCharacterKitBadge(): "melee" | "ranged" | "unknown" {
+    return resolveHubKitType(this.activeCharacterFixedWeaponNames).badge;
+  }
+
+  get activeCharacterXpProgressPercent(): number {
+    const char = this.activeCharacter;
+    if (!char) return 0;
+    const threshold = Math.max(1, char.level * 100);
+    return Math.min(100, Math.max(0, (char.xp / threshold) * 100));
+  }
+
+  get echoFragmentsBalance(): number {
+    return Math.max(0, this.accountStore.state()?.echoFragmentsBalance ?? 0);
   }
 
   get equippedWeaponName(): string {
@@ -91,88 +121,92 @@ export class HomePageComponent implements OnInit {
     return this.resolveEquippedName("relic");
   }
 
-  get currencyRows(): ReadonlyArray<CurrencyRow> {
-    const rows: CurrencyRow[] = [
-      {
-        label: "Echo Fragments",
-        amount: Math.max(0, this.accountStore.state()?.echoFragmentsBalance ?? 0)
-      },
-      {
-        label: "Primal Core (Total)",
-        amount: this.totalPrimalCore
+  get bestiaryTopRows(): ReadonlyArray<Readonly<{
+    speciesName: string;
+    killsTotal: number;
+    killsToNext: number;
+    progressPercent: number;
+  }>> {
+    const char = this.activeCharacter;
+    if (!char) return [];
+
+    const speciesById = this.accountStore.catalogs().speciesById;
+    return Object.entries(char.bestiaryKillsBySpecies ?? {})
+      .map(([speciesId, kills]) => {
+        const killsTotal = Math.max(0, kills ?? 0);
+        const tier = Math.floor(killsTotal / KILL_MILESTONE_STEP);
+        const nextMilestone = Math.max(KILL_MILESTONE_STEP, (tier + 1) * KILL_MILESTONE_STEP);
+        const previousMilestone = Math.max(0, nextMilestone - KILL_MILESTONE_STEP);
+        const progressPercent = Math.max(0, Math.min(100, ((killsTotal - previousMilestone) / KILL_MILESTONE_STEP) * 100));
+        const speciesName = speciesById[speciesId]?.displayName ?? formatTokenId(speciesId);
+        return { speciesName, killsTotal, killsToNext: nextMilestone - killsTotal, progressPercent };
+      })
+      .filter(row => row.killsTotal > 0)
+      .sort((a, b) => b.killsTotal - a.killsTotal)
+      .slice(0, 3);
+  }
+
+  get bestiaryNextMilestone(): Readonly<{ speciesName: string; killsToNext: number }> | null {
+    const char = this.activeCharacter;
+    if (!char) return null;
+
+    const speciesById = this.accountStore.catalogs().speciesById;
+    let best: { speciesName: string; killsToNext: number } | null = null;
+
+    for (const [speciesId, kills] of Object.entries(char.bestiaryKillsBySpecies ?? {})) {
+      const killsTotal = Math.max(0, kills ?? 0);
+      if (killsTotal === 0) continue;
+      const tier = Math.floor(killsTotal / KILL_MILESTONE_STEP);
+      const nextMilestone = Math.max(KILL_MILESTONE_STEP, (tier + 1) * KILL_MILESTONE_STEP);
+      const killsToNext = nextMilestone - killsTotal;
+      const speciesName = speciesById[speciesId]?.displayName ?? formatTokenId(speciesId);
+      if (!best || killsToNext < best.killsToNext) {
+        best = { speciesName, killsToNext };
       }
-    ];
-
-    for (const entry of this.materialCurrencyRows) {
-      rows.push(entry);
     }
-
-    return rows;
-  }
-
-  get materialCurrencyRows(): ReadonlyArray<CurrencyRow> {
-    const character = this.activeCharacter;
-    if (!character) {
-      return [];
-    }
-
-    const itemById = this.accountStore.catalogs().itemById;
-    return Object.entries(character.inventory.materialStacks ?? {})
-      .map(([itemId, quantity]) => ({
-        label: itemById[itemId]?.displayName ?? this.formatItemId(itemId),
-        amount: Math.max(0, Math.floor(quantity ?? 0))
-      }))
-      .filter((row) => row.amount > 0)
-      .sort((left, right) => left.label.localeCompare(right.label, undefined, { sensitivity: "base" }));
-  }
-
-  get totalPrimalCore(): number {
-    const character = this.activeCharacter;
-    if (!character) {
-      return 0;
-    }
-
-    return Object.values(character.primalCoreBySpecies ?? {})
-      .reduce((sum, value) => sum + Math.max(0, Math.floor(value ?? 0)), 0);
+    return best;
   }
 
   get hasLastRunSummary(): boolean {
     return this.lastRunSummary !== null;
   }
 
-  get lastRunRecordedAtLabel(): string {
-    const run = this.lastRunSummary;
-    if (!run?.recordedAtIso) {
-      return "";
-    }
+  get lastRunDurationLabel(): string {
+    return formatMs(this.lastRunSummary?.durationMs ?? 0);
+  }
 
-    const date = new Date(run.recordedAtIso);
-    if (!Number.isFinite(date.getTime())) {
-      return run.recordedAtIso;
-    }
+  get lastRunEndReasonLabel(): string {
+    const reason = this.lastRunSummary?.endReason ?? "";
+    if (reason.includes("victory")) return "Victory";
+    if (reason.includes("defeat") || reason.includes("death") || reason.includes("killed")) return "Defeat";
+    if (!reason || reason === "unknown") return "Unknown";
+    return formatTokenId(reason.replace(/_/g, " ").trim());
+  }
 
-    return date.toLocaleString();
+  get lastRunEndReasonClass(): "victory" | "defeat" | "unknown" {
+    const reason = this.lastRunSummary?.endReason ?? "";
+    if (reason.includes("victory")) return "victory";
+    if (reason.includes("defeat") || reason.includes("death") || reason.includes("killed")) return "defeat";
+    return "unknown";
+  }
+
+  get lastRunCardsFormatted(): ReadonlyArray<string> {
+    return (this.lastRunSummary?.cardsChosen ?? []).map(formatTokenId);
   }
 
   private resolveEquippedName(slot: "weapon" | "armor" | "relic"): string {
     const character = this.activeCharacter;
-    if (!character) {
-      return "None";
-    }
+    if (!character) return "None";
 
     const instanceId = slot === "weapon"
       ? character.equipment.weaponInstanceId
       : slot === "armor"
         ? character.equipment.armorInstanceId
         : character.equipment.relicInstanceId;
-    if (!instanceId) {
-      return "None";
-    }
+    if (!instanceId) return "None";
 
     const instance = character.inventory.equipmentInstances[instanceId];
-    if (!instance) {
-      return `${instanceId} (missing)`;
-    }
+    if (!instance) return `${instanceId} (missing)`;
 
     return this.accountStore.catalogs().itemById[instance.definitionId]?.displayName ?? instance.definitionId;
   }
@@ -183,15 +217,11 @@ export class HomePageComponent implements OnInit {
     }
 
     const raw = window.localStorage.getItem(RUN_RESULT_STORAGE_KEY);
-    if (!raw) {
-      return null;
-    }
+    if (!raw) return null;
 
     try {
       const parsed = JSON.parse(raw);
-      if (!Array.isArray(parsed) || parsed.length === 0) {
-        return null;
-      }
+      if (!Array.isArray(parsed) || parsed.length === 0) return null;
 
       const candidate = parsed[parsed.length - 1] as Partial<RunResultV1> | null;
       if (!candidate || candidate.schemaVersion !== 1 || typeof candidate.battleSeed !== "number") {
@@ -202,14 +232,5 @@ export class HomePageComponent implements OnInit {
     } catch {
       return null;
     }
-  }
-
-  private formatItemId(itemId: string): string {
-    return itemId
-      .replace(/^[a-z]+\./i, "")
-      .split("_")
-      .filter((part) => part.length > 0)
-      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-      .join(" ");
   }
 }

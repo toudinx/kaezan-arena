@@ -1,9 +1,11 @@
 <section class="arena-client">
-  <div class="arena-client__frame">
+  <div class="arena-client__frame" [class.arena-client__frame--no-left]="!showRunIntelPanel">
+    @if (showRunIntelPanel) {
     <aside class="pane pane--left" #leftLogsPane tabindex="-1" aria-label="Run intel pane">
       <header class="pane__header">
         <div class="pane__title-row">
           <h2>Run Intel</h2>
+          <button type="button" class="dev-panel__auto-toggle" (click)="toggleAutoAssist()">{{ assistAutoToggleLabel }}</button>
         </div>
       </header>
 
@@ -199,9 +201,11 @@
                     <p class="analyzer-note">Refined: {{ runRefinedItemsSummary.preview }}</p>
                   }
                 </section>
-                @if (economyLootPreview.length > 0) {
-                  <section class="economy-loot">
-                    <h4>Recent Loot</h4>
+                <section class="economy-loot">
+                  <h4>Recent Loot</h4>
+                  @if (economyLootPreview.length === 0) {
+                    <p class="analyzer-empty">No drops yet.</p>
+                  } @else {
                     <ul class="economy-loot__list">
                       @for (drop of economyLootPreview; track drop.dropEventId) {
                         <li>
@@ -210,8 +214,8 @@
                         </li>
                       }
                     </ul>
-                  </section>
-                }
+                  }
+                </section>
               </div>
             }
           </div>
@@ -294,10 +298,14 @@
         </section>
       </div>
     </aside>
+    }
 
     <section class="center-column" aria-label="Gameplay pane">
       <header class="top-hud">
-        <div class="top-hud__identity">{{ runHudIdentityLabel }}</div>
+        <div class="top-hud__identity">
+          {{ runHudIdentityLabel }}
+          <button type="button" class="dev-toggle-btn" (click)="toggleRunIntelPanel()" [title]="showRunIntelPanel ? 'Hide Run Intel panel' : 'Show Run Intel panel'">[DEV]</button>
+        </div>
         <div class="top-hud__bars">
           <div class="top-hud__vitals-track">
             <div class="top-hud__vitals-fill top-hud__vitals-fill--hp" [style.width.%]="playerHpPercent"></div>
@@ -371,7 +379,6 @@
     <aside class="pane pane--right" #rightInfoPane tabindex="-1" aria-label="Info pane">
       <header class="pane__header pane__header--right">
         <div class="info-actions">
-          <button type="button" class="info-actions__auto-toggle" (click)="toggleAutoAssist()">{{ assistAutoToggleLabel }}</button>
           <button type="button" class="info-actions__hotkeys" (click)="openHotkeysModal()">Hotkeys</button>
         </div>
       </header>
@@ -397,7 +404,11 @@
         </section>
 
         <section class="right-pane__pinned right-pane__pinned--backpack" #backpackPanel tabindex="-1">
-          <header class="right-pane__pinned-header">Backpack</header>
+          <header class="right-pane__pinned-header right-pane__pinned-header--toggle" (click)="toggleBackpackPanel()">
+            <span>Backpack</span>
+            <button type="button" class="pane-toggle-btn" [attr.aria-expanded]="isBackpackPanelOpen">{{ isBackpackPanelOpen ? '▲' : '▼' }}</button>
+          </header>
+          @if (isBackpackPanelOpen) {
           <div class="right-pane__pinned-body right-pane__pinned-body--backpack">
             <app-backpack-window
               [character]="selectedCharacter"
@@ -413,6 +424,7 @@
               (salvageRequested)="onBackpackSalvageRequested($event)"
             ></app-backpack-window>
           </div>
+          }
         </section>
 
         <section class="right-pane__status" #statusPanel tabindex="-1">
@@ -429,6 +441,9 @@
                 }
               </div>
               <h4>Skills</h4>
+              @if (bottomBarSkillSlots.length === 0 || bottomBarSkillSlots.every(s => s.isLocked)) {
+                <p class="right-panel-empty">No skills active.</p>
+              }
               @for (slot of bottomBarSkillSlots; track slot.skillId) {
                 <div
                   class="right-panel-skill-row"
@@ -469,92 +484,107 @@
   </div>
 
   @if (!isInRun) {
-    <section class="pre-run-screen" aria-label="Pre-run setup">
-      <div class="pre-run-card">
-        <header class="pre-run-card__header">
-          <h2>Arena Preparation</h2>
-          <p>Select your character and start the run.</p>
-        </header>
+    <section class="pre-run-lobby" aria-label="Arena lobby">
+      @if (isPreRunLoading) {
+        <p class="pre-run-lobby__state">Loading account...</p>
+      } @else if (isPreRunEmptyState) {
+        <p class="pre-run-lobby__state">No characters found (dev seed missing).</p>
+        <button type="button" (click)="reloadAccountState()" [disabled]="accountStateRequestInFlight">Reload</button>
+      } @else {
+        <div class="pre-run-lobby__layout">
 
-        <p class="pre-run-card__debug">Account loaded: {{ accountLoaded ? "yes" : "no" }}, characters: {{ preRunCharacters.length }}</p>
+          <!-- LEFT: character identity -->
+          <aside class="pre-run-lobby__left">
+            <div class="pre-run-lobby__portrait" aria-hidden="true">
+              <span class="pre-run-lobby__portrait-initial">{{ selectedPreRunCharacter?.name?.slice(0, 1) ?? '?' }}</span>
+            </div>
 
-        @if (isPreRunLoading) {
-          <p class="pre-run-card__status">Loading account...</p>
-        } @else if (isPreRunEmptyState) {
-          <p class="pre-run-card__status">No characters found (dev seed missing).</p>
-          <button type="button" (click)="reloadAccountState()" [disabled]="accountStateRequestInFlight">Reload</button>
-        } @else {
-          <div class="pre-run-card__body">
-            <label class="pre-run-card__field">
-              <span>Character</span>
-              <select
-                [value]="selectedCharacterId"
-                (change)="onSelectedCharacterChange($event)"
-                [disabled]="accountStateRequestInFlight || accountRequestInFlight"
-              >
-                @for (character of preRunCharacters; track character.id) {
-                  <option [value]="character.id">{{ character.name }} (Lv {{ character.level }})</option>
-                }
-              </select>
-            </label>
+            <div class="pre-run-lobby__identity">
+              <div class="pre-run-lobby__nav">
+                <button type="button" class="pre-run-lobby__nav-btn" (click)="selectPrevPreRunCharacter()" aria-label="Previous character">&lt;</button>
+                <h2 class="pre-run-lobby__name">{{ selectedPreRunCharacter?.name ?? '—' }}</h2>
+                <button type="button" class="pre-run-lobby__nav-btn" (click)="selectNextPreRunCharacter()" aria-label="Next character">&gt;</button>
+              </div>
+
+              @if (selectedCharacterSubtitle) {
+                <p class="pre-run-lobby__subtitle">{{ selectedCharacterSubtitle }}</p>
+              }
+
+              <p class="pre-run-lobby__level">
+                Lv {{ selectedPreRunCharacter?.level ?? 0 }}
+                <span class="pre-run-lobby__level-sep">·</span>
+                {{ selectedPreRunCharacter?.xp ?? 0 }} XP
+              </p>
+
+              <div class="pre-run-lobby__kit">
+                <span class="pre-run-lobby__kit-label">Fixed Kit</span>
+                <div class="pre-run-lobby__kit-pills">
+                  @for (weaponName of selectedCharacterKitWeaponNames; track weaponName) {
+                    <span class="pre-run-lobby__pill">{{ weaponName }}</span>
+                  }
+                  @if (selectedCharacterKitWeaponNames.length === 0) {
+                    <span class="pre-run-lobby__pill pre-run-lobby__pill--unknown">Unknown</span>
+                  }
+                </div>
+              </div>
+
+              <div class="pre-run-lobby__rune-slot">
+                <span class="pre-run-lobby__kit-label">Rune Slot</span>
+                <span class="pre-run-lobby__pill pre-run-lobby__pill--locked">Locked</span>
+              </div>
+
+              <div class="pre-run-lobby__gear">
+                <p><span>Weapon</span><strong>{{ selectedCharacterWeaponLabel }}</strong></p>
+                <p><span>Armor</span><strong>{{ selectedCharacterArmorLabel }}</strong></p>
+                <p><span>Relic</span><strong>{{ selectedCharacterRelicLabel }}</strong></p>
+              </div>
+            </div>
+          </aside>
+
+          <!-- RIGHT: run config + CTA -->
+          <aside class="pre-run-lobby__right">
+            <p class="pre-run-lobby__enter-label">ENTER ARENA</p>
+
+            <div class="pre-run-lobby__economy">
+              <span>Echo Fragments</span>
+              <strong>{{ preRunEchoFragmentsBalance }}</strong>
+            </div>
+
+            @if (preRunBestiaryTeaser) {
+              <div class="pre-run-lobby__teaser">
+                <p class="pre-run-lobby__teaser-label">Closest milestone</p>
+                <p class="pre-run-lobby__teaser-species">{{ preRunBestiaryTeaser.speciesName }}</p>
+                <p class="pre-run-lobby__teaser-progress">{{ preRunBestiaryTeaser.killsToNext }} kills to next · {{ preRunBestiaryTeaser.killsTotal }} total</p>
+                <span class="pre-run-lobby__teaser-bar">
+                  <span [style.width.%]="preRunBestiaryTeaser.progressPercent"></span>
+                </span>
+              </div>
+            } @else {
+              <div class="pre-run-lobby__teaser pre-run-lobby__teaser--empty">
+                <p class="pre-run-lobby__teaser-label">Closest milestone</p>
+                <p class="pre-run-lobby__teaser-empty">Defeat mobs to start tracking.</p>
+              </div>
+            }
 
             <button
               type="button"
-              (click)="applySelectedCharacter()"
-              [disabled]="accountStateRequestInFlight || accountRequestInFlight || isSelectedCharacterActive || !selectedCharacterId"
-            >
-              Set Active
-            </button>
-
-            <p class="pre-run-card__summary">{{ selectedCharacterSummaryLabel }}</p>
-            <p class="pre-run-card__weapon">Equipped Weapon: {{ selectedCharacterWeaponLabel }}</p>
-
-            <button
-              type="button"
-              class="pre-run-card__start"
-              (click)="startRun()"
+              class="pre-run-lobby__start"
+              (click)="startRunAbsorbed()"
               [disabled]="bootPhase !== 'ready_to_start' || accountStateRequestInFlight || accountRequestInFlight || battleRequestInFlight || !selectedCharacterId"
             >
               Start Run
+              <span class="pre-run-lobby__start-hint">[Space] or [Enter]</span>
             </button>
-            <button
-              type="button"
-              class="pre-run-card__start"
-              (click)="replayLastRun()"
-              [disabled]="!canReplayLastRun"
-            >
-              {{ replayLastRunLabel }}
-            </button>
-            <button
-              type="button"
-              class="pre-run-card__start"
-              (click)="playImportedReplay()"
-              [disabled]="!canPlayImportedReplay"
-            >
-              Play Imported Replay
-            </button>
-            <button
-              type="button"
-              class="pre-run-card__start"
-              (click)="openReplayImportModal()"
-            >
-              Import Replay
-            </button>
-            <button
-              type="button"
-              class="pre-run-card__start"
-              (click)="exportAllRunResultsJson()"
-            >
-              Export Runs
-            </button>
-            <p class="pre-run-card__summary">{{ importedReplaySummaryLabel }}</p>
-          </div>
-        }
 
-        @if (accountLoadErrorMessage) {
-          <p class="pre-run-card__status pre-run-card__status--error">{{ accountLoadErrorMessage }}</p>
-        }
-      </div>
+            @if (accountLoadErrorMessage) {
+              <p class="pre-run-lobby__error">{{ accountLoadErrorMessage }}</p>
+            }
+
+            <a class="pre-run-lobby__back" routerLink="/home">&#8592; Back</a>
+          </aside>
+
+        </div>
+      }
     </section>
   }
 
@@ -588,59 +618,117 @@
   @if (isRunEnded) {
     <div class="run-complete__backdrop">
       <section class="run-complete" role="dialog" aria-modal="true" aria-label="Run Complete">
+
+        <!-- Section A: Outcome header -->
         <header class="run-complete__header">
-          <h2>{{ runCompleteTitle }}</h2>
-          <p>Run Complete</p>
+          <h2 class="run-complete__outcome" [class.run-complete__outcome--victory]="runOutcomeIsVictory" [class.run-complete__outcome--defeat]="!runOutcomeIsVictory">
+            {{ runOutcomeIsVictory ? 'VICTORY' : 'DEFEAT' }}
+          </h2>
+          <p class="run-complete__subtitle">{{ runCompleteReasonText }}</p>
+          <div class="run-complete__meta">
+            <span>{{ runDurationFormatted }}</span>
+            <span class="run-complete__meta-sep">·</span>
+            <span>Reached Level {{ runLevel }}</span>
+            <span class="run-complete__meta-sep">·</span>
+            <span>{{ runSummaryLine }}</span>
+          </div>
         </header>
-        <p class="run-complete__reason">{{ runCompleteReasonText }}</p>
-        <section class="run-complete__stats run-complete__stats--summary">
-          @for (row of runCompleteSummaryRows; track row.label) {
-            <div class="run-complete__stat-row">
-              <span>{{ row.label }}</span>
-              <strong>{{ row.value }}</strong>
+
+        <!-- Section B: Run stats -->
+        <div class="run-complete__stats-grid">
+          <div class="run-complete__stats-col">
+            <p class="run-complete__stats-label">Combat</p>
+            <div class="run-complete__stat-tile">
+              <strong>{{ runTotalKills }}</strong><span>Kills</span>
             </div>
-          }
-        </section>
-        <section class="run-complete__stats run-complete__stats--summary">
-          <h3>Run payout</h3>
-          @for (row of runPayoutRows; track row.label) {
-            <div class="run-complete__stat-row">
-              <span>{{ row.label }}</span>
-              <strong>{{ row.value }}</strong>
+            <div class="run-complete__stat-tile">
+              <strong>{{ runEliteKills }}</strong><span>Elites</span>
             </div>
-          }
-        </section>
-        <div class="run-complete__cards">
-          <h3>Cards</h3>
-          @if (selectedCards.length === 0) {
-            <p>No cards selected.</p>
-          } @else {
-            <ul>
-              @for (card of selectedCards; track card.id) {
-                <li>{{ card.name }}</li>
-              }
-            </ul>
-          }
+            <div class="run-complete__stat-tile">
+              <strong>{{ runChestsOpened }}</strong><span>Chests</span>
+            </div>
+            <div class="run-complete__stat-tile">
+              <strong>{{ selectedCards.length }}</strong><span>Cards</span>
+            </div>
+            <div class="run-complete__stat-tile">
+              <strong>{{ combatTotalDamageDealt }}</strong><span>Damage</span>
+            </div>
+          </div>
+          <div class="run-complete__stats-col">
+            <p class="run-complete__stats-label">Rewards</p>
+            <div class="run-complete__stat-tile">
+              <strong [class.run-complete__stat-tile-val--pos]="runEchoFragmentsNet >= 0" [class.run-complete__stat-tile-val--neg]="runEchoFragmentsNet < 0">
+                {{ runEchoFragmentsNet >= 0 ? '+' : '' }}{{ runEchoFragmentsNet }}
+              </strong>
+              <span>Echo Fragments</span>
+            </div>
+            <div class="run-complete__stat-tile">
+              <strong>{{ economyTotalPrimalCore }}</strong><span>Primal Core</span>
+            </div>
+            <div class="run-complete__stat-tile">
+              <strong>{{ runAwardedItemDropCount }}</strong><span>Equipment Drops</span>
+            </div>
+          </div>
         </div>
+
+        @if (selectedCards.length > 0) {
+          <div class="run-complete__cards">
+            @for (card of selectedCards; track card.id) {
+              <span class="run-complete__card-pill">{{ card.name }}</span>
+            }
+          </div>
+        }
+
+        <!-- Section C: Bestiary progress + actions -->
+        @if (runBestiaryProgressRows.length > 0) {
+          <div class="run-complete__bestiary">
+            <p class="run-complete__section-label">Bestiary Progress</p>
+            @for (row of runBestiaryProgressRows; track row.speciesId) {
+              <div class="run-complete__bestiary-row">
+                <span class="run-complete__bestiary-name">{{ row.displayName }}</span>
+                <span class="run-complete__bestiary-kills">+{{ row.killsGained }} kills</span>
+                @if (row.isNewRank) {
+                  <span class="run-complete__new-rank">NEW RANK {{ row.newRank }}</span>
+                }
+              </div>
+            }
+          </div>
+        }
+
         <div class="run-complete__actions">
-          <button type="button" (click)="onDeathModalRestartRun()" [disabled]="battleRequestInFlight">Restart Run</button>
-          <button type="button" (click)="onDeathModalReturnToPreRun()" [disabled]="battleRequestInFlight">Exit</button>
-          <button type="button" (click)="exportReplayJson()">Export Replay</button>
-          <button type="button" (click)="openReplayImportModal()">Import Replay</button>
-          <button type="button" (click)="playImportedReplay()" [disabled]="!canPlayImportedReplay">Play Imported Replay</button>
-          <button type="button" (click)="copyLastRunResultJson()">Copy Last Run JSON</button>
-          <button type="button" (click)="copyAllRunResultsJson()">Copy All Run Results</button>
-          <button type="button" (click)="exportAllRunResultsJson()">Export Runs</button>
+          <button type="button" class="run-complete__btn run-complete__btn--primary" (click)="onDeathModalRestartRun()" [disabled]="battleRequestInFlight">
+            RUN AGAIN
+          </button>
+          <button type="button" class="run-complete__btn run-complete__btn--secondary" (click)="onDeathModalReturnToPreRun()" [disabled]="battleRequestInFlight">
+            EXIT TO HOME
+          </button>
         </div>
-        @if (runResultCopyMessage) {
-          <p class="run-complete__copy-status">{{ runResultCopyMessage }}</p>
-        }
-        @if (replayIoMessage) {
-          <p class="run-complete__copy-status">{{ replayIoMessage }}</p>
-        }
-        @if (replayIoErrorMessage) {
-          <p class="run-complete__copy-status run-complete__copy-status--error">{{ replayIoErrorMessage }}</p>
-        }
+
+        <!-- DEV disclosure -->
+        <details class="run-complete__dev">
+          <summary class="run-complete__dev-toggle">[DEV]</summary>
+          <div class="run-complete__dev-body">
+            <div class="run-complete__dev-actions">
+              <button type="button" (click)="exportReplayJson()">Export Replay</button>
+              <button type="button" (click)="openReplayImportModal()">Import Replay</button>
+              <button type="button" (click)="playImportedReplay()" [disabled]="!canPlayImportedReplay">Play Imported Replay</button>
+              <button type="button" (click)="copyLastRunResultJson()">Copy Last Run JSON</button>
+              <button type="button" (click)="copyAllRunResultsJson()">Copy All Run Results</button>
+              <button type="button" (click)="exportAllRunResultsJson()">Export Runs</button>
+            </div>
+            @if (runResultCopyMessage) {
+              <p class="run-complete__dev-msg">{{ runResultCopyMessage }}</p>
+            }
+            @if (replayIoMessage) {
+              <p class="run-complete__dev-msg">{{ replayIoMessage }}</p>
+            }
+            @if (replayIoErrorMessage) {
+              <p class="run-complete__dev-msg run-complete__dev-msg--error">{{ replayIoErrorMessage }}</p>
+            }
+          </div>
+        </details>
+
+        <p class="run-complete__footer">Run result logged and stored.</p>
       </section>
     </div>
   }

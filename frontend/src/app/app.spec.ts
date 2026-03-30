@@ -16,10 +16,10 @@ describe('App', () => {
     expect(app).toBeTruthy();
   });
 
-  it('should render navigation', async () => {
+  it('should render the viewport container', async () => {
     const fixture = TestBed.createComponent(App);
     await fixture.whenStable();
     const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.querySelector('.brand')?.textContent).toContain('Kaezan Arena');
+    expect(compiled.querySelector('.viewport')).not.toBeNull();
   });
 });

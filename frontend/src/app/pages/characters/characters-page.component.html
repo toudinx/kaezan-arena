@@ -1,12 +1,9 @@
-﻿<section class="characters-shell">
+<section class="characters-shell">
   <header class="characters-shell__header">
     <div>
       <h1>Characters</h1>
-      <p>Manage active character and review equipped gear outside the arena.</p>
+      <p>Choose your build identity and begin your run.</p>
     </div>
-    @if (isCharacterRoute) {
-      <button type="button" class="characters-shell__back" (click)="clearCharacterRoute()">Back to list</button>
-    }
   </header>
 
   @if (actionMessage) {
@@ -24,79 +21,148 @@
     <p class="characters-shell__state">No characters found for this account.</p>
   } @else {
     <div class="characters-shell__layout">
-      <aside class="characters-list">
-        <h2>Character List</h2>
-        <ul>
+
+      <!-- LEFT: roster list -->
+      <aside class="roster">
+        <ul class="roster__list">
           @for (row of characterRows; track row.characterId) {
-            <li class="character-card" [class.character-card--selected]="selectedCharacterId === row.characterId">
-              <button type="button" class="character-card__main" (click)="viewCharacter(row.characterId)">
-                <div class="character-card__identity">
-                  <span class="character-card__avatar" [class.character-card__avatar--provisional]="row.isProvisional">
-                    {{ row.name.slice(0, 1) }}
-                  </span>
-                  <div class="character-card__title">
-                    <strong>{{ row.name }}</strong>
-                    <span>{{ row.subtitle || row.characterId }}</span>
+            <li>
+              <button
+                type="button"
+                class="roster-card"
+                [class.roster-card--active]="row.isActive"
+                [class.roster-card--selected]="selectedCharacterId === row.characterId"
+                (click)="selectCharacter(row.characterId)"
+              >
+                @if (row.isActive) {
+                  <span class="roster-card__active-badge">ACTIVE</span>
+                }
+                <div class="roster-card__portrait roster-card__portrait--{{ row.portraitColor }}" aria-hidden="true">
+                  <span>{{ row.name.slice(0, 1) }}</span>
+                </div>
+                <div class="roster-card__body">
+                  <strong class="roster-card__name">{{ row.name }}</strong>
+                  <span class="roster-card__kit-badge roster-card__kit-badge--{{ row.kitBadge }}">{{ row.kitTypeLabel }}</span>
+                  <span class="roster-card__level">Lv {{ row.level }}</span>
+                  <div class="roster-card__pills">
+                    @for (weapon of row.fixedWeaponNames; track weapon) {
+                      <span class="roster-card__pill">{{ weapon }}</span>
+                    }
                   </div>
                 </div>
-                <div class="character-card__stats">
-                  <span>Level {{ row.level }}</span>
-                  <span>XP {{ row.xp }}</span>
-                </div>
-                <p class="character-card__kit"><strong>Fixed Kit:</strong> {{ row.fixedKitLabel }}</p>
-                <div class="character-card__equipment">
-                  <span><strong>Weapon:</strong> {{ row.equippedWeaponName }}</span>
-                  <span><strong>Armor:</strong> {{ row.equippedArmorName }}</span>
-                  <span><strong>Relic:</strong> {{ row.equippedRelicName }}</span>
-                </div>
               </button>
-              <div class="character-card__actions">
-                <button
-                  type="button"
-                  [disabled]="row.isActive || isSetActiveInFlight(row.characterId)"
-                  (click)="setActiveCharacter(row.characterId, $event)">
-                  {{
-                    row.isActive
-                      ? "Active"
-                      : isSetActiveInFlight(row.characterId)
-                        ? "Setting..."
-                        : "Set Active"
-                  }}
-                </button>
-                <a [routerLink]="['/characters', row.characterId]">Details</a>
-              </div>
             </li>
           }
         </ul>
       </aside>
 
-      <section class="character-details">
+      <!-- RIGHT: detail panel -->
+      <section class="detail">
         @if (selectedCharacter) {
-          <header class="character-details__header">
-            <h2>{{ selectedCharacter.name }}</h2>
-            <p>{{ selectedCharacter.subtitle || selectedCharacter.characterId }} - Level {{ selectedCharacter.level }} - XP {{ selectedCharacter.xp }}</p>
-          </header>
-
-          <div class="character-details__paperdoll">
-            <h3>Paperdoll Summary</h3>
-            <p><span>Status</span><strong>{{ selectedCharacter.isActive ? "Active" : "Inactive" }}</strong></p>
-            <p><span>Fixed Kit</span><strong>{{ selectedCharacter.fixedKitLabel }}</strong></p>
-            <p><span>Weapon Slot</span><strong>{{ selectedCharacter.equippedWeaponName }}</strong></p>
-            <p><span>Armor Slot</span><strong>{{ selectedCharacter.equippedArmorName }}</strong></p>
-            <p><span>Relic Slot</span><strong>{{ selectedCharacter.equippedRelicName }}</strong></p>
+          <div class="detail__portrait detail__portrait--{{ selectedCharacter.portraitColor }}" aria-hidden="true">
+            <span>{{ selectedCharacter.name.slice(0, 1) }}</span>
           </div>
 
-          <div class="character-details__actions">
-            <h3>Quick Actions</h3>
-            <div>
-              <button type="button" (click)="openBackpack()">Open Backpack</button>
-              <a routerLink="/arena">Enter Arena</a>
+          <div class="detail__identity">
+            <h2 class="detail__name">{{ selectedCharacter.name }}</h2>
+            <p class="detail__kit-line">
+              {{ selectedCharacter.kitTypeLabel }}
+              @if (selectedCharacter.isProvisional) {
+                <span class="detail__wip">[WIP]</span>
+              }
+              <span class="detail__kit-sep">·</span> Lv {{ selectedCharacter.level }}
+            </p>
+          </div>
+
+          <div class="detail__xp">
+            <div class="detail__xp-header">
+              <span>XP</span>
+              <span>{{ selectedCharacter.xp }}</span>
+            </div>
+            <div class="detail__xp-track">
+              <div class="detail__xp-fill" [style.width.%]="selectedCharacter.xpProgressPercent"></div>
             </div>
           </div>
+
+          <section class="detail__section">
+            <h3 class="detail__section-title">Fixed Kit</h3>
+            <div class="detail__weapon-cards">
+              @for (weapon of selectedCharacter.fixedWeaponNames; track weapon) {
+                <div class="weapon-card">
+                  <strong class="weapon-card__name">{{ weapon }}</strong>
+                  <span class="weapon-card__desc">—</span>
+                </div>
+              }
+              @if (selectedCharacter.fixedWeaponNames.length === 0) {
+                <p class="detail__empty-section">No kit data available.</p>
+              }
+            </div>
+          </section>
+
+          <section class="detail__section">
+            <h3 class="detail__section-title">Rune Slot</h3>
+            <div class="rune-slot">
+              <span class="rune-slot__lock" aria-hidden="true">&#x2B21;</span>
+              <div>
+                <p class="rune-slot__label">Rune Slot</p>
+                <p class="rune-slot__hint">Complete character mastery to unlock</p>
+              </div>
+            </div>
+          </section>
+
+          <section class="detail__section">
+            <h3 class="detail__section-title">Equipped Gear</h3>
+            <div class="gear-slots">
+              <div class="gear-slot">
+                <span class="gear-slot__icon gear-slot__icon--weapon" aria-hidden="true"></span>
+                <div class="gear-slot__info">
+                  <span class="gear-slot__label">Weapon</span>
+                  <span class="gear-slot__value" [class.gear-slot__value--empty]="selectedCharacter.equippedWeaponName === 'None'">
+                    {{ selectedCharacter.equippedWeaponName === 'None' ? 'Empty slot' : selectedCharacter.equippedWeaponName }}
+                  </span>
+                </div>
+              </div>
+              <div class="gear-slot">
+                <span class="gear-slot__icon gear-slot__icon--armor" aria-hidden="true"></span>
+                <div class="gear-slot__info">
+                  <span class="gear-slot__label">Armor</span>
+                  <span class="gear-slot__value" [class.gear-slot__value--empty]="selectedCharacter.equippedArmorName === 'None'">
+                    {{ selectedCharacter.equippedArmorName === 'None' ? 'Empty slot' : selectedCharacter.equippedArmorName }}
+                  </span>
+                </div>
+              </div>
+              <div class="gear-slot">
+                <span class="gear-slot__icon gear-slot__icon--relic" aria-hidden="true"></span>
+                <div class="gear-slot__info">
+                  <span class="gear-slot__label">Relic</span>
+                  <span class="gear-slot__value" [class.gear-slot__value--empty]="selectedCharacter.equippedRelicName === 'None'">
+                    {{ selectedCharacter.equippedRelicName === 'None' ? 'Empty slot' : selectedCharacter.equippedRelicName }}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <div class="detail__actions">
+            @if (selectedCharacter.isActive) {
+              <span class="detail__active-status">Active Character</span>
+            } @else {
+              <button
+                type="button"
+                class="detail__set-active"
+                [disabled]="!!setActiveInFlightCharacterId"
+                (click)="setActiveCharacter(selectedCharacter.characterId)"
+              >
+                {{ isSetActiveInFlight(selectedCharacter.characterId) ? 'Setting...' : 'Set Active' }}
+              </button>
+            }
+            <a class="detail__enter-arena" routerLink="/arena">Enter Arena</a>
+          </div>
         } @else {
-          <p class="characters-shell__state">Select a character to inspect details.</p>
+          <p class="detail__placeholder">Select a character from the roster.</p>
         }
       </section>
+
     </div>
   }
 </section>

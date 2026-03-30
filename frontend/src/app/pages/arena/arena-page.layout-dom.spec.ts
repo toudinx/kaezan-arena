@@ -25,6 +25,7 @@ describe("ArenaPageComponent layout DOM", () => {
   function createFixture() {
     const fixture = TestBed.createComponent(ArenaPageComponent);
     fixture.componentInstance.isInRun = true;
+    fixture.componentInstance.showRunIntelPanel = true;
     fixture.detectChanges();
     return fixture;
   }
@@ -32,6 +33,7 @@ describe("ArenaPageComponent layout DOM", () => {
   it("renders level_up and card_chosen messages in Events tab", () => {
     const fixture = TestBed.createComponent(ArenaPageComponent);
     fixture.componentInstance.isInRun = true;
+    fixture.componentInstance.showRunIntelPanel = true;
     fixture.componentInstance.selectedTopLeftTab = "events";
     fixture.componentInstance.eventFeedEntries = [
       {

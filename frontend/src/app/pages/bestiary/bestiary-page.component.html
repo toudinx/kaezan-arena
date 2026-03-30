@@ -1,14 +1,15 @@
 <section class="bestiary-shell">
+
   <header class="bestiary-shell__header">
     <div>
       <h1>Bestiary</h1>
       @if (characterName) {
-        <p>{{ characterName }} ({{ characterId }})</p>
+        <p class="bestiary-shell__subtitle">{{ characterName }}</p>
       } @else {
-        <p>Character progression and species crafting.</p>
+        <p class="bestiary-shell__subtitle">Species progression and crafting.</p>
       }
     </div>
-    <div class="bestiary-shell__economy">
+    <div class="bestiary-shell__echo">
       <span>Echo Fragments</span>
       <strong>{{ echoFragmentsBalance }}</strong>
     </div>
@@ -20,171 +21,189 @@
     <p class="bestiary-state bestiary-state--error">{{ loadError }}</p>
   } @else if (!hasCharacter) {
     <p class="bestiary-state">No active character available.</p>
-  } @else if (speciesRows.length === 0) {
-    <p class="bestiary-state">No species data yet. Enter arena and defeat mobs to start progression.</p>
   } @else {
-    <div class="bestiary-layout">
-      <aside class="bestiary-panel bestiary-panel--left">
-        <h2>Species Overview</h2>
-        <label class="species-search">
-          <span>Search species</span>
-          <input
-            type="search"
-            [value]="searchQuery"
-            placeholder="Name or id"
-            (input)="onSearchInput($event)"
-          />
-        </label>
 
-        <div class="species-overview-metrics">
-          <p><span>Tracked species</span><strong>{{ speciesRows.length }}</strong></p>
-          <p><span>Unlocked</span><strong>{{ speciesUnlockedCount }}</strong></p>
-          <p><span>Total kills</span><strong>{{ totalKillsAcrossSpecies }}</strong></p>
-        </div>
+    <div class="bestiary-stats">
+      <div class="bestiary-stat">
+        <strong>{{ speciesRows.length }}</strong>
+        <span>Tracked</span>
+      </div>
+      <div class="bestiary-stat">
+        <strong>{{ speciesUnlockedCount }}</strong>
+        <span>Unlocked</span>
+      </div>
+      <div class="bestiary-stat">
+        <strong>{{ totalKillsAcrossSpecies }}</strong>
+        <span>Total Kills</span>
+      </div>
+    </div>
 
-        @if (filteredSpeciesRows.length === 0) {
-          <p class="bestiary-empty">No species match your search.</p>
-        } @else {
-          <ul class="species-list">
-            @for (row of filteredSpeciesRows; track row.speciesId) {
-              <li>
-                <button
-                  type="button"
-                  class="species-row"
-                  [class.species-row--selected]="row.speciesId === selectedSpeciesId"
-                  (click)="selectSpecies(row.speciesId)">
-                  <span class="species-row__name">{{ row.displayName }}</span>
-                  <div class="species-row__metrics">
-                    <span class="species-row__metric">Kills <strong>{{ row.killsTotal }}</strong></span>
-                    <span class="species-row__metric">Primal Core <strong>{{ row.primalCoreBalance }}</strong></span>
-                  </div>
-                  <div class="species-row__progress-meta">
-                    <span>Next {{ row.nextKillMilestone }}</span>
-                    <span>{{ row.killsToNextMilestone }} to go</span>
-                  </div>
-                  <span class="species-row__progress">
-                    <span [style.width.%]="row.progressPercent"></span>
-                  </span>
-                </button>
-              </li>
-            }
-          </ul>
-        }
-      </aside>
+    <label class="bestiary-search">
+      <span>Search species</span>
+      <input
+        type="search"
+        [value]="searchQuery"
+        placeholder="Species name"
+        (input)="onSearchInput($event)"
+      />
+    </label>
 
-      <section class="bestiary-panel bestiary-panel--right">
-        @if (selectedSpecies) {
-          <header class="species-details__header">
-            <h2>{{ selectedSpeciesName }}</h2>
-            <p>{{ selectedSpecies.speciesId }}</p>
-          </header>
+    @if (speciesRows.length === 0) {
+      <p class="bestiary-state">No species data yet. Enter arena and defeat mobs to start progression.</p>
+    } @else {
+      <div class="bestiary-layout">
 
-          <div class="species-detail species-detail--grid">
-            <p><span>Kills</span><strong>{{ selectedSpecies.killsTotal }}</strong></p>
-            <p><span>Primal Core</span><strong>{{ selectedSpecies.primalCoreBalance }}</strong></p>
-            <p><span>Next milestone</span><strong>{{ selectedSpecies.nextKillMilestone }}</strong></p>
-            <p><span>Remaining kills</span><strong>{{ selectedSpecies.killsToNextMilestone }}</strong></p>
-          </div>
+        <!-- LEFT: species list -->
+        <aside class="bestiary-left">
+          @if (filteredSpeciesRows.length === 0) {
+            <p class="bestiary-empty">No species match your search.</p>
+          } @else {
+            <ul class="species-list">
+              @for (row of filteredSpeciesRows; track row.speciesId) {
+                <li>
+                  <button
+                    type="button"
+                    class="species-row"
+                    [class.species-row--selected]="row.speciesId === selectedSpeciesId"
+                    (click)="selectSpecies(row.speciesId)">
+                    <div class="species-row__header">
+                      <span class="species-row__name">{{ row.displayName }}</span>
+                      @if (row.rank > 0) {
+                        <span class="species-row__rank">Rank {{ row.rank }}</span>
+                      }
+                    </div>
+                    <div class="species-row__meta">
+                      <span>{{ row.killsTotal }} kills</span>
+                      <span>{{ row.killsToNextMilestone }} to next</span>
+                    </div>
+                    <div class="species-row__track">
+                      <div class="species-row__fill" [style.width.%]="row.progressPercent"></div>
+                    </div>
+                  </button>
+                </li>
+              }
+            </ul>
+          }
+        </aside>
 
-          <div class="species-detail">
-            <p><span>Progress</span><strong>{{ selectedSpeciesProgressLabel }}</strong></p>
-            <span class="species-detail__progress">
-              <span [style.width.%]="selectedSpecies.progressPercent"></span>
-            </span>
-          </div>
+        <!-- RIGHT: detail panel -->
+        <section class="bestiary-right">
+          @if (selectedSpecies) {
 
-          <section class="actions-panel">
-            <h3>Actions</h3>
-            @if (actionFeedback) {
-              <p class="actions-feedback">{{ actionFeedback }}</p>
-            }
+            <div class="species-detail__name-row">
+              <h2 class="species-detail__name">{{ selectedSpeciesName }}</h2>
+              <span class="species-detail__rank-badge" [class.species-detail__rank-badge--earned]="selectedSpecies.rank > 0">
+                Rank {{ selectedSpecies.rank }}
+              </span>
+            </div>
 
-            <div class="crafting-doc">
-              <p><span>Craft cost:</span> {{ primalCoreCost }} Primal Core + {{ echoFragmentsCost }} Echo Fragments</p>
-              <div class="crafting-actions">
-                <button type="button" [disabled]="!canCraftSelectedSpecies || isCrafting" (click)="craftWeapon()">
-                  Craft Weapon
-                </button>
-                <button type="button" [disabled]="!canCraftSelectedSpecies || isCrafting" (click)="craftArmor()">
-                  Craft Armor
-                </button>
-                <button type="button" [disabled]="!canCraftSelectedSpecies || isCrafting" (click)="craftRelic()">
-                  Craft Relic
-                </button>
+            <div class="species-detail__stats">
+              <div class="species-detail__stat">
+                <strong>{{ selectedSpecies.killsTotal }}</strong>
+                <span>Kills</span>
+              </div>
+              <div class="species-detail__stat">
+                <strong>{{ selectedSpecies.primalCoreBalance }}</strong>
+                <span>Primal Core</span>
               </div>
             </div>
 
-            <div class="actions-grid">
-              <section class="inventory-doc">
-                <h4>Refine From {{ selectedSpeciesName }}</h4>
-                @if (selectedSpeciesRefineRows.length === 0) {
-                  <p class="bestiary-empty">No refinable items for this species.</p>
-                } @else {
-                  <ul>
-                    @for (item of selectedSpeciesRefineRows; track item.instanceId) {
-                      <li
-                        [class.inventory-item--highlight]="item.instanceId === lastUpdatedItemInstanceId"
-                        [class.inventory-item--common]="item.rarityKey === 'common'"
-                        [class.inventory-item--rare]="item.rarityKey === 'rare'"
-                        [class.inventory-item--epic]="item.rarityKey === 'epic'"
-                        [class.inventory-item--legendary]="item.rarityKey === 'legendary'"
-                        [class.inventory-item--ascendant]="item.rarityKey === 'ascendant'">
-                        <strong>{{ item.displayName }} @if (item.isEquipped) { <em>(Equipped)</em> }</strong>
-                        <span>{{ item.slotLabel }} | {{ item.rarityLabel }}</span>
-                        <span>
-                          Cost: {{ item.refinePrimalCoreCost }} Primal Core + {{ item.refineEchoFragmentsCost }} Echo Fragments
-                          -> {{ item.nextRarityLabel }}
-                        </span>
-                        <div class="inventory-refine-actions">
-                          <button
-                            type="button"
-                            [disabled]="!item.canAffordRefine || isCrafting || refiningItemInstanceId === item.instanceId || salvagingItemInstanceId === item.instanceId"
-                            (click)="refineItem(item)">
-                            {{ refiningItemInstanceId === item.instanceId ? "Refining..." : "Refine" }}
-                          </button>
-                        </div>
-                      </li>
-                    }
-                  </ul>
-                }
-              </section>
-
-              <section class="inventory-doc">
-                <h4>Salvage From {{ selectedSpeciesName }}</h4>
-                @if (selectedSpeciesSalvageRows.length === 0) {
-                  <p class="bestiary-empty">No salvageable items for this species.</p>
-                } @else {
-                  <ul>
-                    @for (item of selectedSpeciesSalvageRows; track item.instanceId) {
-                      <li
-                        [class.inventory-item--highlight]="item.instanceId === lastUpdatedItemInstanceId"
-                        [class.inventory-item--common]="item.rarityKey === 'common'"
-                        [class.inventory-item--rare]="item.rarityKey === 'rare'"
-                        [class.inventory-item--epic]="item.rarityKey === 'epic'"
-                        [class.inventory-item--legendary]="item.rarityKey === 'legendary'"
-                        [class.inventory-item--ascendant]="item.rarityKey === 'ascendant'">
-                        <strong>{{ item.displayName }} @if (item.isEquipped) { <em>(Equipped)</em> }</strong>
-                        <span>{{ item.slotLabel }} | {{ item.rarityLabel }}</span>
-                        <span>Return: {{ item.salvagePrimalCoreReturn }} Primal Core</span>
-                        <div class="inventory-salvage-actions">
-                          <button
-                            type="button"
-                            [disabled]="isCrafting || refiningItemInstanceId === item.instanceId || salvagingItemInstanceId === item.instanceId"
-                            (click)="salvageItem(item)">
-                            {{ salvagingItemInstanceId === item.instanceId ? "Salvaging..." : "Salvage" }}
-                          </button>
-                        </div>
-                      </li>
-                    }
-                  </ul>
-                }
-              </section>
+            <div class="species-detail__progress">
+              <div class="species-detail__progress-header">
+                <span>Progress to Rank {{ selectedSpecies.rank + 1 }}</span>
+                <span>{{ selectedSpecies.killsToNextMilestone }} kills to milestone {{ selectedSpecies.nextKillMilestone }}</span>
+              </div>
+              <div class="species-detail__progress-track">
+                <div class="species-detail__progress-fill" [style.width.%]="selectedSpecies.progressPercent"></div>
+              </div>
             </div>
-          </section>
-        } @else {
-          <p class="bestiary-empty">Select a species from the left panel.</p>
-        }
-      </section>
-    </div>
+
+            <div class="species-detail__actions">
+              <p class="species-detail__actions-label">Available Actions</p>
+              @if (actionFeedback) {
+                <p class="actions-feedback">{{ actionFeedback }}</p>
+              }
+              <div class="crafting-section">
+                <p class="crafting-section__cost">Cost: {{ primalCoreCost }} Primal Core + {{ echoFragmentsCost }} Echo Fragments</p>
+                <div class="crafting-buttons">
+                  <button type="button" [disabled]="!canCraftSelectedSpecies || isCrafting" (click)="craftWeapon()">
+                    Craft Weapon
+                  </button>
+                  <button type="button" [disabled]="!canCraftSelectedSpecies || isCrafting" (click)="craftArmor()">
+                    Craft Armor
+                  </button>
+                  <button type="button" [disabled]="!canCraftSelectedSpecies || isCrafting" (click)="craftRelic()">
+                    Craft Relic
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            @if (selectedSpeciesRefineRows.length > 0) {
+              <section class="inventory-section">
+                <h4 class="inventory-section__title">Refine From {{ selectedSpeciesName }}</h4>
+                <ul class="inventory-list">
+                  @for (item of selectedSpeciesRefineRows; track item.instanceId) {
+                    <li class="inventory-item"
+                        [class.inventory-item--highlight]="item.instanceId === lastUpdatedItemInstanceId"
+                        [class.inventory-item--common]="item.rarityKey === 'common'"
+                        [class.inventory-item--rare]="item.rarityKey === 'rare'"
+                        [class.inventory-item--epic]="item.rarityKey === 'epic'"
+                        [class.inventory-item--legendary]="item.rarityKey === 'legendary'"
+                        [class.inventory-item--ascendant]="item.rarityKey === 'ascendant'">
+                      <strong>{{ item.displayName }} @if (item.isEquipped) { <em>(Equipped)</em> }</strong>
+                      <span>{{ item.slotLabel }} | {{ item.rarityLabel }}</span>
+                      <span>Cost: {{ item.refinePrimalCoreCost }} Primal Core + {{ item.refineEchoFragmentsCost }} Echo Fragments → {{ item.nextRarityLabel }}</span>
+                      <div class="inventory-item__actions">
+                        <button
+                          type="button"
+                          [disabled]="!item.canAffordRefine || isCrafting || refiningItemInstanceId === item.instanceId || salvagingItemInstanceId === item.instanceId"
+                          (click)="refineItem(item)">
+                          {{ refiningItemInstanceId === item.instanceId ? "Refining..." : "Refine" }}
+                        </button>
+                      </div>
+                    </li>
+                  }
+                </ul>
+              </section>
+            }
+
+            @if (selectedSpeciesSalvageRows.length > 0) {
+              <section class="inventory-section">
+                <h4 class="inventory-section__title">Salvage From {{ selectedSpeciesName }}</h4>
+                <ul class="inventory-list">
+                  @for (item of selectedSpeciesSalvageRows; track item.instanceId) {
+                    <li class="inventory-item"
+                        [class.inventory-item--highlight]="item.instanceId === lastUpdatedItemInstanceId"
+                        [class.inventory-item--common]="item.rarityKey === 'common'"
+                        [class.inventory-item--rare]="item.rarityKey === 'rare'"
+                        [class.inventory-item--epic]="item.rarityKey === 'epic'"
+                        [class.inventory-item--legendary]="item.rarityKey === 'legendary'"
+                        [class.inventory-item--ascendant]="item.rarityKey === 'ascendant'">
+                      <strong>{{ item.displayName }} @if (item.isEquipped) { <em>(Equipped)</em> }</strong>
+                      <span>{{ item.slotLabel }} | {{ item.rarityLabel }}</span>
+                      <span>Return: {{ item.salvagePrimalCoreReturn }} Primal Core</span>
+                      <div class="inventory-item__actions inventory-item__actions--salvage">
+                        <button
+                          type="button"
+                          [disabled]="isCrafting || refiningItemInstanceId === item.instanceId || salvagingItemInstanceId === item.instanceId"
+                          (click)="salvageItem(item)">
+                          {{ salvagingItemInstanceId === item.instanceId ? "Salvaging..." : "Salvage" }}
+                        </button>
+                      </div>
+                    </li>
+                  }
+                </ul>
+              </section>
+            }
+
+          } @else {
+            <p class="bestiary-empty">Select a species from the list.</p>
+          }
+        </section>
+
+      </div>
+    }
   }
+
 </section>

@@ -8,7 +8,7 @@ import {
   OnDestroy,
   ViewChild
 } from "@angular/core";
-import { Router } from "@angular/router";
+import { Router, RouterLink } from "@angular/router";
 import { AssetPreloaderService } from "../../arena/assets/asset-preloader.service";
 import { AssetResolverService } from "../../arena/assets/asset-resolver.service";
 import { ArenaEngine } from "../../arena/engine/arena-engine";
@@ -331,6 +331,7 @@ const DEV_LOG_ASSET_IDS = [
   selector: "app-arena-page",
   standalone: true,
   imports: [
+    RouterLink,
     BackpackWindowComponent,
     EquipmentPaperdollWindowComponent,
     HelperAssistWindowComponent
@@ -376,6 +377,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   currentSeed = 0;
   altarCooldownRemainingMs = 0;
   bestiaryEntries: ArenaBestiaryEntry[] = [];
+  private runStartBestiaryKills: Record<string, number> = {};
   pendingSpeciesChest: string | null = null;
   lastFocusedSpecies: string | null = null;
   accountState: AccountState | null = null;
@@ -419,6 +421,8 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   runEchoFragmentsBalanceCurrent = 0;
   runEchoFragmentsSpend = 0;
   runEchoFragmentsIncome = 0;
+  showRunIntelPanel = false;
+  isBackpackPanelOpen = false;
   isHotkeysModalOpen = false;
   isPauseModalOpen = false;
   isDeathModalOpen = false;
@@ -652,6 +656,62 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       { label: "Crafted items", value: `${craftedSummary.count}${craftedSummary.preview ? ` (${craftedSummary.preview})` : ""}` },
       { label: "Refined items", value: `${refinedSummary.count}${refinedSummary.preview ? ` (${refinedSummary.preview})` : ""}` }
     ];
+  }
+
+  get runOutcomeIsVictory(): boolean {
+    return this.runEndReason === "victory_time";
+  }
+
+  get runDurationFormatted(): string {
+    const totalSec = Math.floor(this.timeSurvivedMs / 1000);
+    const m = Math.floor(totalSec / 60);
+    const s = totalSec % 60;
+    return m > 0 ? `${m}m ${s}s` : `${s}s`;
+  }
+
+  get runSummaryLine(): string {
+    return `${this.runTotalKills} kills · ${this.runEliteKills} elites · ${this.runChestsOpened} chests`;
+  }
+
+  get runBestiaryProgressRows(): ReadonlyArray<Readonly<{
+    speciesId: string;
+    displayName: string;
+    killsGained: number;
+    killsTotal: number;
+    prevRank: number;
+    newRank: number;
+    isNewRank: boolean;
+  }>> {
+    const speciesById = this.accountStore.catalogs().speciesById;
+    const MILESTONE = 25;
+    return this.bestiaryEntries
+      .map((entry) => {
+        const preRunKills = Math.max(0, this.runStartBestiaryKills[entry.species] ?? 0);
+        const killsTotal = entry.killsTotal;
+        const killsGained = Math.max(0, killsTotal - preRunKills);
+        const prevRank = Math.floor(preRunKills / MILESTONE);
+        const newRank = Math.floor(killsTotal / MILESTONE);
+        return {
+          speciesId: entry.species,
+          displayName: speciesById[entry.species]?.displayName ?? this.fallbackSpeciesLabel(entry.species),
+          killsGained,
+          killsTotal,
+          prevRank,
+          newRank,
+          isNewRank: newRank > prevRank
+        };
+      })
+      .filter((row) => row.killsGained > 0)
+      .sort((a, b) => b.killsGained - a.killsGained)
+      .slice(0, 3);
+  }
+
+  private fallbackSpeciesLabel(speciesId: string): string {
+    return speciesId
+      .split("_")
+      .filter((chunk) => chunk.length > 0)
+      .map((chunk) => chunk[0].toUpperCase() + chunk.slice(1))
+      .join(" ");
   }
 
   get itemCatalogByIdForUi(): Readonly<Record<string, ItemDefinition>> {
@@ -957,8 +1017,8 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       await Promise.resolve();
       await this.nextAnimationFrame();
       this.bootPhase = "measuring_canvas";
-      await this.prepareCanvasForFirstRender();
       this.startCanvasResizeObserver();
+      await this.prepareCanvasForFirstRender();
 
       this.bootPhase = "resolving_manifest";
       await this.resolver.loadManifest();
@@ -1109,6 +1169,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         return;
       }
 
+      this.openBackpackPanel();
       this.focusBackpackPanel();
       this.focusRightInfoPane();
       return;
@@ -1281,6 +1342,18 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
 
   toggleAutoAssist(): void {
     this.updateAssistConfig({ enabled: !this.assistConfig.enabled });
+  }
+
+  toggleRunIntelPanel(): void {
+    this.showRunIntelPanel = !this.showRunIntelPanel;
+  }
+
+  openBackpackPanel(): void {
+    this.isBackpackPanelOpen = true;
+  }
+
+  toggleBackpackPanel(): void {
+    this.isBackpackPanelOpen = !this.isBackpackPanelOpen;
   }
 
   onAssistAutoHealEnabledToggle(enabled: boolean): void {
@@ -1655,6 +1728,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.replayIoErrorMessage = "";
     this.isReplayImportModalOpen = false;
     this.assistConfig = this.buildDefaultAssistConfig();
+    this.runStartBestiaryKills = { ...(this.accountState?.characters[this.selectedCharacterId]?.bestiaryKillsBySpecies ?? {}) };
     this.bestiaryEntries = [];
     this.pendingSpeciesChest = null;
     this.lastFocusedSpecies = null;
@@ -2097,6 +2171,83 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     }
 
     return state.activeCharacterId === this.selectedCharacterId;
+  }
+
+  get selectedCharacterCatalogEntry() {
+    const id = this.selectedPreRunCharacter?.id;
+    if (!id) {
+      return null;
+    }
+    return this.accountStore.catalogs().characterById[id] ?? null;
+  }
+
+  get selectedCharacterSubtitle(): string {
+    return this.selectedCharacterCatalogEntry?.subtitle ?? "";
+  }
+
+  get selectedCharacterKitWeaponNames(): ReadonlyArray<string> {
+    return this.selectedCharacterCatalogEntry?.fixedWeaponNames ?? [];
+  }
+
+  get preRunEchoFragmentsBalance(): number {
+    return Math.max(0, this.accountState?.echoFragmentsBalance ?? 0);
+  }
+
+  get preRunBestiaryTeaser(): Readonly<{ speciesName: string; killsTotal: number; killsToNext: number; progressPercent: number }> | null {
+    const character = this.selectedPreRunCharacter;
+    if (!character) {
+      return null;
+    }
+    const charState = this.accountState?.characters[character.id];
+    if (!charState) {
+      return null;
+    }
+    const killsBySpecies = charState.bestiaryKillsBySpecies;
+    const speciesIds = Object.keys(killsBySpecies);
+    if (speciesIds.length === 0) {
+      return null;
+    }
+    const STEP = 25;
+    let best: { speciesName: string; killsTotal: number; killsToNext: number; progressPercent: number } | null = null;
+    for (const speciesId of speciesIds) {
+      const killsTotal = Math.max(0, killsBySpecies[speciesId] ?? 0);
+      const tier = Math.floor(killsTotal / STEP);
+      const nextMilestone = Math.max(STEP, (tier + 1) * STEP);
+      const killsToNext = nextMilestone - killsTotal;
+      const previousMilestone = Math.max(0, nextMilestone - STEP);
+      const progressPercent = Math.max(0, Math.min(100, ((killsTotal - previousMilestone) / STEP) * 100));
+      if (!best || killsToNext < best.killsToNext) {
+        best = { speciesName: this.formatSpeciesLabel(speciesId), killsTotal, killsToNext, progressPercent };
+      }
+    }
+    return best;
+  }
+
+  selectPrevPreRunCharacter(): void {
+    const chars = this.preRunCharacters;
+    if (chars.length === 0) {
+      return;
+    }
+    const currentIndex = chars.findIndex((c) => c.id === this.selectedCharacterId);
+    const prevIndex = currentIndex <= 0 ? chars.length - 1 : currentIndex - 1;
+    this.selectedCharacterId = chars[prevIndex].id;
+  }
+
+  selectNextPreRunCharacter(): void {
+    const chars = this.preRunCharacters;
+    if (chars.length === 0) {
+      return;
+    }
+    const currentIndex = chars.findIndex((c) => c.id === this.selectedCharacterId);
+    const nextIndex = currentIndex < 0 || currentIndex >= chars.length - 1 ? 0 : currentIndex + 1;
+    this.selectedCharacterId = chars[nextIndex].id;
+  }
+
+  async startRunAbsorbed(): Promise<void> {
+    if (!this.isSelectedCharacterActive && this.selectedCharacterId) {
+      await this.applySelectedCharacter();
+    }
+    await this.startRun();
   }
 
   onSelectedCharacterChange(event: Event): void {

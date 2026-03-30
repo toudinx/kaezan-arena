@@ -4,6 +4,23 @@ import { Subscription } from "rxjs";
 import { type AccountState, type CharacterState } from "../../api/account-api.service";
 import { AccountStore } from "../../account/account-store.service";
 
+const CHARACTER_PORTRAIT_COLORS: Readonly<Record<string, string>> = {
+  "character:kina": "amber",
+  "character:ranged_prototype": "teal",
+  "kaelis_01": "purple",
+  "kaelis_02": "green"
+};
+
+function resolveKitType(fixedWeaponNames: ReadonlyArray<string>): { kitTypeLabel: string; kitBadge: "melee" | "ranged" | "unknown" } {
+  if (fixedWeaponNames.includes("Exori Min")) {
+    return { kitTypeLabel: "Melee Kit", kitBadge: "melee" };
+  }
+  if (fixedWeaponNames.includes("Sigil Bolt")) {
+    return { kitTypeLabel: "Ranged Kit", kitBadge: "ranged" };
+  }
+  return { kitTypeLabel: "Unknown Kit", kitBadge: "unknown" };
+}
+
 type CharacterRow = Readonly<{
   characterId: string;
   name: string;
@@ -16,6 +33,11 @@ type CharacterRow = Readonly<{
   equippedWeaponName: string;
   equippedArmorName: string;
   equippedRelicName: string;
+  fixedWeaponNames: ReadonlyArray<string>;
+  kitTypeLabel: string;
+  kitBadge: "melee" | "ranged" | "unknown";
+  portraitColor: string;
+  xpProgressPercent: number;
 }>;
 
 @Component({
@@ -30,6 +52,7 @@ export class CharactersPageComponent implements OnInit, OnDestroy {
   actionError: string | null = null;
   setActiveInFlightCharacterId: string | null = null;
 
+  private localSelectedCharacterId: string | null = null;
   private routeCharacterId: string | null = null;
   private routeSubscription: Subscription | null = null;
 
@@ -86,6 +109,10 @@ export class CharactersPageComponent implements OnInit, OnDestroy {
       return null;
     }
 
+    if (this.localSelectedCharacterId && state.characters[this.localSelectedCharacterId]) {
+      return this.localSelectedCharacterId;
+    }
+
     if (this.routeCharacterId && state.characters[this.routeCharacterId]) {
       return this.routeCharacterId;
     }
@@ -96,6 +123,10 @@ export class CharactersPageComponent implements OnInit, OnDestroy {
     }
 
     return Object.values(state.characters)[0]?.characterId ?? null;
+  }
+
+  selectCharacter(characterId: string): void {
+    this.localSelectedCharacterId = characterId;
   }
 
   get selectedCharacter(): CharacterRow | null {
@@ -155,9 +186,12 @@ export class CharactersPageComponent implements OnInit, OnDestroy {
 
   private toCharacterRow(character: CharacterState, account: AccountState): CharacterRow {
     const catalogEntry = this.accountStore.catalogs().characterById[character.characterId];
-    const fixedKitLabel = catalogEntry?.fixedWeaponNames?.length
-      ? catalogEntry.fixedWeaponNames.join(", ")
-      : "Unknown";
+    const fixedWeaponNames: ReadonlyArray<string> = catalogEntry?.fixedWeaponNames ?? [];
+    const fixedKitLabel = fixedWeaponNames.length ? fixedWeaponNames.join(", ") : "Unknown";
+    const { kitTypeLabel, kitBadge } = resolveKitType(fixedWeaponNames);
+    const portraitColor = CHARACTER_PORTRAIT_COLORS[character.characterId] ?? "gray";
+    const xpThreshold = Math.max(1, character.level * 100);
+    const xpProgressPercent = Math.min(100, Math.max(0, (character.xp / xpThreshold) * 100));
 
     return {
       characterId: character.characterId,
@@ -170,7 +204,12 @@ export class CharactersPageComponent implements OnInit, OnDestroy {
       fixedKitLabel,
       equippedWeaponName: this.resolveEquippedItemName(character, "weapon"),
       equippedArmorName: this.resolveEquippedItemName(character, "armor"),
-      equippedRelicName: this.resolveEquippedItemName(character, "relic")
+      equippedRelicName: this.resolveEquippedItemName(character, "relic"),
+      fixedWeaponNames,
+      kitTypeLabel,
+      kitBadge,
+      portraitColor,
+      xpProgressPercent
     };
   }
 

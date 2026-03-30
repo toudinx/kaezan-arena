@@ -21,6 +21,14 @@ public static class AccountCatalog
         BuildCharacterDefinition(
             ArenaConfig.CharacterIds.RangedPrototype,
             ArenaConfig.CharacterSubtitleRangedPrototype,
+            isProvisional: true),
+        BuildCharacterDefinition(
+            ArenaConfig.CharacterIds.KaelisDawn,
+            ArenaConfig.CharacterSubtitleKina,
+            isProvisional: false),
+        BuildCharacterDefinition(
+            ArenaConfig.CharacterIds.KaelisEmber,
+            ArenaConfig.CharacterSubtitleRangedPrototype,
             isProvisional: true)
     ];
 
