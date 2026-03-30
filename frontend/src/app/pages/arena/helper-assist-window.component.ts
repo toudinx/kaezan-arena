@@ -1,12 +1,36 @@
 import { CommonModule } from "@angular/common";
 import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from "@angular/core";
+import {
+  resolveSkillPresentation,
+  type SkillVisualFamily,
+  type SkillVisualTier
+} from "../../shared/skills/skill-presentation.helpers";
 
 export type AssistSkillToggleId = "exori" | "exori_min" | "exori_mas" | "avalanche";
+type AssistSkillRow = Readonly<{
+  skillId: AssistSkillToggleId;
+  label: string;
+  iconGlyph: string;
+  family: SkillVisualFamily;
+  tier: SkillVisualTier;
+}>;
 
 export type AssistSkillToggleChangedEvent = Readonly<{
   skillId: AssistSkillToggleId;
   enabled: boolean;
 }>;
+
+const ASSIST_SKILL_ORDER: readonly AssistSkillToggleId[] = ["exori_min", "exori", "exori_mas", "avalanche"];
+const ASSIST_SKILL_ROWS: readonly AssistSkillRow[] = ASSIST_SKILL_ORDER.map((skillId) => {
+  const presentation = resolveSkillPresentation({ skillId });
+  return {
+    skillId,
+    label: presentation.label,
+    iconGlyph: presentation.iconGlyph,
+    family: presentation.family,
+    tier: presentation.tier
+  };
+});
 
 @Component({
   selector: "app-helper-assist-window",
@@ -17,6 +41,8 @@ export type AssistSkillToggleChangedEvent = Readonly<{
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class HelperAssistWindowComponent {
+  readonly skillRows = ASSIST_SKILL_ROWS;
+
   @Input() isRunStarted = false;
   @Input() assistEnabled = false;
   @Input() autoHealEnabled = false;
@@ -85,5 +111,9 @@ export class HelperAssistWindowComponent {
       skillId,
       enabled: target?.checked ?? this.autoSkills[skillId]
     });
+  }
+
+  trackSkillRowById(_index: number, row: AssistSkillRow): AssistSkillToggleId {
+    return row.skillId;
   }
 }

@@ -146,7 +146,7 @@ export interface MobKnockbackSlideInstance {
 
 export interface FloatingTextInstance {
   kind: "crit_text" | "combat_callout";
-  tone?: "crit" | "elite" | "assist" | "shield_break" | "danger";
+  tone?: "crit" | "elite" | "assist" | "shield_break" | "danger" | "reward";
   text: string;
   tilePos: TilePos;
   startAtMs: number;
@@ -156,7 +156,7 @@ export interface FloatingTextInstance {
 }
 
 export interface ArenaCombatMomentCue {
-  kind: "elite_spawn" | "elite_died" | "shield_break" | "assist_cast" | "danger_hit" | "player_death";
+  kind: "elite_spawn" | "elite_died" | "mob_death" | "shield_break" | "assist_cast" | "danger_hit" | "player_death" | "reward_open";
   tilePos: TilePos;
   elapsedMs: number;
   durationMs: number;
@@ -323,6 +323,26 @@ export interface ArenaEliteDiedEvent {
   mobType: MobArchetypeValue;
 }
 
+export interface ArenaPoiInteractedEvent {
+  type: "poi_interacted";
+  poiId: string;
+  poiType: "altar" | "chest" | "species_chest";
+  tileX: number;
+  tileY: number;
+  species?: string;
+}
+
+export interface ArenaCardChoiceOfferedEvent {
+  type: "card_choice_offered";
+  choiceId: string;
+}
+
+export interface ArenaCardChosenEvent {
+  type: "card_chosen";
+  choiceId: string;
+  cardName?: string;
+}
+
 export type ArenaBattleEvent =
   | ArenaFxSpawnEvent
   | ArenaDamageNumberEvent
@@ -334,6 +354,9 @@ export type ArenaBattleEvent =
   | ArenaAssistCastEvent
   | ArenaEliteSpawnedEvent
   | ArenaEliteDiedEvent
+  | ArenaPoiInteractedEvent
+  | ArenaCardChoiceOfferedEvent
+  | ArenaCardChosenEvent
   | ArenaRangedProjectileFiredEvent
   | ArenaMobKnockedBackEvent;
 

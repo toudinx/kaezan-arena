@@ -199,6 +199,94 @@ describe("ArenaPageComponent run progression", () => {
     expect(messages.some((message) => message.includes("Card chosen: Colossus Heart"))).toBe(true);
   });
 
+  it("derives card choice presentation source from existing chest/level events", () => {
+    const component = createComponent();
+
+    (component as any).applyCardChoiceStateFromSnapshot({
+      isAwaitingCardChoice: true,
+      pendingChoiceId: "card-choice-10",
+      offeredCards: [{ id: "butcher_mark", name: "Butcher Mark", description: "+12 flat damage." }],
+      selectedCards: []
+    });
+    (component as any).updateCardChoicePresentationFromEvents([
+      { type: "poi_interacted", poiId: "poi.chest.10", poiType: "chest", tileX: 2, tileY: 4 },
+      { type: "card_choice_offered", choiceId: "card-choice-10" }
+    ]);
+    expect((component as any).cardChoiceSource).toBe("chest");
+
+    (component as any).applyCardChoiceStateFromSnapshot({
+      isAwaitingCardChoice: true,
+      pendingChoiceId: "card-choice-11",
+      offeredCards: [{ id: "colossus_heart", name: "Colossus Heart", description: "+40% max HP and +6 damage." }],
+      selectedCards: []
+    });
+    (component as any).updateCardChoicePresentationFromEvents([
+      { type: "level_up", previousLevel: 1, newLevel: 2, runXp: 5, xpToNextLevel: 40 },
+      { type: "card_choice_offered", choiceId: "card-choice-11" }
+    ]);
+    expect((component as any).cardChoiceSource).toBe("level_up");
+    expect(component.cardChoiceLevelContextLabel).toContain("Lv 2");
+    expect(component.cardChoiceLevelContextLabel).toContain("5/40 XP");
+  });
+
+  it("maps card offer metadata into clearer presentation fields", () => {
+    const component = createComponent();
+
+    (component as any).applyCardChoiceStateFromSnapshot({
+      isAwaitingCardChoice: true,
+      pendingChoiceId: "card-choice-12",
+      offeredCards: [
+        {
+          id: "bloodletter_edge",
+          name: "Bloodletter Edge",
+          description: "+22% damage and +2 HP on hit.",
+          tags: ["offense", "sustain"],
+          rarityWeight: 90,
+          maxStacks: 3,
+          currentStacks: 1,
+          isSkillCard: false
+        }
+      ],
+      selectedCards: []
+    });
+
+    const card = (component as any).offeredCards[0];
+    expect(card.categoryLabel).toBe("Offense");
+    expect(card.rarityTierLabel).toBe("Uncommon");
+    expect(card.impactLines).toContain("+22% Damage");
+    expect(card.impactLines).toContain("+2 HP On Hit");
+    expect(card.stackStateLabel).toContain("Current stack 1/3");
+  });
+
+  it("triggers and clears a short level-up pulse when level_up event appears", () => {
+    vi.useFakeTimers();
+    try {
+      const component = createComponent();
+
+      (component as any).applyRunProgressFromSnapshot({
+        tick: 12,
+        runLevel: 3,
+        runXp: 7,
+        xpToNextLevel: 55,
+        events: [
+          {
+            type: "level_up",
+            previousLevel: 2,
+            newLevel: 3,
+            runXp: 7,
+            xpToNextLevel: 55
+          }
+        ]
+      });
+
+      expect((component as any).levelUpPulseActive).toBe(true);
+      vi.advanceTimersByTime(800);
+      expect((component as any).levelUpPulseActive).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("flags a short shield-break pulse only when shield crosses from positive to zero", () => {
     vi.useFakeTimers();
     try {

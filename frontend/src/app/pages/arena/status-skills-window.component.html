@@ -25,11 +25,14 @@
         class="status-window__skill"
         [class.status-window__skill--disabled]="slot.disabled"
         [class.status-window__skill--free]="slot.isFreeSlot"
+        [attr.data-skill-family]="slot.visualFamily"
+        [attr.data-skill-tier]="slot.visualTier"
+        [title]="slot.tooltip"
         (click)="onSkillClick(slot.skillId)"
         [disabled]="slot.disabled"
       >
         <span class="status-window__key">{{ slot.keyLabel }}</span>
-        <span class="status-window__icon" [style.background]="slot.accentColor"></span>
+        <span class="status-window__icon" [style.background]="slot.accentColor">{{ slot.iconGlyph }}</span>
         <span class="status-window__name">{{ slot.label }}</span>
         @if (slot.cooldownText) {
           <span class="status-window__cooldown-text">{{ slot.cooldownText }}</span>

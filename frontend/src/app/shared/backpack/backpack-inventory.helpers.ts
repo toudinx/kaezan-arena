@@ -4,8 +4,10 @@ import type {
   ItemDefinition,
   OwnedEquipmentInstance
 } from "../../api/account-api.service";
+import { resolveItemVisual, type ItemIconTone } from "../items/item-visuals.helpers";
 
 export type BackpackFilter = "all" | "weapons" | "armor" | "relics";
+export type BackpackRarityClass = "common" | "rare" | "epic" | "legendary" | "ascendant";
 
 type BackpackEquipmentSlot = "weapon" | "armor" | "relic" | "unknown";
 
@@ -17,11 +19,15 @@ export type BackpackSlot = Readonly<{
   definitionId: string;
   displayName: string;
   rarity: string;
+  rarityClass: BackpackRarityClass;
   quantity: number;
   instanceId: string;
   originSpeciesId: string | null;
   weaponClass: string | null;
   weaponElement: string | null;
+  iconImageUrl: string | null;
+  iconGlyph: string;
+  iconTone: ItemIconTone;
   slotLabel: string;
   rarityLabel: string;
   typeLabel: string;
@@ -146,12 +152,19 @@ function toNamedEquipmentInstance(
 function createEquipmentSlot(entry: NamedEquipmentInstance): BackpackSlot {
   const slotLabel = SLOT_LABELS[entry.slot];
   const rarityLabel = toTitleLabel(entry.rarity);
+  const rarityClass = toRarityClass(entry.rarity);
   const typeLabel = resolveTypeLabel(entry.slot, entry.weaponClass, entry.weaponElement);
+  const visual = resolveItemVisual({
+    slot: entry.slot,
+    weaponClass: entry.weaponClass,
+    displayName: entry.displayName,
+    definitionId: entry.definitionId
+  });
   const impactBadges = buildImpactBadges(entry.gameplayModifiers);
   const detailStatLines = buildDetailStatLines(entry.gameplayModifiers);
   const shortStatSummary =
     impactBadges.length > 0
-      ? impactBadges.slice(0, 2).join(" • ")
+      ? impactBadges.slice(0, 2).join(" | ")
       : detailStatLines[0] ?? "No combat modifiers";
 
   return {
@@ -162,11 +175,15 @@ function createEquipmentSlot(entry: NamedEquipmentInstance): BackpackSlot {
     definitionId: entry.definitionId,
     displayName: entry.displayName,
     rarity: entry.rarity,
+    rarityClass,
     quantity: 1,
     instanceId: entry.instanceId,
     originSpeciesId: entry.originSpeciesId,
     weaponClass: entry.weaponClass,
     weaponElement: entry.weaponElement,
+    iconImageUrl: visual.iconImageUrl,
+    iconGlyph: visual.iconGlyph,
+    iconTone: visual.tone,
     slotLabel,
     rarityLabel,
     typeLabel,
@@ -235,6 +252,27 @@ function resolveRarity(instanceRarity: string | null | undefined, itemRarity: st
 
 function rarityWeight(rarity: string): number {
   return RARITY_SORT_ORDER[(rarity ?? "").trim().toLowerCase()] ?? 0;
+}
+
+function toRarityClass(rarity: string): BackpackRarityClass {
+  const normalized = (rarity ?? "").trim().toLowerCase();
+  if (normalized === "ascendant") {
+    return "ascendant";
+  }
+
+  if (normalized === "legendary") {
+    return "legendary";
+  }
+
+  if (normalized === "epic") {
+    return "epic";
+  }
+
+  if (normalized === "rare") {
+    return "rare";
+  }
+
+  return "common";
 }
 
 function toTitleLabel(value: string): string {

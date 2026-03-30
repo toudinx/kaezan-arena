@@ -336,7 +336,9 @@
               <span class="top-hud__timer-total">/ {{ runHudTimerTotalLabel }}</span>
             </div>
             @if (lockedTargetLabel) {
-              <span class="top-hud__target-lock">&#8857; {{ lockedTargetLabel }}</span>
+              <span class="top-hud__target-lock" [class.top-hud__target-lock--elite]="isLockedTargetElite">
+                &#8857; {{ lockedTargetLabel }}
+              </span>
             }
           </div>
           @if (topHudBuffs.length > 0) {
@@ -385,13 +387,18 @@
               [class.bottom-hotbar__skill--locked]="slot.isLocked"
               [class.bottom-hotbar__skill--ready]="!slot.disabled && !slot.isLocked"
               [class.bottom-hotbar__skill--free]="slot.isFreeSlot"
-              [title]="slot.isLocked ? (slot.isFreeSlot ? 'Free slot — no rune equipped' : 'Locked') : slot.label"
+              [attr.data-skill-family]="slot.visualFamily"
+              [attr.data-skill-tier]="slot.visualTier"
+              [title]="slot.tooltip"
             >
               @if (!slot.isLocked) {
                 <span class="bottom-hotbar__skill-key">{{ slot.keyLabel }}</span>
+                <span class="bottom-hotbar__skill-icon">{{ slot.iconGlyph }}</span>
                 <span class="bottom-hotbar__skill-name">{{ slot.label }}</span>
                 @if (slot.cooldownText) {
                   <span class="bottom-hotbar__skill-cd">{{ slot.cooldownText }}</span>
+                } @else {
+                  <span class="bottom-hotbar__skill-ready">Ready</span>
                 }
                 @if (slot.cooldownFraction > 0) {
                   <span
@@ -406,8 +413,15 @@
             </div>
           }
         </div>
-        <div class="bottom-hotbar__exp-track" aria-label="Experience bar">
+        <div
+          class="bottom-hotbar__exp-track"
+          [class.bottom-hotbar__exp-track--level-up]="levelUpPulseActive"
+          aria-label="Experience bar"
+        >
           <div class="bottom-hotbar__exp-fill" [style.width.%]="playerExpPercent"></div>
+          @if (levelUpPulseActive) {
+            <span class="bottom-hotbar__exp-burst">LEVEL UP</span>
+          }
         </div>
       </footer>
     </section>
@@ -485,9 +499,12 @@
                   class="right-panel-skill-row"
                   [class.right-panel-skill-row--locked]="slot.isLocked"
                   [class.right-panel-skill-row--free]="slot.isFreeSlot"
-                  [title]="slot.isFreeSlot && slot.isLocked ? 'Free slot — empty until rune system' : slot.isLocked ? 'Locked' : slot.label"
+                  [attr.data-skill-family]="slot.visualFamily"
+                  [attr.data-skill-tier]="slot.visualTier"
+                  [title]="slot.tooltip"
                 >
                   @if (!slot.isLocked) {
+                    <span class="right-panel-skill-row__icon">{{ slot.iconGlyph }}</span>
                     <span class="right-panel-skill-row__name">{{ slot.label }}</span>
                     @if (slot.cooldownText) {
                       <span class="right-panel-skill-row__cd">{{ slot.cooldownText }}</span>
@@ -555,10 +572,17 @@
               <div class="pre-run-lobby__kit">
                 <span class="pre-run-lobby__kit-label">Fixed Kit</span>
                 <div class="pre-run-lobby__kit-pills">
-                  @for (weaponName of selectedCharacterKitWeaponNames; track weaponName) {
-                    <span class="pre-run-lobby__pill">{{ weaponName }}</span>
+                  @for (weapon of selectedCharacterKitWeapons; track weapon.label) {
+                    <span
+                      class="pre-run-lobby__pill"
+                      [attr.data-skill-family]="weapon.family"
+                      [attr.data-skill-tier]="weapon.tier"
+                    >
+                      <span class="pre-run-lobby__pill-icon">{{ weapon.iconGlyph }}</span>
+                      <span class="pre-run-lobby__pill-label">{{ weapon.label }}</span>
+                    </span>
                   }
-                  @if (selectedCharacterKitWeaponNames.length === 0) {
+                  @if (selectedCharacterKitWeapons.length === 0) {
                     <span class="pre-run-lobby__pill pre-run-lobby__pill--unknown">Unknown</span>
                   }
                 </div>
@@ -625,25 +649,65 @@
   }
 
   @if (isAwaitingCardChoice && !isRunEnded) {
-    <div class="pause-modal__backdrop">
-      <section class="pause-modal" role="dialog" aria-modal="true" aria-label="Choose a card">
-        <header class="pause-modal__header">
-          <h2>Choose a Card</h2>
-          <p>Simulation paused. Pick one to continue.</p>
+    <div
+      class="reward-modal__backdrop"
+      [class.reward-modal__backdrop--chest]="cardChoiceSource === 'chest'"
+      [class.reward-modal__backdrop--level]="cardChoiceSource === 'level_up'"
+    >
+      <section
+        class="reward-modal"
+        [class.reward-modal--confirming]="cardChoiceRequestInFlight && pendingCardSelectionId !== null"
+        [attr.data-reward-source]="cardChoiceSource"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Choose a card"
+      >
+        <header class="reward-modal__header">
+          <p class="reward-modal__eyebrow">{{ cardChoiceSourceLabel }}</p>
+          <h2>{{ cardChoiceTitle }}</h2>
+          <p>{{ cardChoiceSubtitle }}</p>
+          <div class="reward-modal__context">
+            <span class="reward-modal__context-pill reward-modal__context-pill--run">{{ cardChoiceRunContextLabel }}</span>
+            @if (cardChoiceLevelContextLabel) {
+              <span class="reward-modal__context-pill reward-modal__context-pill--level">{{ cardChoiceLevelContextLabel }}</span>
+            }
+            <span class="reward-modal__context-pill reward-modal__context-pill--build">{{ cardChoiceBuildContextLabel }}</span>
+          </div>
         </header>
-        <div class="pause-modal__actions">
-          @for (card of offeredCards; track card.id) {
+        <div class="reward-modal__actions">
+          @for (card of offeredCards; track card.id; let cardIndex = $index) {
             <button
               type="button"
-              class="card-offer"
+              class="card-offer reward-card-offer"
               [class.card-offer--skill]="card.isSkillCard"
               [class.card-offer--passive]="!card.isSkillCard"
+              [class.reward-card-offer--selected]="pendingCardSelectionId === card.id"
+              [class.reward-card-offer--dimmed]="cardChoiceRequestInFlight && pendingCardSelectionId !== null && pendingCardSelectionId !== card.id"
               (click)="onCardChoiceSelected(card.id)"
               [disabled]="cardChoiceRequestInFlight || isReplayInProgress"
+              [style.--reward-order]="cardIndex"
             >
-              <span class="card-offer__tag">{{ card.isSkillCard ? "SKILL" : "PASSIVE" }}</span>
+              <span class="reward-card-offer__topline">
+                <span class="card-offer__tag">{{ card.isSkillCard ? "SKILL" : "PASSIVE" }}</span>
+                <span class="reward-card-offer__rarity" [attr.data-rarity-tier]="card.rarityTierLabel.toLowerCase()">{{ card.rarityTierLabel }}</span>
+              </span>
               <span class="card-offer__name">{{ card.name }}</span>
+              <span class="reward-card-offer__category">{{ card.categoryLabel }}</span>
+              @if (card.impactLines.length > 0) {
+                <span class="reward-card-offer__impact-list">
+                  @for (line of card.impactLines; track line + '-' + $index) {
+                    <span class="reward-card-offer__impact-chip">{{ line }}</span>
+                  }
+                </span>
+              }
               <span class="card-offer__desc">{{ card.description }}</span>
+              <span class="reward-card-offer__meta-row">
+                <span class="reward-card-offer__meta">{{ card.isSkillCard ? "Skill unlock" : "Passive reward" }}</span>
+                <span class="reward-card-offer__stack" [attr.data-stack-tone]="card.stackStateTone">{{ card.stackStateLabel }}</span>
+              </span>
+              @if (pendingCardSelectionId === card.id && cardChoiceRequestInFlight) {
+                <span class="reward-card-offer__claiming">Claiming reward...</span>
+              }
             </button>
           }
         </div>

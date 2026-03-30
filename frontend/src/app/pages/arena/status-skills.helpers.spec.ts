@@ -19,7 +19,9 @@ describe("status-skills.helpers", () => {
     expect(slots[0].cooldownFraction).toBeGreaterThan(0);
     expect(slots[1].cooldownRemainingMs).toBe(0);
     expect(slots[1].disabled).toBe(false);
-    expect(slots.every((s) => !s.isFreeSlot)).toBe(true);
+    expect(slots.every((slot) => !slot.isFreeSlot)).toBe(true);
+    expect(slots.map((slot) => slot.iconGlyph)).toEqual(["EX", "E-", "E+"]);
+    expect(slots.map((slot) => slot.visualFamily)).toEqual(["exori", "exori", "exori"]);
   });
 
   it("marks ready skills as gcd-blocked when global cooldown is active", () => {
@@ -43,7 +45,7 @@ describe("status-skills.helpers", () => {
   it("buildFreeSlotViewModel returns locked/empty slot when weapon name is null", () => {
     const slot = buildFreeSlotViewModel(null);
     expect(slot.keyLabel).toBe("4");
-    expect(slot.label).toBe("—");
+    expect(slot.label).toBe("Rune Slot");
     expect(slot.isLocked).toBe(true);
     expect(slot.isFreeSlot).toBe(true);
     expect(slot.disabled).toBe(true);
@@ -52,6 +54,8 @@ describe("status-skills.helpers", () => {
   it("buildFreeSlotViewModel returns an active slot when a weapon name is provided", () => {
     const slot = buildFreeSlotViewModel("Avalanche");
     expect(slot.label).toBe("Avalanche");
+    expect(slot.iconGlyph).toBe("AV");
+    expect(slot.visualFamily).toBe("rune");
     expect(slot.isLocked).toBe(false);
     expect(slot.isFreeSlot).toBe(true);
     expect(slot.disabled).toBe(false);

@@ -21,6 +21,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 0 0.9rem;
+  transition: border-color var(--motion-base) var(--motion-ease-standard),
+    box-shadow var(--motion-base) var(--motion-ease-standard);
 }
 
 .shell__brand {
@@ -48,11 +50,31 @@
   font-weight: 600;
   padding: 0.3rem 0.55rem;
   border-radius: 0.35rem;
+  border: 1px solid transparent;
+  transition: color var(--motion-fast) var(--motion-ease-standard),
+    background-color var(--motion-fast) var(--motion-ease-standard),
+    border-color var(--motion-fast) var(--motion-ease-standard),
+    transform var(--motion-fast) var(--motion-ease-standard),
+    box-shadow var(--motion-fast) var(--motion-ease-standard);
+}
+
+.shell__nav a:hover {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+  color: #0f172a;
+  transform: translateY(-1px);
 }
 
 .shell__nav a.active {
   background: #0f172a;
   color: #f8fafc;
+  border-color: #0f172a;
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.2);
+}
+
+.shell__nav a:focus-visible {
+  outline: none;
+  box-shadow: var(--motion-outline-focus);
 }
 
 .shell__backpack-button {
@@ -64,6 +86,25 @@
   font-weight: 600;
   padding: 0.3rem 0.58rem;
   cursor: pointer;
+  transition: border-color var(--motion-fast) var(--motion-ease-standard),
+    background-color var(--motion-fast) var(--motion-ease-standard),
+    transform var(--motion-fast) var(--motion-ease-standard),
+    box-shadow var(--motion-fast) var(--motion-ease-standard);
+}
+
+.shell__backpack-button:hover {
+  border-color: #0f172a;
+  background: #eef2f7;
+  transform: translateY(-1px);
+}
+
+.shell__backpack-button:active {
+  transform: translateY(0);
+}
+
+.shell__backpack-button:focus-visible {
+  outline: none;
+  box-shadow: var(--motion-outline-focus);
 }
 
 .shell__content {

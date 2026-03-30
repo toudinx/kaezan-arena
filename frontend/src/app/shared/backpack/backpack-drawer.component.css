@@ -5,6 +5,7 @@
   background: rgba(2, 6, 23, 0.72);
   display: flex;
   justify-content: flex-end;
+  animation: backpack-overlay-in var(--motion-base) var(--motion-ease-standard) both;
 }
 
 .backpack-drawer {
@@ -16,6 +17,7 @@
   display: flex;
   flex-direction: column;
   box-shadow: -14px 0 28px rgba(2, 6, 23, 0.45);
+  animation: backpack-drawer-in var(--motion-emphasis) var(--motion-ease-emphasis) both;
 }
 
 .backpack-drawer__header {
@@ -49,10 +51,21 @@
   cursor: pointer;
   font-size: 0.7rem;
   font-weight: 600;
+  transition: border-color var(--motion-fast) var(--motion-ease-standard),
+    background-color var(--motion-fast) var(--motion-ease-standard),
+    transform var(--motion-fast) var(--motion-ease-standard),
+    box-shadow var(--motion-fast) var(--motion-ease-standard);
 }
 
 .backpack-drawer__header button:hover {
   border-color: #4a6585;
+  background: #18304a;
+  transform: translateY(-1px);
+}
+
+.backpack-drawer__header button:focus-visible {
+  outline: none;
+  box-shadow: var(--motion-outline-focus);
 }
 
 .backpack-drawer__body {
@@ -76,6 +89,15 @@
   border-radius: 0.52rem;
   background: #0d1828;
   padding: 0.55rem 0.65rem;
+  transition: border-color var(--motion-fast) var(--motion-ease-standard),
+    transform var(--motion-fast) var(--motion-ease-standard),
+    box-shadow var(--motion-fast) var(--motion-ease-standard);
+}
+
+.backpack-drawer__hero:hover {
+  border-color: #2b4765;
+  transform: translateY(var(--motion-lift-y));
+  box-shadow: var(--motion-shadow-soft);
 }
 
 .backpack-drawer__character-block {
@@ -113,6 +135,15 @@
   letter-spacing: 0.04em;
   text-transform: uppercase;
   padding: 0.12rem 0.44rem;
+  transition: border-color var(--motion-fast) var(--motion-ease-standard),
+    transform var(--motion-fast) var(--motion-ease-standard),
+    color var(--motion-fast) var(--motion-ease-standard);
+}
+
+.backpack-drawer__chip:hover {
+  border-color: #3c5775;
+  color: #dbe4f0;
+  transform: translateY(-1px);
 }
 
 .backpack-drawer__chip--echo {
@@ -150,5 +181,27 @@
 
   .backpack-drawer__body {
     padding: 0.75rem;
+  }
+}
+
+@keyframes backpack-overlay-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes backpack-drawer-in {
+  from {
+    opacity: 0.8;
+    transform: translateX(22px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
   }
 }

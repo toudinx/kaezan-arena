@@ -165,8 +165,36 @@ describe("ArenaPageComponent layout DOM", () => {
     fixture.componentInstance.runAwardedDropEventsCount = 15;
     fixture.componentInstance.runAwardedItemDropCount = 4;
     fixture.componentInstance.selectedCards = [
-      { id: "colossus_heart", name: "Colossus Heart", description: "", isSkillCard: false, currentStacks: 1 },
-      { id: "avenger_instinct", name: "Avenger Instinct", description: "", isSkillCard: false, currentStacks: 1 }
+      {
+        id: "colossus_heart",
+        name: "Colossus Heart",
+        description: "",
+        tags: ["defense"],
+        rarityWeight: 40,
+        maxStacks: 3,
+        isSkillCard: false,
+        currentStacks: 1,
+        rarityTierLabel: "Epic",
+        categoryLabel: "Defense",
+        impactLines: ["+40% Max HP"],
+        stackStateLabel: "Current stack 1/3",
+        stackStateTone: "growing"
+      },
+      {
+        id: "avenger_instinct",
+        name: "Avenger Instinct",
+        description: "",
+        tags: ["offense"],
+        rarityWeight: 80,
+        maxStacks: 3,
+        isSkillCard: false,
+        currentStacks: 1,
+        rarityTierLabel: "Uncommon",
+        categoryLabel: "Offense",
+        impactLines: ["+12 Damage"],
+        stackStateLabel: "Current stack 1/3",
+        stackStateTone: "growing"
+      }
     ];
     fixture.detectChanges();
 

@@ -62,41 +62,20 @@
   </label>
 
   <div class="helper-window__skills">
-    <label>
-      <input
-        type="checkbox"
-        [checked]="autoSkills.exori"
-        (change)="onAutoSkillChanged('exori', $event)"
-        [disabled]="!isRunStarted || !assistEnabled || !autoOffenseEnabled"
-      />
-      <span>Exori</span>
-    </label>
-    <label>
-      <input
-        type="checkbox"
-        [checked]="autoSkills.exori_min"
-        (change)="onAutoSkillChanged('exori_min', $event)"
-        [disabled]="!isRunStarted || !assistEnabled || !autoOffenseEnabled"
-      />
-      <span>Exori Min</span>
-    </label>
-    <label>
-      <input
-        type="checkbox"
-        [checked]="autoSkills.exori_mas"
-        (change)="onAutoSkillChanged('exori_mas', $event)"
-        [disabled]="!isRunStarted || !assistEnabled || !autoOffenseEnabled"
-      />
-      <span>Exori Mas</span>
-    </label>
-    <label>
-      <input
-        type="checkbox"
-        [checked]="autoSkills.avalanche"
-        (change)="onAutoSkillChanged('avalanche', $event)"
-        [disabled]="!isRunStarted || !assistEnabled || !autoOffenseEnabled"
-      />
-      <span>Avalanche</span>
-    </label>
+    @for (row of skillRows; track trackSkillRowById($index, row)) {
+      <label
+        [attr.data-skill-family]="row.family"
+        [attr.data-skill-tier]="row.tier"
+      >
+        <input
+          type="checkbox"
+          [checked]="autoSkills[row.skillId]"
+          (change)="onAutoSkillChanged(row.skillId, $event)"
+          [disabled]="!isRunStarted || !assistEnabled || !autoOffenseEnabled"
+        />
+        <span class="helper-window__skill-icon">{{ row.iconGlyph }}</span>
+        <span>{{ row.label }}</span>
+      </label>
+    }
   </div>
 </section>

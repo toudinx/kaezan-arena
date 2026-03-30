@@ -37,8 +37,24 @@
                 @if (row.isActive) {
                   <span class="roster-card__active-badge">ACTIVE</span>
                 }
-                <div class="roster-card__portrait roster-card__portrait--{{ row.portraitColor }}" aria-hidden="true">
-                  <span>{{ row.name.slice(0, 1) }}</span>
+                <div
+                  class="roster-card__portrait kae-char-portrait"
+                  [class.kae-char-portrait--selected]="selectedCharacterId === row.characterId"
+                  [class.kae-char-portrait--active]="row.isActive"
+                  [attr.data-tone]="row.portrait.tone"
+                  aria-hidden="true"
+                >
+                  @if (row.portrait.imageUrl && !isPortraitImageFailed(row.characterId)) {
+                    <img
+                      class="kae-char-portrait__img"
+                      [src]="row.portrait.imageUrl"
+                      [alt]="''"
+                      (error)="onPortraitImageError(row.characterId)"
+                    />
+                  } @else {
+                    <span class="kae-char-portrait__fallback">{{ row.portrait.monogram }}</span>
+                  }
+                  <span class="kae-char-portrait__sigil">{{ row.portrait.sigil }}</span>
                 </div>
                 <div class="roster-card__body">
                   <div class="roster-card__name-row">
@@ -55,8 +71,15 @@
                     <span class="roster-card__subtitle">{{ row.subtitle }}</span>
                   }
                   <div class="roster-card__pills">
-                    @for (weapon of row.fixedWeaponNames; track weapon) {
-                      <span class="roster-card__pill">{{ weapon }}</span>
+                    @for (weapon of row.fixedWeapons; track weapon.label) {
+                      <span
+                        class="roster-card__pill"
+                        [attr.data-skill-family]="weapon.family"
+                        [attr.data-skill-tier]="weapon.tier"
+                      >
+                        <span class="roster-card__pill-icon">{{ weapon.iconGlyph }}</span>
+                        <span class="roster-card__pill-label">{{ weapon.label }}</span>
+                      </span>
                     }
                   </div>
                 </div>
@@ -70,8 +93,22 @@
       <section class="detail">
         @if (selectedCharacter) {
           <div class="detail__header">
-            <div class="detail__portrait detail__portrait--{{ selectedCharacter.portraitColor }}" aria-hidden="true">
-              <span>{{ selectedCharacter.name.slice(0, 1) }}</span>
+            <div
+              class="detail__portrait kae-char-portrait kae-char-portrait--active"
+              [attr.data-tone]="selectedCharacter.portrait.tone"
+              aria-hidden="true"
+            >
+              @if (selectedCharacter.portrait.imageUrl && !isPortraitImageFailed(selectedCharacter.characterId)) {
+                <img
+                  class="kae-char-portrait__img"
+                  [src]="selectedCharacter.portrait.imageUrl"
+                  [alt]="''"
+                  (error)="onPortraitImageError(selectedCharacter.characterId)"
+                />
+              } @else {
+                <span class="kae-char-portrait__fallback">{{ selectedCharacter.portrait.monogram }}</span>
+              }
+              <span class="kae-char-portrait__sigil">{{ selectedCharacter.portrait.sigil }}</span>
             </div>
 
             <div class="detail__identity">
@@ -105,15 +142,21 @@
           <section class="detail__section">
             <h3 class="detail__section-title">Fixed Kit</h3>
             <div class="detail__weapon-cards">
-              @for (weapon of selectedCharacter.fixedWeaponNames; track weapon) {
-                <div class="weapon-card">
-                  <strong class="weapon-card__name">{{ weapon }}</strong>
-                  @if (weaponDescription(weapon)) {
-                    <span class="weapon-card__desc">{{ weaponDescription(weapon) }}</span>
+              @for (weapon of selectedCharacter.fixedWeapons; track weapon.label) {
+                <div
+                  class="weapon-card"
+                  [attr.data-skill-family]="weapon.family"
+                  [attr.data-skill-tier]="weapon.tier"
+                  [title]="weapon.description"
+                >
+                  <span class="weapon-card__icon">{{ weapon.iconGlyph }}</span>
+                  <strong class="weapon-card__name">{{ weapon.label }}</strong>
+                  @if (weapon.description) {
+                    <span class="weapon-card__desc">{{ weapon.description }}</span>
                   }
                 </div>
               }
-              @if (selectedCharacter.fixedWeaponNames.length === 0) {
+              @if (selectedCharacter.fixedWeapons.length === 0) {
                 <p class="detail__empty-section">No kit data available.</p>
               }
             </div>

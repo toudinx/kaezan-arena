@@ -101,6 +101,11 @@ import {
   type EliteTimelineSummary
 } from "./combat-analyzer.helpers";
 import { computeExpProgressPercent, computeUnifiedVitalsPercent, formatRunTimer } from "./arena-hud.helpers";
+import {
+  resolveSkillPresentation,
+  type SkillVisualFamily,
+  type SkillVisualTier
+} from "../../shared/skills/skill-presentation.helpers";
 
 type ApiActorState = NonNullable<StartBattleResponse["actors"]>[number];
 type ApiSkillState = NonNullable<StartBattleResponse["skills"]>[number];
@@ -128,6 +133,9 @@ type ApiCardOffer = {
   id?: unknown;
   name?: unknown;
   description?: unknown;
+  tags?: unknown;
+  rarityWeight?: unknown;
+  maxStacks?: unknown;
   isSkillCard?: unknown;
   currentStacks?: unknown;
 };
@@ -192,19 +200,41 @@ type PreRunCharacterViewModel = Readonly<{
   equippedWeaponName: string;
   isActive: boolean;
 }>;
+type PreRunKitWeaponViewModel = Readonly<{
+  skillId: string | null;
+  label: string;
+  iconGlyph: string;
+  family: SkillVisualFamily;
+  tier: SkillVisualTier;
+}>;
 type ExpConsoleEntry = Readonly<{
   id: string;
   tick: number;
   message: string;
   kind: "xp_gained" | "level_up" | "system";
 }>;
+type CardOfferStackTone = "new" | "growing" | "maxed";
+type CardChoiceLevelContext = Readonly<{
+  newLevel: number;
+  runXp: number;
+  xpToNextLevel: number;
+}>;
 type ArenaCardOffer = Readonly<{
   id: string;
   name: string;
   description: string;
+  tags: ReadonlyArray<string>;
+  rarityWeight: number;
+  maxStacks: number;
   isSkillCard: boolean;
   currentStacks: number;
+  rarityTierLabel: string;
+  categoryLabel: string;
+  impactLines: ReadonlyArray<string>;
+  stackStateLabel: string;
+  stackStateTone: CardOfferStackTone;
 }>;
+type CardChoiceSource = "chest" | "level_up" | "unknown";
 type ShieldHudVisualState = "active" | "low" | "depleted";
 type RunRecordingBatch = Readonly<{
   tick: number;
@@ -244,6 +274,7 @@ const ANALYZER_SAMPLE_RETENTION_MS = 45_000;
 const ECONOMY_LOOT_PREVIEW_MAX_ENTRIES = 8;
 const SHIELD_LOW_THRESHOLD_PERCENT = 30;
 const SHIELD_BREAK_PULSE_DURATION_MS = 260;
+const LEVEL_UP_PULSE_DURATION_MS = 760;
 const CRAFTED_EQUIPMENT_ITEM_IDS = new Set<string>([
   "wpn.primal_forged_blade",
   "arm.primal_forged_mail",
@@ -435,6 +466,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   runEndReason: string | null = null;
   runEndedAtMs: number | null = null;
   shieldBreakPulseActive = false;
+  levelUpPulseActive = false;
   runTimeMs = 0;
   runDurationMs = DEFAULT_RUN_DURATION_MS;
   timeSurvivedMs = 0;
@@ -453,6 +485,8 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   pendingCardChoiceId: string | null = null;
   offeredCards: ArenaCardOffer[] = [];
   selectedCards: ArenaCardOffer[] = [];
+  cardChoiceSource: CardChoiceSource = "unknown";
+  pendingCardSelectionId: string | null = null;
   cardChoiceRequestInFlight = false;
   damageConsoleEntries: DamageConsoleEntry[] = [];
   expConsoleEntries: ExpConsoleEntry[] = [];
@@ -499,6 +533,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   private autoStepTimerId: ReturnType<typeof setTimeout> | null = null;
   private assistConfigDebounceTimerId: ReturnType<typeof setTimeout> | null = null;
   private shieldBreakPulseTimeoutId: ReturnType<typeof setTimeout> | null = null;
+  private levelUpPulseTimeoutId: ReturnType<typeof setTimeout> | null = null;
   private autoStepWasEnabledBeforePause = false;
   private autoStepWasEnabledBeforeCardChoice = false;
   private autoStepLoopRunId = 0;
@@ -519,6 +554,9 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   private readonly replayIoService = new ReplayIoService();
   private importedReplayRecording: RunRecording | null = null;
   private importedReplaySeedOverride: number | null = null;
+  private readonly cardChoiceSourceByChoiceId = new Map<string, CardChoiceSource>();
+  private readonly cardChoiceLevelContextByChoiceId = new Map<string, CardChoiceLevelContext>();
+  private currentCardChoiceLevelContext: CardChoiceLevelContext | null = null;
   assistConfig: ArenaAssistConfig = this.buildDefaultAssistConfig();
   readonly hotkeyGroups: ReadonlyArray<Readonly<{ title: string; entries: ReadonlyArray<string> }>> = [
     { title: "Facing", entries: ["Arrow keys set facing"] },
@@ -617,7 +655,22 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     const actor = this.scene?.actorsById[lockedId];
     if (!actor || actor.kind !== "mob" || !actor.mobType) return null;
     const species = this.mapMobArchetypeToSpecies(actor.mobType);
-    return species ? this.formatSpeciesLabel(species) : null;
+    if (!species) {
+      return null;
+    }
+
+    const baseLabel = this.formatSpeciesLabel(species);
+    return actor.isElite === true ? `Elite ${baseLabel}` : baseLabel;
+  }
+
+  get isLockedTargetElite(): boolean {
+    const lockedId = this.scene?.lockedTargetEntityId ?? null;
+    if (!lockedId) {
+      return false;
+    }
+
+    const actor = this.scene?.actorsById[lockedId];
+    return !!actor && actor.kind === "mob" && actor.isElite === true;
   }
 
   get playerExpPercent(): number {
@@ -1151,6 +1204,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.clearAssistConfigDebounce();
     this.stopAutoStepLoop();
     this.clearShieldBreakPulse();
+    this.clearLevelUpPulse();
 
   }
 
@@ -1395,6 +1449,11 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   }
 
   onCardChoiceSelected(cardId: string): void {
+    if (this.cardChoiceRequestInFlight || this.isReplayInProgress) {
+      return;
+    }
+
+    this.pendingCardSelectionId = cardId;
     void this.chooseCard(cardId);
   }
 
@@ -1746,6 +1805,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.stopAutoStepLoop();
     this.clearAssistConfigDebounce();
     this.clearShieldBreakPulse();
+    this.clearLevelUpPulse();
 
     this.clearReplaySessionState();
     this.activeRunRecording = null;
@@ -1820,6 +1880,11 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.pendingCardChoiceId = null;
     this.offeredCards = [];
     this.selectedCards = [];
+    this.cardChoiceSource = "unknown";
+    this.pendingCardSelectionId = null;
+    this.cardChoiceSourceByChoiceId.clear();
+    this.cardChoiceLevelContextByChoiceId.clear();
+    this.currentCardChoiceLevelContext = null;
     this.cardChoiceRequestInFlight = false;
     this.autoStepWasEnabledBeforeCardChoice = false;
     this.autoStepWasEnabledBeforePause = false;
@@ -2250,7 +2315,34 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   }
 
   get selectedCharacterKitWeaponNames(): ReadonlyArray<string> {
-    return this.selectedCharacterCatalogEntry?.fixedWeaponNames ?? [];
+    return this.selectedCharacterKitWeapons.map((weapon) => weapon.label);
+  }
+
+  get selectedCharacterKitWeapons(): ReadonlyArray<PreRunKitWeaponViewModel> {
+    const catalogEntry = this.selectedCharacterCatalogEntry;
+    const fixedWeaponIds = catalogEntry?.fixedWeaponIds ?? [];
+    const fixedWeaponNames = catalogEntry?.fixedWeaponNames ?? [];
+    const size = Math.max(fixedWeaponIds.length, fixedWeaponNames.length);
+    const rows: PreRunKitWeaponViewModel[] = [];
+
+    for (let index = 0; index < size; index += 1) {
+      const skillId = fixedWeaponIds[index] ?? null;
+      const displayName = fixedWeaponNames[index] ?? null;
+      const presentation = resolveSkillPresentation({
+        skillId,
+        displayName,
+        fallbackLabel: displayName ?? skillId ?? `Skill ${index + 1}`
+      });
+      rows.push({
+        skillId: presentation.canonicalId ?? skillId,
+        label: presentation.label,
+        iconGlyph: presentation.iconGlyph,
+        family: presentation.family,
+        tier: presentation.tier
+      });
+    }
+
+    return rows;
   }
 
   get preRunEchoFragmentsBalance(): number {
@@ -2606,6 +2698,64 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     return `Pending Species Chest: ${this.formatSpeciesLabel(this.pendingSpeciesChest)}`;
   }
 
+  get cardChoiceSourceLabel(): string {
+    if (this.cardChoiceSource === "chest") {
+      return "Chest Reward";
+    }
+
+    if (this.cardChoiceSource === "level_up") {
+      return "Level Up Reward";
+    }
+
+    return "Reward Choice";
+  }
+
+  get cardChoiceTitle(): string {
+    if (this.cardChoiceSource === "chest") {
+      return "Treasure Unlocked";
+    }
+
+    if (this.cardChoiceSource === "level_up") {
+      return "Choose Your Growth";
+    }
+
+    return "Choose a Card";
+  }
+
+  get cardChoiceSubtitle(): string {
+    if (this.cardChoiceSource === "chest") {
+      return "Pick one reward and continue the fight.";
+    }
+
+    if (this.cardChoiceSource === "level_up") {
+      return "Level up secured. Choose the next power spike for your build.";
+    }
+
+    return "Simulation paused. Pick one to continue.";
+  }
+
+  get cardChoiceRunContextLabel(): string {
+    return `Run Lv. ${Math.max(RUN_INITIAL_LEVEL, this.runLevel)}`;
+  }
+
+  get cardChoiceBuildContextLabel(): string {
+    const count = this.selectedCards.length;
+    return `Build: ${count} card${count === 1 ? "" : "s"} selected`;
+  }
+
+  get cardChoiceLevelContextLabel(): string | null {
+    if (this.cardChoiceSource !== "level_up") {
+      return null;
+    }
+
+    const context = this.currentCardChoiceLevelContext;
+    if (!context) {
+      return null;
+    }
+
+    return `Lv ${context.newLevel} · ${context.runXp}/${context.xpToNextLevel} XP`;
+  }
+
   async pingBackend(): Promise<void> {
     if (this.pingInFlight) {
       return;
@@ -2821,6 +2971,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       !this.pendingCardChoiceId ||
       this.isTerminalBattleStatus(this.battleStatus)
     ) {
+      this.pendingCardSelectionId = null;
       return;
     }
 
@@ -2875,6 +3026,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     } finally {
       this.runInAngularZone(() => {
         this.cardChoiceRequestInFlight = false;
+        this.pendingCardSelectionId = null;
         if (shouldResumeAutoStep) {
           this.autoStepEnabled = true;
           this.startOrRestartAutoStepLoop();
@@ -3443,6 +3595,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.applyRunProgressFromSnapshot(response);
     this.applyScalingTelemetryFromSnapshot(response);
     this.applyCardChoiceStateFromSnapshot(response);
+    this.updateCardChoicePresentationFromEvents(response.events);
     this.applyFreeSlotFromSnapshot(response);
     this.activeFxCount = this.getActiveFxCount(this.scene);
     this.appendDamageLogs(applied.damageNumbers);
@@ -4015,6 +4168,60 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         continue;
       }
 
+      if (eventType === "poi_interacted") {
+        const poiId = this.readString(value["poiId"]);
+        const poiType = this.readString(value["poiType"]);
+        const tileX = this.readNumber(value["tileX"]);
+        const tileY = this.readNumber(value["tileY"]);
+        if (
+          !poiId ||
+          (poiType !== "altar" && poiType !== "chest" && poiType !== "species_chest") ||
+          tileX === null ||
+          tileY === null
+        ) {
+          continue;
+        }
+
+        mapped.push({
+          type: "poi_interacted",
+          poiId,
+          poiType,
+          tileX,
+          tileY,
+          species: this.readString(value["species"]) ?? undefined
+        });
+        continue;
+      }
+
+      if (eventType === "card_choice_offered") {
+        const choiceId = this.readString(value["choiceId"]);
+        if (!choiceId) {
+          continue;
+        }
+
+        mapped.push({
+          type: "card_choice_offered",
+          choiceId
+        });
+        continue;
+      }
+
+      if (eventType === "card_chosen") {
+        const choiceId = this.readString(value["choiceId"]);
+        if (!choiceId) {
+          continue;
+        }
+
+        const card = this.readRecord(value["card"]);
+        const cardName = this.readString(card?.["name"]) ?? undefined;
+        mapped.push({
+          type: "card_chosen",
+          choiceId,
+          cardName
+        });
+        continue;
+      }
+
       if (eventType === "elite_spawned" || eventType === "elite_died") {
         const eliteEntityId = this.readString(value["eliteEntityId"]);
         const mobType = this.readMobArchetypeValue(value["mobType"]);
@@ -4409,8 +4616,78 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     if (hasValidPendingChoice) {
       this.queuedCommands = [];
       this.queuedCommandCount = 0;
-  
+      this.pendingCardSelectionId = null;
+    } else {
+      this.pendingCardSelectionId = null;
+      this.currentCardChoiceLevelContext = null;
     }
+  }
+
+  private updateCardChoicePresentationFromEvents(events: StepBattleResponse["events"]): void {
+    if (Array.isArray(events) && events.length > 0) {
+      let latestSource: CardChoiceSource = "unknown";
+      let latestLevelContext: CardChoiceLevelContext | null = null;
+      for (const rawEvent of events) {
+        const eventRecord = rawEvent as Record<string, unknown>;
+        const eventType = this.readString(eventRecord["type"]);
+        if (!eventType) {
+          continue;
+        }
+
+        if (eventType === "level_up") {
+          latestSource = "level_up";
+          const newLevel = Math.max(
+            RUN_INITIAL_LEVEL,
+            Math.floor(this.readNumber(eventRecord["newLevel"]) ?? this.runLevel)
+          );
+          latestLevelContext = {
+            newLevel,
+            runXp: Math.max(0, Math.floor(this.readNumber(eventRecord["runXp"]) ?? this.runXp)),
+            xpToNextLevel: Math.max(1, Math.floor(this.readNumber(eventRecord["xpToNextLevel"]) ?? this.xpToNextLevel))
+          };
+          continue;
+        }
+
+        if (eventType === "poi_interacted") {
+          const poiType = this.readString(eventRecord["poiType"]);
+          if (poiType === "chest" || poiType === "species_chest") {
+            latestSource = "chest";
+            latestLevelContext = null;
+          }
+          continue;
+        }
+
+        if (eventType === "card_choice_offered") {
+          const choiceId = this.readString(eventRecord["choiceId"]);
+          if (choiceId) {
+            this.cardChoiceSourceByChoiceId.set(choiceId, latestSource);
+            if (latestSource === "level_up" && latestLevelContext) {
+              this.cardChoiceLevelContextByChoiceId.set(choiceId, latestLevelContext);
+            } else {
+              this.cardChoiceLevelContextByChoiceId.delete(choiceId);
+            }
+          }
+          continue;
+        }
+
+        if (eventType === "card_chosen") {
+          const choiceId = this.readString(eventRecord["choiceId"]);
+          if (choiceId) {
+            this.cardChoiceSourceByChoiceId.delete(choiceId);
+            this.cardChoiceLevelContextByChoiceId.delete(choiceId);
+          }
+        }
+      }
+    }
+
+    if (this.isAwaitingCardChoice && this.pendingCardChoiceId) {
+      this.cardChoiceSource = this.cardChoiceSourceByChoiceId.get(this.pendingCardChoiceId) ?? "unknown";
+      this.currentCardChoiceLevelContext = this.cardChoiceLevelContextByChoiceId.get(this.pendingCardChoiceId) ?? null;
+      return;
+    }
+
+    this.cardChoiceSource = "unknown";
+    this.currentCardChoiceLevelContext = null;
   }
 
   private toCardOffers(value: unknown): ArenaCardOffer[] {
@@ -4428,12 +4705,26 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         }
 
         seenIds.add(id);
+        const tags: string[] = [];
+        const isSkillCard = false;
+        const rarityWeight = 100;
+        const maxStacks = 3;
+        const currentStacks = 0;
+        const stackState = this.resolveCardStackPresentation(currentStacks, maxStacks, isSkillCard);
         offers.push({
           id,
           name: this.formatCardNameFromId(id),
           description: "",
-          isSkillCard: false,
-          currentStacks: 0
+          tags,
+          rarityWeight,
+          maxStacks,
+          isSkillCard,
+          currentStacks,
+          rarityTierLabel: this.resolveCardRarityTierLabel(rarityWeight, isSkillCard),
+          categoryLabel: this.resolveCardCategoryLabel(tags, isSkillCard),
+          impactLines: [],
+          stackStateLabel: stackState.label,
+          stackStateTone: stackState.tone
         });
         continue;
       }
@@ -4450,13 +4741,180 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
 
       const name = this.readString(typedEntry.name) ?? this.formatCardNameFromId(id);
       const description = this.readString(typedEntry.description) ?? "";
+      const tags = this.toCardTags(typedEntry.tags);
+      const rarityWeight = Math.max(1, Math.floor(this.readNumber(typedEntry.rarityWeight) ?? 100));
+      const maxStacks = Math.max(1, Math.floor(this.readNumber(typedEntry.maxStacks) ?? 3));
       const isSkillCard = typedEntry.isSkillCard === true;
-      const currentStacks = this.readNumber(typedEntry.currentStacks) ?? 0;
+      const currentStacks = Math.max(0, Math.min(maxStacks, Math.floor(this.readNumber(typedEntry.currentStacks) ?? 0)));
+      const stackState = this.resolveCardStackPresentation(currentStacks, maxStacks, isSkillCard);
       seenIds.add(id);
-      offers.push({ id, name, description, isSkillCard, currentStacks });
+      offers.push({
+        id,
+        name,
+        description,
+        tags,
+        rarityWeight,
+        maxStacks,
+        isSkillCard,
+        currentStacks,
+        rarityTierLabel: this.resolveCardRarityTierLabel(rarityWeight, isSkillCard),
+        categoryLabel: this.resolveCardCategoryLabel(tags, isSkillCard),
+        impactLines: this.resolveCardImpactLines(description, isSkillCard),
+        stackStateLabel: stackState.label,
+        stackStateTone: stackState.tone
+      });
     }
 
     return offers;
+  }
+
+  private toCardTags(value: unknown): string[] {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+
+    const normalized = value
+      .map((tag) => this.readString(tag))
+      .filter((tag): tag is string => !!tag)
+      .map((tag) => tag.trim().toLowerCase())
+      .filter((tag) => tag.length > 0);
+    return Array.from(new Set(normalized));
+  }
+
+  private resolveCardRarityTierLabel(rarityWeight: number, isSkillCard: boolean): string {
+    if (isSkillCard) {
+      return "Signature";
+    }
+
+    if (rarityWeight <= 40) {
+      return "Epic";
+    }
+
+    if (rarityWeight <= 70) {
+      return "Rare";
+    }
+
+    if (rarityWeight <= 95) {
+      return "Uncommon";
+    }
+
+    return "Common";
+  }
+
+  private resolveCardCategoryLabel(tags: ReadonlyArray<string>, isSkillCard: boolean): string {
+    if (isSkillCard) {
+      return "Skill Unlock";
+    }
+
+    const firstTag = tags.find((tag) => tag !== "skill");
+    if (!firstTag) {
+      return "Passive";
+    }
+
+    if (firstTag === "offense") {
+      return "Offense";
+    }
+
+    if (firstTag === "defense") {
+      return "Defense";
+    }
+
+    if (firstTag === "utility") {
+      return "Utility";
+    }
+
+    if (firstTag === "sustain") {
+      return "Sustain";
+    }
+
+    if (firstTag === "mobility") {
+      return "Mobility";
+    }
+
+    return this.formatCardNameFromId(firstTag);
+  }
+
+  private resolveCardImpactLines(description: string, isSkillCard: boolean): string[] {
+    const normalizedDescription = description.trim().replace(/\s+/g, " ");
+    if (!normalizedDescription) {
+      return [];
+    }
+
+    const statLines: string[] = [];
+    this.tryPushCardImpactLine(statLines, normalizedDescription, /([+-]\d+%?)\s*max hp/i, (value) => `${value} Max HP`);
+    const hasFlatDamage = /([+-]\d+%?)\s*flat damage/i.test(normalizedDescription);
+    this.tryPushCardImpactLine(statLines, normalizedDescription, /([+-]\d+%?)\s*flat damage/i, (value) => `${value} Flat Damage`);
+    if (!hasFlatDamage) {
+      this.tryPushCardImpactLine(statLines, normalizedDescription, /([+-]\d+%?)\s*damage/i, (value) => `${value} Damage`);
+    }
+    this.tryPushCardImpactLine(statLines, normalizedDescription, /([+-]\d+%?)\s*attack speed/i, (value) => `${value} Attack Speed`);
+    this.tryPushCardImpactLine(
+      statLines,
+      normalizedDescription,
+      /([+-]\d+%?)\s*global cooldown reduction/i,
+      (value) => `${value} Cooldown Reduction`
+    );
+    this.tryPushCardImpactLine(statLines, normalizedDescription, /([+-]\d+%?)\s*hp on hit/i, (value) => `${value} HP On Hit`);
+    if (statLines.length > 0) {
+      return statLines.slice(0, 3);
+    }
+
+    if (isSkillCard && normalizedDescription.includes(":")) {
+      const segments = normalizedDescription
+        .split(":")
+        .map((segment) => segment.trim())
+        .filter((segment) => segment.length > 0)
+        .map((segment) => segment.replace(/\.$/, ""));
+      return segments.slice(0, 2);
+    }
+
+    return normalizedDescription
+      .replace(/\.$/, "")
+      .split(/\s+and\s+|,\s+/i)
+      .map((segment) => segment.trim())
+      .filter((segment) => segment.length > 0)
+      .slice(0, 2);
+  }
+
+  private tryPushCardImpactLine(
+    output: string[],
+    description: string,
+    pattern: RegExp,
+    formatter: (value: string) => string
+  ): void {
+    const match = description.match(pattern);
+    if (!match || !match[1]) {
+      return;
+    }
+
+    const nextLine = formatter(match[1]);
+    if (!output.includes(nextLine)) {
+      output.push(nextLine);
+    }
+  }
+
+  private resolveCardStackPresentation(
+    currentStacks: number,
+    maxStacks: number,
+    isSkillCard: boolean
+  ): Readonly<{ label: string; tone: CardOfferStackTone }> {
+    if (maxStacks <= 1) {
+      if (isSkillCard) {
+        return { label: "One-time unlock", tone: "new" };
+      }
+
+      return { label: "Single stack card", tone: "new" };
+    }
+
+    if (currentStacks <= 0) {
+      return { label: `New pick (1/${maxStacks})`, tone: "new" };
+    }
+
+    if (currentStacks >= maxStacks) {
+      return { label: `Max stack (${maxStacks}/${maxStacks})`, tone: "maxed" };
+    }
+
+    return { label: `Current stack ${currentStacks}/${maxStacks}`, tone: "growing" };
   }
 
   private formatCardNameFromId(cardId: string): string {
@@ -4545,6 +5003,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         const newLevel = Math.max(RUN_INITIAL_LEVEL, Math.floor(this.readNumber(eventRecord["newLevel"]) ?? this.runLevel));
         const runXp = Math.max(0, Math.floor(this.readNumber(eventRecord["runXp"]) ?? this.runXp));
         const xpToNextLevel = Math.max(1, Math.floor(this.readNumber(eventRecord["xpToNextLevel"]) ?? this.computeRunXpToNextLevel(newLevel)));
+        this.triggerLevelUpPulse();
         nextEntries.push({
           id: `exp-${tick}-${this.expLogSequence++}`,
           tick,
@@ -5418,6 +5877,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.stopAutoStepLoop();
     this.clearAssistConfigDebounce();
     this.clearShieldBreakPulse();
+    this.clearLevelUpPulse();
 
     this.clearReplaySessionState();
     this.activeRunRecording = null;
@@ -5447,6 +5907,11 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.pendingCardChoiceId = null;
     this.offeredCards = [];
     this.selectedCards = [];
+    this.cardChoiceSource = "unknown";
+    this.pendingCardSelectionId = null;
+    this.cardChoiceSourceByChoiceId.clear();
+    this.cardChoiceLevelContextByChoiceId.clear();
+    this.currentCardChoiceLevelContext = null;
     this.cardChoiceRequestInFlight = false;
     this.eventFeedEntries = [];
     this.eventFeedSequence = 0;
@@ -5513,6 +5978,30 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     }
 
     this.shieldBreakPulseActive = false;
+  }
+
+  private triggerLevelUpPulse(): void {
+    if (this.levelUpPulseTimeoutId) {
+      clearTimeout(this.levelUpPulseTimeoutId);
+      this.levelUpPulseTimeoutId = null;
+    }
+
+    this.levelUpPulseActive = true;
+    this.levelUpPulseTimeoutId = setTimeout(() => {
+      this.runInAngularZone(() => {
+        this.levelUpPulseActive = false;
+      });
+      this.levelUpPulseTimeoutId = null;
+    }, LEVEL_UP_PULSE_DURATION_MS);
+  }
+
+  private clearLevelUpPulse(): void {
+    if (this.levelUpPulseTimeoutId) {
+      clearTimeout(this.levelUpPulseTimeoutId);
+      this.levelUpPulseTimeoutId = null;
+    }
+
+    this.levelUpPulseActive = false;
   }
 
   private canIssueBattleCommand(): boolean {

@@ -294,6 +294,57 @@ describe("ArenaEngine combat fx mapping", () => {
     expect(cueKinds).toContain("danger_hit");
   });
 
+  it("uses one assist callout system for the Exori family with tiered intensity", () => {
+    const engine = new ArenaEngine();
+    const scene = engine.createTestScene(7, 7, 32);
+    const actors = createActors();
+    const skills: ArenaSkillState[] = [
+      {
+        skillId: "exori_min",
+        displayName: "Exori Min",
+        cooldownRemainingMs: 0,
+        cooldownTotalMs: 800
+      },
+      {
+        skillId: "exori",
+        displayName: "Exori",
+        cooldownRemainingMs: 0,
+        cooldownTotalMs: 1200
+      },
+      {
+        skillId: "exori_mas",
+        displayName: "Exori Mas",
+        cooldownRemainingMs: 0,
+        cooldownTotalMs: 2000
+      }
+    ];
+    const events: ArenaBattleEvent[] = [
+      { type: "assist_cast", skillId: "exori_min", reason: "auto_offense" },
+      { type: "assist_cast", skillId: "exori", reason: "auto_offense" },
+      { type: "assist_cast", skillId: "exori_mas", reason: "auto_offense" }
+    ];
+
+    const applied = engine.applyBattleStep(scene, actors, skills, [], events);
+    const callouts = applied.scene.floatingTexts.filter((entry) =>
+      entry.kind === "combat_callout" && entry.tone === "assist"
+    );
+
+    expect(callouts).toHaveLength(3);
+    expect(callouts.map((entry) => entry.text)).toEqual(["EXORI MIN", "EXORI", "EXORI MAS"]);
+
+    const exoriMin = callouts.find((entry) => entry.text === "EXORI MIN");
+    const exori = callouts.find((entry) => entry.text === "EXORI");
+    const exoriMas = callouts.find((entry) => entry.text === "EXORI MAS");
+    expect(exoriMin).toBeDefined();
+    expect(exori).toBeDefined();
+    expect(exoriMas).toBeDefined();
+
+    expect(exoriMin!.durationMs).toBeLessThan(exori!.durationMs);
+    expect(exori!.durationMs).toBeLessThan(exoriMas!.durationMs);
+    expect(exoriMin!.fontScale ?? 1).toBeLessThan(exori!.fontScale ?? 1);
+    expect(exori!.fontScale ?? 1).toBeLessThan(exoriMas!.fontScale ?? 1);
+  });
+
   it("creates elite spawn/readability cues directly from elite lifecycle events", () => {
     const engine = new ArenaEngine();
     const scene = engine.createTestScene(7, 7, 32);
@@ -326,8 +377,30 @@ describe("ArenaEngine combat fx mapping", () => {
       }
     ]);
 
-    expect((applied.scene.momentCues ?? []).some((cue) => cue.kind === "elite_spawn")).toBeTrue();
-    expect(applied.scene.floatingTexts.some((entry) => entry.text === "ELITE!")).toBeTrue();
+    expect((applied.scene.momentCues ?? []).some((cue) => cue.kind === "elite_spawn")).toBe(true);
+    expect(applied.scene.floatingTexts.some((entry) => entry.text === "ELITE!")).toBe(true);
+  });
+
+  it("adds subtle mob death cue only for focused or threat-linked deaths", () => {
+    const engine = new ArenaEngine();
+    let scene = engine.createTestScene(7, 7, 32);
+    const actors = createActors();
+    scene = engine.applyActorStates(scene, actors);
+    scene = engine.applyTargetingState(scene, "mob.test.01", "mob.test.01", null);
+
+    const applied = engine.applyBattleStep(scene, actors, [], [], [
+      {
+        type: "death",
+        entityId: "mob.test.01",
+        entityType: "mob",
+        mobType: 2,
+        tileX: 5,
+        tileY: 4,
+        tickIndex: 40
+      }
+    ]);
+
+    expect((applied.scene.momentCues ?? []).some((cue) => cue.kind === "mob_death")).toBe(true);
   });
 
   it("chains piercing segment projectiles sequentially so each segment starts on previous impact", () => {
@@ -387,5 +460,40 @@ describe("ArenaEngine combat fx mapping", () => {
     const thirdAfterSecond = afterSecondImpact.projectileInstances.find((projectile) =>
       projectile.fromPos.x === 1 && projectile.fromPos.y === 5);
     expect(thirdAfterSecond?.startDelayRemainingMs ?? 0).toBe(0);
+  });
+
+  it("emits reward cues for chest interaction and reward card flow using existing events", () => {
+    const engine = new ArenaEngine();
+    const scene = engine.createTestScene(7, 7, 32);
+    const actors = createActors();
+    const events: ArenaBattleEvent[] = [
+      {
+        type: "poi_interacted",
+        poiId: "poi.chest.0007",
+        poiType: "chest",
+        tileX: 2,
+        tileY: 4
+      },
+      {
+        type: "card_choice_offered",
+        choiceId: "card-choice-07"
+      },
+      {
+        type: "card_chosen",
+        choiceId: "card-choice-07",
+        cardName: "Colossus Heart"
+      }
+    ];
+
+    const applied = engine.applyBattleStep(scene, actors, [], [], events);
+    const cueKinds = (applied.scene.momentCues ?? []).map((cue) => cue.kind);
+    const calloutTexts = applied.scene.floatingTexts.map((entry) => entry.text);
+    const calloutTones = applied.scene.floatingTexts.map((entry) => entry.tone);
+
+    expect(cueKinds.filter((kind) => kind === "reward_open").length).toBe(3);
+    expect(calloutTexts).toContain("REWARD");
+    expect(calloutTexts).toContain("CHOOSE REWARD");
+    expect(calloutTexts).toContain("COLOSSUS HEART");
+    expect(calloutTones.every((tone) => tone === "reward")).toBe(true);
   });
 });

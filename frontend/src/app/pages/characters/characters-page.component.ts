@@ -4,37 +4,30 @@ import { Subscription } from "rxjs";
 import { type AccountState, type CharacterState } from "../../api/account-api.service";
 import { AccountStore } from "../../account/account-store.service";
 import { mapInventoryToBackpackSlots, type BackpackSlot } from "../../shared/backpack/backpack-inventory.helpers";
-
-const CHARACTER_PORTRAIT_COLORS: Readonly<Record<string, string>> = {
-  "character:kina": "amber",
-  "character:ranged_prototype": "teal",
-  "kaelis_01": "purple",
-  "kaelis_02": "green"
-};
+import {
+  resolveCharacterPortraitVisual,
+  type CharacterPortraitVisual
+} from "../../shared/characters/character-visuals.helpers";
+import {
+  resolveKitBadgeForSkills,
+  resolveSkillPresentation,
+  type SkillVisualFamily,
+  type SkillVisualTier
+} from "../../shared/skills/skill-presentation.helpers";
 
 const CHARACTER_PLAYSTYLE: Readonly<Record<string, string>> = {
-  "character:kina": "Controls space with escalating melee AoE. A fast frontal strike leads into wider pulses — pressure builds as the arena fills.",
+  "character:kina": "Controls space with escalating melee AoE. A fast frontal strike leads into wider pulses - pressure builds as the arena fills.",
   "character:ranged_prototype": "Fires from distance using projectiles that bounce, pierce, and scatter. Trades melee pressure for reach and multi-target coverage."
 };
 
-const WEAPON_DESCRIPTIONS: Readonly<Record<string, string>> = {
-  "Exori Min": "Fast frontal strike — hits the tile directly ahead",
-  "Exori": "Square burst — damages all tiles within range 1",
-  "Exori Mas": "Wide pulse — diamond area, range 2, slow cooldown",
-  "Sigil Bolt": "Single-target ranged shot — fast and reliable",
-  "Shotgun": "Cone blast — damages a spread of tiles, pushes mobs back",
-  "Void Ricochet": "Bouncing bolt — reflects off borders, pierces every mob per segment"
-};
-
-function resolveKitType(fixedWeaponNames: ReadonlyArray<string>): { kitTypeLabel: string; kitBadge: "melee" | "ranged" | "unknown" } {
-  if (fixedWeaponNames.includes("Exori Min")) {
-    return { kitTypeLabel: "Melee Kit", kitBadge: "melee" };
-  }
-  if (fixedWeaponNames.includes("Sigil Bolt")) {
-    return { kitTypeLabel: "Ranged Kit", kitBadge: "ranged" };
-  }
-  return { kitTypeLabel: "Unknown Kit", kitBadge: "unknown" };
-}
+type CharacterFixedWeaponViewModel = Readonly<{
+  skillId: string | null;
+  label: string;
+  iconGlyph: string;
+  family: SkillVisualFamily;
+  tier: SkillVisualTier;
+  description: string;
+}>;
 
 type CharacterRow = Readonly<{
   characterId: string;
@@ -45,12 +38,11 @@ type CharacterRow = Readonly<{
   xp: number;
   isActive: boolean;
   isProvisional: boolean;
-  fixedKitLabel: string;
   equippedGearSlots: ReadonlyArray<CharacterGearSlotRow>;
-  fixedWeaponNames: ReadonlyArray<string>;
+  fixedWeapons: ReadonlyArray<CharacterFixedWeaponViewModel>;
   kitTypeLabel: string;
   kitBadge: "melee" | "ranged" | "unknown";
-  portraitColor: string;
+  portrait: CharacterPortraitVisual;
   xpProgressPercent: number;
 }>;
 
@@ -84,6 +76,7 @@ export class CharactersPageComponent implements OnInit, OnDestroy {
   private localSelectedCharacterId: string | null = null;
   private routeCharacterId: string | null = null;
   private routeSubscription: Subscription | null = null;
+  private readonly portraitImageFailures = new Set<string>();
 
   constructor(
     private readonly accountStore: AccountStore,
@@ -213,36 +206,92 @@ export class CharactersPageComponent implements OnInit, OnDestroy {
     return this.setActiveInFlightCharacterId === characterId;
   }
 
+  isPortraitImageFailed(characterId: string): boolean {
+    return this.portraitImageFailures.has(characterId);
+  }
+
+  onPortraitImageError(characterId: string): void {
+    if (!characterId) {
+      return;
+    }
+
+    this.portraitImageFailures.add(characterId);
+  }
+
   private toCharacterRow(character: CharacterState, account: AccountState): CharacterRow {
     const catalogEntry = this.accountStore.catalogs().characterById[character.characterId];
+    const name = catalogEntry?.displayName ?? character.name;
     const fixedWeaponNames: ReadonlyArray<string> = catalogEntry?.fixedWeaponNames ?? [];
-    const fixedKitLabel = fixedWeaponNames.length ? fixedWeaponNames.join(", ") : "Unknown";
-    const { kitTypeLabel, kitBadge } = resolveKitType(fixedWeaponNames);
-    const portraitColor = CHARACTER_PORTRAIT_COLORS[character.characterId] ?? "gray";
+    const fixedWeaponIds: ReadonlyArray<string> = catalogEntry?.fixedWeaponIds ?? [];
+    const fixedWeapons = this.mapFixedWeapons(fixedWeaponIds, fixedWeaponNames);
+    const kitBadge = resolveKitBadgeForSkills(
+      fixedWeapons.map((weapon) => ({ skillId: weapon.skillId, displayName: weapon.label }))
+    );
+    const kitTypeLabel = this.toKitLabel(kitBadge);
+    const portrait = resolveCharacterPortraitVisual({
+      characterId: character.characterId,
+      displayName: name
+    });
     const xpThreshold = Math.max(1, character.level * 100);
     const xpProgressPercent = Math.min(100, Math.max(0, (character.xp / xpThreshold) * 100));
 
     return {
       characterId: character.characterId,
-      name: catalogEntry?.displayName ?? character.name,
+      name,
       subtitle: catalogEntry?.subtitle ?? "",
       playstyle: CHARACTER_PLAYSTYLE[character.characterId] ?? "",
       level: character.level,
       xp: character.xp,
       isActive: account.activeCharacterId === character.characterId,
       isProvisional: catalogEntry?.isProvisional ?? false,
-      fixedKitLabel,
       equippedGearSlots: this.resolveEquippedGearSlots(character),
-      fixedWeaponNames,
+      fixedWeapons,
       kitTypeLabel,
       kitBadge,
-      portraitColor,
+      portrait,
       xpProgressPercent
     };
   }
 
-  weaponDescription(weaponName: string): string {
-    return WEAPON_DESCRIPTIONS[weaponName] ?? "";
+  private mapFixedWeapons(
+    fixedWeaponIds: ReadonlyArray<string>,
+    fixedWeaponNames: ReadonlyArray<string>
+  ): ReadonlyArray<CharacterFixedWeaponViewModel> {
+    const size = Math.max(fixedWeaponIds.length, fixedWeaponNames.length);
+    const rows: CharacterFixedWeaponViewModel[] = [];
+
+    for (let index = 0; index < size; index += 1) {
+      const id = fixedWeaponIds[index] ?? null;
+      const name = fixedWeaponNames[index] ?? null;
+      const presentation = resolveSkillPresentation({
+        skillId: id,
+        displayName: name,
+        fallbackLabel: name ?? id ?? `Skill ${index + 1}`
+      });
+
+      rows.push({
+        skillId: presentation.canonicalId ?? id,
+        label: presentation.label,
+        iconGlyph: presentation.iconGlyph,
+        family: presentation.family,
+        tier: presentation.tier,
+        description: presentation.description
+      });
+    }
+
+    return rows;
+  }
+
+  private toKitLabel(badge: "melee" | "ranged" | "unknown"): string {
+    if (badge === "melee") {
+      return "Melee Kit";
+    }
+
+    if (badge === "ranged") {
+      return "Ranged Kit";
+    }
+
+    return "Unknown Kit";
   }
 
   private resolveEquippedGearSlots(character: CharacterState): ReadonlyArray<CharacterGearSlotRow> {

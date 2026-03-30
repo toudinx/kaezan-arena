@@ -79,6 +79,21 @@ describe("CanvasLayeredRenderer readability markers", () => {
     expect(context.arcCallCount).toBeGreaterThan(0);
     expect(context.fillTextValues).not.toContain("F");
   });
+
+  it("renders an ELITE hp badge for elite mobs", () => {
+    const context = createContextStub();
+    const renderer = new CanvasLayeredRenderer(context.context as unknown as CanvasRenderingContext2D);
+    const viewport = {
+      canvasWidth: 480,
+      canvasHeight: 420,
+      originX: 0,
+      originY: 0
+    };
+    const scene = createScene();
+
+    (renderer as any).drawMobHpBars(scene, viewport);
+    expect(context.fillTextValues).toContain("ELITE");
+  });
 });
 
 describe("CanvasLayeredRenderer floating number palette", () => {

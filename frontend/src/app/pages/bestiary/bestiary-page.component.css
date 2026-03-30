@@ -20,6 +20,7 @@
   padding: 1.25rem 1.5rem;
   max-width: 1180px;
   margin: 0 auto;
+  animation: bestiary-fade-in var(--motion-emphasis) var(--motion-ease-emphasis) both;
 }
 
 /* ── Header ──────────────────────────────────────────────── */
@@ -54,6 +55,15 @@
   border-radius: 0.4rem;
   background: #0c1420;
   flex-shrink: 0;
+  transition: border-color var(--motion-fast) var(--motion-ease-standard),
+    transform var(--motion-fast) var(--motion-ease-standard),
+    box-shadow var(--motion-fast) var(--motion-ease-standard);
+}
+
+.bestiary-shell__echo:hover {
+  border-color: rgba(252, 211, 77, 0.45);
+  transform: translateY(var(--motion-lift-y));
+  box-shadow: var(--motion-shadow-soft);
 }
 
 .bestiary-shell__echo span {
@@ -112,6 +122,15 @@
   border-radius: 0.4rem;
   background: #0c1420;
   min-width: 80px;
+  transition: border-color var(--motion-fast) var(--motion-ease-standard),
+    transform var(--motion-fast) var(--motion-ease-standard),
+    box-shadow var(--motion-fast) var(--motion-ease-standard);
+}
+
+.bestiary-stat:hover {
+  border-color: #2b4662;
+  transform: translateY(-1px);
+  box-shadow: 0 8px 16px rgba(2, 6, 23, 0.24);
 }
 
 .bestiary-stat strong {
@@ -154,6 +173,8 @@
   font-size: 0.82rem;
   padding: 0.42rem 0.55rem;
   min-width: 240px;
+  transition: border-color var(--motion-fast) var(--motion-ease-standard),
+    box-shadow var(--motion-fast) var(--motion-ease-standard);
 }
 
 .bestiary-search input::placeholder {
@@ -163,6 +184,7 @@
 .bestiary-search input:focus {
   outline: none;
   border-color: #2a4260;
+  box-shadow: var(--motion-outline-focus);
 }
 
 /* ── Two-column layout ───────────────────────────────────── */
@@ -203,17 +225,24 @@
   gap: 0.22rem;
   padding: 0.55rem 0.65rem;
   text-align: left;
-  transition: border-color 0.15s ease, background 0.15s ease;
+  transition: border-color var(--motion-fast) var(--motion-ease-standard),
+    background-color var(--motion-fast) var(--motion-ease-standard),
+    transform var(--motion-fast) var(--motion-ease-standard),
+    box-shadow var(--motion-fast) var(--motion-ease-standard),
+    opacity var(--motion-fast) var(--motion-ease-standard);
 }
 
 .species-row:hover {
   border-color: #2a4260;
   background: #0f1e30;
+  transform: translateY(-1px);
+  box-shadow: 0 8px 16px rgba(2, 6, 23, 0.22);
 }
 
 .species-row--selected {
   border-color: #2dd4bf;
   background: #0d1e28;
+  box-shadow: 0 0 0 1px rgba(45, 212, 191, 0.3) inset, 0 10px 18px rgba(13, 148, 136, 0.2);
 }
 
 .species-row--zero {
@@ -286,6 +315,7 @@
   height: 100%;
   background: linear-gradient(90deg, #1a5a8a, #2dd4bf);
   border-radius: 3px;
+  transition: width var(--motion-emphasis) var(--motion-ease-emphasis);
 }
 
 /* ── RIGHT: Detail panel ─────────────────────────────────── */
@@ -325,6 +355,10 @@
   background: #0c1420;
   color: #2e4a62;
   flex-shrink: 0;
+  transition: border-color var(--motion-fast) var(--motion-ease-standard),
+    background-color var(--motion-fast) var(--motion-ease-standard),
+    color var(--motion-fast) var(--motion-ease-standard),
+    transform var(--motion-fast) var(--motion-ease-standard);
 }
 
 .species-detail__rank-badge--earned {
@@ -356,6 +390,15 @@
   border-radius: 0.4rem;
   background: #0c1420;
   min-width: 90px;
+  transition: border-color var(--motion-fast) var(--motion-ease-standard),
+    transform var(--motion-fast) var(--motion-ease-standard),
+    box-shadow var(--motion-fast) var(--motion-ease-standard);
+}
+
+.species-detail__stat:hover {
+  border-color: #2b4662;
+  transform: translateY(-1px);
+  box-shadow: 0 8px 16px rgba(2, 6, 23, 0.22);
 }
 
 .species-detail__stat strong {
@@ -439,7 +482,7 @@
   height: 100%;
   background: linear-gradient(90deg, #1a5a8a, #2dd4bf);
   border-radius: 4px;
-  transition: width 0.4s ease;
+  transition: width var(--motion-emphasis) var(--motion-ease-emphasis);
 }
 
 .species-detail__progress-tally {
@@ -509,17 +552,28 @@
   font-size: 0.76rem;
   font-weight: 600;
   padding: 0.4rem 0.7rem;
-  transition: background 0.15s ease, border-color 0.15s ease;
+  transition: background-color var(--motion-fast) var(--motion-ease-standard),
+    border-color var(--motion-fast) var(--motion-ease-standard),
+    color var(--motion-fast) var(--motion-ease-standard),
+    transform var(--motion-fast) var(--motion-ease-standard),
+    box-shadow var(--motion-fast) var(--motion-ease-standard);
 }
 
 .crafting-buttons button:hover:not(:disabled) {
   background: #2563eb;
   color: #fff;
+  transform: translateY(-1px);
+  box-shadow: 0 10px 18px rgba(37, 99, 235, 0.25);
 }
 
 .crafting-buttons button:disabled {
   cursor: not-allowed;
   opacity: 0.4;
+}
+
+.crafting-buttons button:focus-visible {
+  outline: none;
+  box-shadow: var(--motion-outline-focus);
 }
 
 /* Inventory sections */
@@ -564,6 +618,15 @@
   flex-direction: column;
   gap: 0.15rem;
   padding: 0.42rem 0.5rem;
+  transition: border-color var(--motion-fast) var(--motion-ease-standard),
+    transform var(--motion-fast) var(--motion-ease-standard),
+    box-shadow var(--motion-fast) var(--motion-ease-standard);
+}
+
+.inventory-item:hover {
+  border-color: #2d4966;
+  transform: translateX(2px);
+  box-shadow: 0 8px 14px rgba(2, 6, 23, 0.2);
 }
 
 .inventory-item strong {
@@ -595,17 +658,26 @@
   font-size: 0.68rem;
   font-weight: 600;
   padding: 0.28rem 0.5rem;
-  transition: background 0.15s ease;
+  transition: background-color var(--motion-fast) var(--motion-ease-standard),
+    border-color var(--motion-fast) var(--motion-ease-standard),
+    color var(--motion-fast) var(--motion-ease-standard),
+    transform var(--motion-fast) var(--motion-ease-standard);
 }
 
 .inventory-item__actions button:hover:not(:disabled) {
   background: #2563eb;
   color: #fff;
+  transform: translateY(-1px);
 }
 
 .inventory-item__actions button:disabled {
   cursor: not-allowed;
   opacity: 0.45;
+}
+
+.inventory-item__actions button:focus-visible {
+  outline: none;
+  box-shadow: var(--motion-outline-focus);
 }
 
 .inventory-item__actions--salvage button {
@@ -624,6 +696,7 @@
 .inventory-item--highlight {
   border-color: #2dd4bf !important;
   box-shadow: 0 0 0 1px rgba(45, 212, 191, 0.2);
+  animation: bestiary-highlight-pulse 700ms var(--motion-ease-emphasis);
 }
 
 .inventory-item--common    { border-left: 3px solid #64748b; }
@@ -722,5 +795,27 @@
 @media (max-width: 900px) {
   .bestiary-layout {
     grid-template-columns: 1fr;
+  }
+}
+
+@keyframes bestiary-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes bestiary-highlight-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(45, 212, 191, 0.45);
+  }
+
+  100% {
+    box-shadow: 0 0 0 8px rgba(45, 212, 191, 0);
   }
 }

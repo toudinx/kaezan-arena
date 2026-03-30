@@ -38,15 +38,29 @@ const MOB_KNOCKBACK_SLIDE_DURATION_MS = 100;
 const PHYSICAL_ELEMENT = 6;
 const SHIELD_BREAK_CUE_DURATION_MS = 560;
 const ELITE_CUE_DURATION_MS = 760;
+const MOB_DEATH_CUE_DURATION_MS = 420;
 const ASSIST_CUE_DURATION_MS = 520;
 const DANGER_HIT_CUE_DURATION_MS = 420;
 const PLAYER_DEATH_CUE_DURATION_MS = 1200;
-const HIGH_IMPACT_ASSIST_SKILL_IDS = new Set<string>([
-  "exori_mas",
-  "avalanche",
-  "shotgun",
-  "void_ricochet"
-]);
+const REWARD_OPEN_CUE_DURATION_MS = 560;
+const REWARD_CHOICE_CUE_DURATION_MS = 520;
+const REWARD_CHOSEN_CUE_DURATION_MS = 460;
+
+type AssistCastCalloutProfile = Readonly<{
+  cueDurationMs: number;
+  fontScale: number;
+}>;
+
+const ASSIST_CAST_CALLOUT_PROFILES: Readonly<Record<string, AssistCastCalloutProfile>> = {
+  // Exori family: same callout system, distinct readability hierarchy.
+  exori_min: { cueDurationMs: 380, fontScale: 0.8 },
+  exori: { cueDurationMs: 500, fontScale: 0.96 },
+  exori_mas: { cueDurationMs: 640, fontScale: 1.14 },
+  // Existing high-impact assists keep default callout weight.
+  avalanche: { cueDurationMs: ASSIST_CUE_DURATION_MS, fontScale: 1 },
+  shotgun: { cueDurationMs: ASSIST_CUE_DURATION_MS, fontScale: 1 },
+  void_ricochet: { cueDurationMs: ASSIST_CUE_DURATION_MS, fontScale: 1 }
+};
 
 export class ArenaEngine {
   createTestScene(columns = 7, rows = 7, tileSize = 48): ArenaScene {
@@ -275,12 +289,25 @@ export class ArenaEngine {
           spawnedFloatingTexts.push(
             this.createCombatCalloutText("DEFEAT", event.tileX, event.tileY, "danger", PLAYER_DEATH_CUE_DURATION_MS, 1.06)
           );
+          continue;
+        }
+
+        const isFocusedDeath = event.entityId === nextScene.effectiveTargetEntityId ||
+          event.entityId === nextScene.lockedTargetEntityId ||
+          event.entityId === threatMobEntityId;
+        if (isFocusedDeath) {
+          spawnedMomentCues.push(this.createMomentCue("mob_death", event.tileX, event.tileY, MOB_DEATH_CUE_DURATION_MS));
         }
         continue;
       }
 
       if (event.type === "assist_cast") {
-        if (!playerActorId || !this.isHighImpactAssistSkill(event.skillId)) {
+        if (!playerActorId) {
+          continue;
+        }
+
+        const calloutProfile = this.resolveAssistCastCalloutProfile(event.skillId);
+        if (!calloutProfile) {
           continue;
         }
 
@@ -290,9 +317,67 @@ export class ArenaEngine {
         }
 
         const label = this.resolveAssistCastLabel(event.skillId, nextScene);
-        spawnedMomentCues.push(this.createMomentCue("assist_cast", playerActor.tileX, playerActor.tileY, ASSIST_CUE_DURATION_MS));
+        spawnedMomentCues.push(
+          this.createMomentCue("assist_cast", playerActor.tileX, playerActor.tileY, calloutProfile.cueDurationMs)
+        );
         spawnedFloatingTexts.push(
-          this.createCombatCalloutText(label, playerActor.tileX, playerActor.tileY, "assist", ASSIST_CUE_DURATION_MS)
+          this.createCombatCalloutText(
+            label,
+            playerActor.tileX,
+            playerActor.tileY,
+            "assist",
+            calloutProfile.cueDurationMs,
+            calloutProfile.fontScale
+          )
+        );
+        continue;
+      }
+
+      if (event.type === "poi_interacted") {
+        if (event.poiType === "chest" || event.poiType === "species_chest") {
+          spawnedMomentCues.push(this.createMomentCue("reward_open", event.tileX, event.tileY, REWARD_OPEN_CUE_DURATION_MS));
+          spawnedFloatingTexts.push(
+            this.createCombatCalloutText("REWARD", event.tileX, event.tileY, "reward", REWARD_OPEN_CUE_DURATION_MS, 0.9)
+          );
+        }
+        continue;
+      }
+
+      if (event.type === "card_choice_offered") {
+        if (!playerActorId) {
+          continue;
+        }
+
+        const playerActor = nextScene.actorsById[playerActorId] ?? scene.actorsById[playerActorId];
+        if (!playerActor) {
+          continue;
+        }
+
+        spawnedMomentCues.push(
+          this.createMomentCue("reward_open", playerActor.tileX, playerActor.tileY, REWARD_CHOICE_CUE_DURATION_MS)
+        );
+        spawnedFloatingTexts.push(
+          this.createCombatCalloutText("CHOOSE REWARD", playerActor.tileX, playerActor.tileY, "reward", REWARD_CHOICE_CUE_DURATION_MS, 0.92)
+        );
+        continue;
+      }
+
+      if (event.type === "card_chosen") {
+        if (!playerActorId) {
+          continue;
+        }
+
+        const playerActor = nextScene.actorsById[playerActorId] ?? scene.actorsById[playerActorId];
+        if (!playerActor) {
+          continue;
+        }
+
+        const text = this.resolveCardChosenLabel(event.cardName);
+        spawnedMomentCues.push(
+          this.createMomentCue("reward_open", playerActor.tileX, playerActor.tileY, REWARD_CHOSEN_CUE_DURATION_MS)
+        );
+        spawnedFloatingTexts.push(
+          this.createCombatCalloutText(text, playerActor.tileX, playerActor.tileY, "reward", REWARD_CHOSEN_CUE_DURATION_MS, 0.9)
         );
         continue;
       }
@@ -968,8 +1053,8 @@ export class ArenaEngine {
     };
   }
 
-  private isHighImpactAssistSkill(skillId: string): boolean {
-    return HIGH_IMPACT_ASSIST_SKILL_IDS.has(skillId);
+  private resolveAssistCastCalloutProfile(skillId: string): AssistCastCalloutProfile | null {
+    return ASSIST_CAST_CALLOUT_PROFILES[skillId] ?? null;
   }
 
   private resolveAssistCastLabel(skillId: string, scene: ArenaScene): string {
@@ -983,6 +1068,15 @@ export class ArenaEngine {
       .map((token) => (token.length > 0 ? token[0].toUpperCase() + token.slice(1) : token))
       .join(" ")
       .toUpperCase();
+  }
+
+  private resolveCardChosenLabel(cardName: string | undefined): string {
+    const trimmed = typeof cardName === "string" ? cardName.trim() : "";
+    if (trimmed.length > 0) {
+      return trimmed.toUpperCase();
+    }
+
+    return "REWARD CLAIMED";
   }
 
   private toAttackFxInstance(event: Extract<ArenaBattleEvent, { type: "attack_fx" }>): AttackFxInstance {

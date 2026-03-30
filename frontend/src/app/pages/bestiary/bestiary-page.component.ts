@@ -1,4 +1,4 @@
-import { Component, OnInit } from "@angular/core";
+import { Component, OnInit, computed, effect, signal } from "@angular/core";
 import {
   type BestiaryCraftSlot,
   type BestiarySpecies,
@@ -67,19 +67,40 @@ function computeRank(killsTotal: number): number {
 export class BestiaryPageComponent implements OnInit {
   readonly primalCoreCost = 20;
   readonly echoFragmentsCost = 100;
-  speciesRows: BestiaryRow[] = [];
-  selectedSpeciesId: string | null = null;
+  private readonly selectedSpeciesIdSignal = signal<string | null>(null);
+  private readonly speciesRowsSignal = computed(() =>
+    this.buildRows(this.accountStore.catalogs().speciesCatalog, this.accountStore.activeCharacter())
+  );
   searchQuery = "";
   isCrafting = false;
   refiningItemInstanceId: string | null = null;
   salvagingItemInstanceId: string | null = null;
   actionFeedback: string | null = null;
   lastUpdatedItemInstanceId: string | null = null;
+  private readonly maintainSelectionEffect = effect(() => {
+    const rows = this.speciesRowsSignal();
+    const currentSelection = this.selectedSpeciesIdSignal();
+
+    if (rows.length === 0) {
+      if (currentSelection !== null) {
+        this.selectedSpeciesIdSignal.set(null);
+      }
+      return;
+    }
+
+    if (!currentSelection || !rows.some((row) => row.speciesId === currentSelection)) {
+      this.selectedSpeciesIdSignal.set(rows[0].speciesId);
+    }
+  }, { allowSignalWrites: true });
 
   constructor(private readonly accountStore: AccountStore) {}
 
   async ngOnInit(): Promise<void> {
-    await this.loadBestiary();
+    try {
+      await this.loadBestiary();
+    } catch {
+      // Render reads store error state.
+    }
   }
 
   get isLoading(): boolean {
@@ -147,6 +168,14 @@ export class BestiaryPageComponent implements OnInit {
     return this.speciesRows.find((row) => row.speciesId === this.selectedSpeciesId) ?? null;
   }
 
+  get speciesRows(): BestiaryRow[] {
+    return this.speciesRowsSignal();
+  }
+
+  get selectedSpeciesId(): string | null {
+    return this.selectedSpeciesIdSignal();
+  }
+
   get selectedSpeciesName(): string {
     return this.selectedSpecies?.displayName ?? "No species selected";
   }
@@ -161,7 +190,7 @@ export class BestiaryPageComponent implements OnInit {
   }
 
   selectSpecies(speciesId: string): void {
-    this.selectedSpeciesId = speciesId;
+    this.selectedSpeciesIdSignal.set(speciesId);
   }
 
   onSearchInput(event: Event): void {
@@ -286,7 +315,6 @@ export class BestiaryPageComponent implements OnInit {
     try {
       const crafted = await this.accountStore.craftBestiaryItem(selected.speciesId, slot);
       this.lastUpdatedItemInstanceId = crafted.craftedItem.instanceId;
-      this.syncBestiaryRows();
       const craftedLabel = this.accountStore.catalogs().itemById[crafted.craftedItem.definitionId]?.displayName ??
         crafted.craftedItem.definitionId;
       this.actionFeedback = `Crafted ${craftedLabel} from ${selected.displayName}.`;
@@ -307,7 +335,6 @@ export class BestiaryPageComponent implements OnInit {
     try {
       const refined = await this.accountStore.refineItem(item.instanceId);
       this.lastUpdatedItemInstanceId = refined.refinedItem.instanceId;
-      this.syncBestiaryRows();
       this.actionFeedback = `Refined ${item.displayName} to ${this.formatRarityLabel(this.normalizeRarity(refined.refinedItem.rarity) ?? "unknown")}.`;
     } catch (error) {
       this.actionFeedback = this.stringifyError(error);
@@ -334,7 +361,6 @@ export class BestiaryPageComponent implements OnInit {
     try {
       const salvaged = await this.accountStore.salvageItem(item.instanceId);
       this.lastUpdatedItemInstanceId = null;
-      this.syncBestiaryRows();
       this.actionFeedback = `Salvaged ${item.displayName}: +${salvaged.primalCoreAwarded} Primal Core (${this.toSpeciesLabel(salvaged.speciesId)}).`;
     } catch (error) {
       this.actionFeedback = this.stringifyError(error);
@@ -344,23 +370,7 @@ export class BestiaryPageComponent implements OnInit {
   }
 
   private async loadBestiary(): Promise<void> {
-    try {
-      await this.accountStore.load();
-      this.syncBestiaryRows();
-    } catch {
-      this.speciesRows = [];
-      this.selectedSpeciesId = null;
-    }
-  }
-
-  private syncBestiaryRows(): void {
-    const selectedSpeciesId = this.selectedSpeciesId;
-    const speciesCatalog = this.accountStore.catalogs().speciesCatalog;
-    this.speciesRows = this.buildRows(speciesCatalog, this.activeCharacter);
-    this.selectedSpeciesId =
-      selectedSpeciesId && this.speciesRows.some((row) => row.speciesId === selectedSpeciesId)
-        ? selectedSpeciesId
-        : this.speciesRows[0]?.speciesId ?? null;
+    await this.accountStore.load();
   }
 
   private buildRows(speciesCatalog: ReadonlyArray<BestiarySpecies>, character: CharacterState | null): BestiaryRow[] {

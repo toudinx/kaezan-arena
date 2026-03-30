@@ -2,7 +2,17 @@ import { Component, OnInit } from "@angular/core";
 import { RouterLink } from "@angular/router";
 import type { CharacterState } from "../../api/account-api.service";
 import { AccountStore } from "../../account/account-store.service";
+import {
+  resolveCharacterPortraitVisual,
+  type CharacterPortraitVisual
+} from "../../shared/characters/character-visuals.helpers";
 import type { RunResultV1 } from "../../shared/run-results/run-result-logger";
+import {
+  resolveKitBadgeForSkills,
+  resolveSkillPresentation,
+  type SkillVisualFamily,
+  type SkillVisualTier
+} from "../../shared/skills/skill-presentation.helpers";
 
 const RUN_RESULT_STORAGE_KEY = "kaezan_run_results_v1";
 const RANK_THRESHOLDS: ReadonlyArray<number> = [0, 10, 30, 60, 100];
@@ -20,18 +30,13 @@ function computeRank(killsTotal: number): number {
   return rank;
 }
 
-const CHARACTER_PORTRAIT_COLORS: Readonly<Record<string, string>> = {
-  "character:kina": "amber",
-  "character:ranged_prototype": "teal",
-  "kaelis_01": "purple",
-  "kaelis_02": "green"
-};
-
-function resolveHubKitType(fixedWeaponNames: ReadonlyArray<string>): { label: string; badge: "melee" | "ranged" | "unknown" } {
-  if (fixedWeaponNames.includes("Exori Min")) return { label: "Melee Kit", badge: "melee" };
-  if (fixedWeaponNames.includes("Sigil Bolt")) return { label: "Ranged Kit", badge: "ranged" };
-  return { label: "Unknown Kit", badge: "unknown" };
-}
+type HomeFixedWeaponViewModel = Readonly<{
+  skillId: string | null;
+  label: string;
+  iconGlyph: string;
+  family: SkillVisualFamily;
+  tier: SkillVisualTier;
+}>;
 
 function formatMs(ms: number): string {
   const totalSec = Math.floor(ms / 1000);
@@ -57,6 +62,7 @@ function formatTokenId(id: string): string {
 })
 export class HomePageComponent implements OnInit {
   lastRunSummary: RunResultV1 | null = null;
+  private readonly portraitImageFailures = new Set<string>();
 
   constructor(private readonly accountStore: AccountStore) {}
 
@@ -93,22 +99,56 @@ export class HomePageComponent implements OnInit {
     return catalogEntry?.displayName ?? char.name;
   }
 
-  get activeCharacterPortraitColor(): string {
-    const charId = this.activeCharacter?.characterId ?? "";
-    return CHARACTER_PORTRAIT_COLORS[charId] ?? "gray";
+  get activeCharacterPortrait(): CharacterPortraitVisual {
+    return resolveCharacterPortraitVisual({
+      characterId: this.activeCharacter?.characterId ?? null,
+      displayName: this.activeCharacterName
+    });
   }
 
   get activeCharacterFixedWeaponNames(): ReadonlyArray<string> {
+    return this.activeCharacterFixedWeapons.map((weapon) => weapon.label);
+  }
+
+  get activeCharacterFixedWeapons(): ReadonlyArray<HomeFixedWeaponViewModel> {
     const charId = this.activeCharacter?.characterId ?? "";
-    return this.accountStore.catalogs().characterById[charId]?.fixedWeaponNames ?? [];
+    const catalogEntry = this.accountStore.catalogs().characterById[charId];
+    const fixedWeaponIds = catalogEntry?.fixedWeaponIds ?? [];
+    const fixedWeaponNames = catalogEntry?.fixedWeaponNames ?? [];
+    const size = Math.max(fixedWeaponIds.length, fixedWeaponNames.length);
+    const rows: HomeFixedWeaponViewModel[] = [];
+
+    for (let index = 0; index < size; index += 1) {
+      const skillId = fixedWeaponIds[index] ?? null;
+      const displayName = fixedWeaponNames[index] ?? null;
+      const presentation = resolveSkillPresentation({
+        skillId,
+        displayName,
+        fallbackLabel: displayName ?? skillId ?? `Skill ${index + 1}`
+      });
+      rows.push({
+        skillId: presentation.canonicalId ?? skillId,
+        label: presentation.label,
+        iconGlyph: presentation.iconGlyph,
+        family: presentation.family,
+        tier: presentation.tier
+      });
+    }
+
+    return rows;
   }
 
   get activeCharacterKitTypeLabel(): string {
-    return resolveHubKitType(this.activeCharacterFixedWeaponNames).label;
+    return this.toKitLabel(this.activeCharacterKitBadge);
   }
 
   get activeCharacterKitBadge(): "melee" | "ranged" | "unknown" {
-    return resolveHubKitType(this.activeCharacterFixedWeaponNames).badge;
+    return resolveKitBadgeForSkills(
+      this.activeCharacterFixedWeapons.map((weapon) => ({
+        skillId: weapon.skillId,
+        displayName: weapon.label
+      }))
+    );
   }
 
   get activeCharacterXpProgressPercent(): number {
@@ -220,6 +260,24 @@ export class HomePageComponent implements OnInit {
     return (this.lastRunSummary?.cardsChosen ?? []).map(formatTokenId);
   }
 
+  isActiveCharacterPortraitImageFailed(): boolean {
+    const activeCharacterId = this.activeCharacter?.characterId ?? "";
+    if (!activeCharacterId) {
+      return false;
+    }
+
+    return this.portraitImageFailures.has(activeCharacterId);
+  }
+
+  onActiveCharacterPortraitImageError(): void {
+    const activeCharacterId = this.activeCharacter?.characterId ?? "";
+    if (!activeCharacterId) {
+      return;
+    }
+
+    this.portraitImageFailures.add(activeCharacterId);
+  }
+
   private resolveEquippedName(slot: "weapon" | "armor" | "relic"): string {
     const character = this.activeCharacter;
     if (!character) return "None";
@@ -235,6 +293,18 @@ export class HomePageComponent implements OnInit {
     if (!instance) return `${instanceId} (missing)`;
 
     return this.accountStore.catalogs().itemById[instance.definitionId]?.displayName ?? instance.definitionId;
+  }
+
+  private toKitLabel(badge: "melee" | "ranged" | "unknown"): string {
+    if (badge === "melee") {
+      return "Melee Kit";
+    }
+
+    if (badge === "ranged") {
+      return "Ranged Kit";
+    }
+
+    return "Unknown Kit";
   }
 
   private readLastRunSummary(): RunResultV1 | null {

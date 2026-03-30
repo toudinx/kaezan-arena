@@ -58,6 +58,7 @@ export class BackpackWindowComponent implements OnChanges, OnDestroy {
   inspectSlotId: string | null = null;
   contextMenu: BackpackContextMenuState | null = null;
   pulsingSlotIds = new Set<string>();
+  private readonly iconImageFailures = new Set<string>();
   private pulseTimeoutBySlotId: Record<string, ReturnType<typeof setTimeout> | undefined> = {};
 
   constructor(private readonly hostRef: ElementRef<HTMLElement>) {}
@@ -116,7 +117,7 @@ export class BackpackWindowComponent implements OnChanges, OnDestroy {
   }
 
   get selectedSlotRarityClass(): string {
-    return this.resolveRarityClass(this.selectedSlot?.rarity ?? "common");
+    return this.selectedSlot?.rarityClass ?? "common";
   }
 
   get selectedSlot(): BackpackSlot | null {
@@ -323,29 +324,44 @@ export class BackpackWindowComponent implements OnChanges, OnDestroy {
     return this.pulsingSlotIds.has(slotId);
   }
 
-  trackSlotById(_index: number, slot: BackpackSlot): string {
-    return slot.slotId;
+  shouldRenderItemIconImage(slot: BackpackSlot | null | undefined): boolean {
+    if (!slot?.iconImageUrl) {
+      return false;
+    }
+
+    return !this.iconImageFailures.has(slot.slotId);
   }
 
-  resolveRarityClass(rarity: string): string {
-    const normalized = (rarity ?? "").trim().toLowerCase();
-    if (normalized === "ascendant") {
-      return "ascendant";
+  onItemIconError(slotId: string): void {
+    if (!slotId) {
+      return;
     }
 
-    if (normalized === "legendary") {
-      return "legendary";
-    }
+    this.iconImageFailures.add(slotId);
+  }
 
-    if (normalized === "epic") {
-      return "epic";
+  getSlotFallbackGlyph(slot: "weapon" | "armor" | "relic"): string {
+    if (slot === "weapon") {
+      return "WP";
     }
-
-    if (normalized === "rare") {
-      return "rare";
+    if (slot === "armor") {
+      return "AR";
     }
+    return "RL";
+  }
 
-    return "common";
+  getSlotFallbackTone(slot: "weapon" | "armor" | "relic"): string {
+    if (slot === "weapon") {
+      return "weapon";
+    }
+    if (slot === "armor") {
+      return "armor";
+    }
+    return "relic";
+  }
+
+  trackSlotById(_index: number, slot: BackpackSlot): string {
+    return slot.slotId;
   }
 
   @HostListener("document:mousedown", ["$event"])

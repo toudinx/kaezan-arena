@@ -1,33 +1,41 @@
 import type { ArenaBuffState, ArenaSkillState } from "../../arena/engine/arena-engine.types";
+import {
+  normalizeSkillToken,
+  resolveSkillPresentation,
+  type SkillVisualFamily,
+  type SkillVisualTier
+} from "../../shared/skills/skill-presentation.helpers";
 import { computeCooldownFraction, formatCooldownSeconds, isReadyButBlockedByGcd } from "./skill-cooldown.helpers";
 
 export type StatusSkillBinding = Readonly<{
   keyLabel: string;
   skillId: string;
-  label: string;
-  accentColor: string;
 }>;
 
-// Fixed 3-slot kit bindings. Avalanche removed — it lives in the free slot (rune system).
+// Fixed 3-slot kit bindings. Avalanche lives in the free slot (rune system).
 export const STATUS_SKILL_BINDINGS: readonly StatusSkillBinding[] = [
-  { keyLabel: "1", skillId: "exori", label: "Exori", accentColor: "#f97316" },
-  { keyLabel: "2", skillId: "exori_min", label: "Exori Min", accentColor: "#ef4444" },
-  { keyLabel: "3", skillId: "exori_mas", label: "Exori Mas", accentColor: "#7c3aed" }
+  { keyLabel: "1", skillId: "exori" },
+  { keyLabel: "2", skillId: "exori_min" },
+  { keyLabel: "3", skillId: "exori_mas" }
 ] as const;
 
 export type StatusSkillSlotViewModel = Readonly<{
   keyLabel: string;
   skillId: string;
   label: string;
+  iconGlyph: string;
   accentColor: string;
+  visualFamily: SkillVisualFamily;
+  visualTier: SkillVisualTier;
   cooldownRemainingMs: number;
   cooldownTotalMs: number;
   cooldownFraction: number;
   cooldownText: string;
+  tooltip: string;
   blockedByGlobalCooldown: boolean;
   disabled: boolean;
   isLocked: boolean;
-  /** True for the fourth free (rune) slot — styled distinctly from the 3 fixed slots. */
+  /** True for the fourth free (rune) slot - styled distinctly from the 3 fixed slots. */
   isFreeSlot: boolean;
 }>;
 
@@ -53,6 +61,11 @@ export function mapStatusSkillSlots(
 
   return bindings.map((binding) => {
     const state = byId[binding.skillId];
+    const presentation = resolveSkillPresentation({
+      skillId: state?.skillId ?? binding.skillId,
+      displayName: state?.displayName ?? null
+    });
+
     const isLocked = state === undefined;
     const remainingMs = Math.max(0, state?.cooldownRemainingMs ?? 0);
     const totalMs = Math.max(0, state?.cooldownTotalMs ?? 0);
@@ -66,12 +79,16 @@ export function mapStatusSkillSlots(
     return {
       keyLabel: binding.keyLabel,
       skillId: binding.skillId,
-      label: state?.displayName ?? binding.label,
-      accentColor: binding.accentColor,
+      label: presentation.label,
+      iconGlyph: presentation.iconGlyph,
+      accentColor: presentation.accentColor,
+      visualFamily: presentation.family,
+      visualTier: presentation.tier,
       cooldownRemainingMs: remainingMs,
       cooldownTotalMs: totalMs,
       cooldownFraction: computeCooldownFraction(remainingMs, totalMs),
       cooldownText,
+      tooltip: buildSkillTooltip(presentation.label, cooldownText, isLocked, false),
       blockedByGlobalCooldown: blockedByGcd,
       disabled: isLocked || remainingMs > 0 || blockedByGcd,
       isLocked,
@@ -92,13 +109,22 @@ export function buildFreeSlotViewModel(
   globalCooldownRemainingMs = 0
 ): StatusSkillSlotViewModel {
   const isLocked = !freeSlotWeaponName;
-  const label = freeSlotWeaponName ?? "—";
-  const accentColor = "#64748b";
-  const gcdRemaining = Math.max(0, globalCooldownRemainingMs);
+  const fallbackLabel = freeSlotWeaponName ?? "Rune Slot";
+  const freeSlotToken = normalizeSkillToken(freeSlotWeaponName);
 
-  // When the rune system adds the free-slot skill to the snapshot, surface its cooldown.
-  // For now FreeSlotWeaponId is always null so remainingMs / totalMs stay 0.
-  const state = skillStates.find((s) => s.displayName === freeSlotWeaponName);
+  const state = skillStates.find((entry) => {
+    const stateTokenFromId = normalizeSkillToken(entry.skillId);
+    const stateTokenFromName = normalizeSkillToken(entry.displayName ?? null);
+    return freeSlotToken !== null && (stateTokenFromId === freeSlotToken || stateTokenFromName === freeSlotToken);
+  });
+
+  const presentation = resolveSkillPresentation({
+    skillId: state?.skillId ?? freeSlotToken,
+    displayName: freeSlotWeaponName ?? state?.displayName ?? null,
+    fallbackLabel
+  });
+
+  const gcdRemaining = Math.max(0, globalCooldownRemainingMs);
   const remainingMs = Math.max(0, state?.cooldownRemainingMs ?? 0);
   const totalMs = Math.max(0, state?.cooldownTotalMs ?? 0);
   const blockedByGcd = !isLocked && isReadyButBlockedByGcd(remainingMs, gcdRemaining);
@@ -110,13 +136,17 @@ export function buildFreeSlotViewModel(
 
   return {
     keyLabel: "4",
-    skillId: freeSlotWeaponName ?? "__free_slot__",
-    label,
-    accentColor,
+    skillId: state?.skillId ?? freeSlotWeaponName ?? "__free_slot__",
+    label: presentation.label,
+    iconGlyph: presentation.iconGlyph,
+    accentColor: presentation.accentColor,
+    visualFamily: presentation.family,
+    visualTier: presentation.tier,
     cooldownRemainingMs: remainingMs,
     cooldownTotalMs: totalMs,
     cooldownFraction: computeCooldownFraction(remainingMs, totalMs),
     cooldownText,
+    tooltip: buildSkillTooltip(presentation.label, cooldownText, isLocked, true),
     blockedByGlobalCooldown: blockedByGcd,
     disabled: isLocked || remainingMs > 0 || blockedByGcd,
     isLocked,
@@ -145,4 +175,16 @@ export function resolveSkillIdForHotkeyKey(
 ): string | null {
   const matched = bindings.find((binding) => binding.keyLabel === key);
   return matched?.skillId ?? null;
+}
+
+function buildSkillTooltip(label: string, cooldownText: string, isLocked: boolean, isFreeSlot: boolean): string {
+  if (isLocked) {
+    return isFreeSlot ? "Rune slot is empty." : `${label} is currently unavailable.`;
+  }
+
+  if (cooldownText.length > 0) {
+    return `${label} - ${cooldownText}`;
+  }
+
+  return `${label} - Ready`;
 }

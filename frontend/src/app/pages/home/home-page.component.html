@@ -10,13 +10,30 @@
       <!-- LEFT: Active character card -->
       <aside class="hub-char">
         @if (hasActiveCharacter) {
-          <div class="hub-char__portrait hub-char__portrait--{{ activeCharacterPortraitColor }}" aria-hidden="true">
-            <span>{{ activeCharacterName.slice(0, 1) }}</span>
+          <div
+            class="hub-char__portrait kae-char-portrait kae-char-portrait--active"
+            [attr.data-tone]="activeCharacterPortrait.tone"
+            aria-hidden="true"
+          >
+            @if (activeCharacterPortrait.imageUrl && !isActiveCharacterPortraitImageFailed()) {
+              <img
+                class="kae-char-portrait__img"
+                [src]="activeCharacterPortrait.imageUrl"
+                [alt]="''"
+                (error)="onActiveCharacterPortraitImageError()"
+              />
+            } @else {
+              <span class="kae-char-portrait__fallback">{{ activeCharacterPortrait.monogram }}</span>
+            }
+            <span class="kae-char-portrait__sigil">{{ activeCharacterPortrait.sigil }}</span>
           </div>
 
           <div class="hub-char__identity">
             <strong class="hub-char__name">{{ activeCharacterName }}</strong>
-            <span class="hub-char__kit-badge hub-char__kit-badge--{{ activeCharacterKitBadge }}">{{ activeCharacterKitTypeLabel }}</span>
+            <div class="hub-char__identity-badges">
+              <span class="hub-char__active-chip">Active</span>
+              <span class="hub-char__kit-badge hub-char__kit-badge--{{ activeCharacterKitBadge }}">{{ activeCharacterKitTypeLabel }}</span>
+            </div>
           </div>
 
           <div class="hub-char__xp">
@@ -32,10 +49,17 @@
           <div class="hub-char__section">
             <p class="hub-char__section-title">Fixed Kit</p>
             <div class="hub-char__pills">
-              @for (weapon of activeCharacterFixedWeaponNames; track weapon) {
-                <span class="hub-char__pill">{{ weapon }}</span>
+              @for (weapon of activeCharacterFixedWeapons; track weapon.label) {
+                <span
+                  class="hub-char__pill"
+                  [attr.data-skill-family]="weapon.family"
+                  [attr.data-skill-tier]="weapon.tier"
+                >
+                  <span class="hub-char__pill-icon">{{ weapon.iconGlyph }}</span>
+                  <span class="hub-char__pill-label">{{ weapon.label }}</span>
+                </span>
               }
-              @if (activeCharacterFixedWeaponNames.length === 0) {
+              @if (activeCharacterFixedWeapons.length === 0) {
                 <span class="hub-char__pill hub-char__pill--empty">No kit data</span>
               }
             </div>
