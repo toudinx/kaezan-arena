@@ -38,16 +38,6 @@
       </div>
     </div>
 
-    <label class="bestiary-search">
-      <span>Search species</span>
-      <input
-        type="search"
-        [value]="searchQuery"
-        placeholder="Species name"
-        (input)="onSearchInput($event)"
-      />
-    </label>
-
     @if (speciesRows.length === 0) {
       <p class="bestiary-state">No species data yet. Enter the arena and defeat mobs to begin tracking progress.</p>
     } @else {
@@ -55,6 +45,15 @@
 
         <!-- LEFT: species list -->
         <aside class="bestiary-left">
+          <label class="bestiary-search">
+            <span>Search species</span>
+            <input
+              type="search"
+              [value]="searchQuery"
+              placeholder="Species name"
+              (input)="onSearchInput($event)"
+            />
+          </label>
           @if (filteredSpeciesRows.length === 0) {
             <p class="bestiary-empty">No species match your search.</p>
           } @else {
@@ -118,8 +117,8 @@
           }
         </aside>
 
-        <!-- RIGHT: detail panel -->
-        <section class="bestiary-right">
+        <!-- CENTER: species info + loot -->
+        <section class="bestiary-center">
           @if (selectedSpecies) {
 
             <div class="species-detail__name-row">
@@ -251,6 +250,14 @@
               }
             </section>
 
+          } @else {
+            <p class="bestiary-empty">Select a species from the list.</p>
+          }
+        </section>
+
+        <!-- RIGHT: crafting actions (craft / refine / salvage) -->
+        <aside class="bestiary-right">
+          @if (selectedSpecies) {
             <div class="species-detail__actions">
               <p class="species-detail__actions-label">Craft Equipment</p>
               @if (actionFeedback) {
@@ -338,11 +345,8 @@
                 </ul>
               </section>
             }
-
-          } @else {
-            <p class="bestiary-empty">Select a species from the list.</p>
           }
-        </section>
+        </aside>
 
       </div>
     }

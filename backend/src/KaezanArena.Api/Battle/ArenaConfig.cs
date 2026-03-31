@@ -20,7 +20,7 @@ public static class ArenaConfig
     public const int PlayerMoveCooldownMs = 300;
     public const int PlayerAutoAttackCooldownMs = 800;
     public const int PlayerGlobalCooldownMs = 400;
-    #endregion
+    #endregion  
 
     #region Player Combat
     public const int PlayerAutoAttackDamage = 8;

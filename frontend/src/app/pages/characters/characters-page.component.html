@@ -104,8 +104,8 @@
         </ul>
       </aside>
 
-      <!-- RIGHT: detail panel -->
-      <section class="detail">
+      <!-- CENTER: character preview (portrait + identity + actions) -->
+      <section class="char-preview">
         @if (selectedCharacter) {
           <div class="detail__header">
             <div class="detail__preview" [attr.data-tone]="selectedCharacter.portrait.tone">
@@ -184,6 +184,30 @@
             </div>
           </div>
 
+          <div class="detail__actions">
+            @if (selectedCharacter.isActive) {
+              <span class="detail__active-status">Active Character</span>
+              <a class="detail__enter-arena detail__enter-arena--primary" routerLink="/arena">Enter Arena</a>
+            } @else {
+              <button
+                type="button"
+                class="detail__set-active"
+                [disabled]="!!setActiveInFlightCharacterId"
+                (click)="setActiveCharacter(selectedCharacter.characterId)"
+              >
+                {{ isSetActiveInFlight(selectedCharacter.characterId) ? 'Setting...' : 'Set Active' }}
+              </button>
+              <a class="detail__enter-arena" routerLink="/arena">Enter Arena</a>
+            }
+          </div>
+        } @else {
+          <p class="detail__placeholder">Select a character from the roster.</p>
+        }
+      </section>
+
+      <!-- RIGHT: loadout (kit + rune + gear) -->
+      <aside class="char-loadout">
+        @if (selectedCharacter) {
           <section class="detail__section">
             <h3 class="detail__section-title">Fixed Kit</h3>
             <div class="detail__weapon-cards">
@@ -263,27 +287,8 @@
               }
             </div>
           </section>
-
-          <div class="detail__actions">
-            @if (selectedCharacter.isActive) {
-              <span class="detail__active-status">Active Character</span>
-              <a class="detail__enter-arena detail__enter-arena--primary" routerLink="/arena">Enter Arena</a>
-            } @else {
-              <button
-                type="button"
-                class="detail__set-active"
-                [disabled]="!!setActiveInFlightCharacterId"
-                (click)="setActiveCharacter(selectedCharacter.characterId)"
-              >
-                {{ isSetActiveInFlight(selectedCharacter.characterId) ? 'Setting...' : 'Set Active' }}
-              </button>
-              <a class="detail__enter-arena" routerLink="/arena">Enter Arena</a>
-            }
-          </div>
-        } @else {
-          <p class="detail__placeholder">Select a character from the roster.</p>
         }
-      </section>
+      </aside>
 
     </div>
   }

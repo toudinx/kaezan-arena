@@ -21,8 +21,6 @@
   flex-direction: column;
   gap: 0.85rem;
   padding: 1.25rem 1.5rem;
-  max-width: 1180px;
-  margin: 0 auto;
   overflow: hidden;
   animation: characters-fade-in var(--motion-emphasis) var(--motion-ease-emphasis) both;
 }
@@ -72,13 +70,13 @@
   background: rgba(127, 29, 29, 0.15);
 }
 
-/* ── Two-column layout ───────────────────────────────────── */
+/* ── Three-column layout ─────────────────────────────────── */
 
 .characters-shell__layout {
   flex: 1 1 auto;
   min-height: 0;
   display: grid;
-  grid-template-columns: 290px 1fr;
+  grid-template-columns: 260px 1fr 300px;
   gap: 1rem;
   align-items: stretch;
   overflow: hidden;
@@ -401,9 +399,9 @@
   text-shadow: 0 0 8px rgba(168, 85, 247, 0.45);
 }
 
-/* ── Detail panel (RIGHT) ────────────────────────────────── */
+/* ── CENTER: Character preview ───────────────────────────── */
 
-.detail {
+.char-preview {
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -412,6 +410,19 @@
   padding-right: 0.2rem;
   animation: characters-fade-in var(--motion-emphasis) var(--motion-ease-emphasis) both;
   animation-delay: 40ms;
+}
+
+/* ── RIGHT: Loadout panel ────────────────────────────────── */
+
+.char-loadout {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  gap: 0.75rem;
+  overflow: auto;
+  padding-right: 0.2rem;
+  animation: characters-fade-in var(--motion-emphasis) var(--motion-ease-emphasis) both;
+  animation-delay: 80ms;
 }
 
 /* Header row: portrait + identity side by side */
@@ -1046,11 +1057,28 @@
 
 /* ── Responsive ──────────────────────────────────────────── */
 
+@media (max-width: 1200px) {
+  .characters-shell__layout {
+    grid-template-columns: 240px 1fr 280px;
+  }
+}
+
 @media (max-width: 900px) {
+  :host {
+    overflow: auto;
+  }
+
+  .characters-shell {
+    overflow: visible;
+    height: auto;
+    min-height: 100%;
+  }
+
   .characters-shell__layout {
     grid-template-columns: 1fr;
     align-items: start;
-    overflow: auto;
+    overflow: visible;
+    min-height: auto;
   }
 
   .roster {
@@ -1062,9 +1090,11 @@
     padding-right: 0;
   }
 
-  .detail {
+  .char-preview,
+  .char-loadout {
     overflow: visible;
     padding-right: 0;
+    min-height: auto;
   }
 
   .detail__preview {

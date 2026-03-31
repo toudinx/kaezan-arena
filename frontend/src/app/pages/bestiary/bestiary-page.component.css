@@ -21,8 +21,6 @@
   flex-direction: column;
   gap: 0.85rem;
   padding: 1.25rem 1.5rem;
-  max-width: 1180px;
-  margin: 0 auto;
   overflow: hidden;
   animation: bestiary-fade-in var(--motion-emphasis) var(--motion-ease-emphasis) both;
 }
@@ -176,7 +174,8 @@
   color: #dbe4f0;
   font-size: 0.82rem;
   padding: 0.42rem 0.55rem;
-  min-width: 240px;
+  width: 100%;
+  min-width: 0;
   transition: border-color var(--motion-fast) var(--motion-ease-standard),
     box-shadow var(--motion-fast) var(--motion-ease-standard);
 }
@@ -191,13 +190,13 @@
   box-shadow: var(--motion-outline-focus);
 }
 
-/* ── Two-column layout ───────────────────────────────────── */
+/* ── Three-column layout ─────────────────────────────────── */
 
 .bestiary-layout {
   flex: 1 1 auto;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(250px, 300px) minmax(0, 1fr);
+  grid-template-columns: 240px 1fr 300px;
   gap: 1rem;
   align-items: stretch;
   overflow: hidden;
@@ -421,7 +420,18 @@
   transition: width var(--motion-emphasis) var(--motion-ease-emphasis);
 }
 
-/* ── RIGHT: Detail panel ─────────────────────────────────── */
+/* ── CENTER: Species detail ──────────────────────────────── */
+
+.bestiary-center {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  gap: 0.85rem;
+  overflow: auto;
+  padding-right: 0.2rem;
+}
+
+/* ── RIGHT: Crafting actions ─────────────────────────────── */
 
 .bestiary-right {
   display: flex;
@@ -1214,17 +1224,36 @@
 
 /* ── Responsive ──────────────────────────────────────────── */
 
-@media (max-width: 900px) {
+@media (max-width: 1200px) {
   .bestiary-layout {
-    grid-template-columns: 1fr;
-    align-items: start;
+    grid-template-columns: 220px 1fr 280px;
+  }
+}
+
+@media (max-width: 900px) {
+  :host {
     overflow: auto;
   }
 
+  .bestiary-shell {
+    overflow: visible;
+    height: auto;
+    min-height: 100%;
+  }
+
+  .bestiary-layout {
+    grid-template-columns: 1fr;
+    align-items: start;
+    overflow: visible;
+    min-height: auto;
+  }
+
   .bestiary-left,
+  .bestiary-center,
   .bestiary-right {
     overflow: visible;
     padding-right: 0;
+    min-height: auto;
   }
 
   .species-list {
