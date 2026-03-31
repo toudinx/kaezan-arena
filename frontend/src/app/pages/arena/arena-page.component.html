@@ -436,7 +436,7 @@
       <div class="pane__body pane__body--right-layout">
         <section class="right-pane__pinned right-pane__pinned--equipment" #equipmentPanel tabindex="-1">
           <header class="right-pane__pinned-header">Equipment</header>
-          <div class="right-pane__pinned-body">
+          <div class="right-pane__pinned-body right-pane__pinned-body--equipment">
             <app-equipment-paperdoll-window
               [character]="selectedCharacter"
               [equippedWeaponLabel]="selectedCharacterWeaponLabel"
@@ -481,7 +481,7 @@
           <header class="right-pane__status-header">Status</header>
           <div class="right-pane__status-body">
             <div class="status-details">
-              <h3>{{ selectedCharacter?.name ?? "Unknown" }}</h3>
+              <h3 class="status-details__title">{{ selectedCharacter?.name ?? "Unknown" }}</h3>
               <div class="status-details__grid">
                 @for (row of statusTabRows; track row.label) {
                   <div class="status-details__row">
@@ -490,45 +490,56 @@
                   </div>
                 }
               </div>
-              <h4>Skills</h4>
-              @if (bottomBarSkillSlots.length === 0 || bottomBarSkillSlots.every(s => s.isLocked)) {
-                <p class="right-panel-empty">No skills active.</p>
-              }
-              @for (slot of bottomBarSkillSlots; track slot.skillId) {
-                <div
-                  class="right-panel-skill-row"
-                  [class.right-panel-skill-row--locked]="slot.isLocked"
-                  [class.right-panel-skill-row--free]="slot.isFreeSlot"
-                  [attr.data-skill-family]="slot.visualFamily"
-                  [attr.data-skill-tier]="slot.visualTier"
-                  [title]="slot.tooltip"
-                >
-                  @if (!slot.isLocked) {
-                    <span class="right-panel-skill-row__icon">{{ slot.iconGlyph }}</span>
-                    <span class="right-panel-skill-row__name">{{ slot.label }}</span>
-                    @if (slot.cooldownText) {
-                      <span class="right-panel-skill-row__cd">{{ slot.cooldownText }}</span>
-                    } @else {
-                      <span class="right-panel-skill-row__ready">Ready</span>
+              <div class="status-details__columns">
+                <section class="status-details__block">
+                  <h4>Skills</h4>
+                  <div class="status-details__list status-details__list--skills">
+                    @if (bottomBarSkillSlots.length === 0 || bottomBarSkillSlots.every(s => s.isLocked)) {
+                      <p class="right-panel-empty">No skills active.</p>
                     }
-                  } @else if (slot.isFreeSlot) {
-                    <span class="right-panel-skill-row__name right-panel-skill-row__name--muted">{{ slot.label }}</span>
-                  }
-                </div>
-              }
-              <h4>Passives</h4>
-              @if (hudPassiveSlots.length === 0) {
-                <p>No passives yet.</p>
-              } @else {
-                @for (slot of hudPassiveSlots; track slot.id) {
-                  <div class="right-panel-passive-row" [title]="slot.description">
-                    <span class="right-panel-passive-row__name">{{ slot.name }}</span>
-                    @if (slot.currentStacks > 1) {
-                      <span class="right-panel-passive-row__stack">x{{ slot.currentStacks }}</span>
+                    @for (slot of bottomBarSkillSlots; track slot.skillId) {
+                      <div
+                        class="right-panel-skill-row"
+                        [class.right-panel-skill-row--locked]="slot.isLocked"
+                        [class.right-panel-skill-row--free]="slot.isFreeSlot"
+                        [attr.data-skill-family]="slot.visualFamily"
+                        [attr.data-skill-tier]="slot.visualTier"
+                        [title]="slot.tooltip"
+                      >
+                        @if (!slot.isLocked) {
+                          <span class="right-panel-skill-row__icon">{{ slot.iconGlyph }}</span>
+                          <span class="right-panel-skill-row__name">{{ slot.label }}</span>
+                          @if (slot.cooldownText) {
+                            <span class="right-panel-skill-row__cd">{{ slot.cooldownText }}</span>
+                          } @else {
+                            <span class="right-panel-skill-row__ready">Ready</span>
+                          }
+                        } @else if (slot.isFreeSlot) {
+                          <span class="right-panel-skill-row__name right-panel-skill-row__name--muted">{{ slot.label }}</span>
+                        }
+                      </div>
                     }
                   </div>
-                }
-              }
+                </section>
+
+                <section class="status-details__block">
+                  <h4>Passives</h4>
+                  <div class="status-details__list status-details__list--passives">
+                    @if (hudPassiveSlots.length === 0) {
+                      <p class="right-panel-empty">No passives yet.</p>
+                    } @else {
+                      @for (slot of hudPassiveSlots; track slot.id) {
+                        <div class="right-panel-passive-row" [title]="slot.description">
+                          <span class="right-panel-passive-row__name">{{ slot.name }}</span>
+                          @if (slot.currentStacks > 1) {
+                            <span class="right-panel-passive-row__stack">x{{ slot.currentStacks }}</span>
+                          }
+                        </div>
+                      }
+                    }
+                  </div>
+                </section>
+              </div>
             </div>
           </div>
         </section>

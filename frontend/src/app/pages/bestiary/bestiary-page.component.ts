@@ -212,16 +212,20 @@ export class BestiaryPageComponent implements OnInit {
     return `${selected.killsToNextMilestone} kills to milestone ${selected.nextKillMilestone}`;
   }
 
-  isSpeciesImageVisible(row: BestiaryRow): boolean {
-    return !!row.visual.imageUrl && !this.speciesImageFailures.has(row.speciesId);
+  shouldRenderSpeciesImage(imageUrl: string | null | undefined): boolean {
+    if (!imageUrl) {
+      return false;
+    }
+
+    return !this.speciesImageFailures.has(imageUrl);
   }
 
-  onSpeciesImageError(speciesId: string): void {
-    if (!speciesId) {
+  onSpeciesImageError(imageUrl: string | null | undefined): void {
+    if (!imageUrl) {
       return;
     }
 
-    this.speciesImageFailures.add(speciesId);
+    this.speciesImageFailures.add(imageUrl);
   }
 
   shouldRenderItemIcon(item: InventoryRow): boolean {

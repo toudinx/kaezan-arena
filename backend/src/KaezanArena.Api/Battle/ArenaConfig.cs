@@ -49,7 +49,7 @@ public static class ArenaConfig
     #region Shotgun
     public const int ShotgunDamageBase = SigilBoltDamageBase;
     public const int ShotgunCooldownMs = SigilBoltCooldownMs;
-    public const int ShotgunVisualProjectileCount = 5;
+    public const int ShotgunVisualProjectileCount = 5;  
     public const int ShotgunMaxRange = AutoAttackRangedMaxRange;
     public const bool ShotgunRequiresLOS = true;
     public const int ShotgunKnockbackTiles = 1;

@@ -1,45 +1,49 @@
 .paperdoll {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.28rem;
   color: #e2e8f0;
+  min-height: 0;
 }
 
 .paperdoll__header {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 0.5rem;
-  font-size: 0.72rem;
-}
-
-.paperdoll__header strong {
-  font-size: 0.78rem;
-}
-
-.paperdoll__header span {
+  gap: 0.35rem;
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   color: #94a3b8;
 }
 
+.paperdoll__header strong {
+  font-size: 0.68rem;
+  text-transform: none;
+  letter-spacing: 0.01em;
+  color: #e2e8f0;
+}
+
 .paperdoll__slots {
-  display: flex;
-  gap: 0.55rem;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.3rem;
+  min-width: 0;
 }
 
 .paperdoll__slot-wrap {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.25rem;
-  width: 80px;
+  gap: 0.12rem;
+  min-width: 0;
 }
 
 .paperdoll__slot {
-  width: 80px;
-  height: 80px;
+  width: 52px;
+  height: 52px;
   border: 2px solid #64748b;
-  border-radius: 0.45rem;
+  border-radius: 0.38rem;
   background: linear-gradient(180deg, rgba(51, 65, 85, 0.94), rgba(15, 23, 42, 0.96));
   color: #f8fafc;
   display: grid;
@@ -50,27 +54,39 @@
 
 .paperdoll__hint {
   margin: 0;
-  padding: 0.3rem 0.4rem;
+  padding: 0.22rem 0.34rem;
   border: 1px solid #0ea5e9;
   border-radius: 0.24rem;
   background: rgba(14, 165, 233, 0.12);
   color: #bae6fd;
-  font-size: 0.67rem;
+  font-size: 0.6rem;
 }
 
 .paperdoll__slot-glyph {
-  font-size: 2rem;
+  font-size: 1.35rem;
   line-height: 1;
   font-weight: 800;
   letter-spacing: 0.02em;
 }
 
 .paperdoll__slot-name {
-  font-size: 0.66rem;
+  font-size: 0.54rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: #94a3b8;
   text-align: center;
+}
+
+.paperdoll__slot-item {
+  width: 100%;
+  max-width: 100%;
+  font-size: 0.56rem;
+  color: #cbd5e1;
+  line-height: 1.2;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .paperdoll__slot--rarity-common {

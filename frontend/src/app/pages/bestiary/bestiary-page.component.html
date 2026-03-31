@@ -68,12 +68,12 @@
                     (click)="selectSpecies(row.speciesId)">
                     <div class="species-row__top">
                       <div class="species-row__portrait" [attr.data-tone]="row.visual.tone" aria-hidden="true">
-                        @if (isSpeciesImageVisible(row)) {
+                        @if (shouldRenderSpeciesImage(row.visual.imageUrl)) {
                           <img
                             class="species-row__portrait-image"
                             [src]="row.visual.imageUrl!"
                             [alt]="''"
-                            (error)="onSpeciesImageError(row.speciesId)"
+                            (error)="onSpeciesImageError(row.visual.imageUrl)"
                           />
                         } @else {
                           <span class="species-row__portrait-fallback">{{ row.visual.monogram }}</span>
@@ -121,74 +121,105 @@
         <section class="bestiary-center">
           @if (selectedSpecies) {
 
-            <div class="species-detail__name-row">
-              <h2 class="species-detail__name">{{ selectedSpeciesName }}</h2>
-              <span class="species-detail__rank-badge"
-                    [class.species-detail__rank-badge--earned]="selectedSpecies.rank > 1"
-                    [class.species-detail__rank-badge--max]="selectedSpecies.isMaxRank">
-                @if (selectedSpecies.isMaxRank) { MAX RANK } @else { Rank {{ selectedSpecies.rank }} }
-              </span>
-            </div>
-
-            <div class="species-detail__hero" [attr.data-tone]="selectedSpecies.visual.tone">
-              <div class="species-detail__portrait" [attr.data-tone]="selectedSpecies.visual.tone" aria-hidden="true">
-                @if (isSpeciesImageVisible(selectedSpecies)) {
-                  <img
-                    class="species-detail__portrait-image"
-                    [src]="selectedSpecies.visual.imageUrl!"
-                    [alt]="''"
-                    (error)="onSpeciesImageError(selectedSpecies.speciesId)"
-                  />
-                } @else {
-                  <span class="species-detail__portrait-fallback">{{ selectedSpecies.visual.monogram }}</span>
-                }
-                <span class="species-detail__portrait-sigil">{{ selectedSpecies.visual.sigil }}</span>
-              </div>
-              <div class="species-detail__hero-copy">
-                <p class="species-detail__hero-kicker">Tracked Species</p>
-                <p class="species-detail__hero-summary">
-                  {{ selectedSpecies.killsTotal }} kills recorded and {{ selectedSpecies.primalCoreBalance }} primal core harvested.
-                </p>
-              </div>
-            </div>
-
-            <div class="species-detail__stats">
-              <div class="species-detail__stat">
-                <strong>{{ selectedSpecies.killsTotal }}</strong>
-                <span>Kills</span>
-              </div>
-              <div class="species-detail__stat">
-                <strong>{{ selectedSpecies.primalCoreBalance }}</strong>
-                <span>Primal Core</span>
-              </div>
-            </div>
-
-            <div class="species-detail__progress">
-              @if (selectedSpecies.isMaxRank) {
-                <div class="species-detail__progress-milestone">
-                  <span class="species-detail__rank-current">Rank {{ selectedSpecies.rank }}</span>
-                  <span class="species-detail__max-label">Max Rank Reached</span>
+            <article class="species-detail__hero-screen" [attr.data-tone]="selectedSpecies.visual.tone">
+              <header class="species-detail__hero-head">
+                <div>
+                  <p class="species-detail__hero-kicker">Bestiary Entry</p>
+                  <h2 class="species-detail__name">{{ selectedSpeciesName }}</h2>
                 </div>
-              } @else {
-                <div class="species-detail__progress-milestone">
-                  <div class="species-detail__progress-ranks">
-                    <span class="species-detail__rank-current">Rank {{ selectedSpecies.rank }}</span>
-                    <span class="species-detail__rank-arrow" aria-hidden="true">-></span>
-                    <span class="species-detail__rank-next">Rank {{ selectedSpecies.rank + 1 }}</span>
+                <span class="species-detail__rank-badge"
+                      [class.species-detail__rank-badge--earned]="selectedSpecies.rank > 1"
+                      [class.species-detail__rank-badge--max]="selectedSpecies.isMaxRank">
+                  @if (selectedSpecies.isMaxRank) { MAX RANK } @else { Rank {{ selectedSpecies.rank }} }
+                </span>
+              </header>
+
+              <div class="species-detail__hero-stage">
+                <div class="species-detail__hero-rail" aria-hidden="true">
+                  <div class="species-detail__support-frame">
+                    @if (shouldRenderSpeciesImage(selectedSpecies.visual.runImageUrl)) {
+                      <img
+                        class="species-detail__support-frame-image"
+                        [src]="selectedSpecies.visual.runImageUrl!"
+                        [alt]="''"
+                        (error)="onSpeciesImageError(selectedSpecies.visual.runImageUrl)"
+                      />
+                    } @else {
+                      <span class="species-detail__support-frame-fallback">RUN</span>
+                    }
                   </div>
-                  <span class="species-detail__progress-remaining">{{ selectedSpecies.killsToNextMilestone }} kills</span>
+                  <div class="species-detail__support-frame">
+                    @if (shouldRenderSpeciesImage(selectedSpecies.visual.hitImageUrl)) {
+                      <img
+                        class="species-detail__support-frame-image"
+                        [src]="selectedSpecies.visual.hitImageUrl!"
+                        [alt]="''"
+                        (error)="onSpeciesImageError(selectedSpecies.visual.hitImageUrl)"
+                      />
+                    } @else {
+                      <span class="species-detail__support-frame-fallback">HIT</span>
+                    }
+                  </div>
                 </div>
-              }
-              <div class="species-detail__progress-track">
-                <div class="species-detail__progress-fill" [style.width.%]="selectedSpecies.progressPercent"></div>
+
+                <div class="species-detail__hero-core">
+                  <div class="species-detail__portrait species-detail__portrait--hero" [attr.data-tone]="selectedSpecies.visual.tone" aria-hidden="true">
+                    @if (shouldRenderSpeciesImage(selectedSpecies.visual.imageUrl)) {
+                      <img
+                        class="species-detail__portrait-image"
+                        [src]="selectedSpecies.visual.imageUrl!"
+                        [alt]="''"
+                        (error)="onSpeciesImageError(selectedSpecies.visual.imageUrl)"
+                      />
+                    } @else {
+                      <span class="species-detail__portrait-fallback">{{ selectedSpecies.visual.monogram }}</span>
+                    }
+                    <span class="species-detail__portrait-sigil">{{ selectedSpecies.visual.sigil }}</span>
+                  </div>
+                  <p class="species-detail__hero-summary">
+                    {{ selectedSpecies.killsTotal }} kills recorded and {{ selectedSpecies.primalCoreBalance }} primal core harvested.
+                  </p>
+                </div>
+
+                <div class="species-detail__hero-rail species-detail__hero-rail--right">
+                  <div class="species-detail__hero-chip">
+                    <span>Kills</span>
+                    <strong>{{ selectedSpecies.killsTotal }}</strong>
+                  </div>
+                  <div class="species-detail__hero-chip">
+                    <span>Primal Core</span>
+                    <strong>{{ selectedSpecies.primalCoreBalance }}</strong>
+                  </div>
+                </div>
               </div>
-              @if (!selectedSpecies.isMaxRank) {
-                <div class="species-detail__progress-tally">
-                  <span>{{ selectedSpecies.killsTotal }} / {{ selectedSpecies.nextKillMilestone }}</span>
-                  <span>next rank at {{ selectedSpecies.nextKillMilestone }} kills</span>
+
+              <div class="species-detail__progress">
+                @if (selectedSpecies.isMaxRank) {
+                  <div class="species-detail__progress-milestone">
+                    <span class="species-detail__rank-current">Rank {{ selectedSpecies.rank }}</span>
+                    <span class="species-detail__max-label">Max Rank Reached</span>
+                  </div>
+                } @else {
+                  <div class="species-detail__progress-milestone">
+                    <div class="species-detail__progress-ranks">
+                      <span class="species-detail__rank-current">Rank {{ selectedSpecies.rank }}</span>
+                      <span class="species-detail__rank-arrow" aria-hidden="true">-></span>
+                      <span class="species-detail__rank-next">Rank {{ selectedSpecies.rank + 1 }}</span>
+                    </div>
+                    <span class="species-detail__progress-remaining">{{ selectedSpecies.killsToNextMilestone }} kills</span>
+                  </div>
+                }
+                <div class="species-detail__progress-track">
+                  <div class="species-detail__progress-fill" [style.width.%]="selectedSpecies.progressPercent"></div>
                 </div>
-              }
-            </div>
+                @if (!selectedSpecies.isMaxRank) {
+                  <div class="species-detail__progress-tally">
+                    <span>{{ selectedSpecies.killsTotal }} / {{ selectedSpecies.nextKillMilestone }}</span>
+                    <span>next rank at {{ selectedSpecies.nextKillMilestone }} kills</span>
+                  </div>
+                }
+              </div>
+            </article>
 
             @if (selectedSpecies.killsTotal === 0) {
               <div class="species-detail__not-encountered">

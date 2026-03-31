@@ -107,27 +107,28 @@
       <!-- CENTER: character preview (portrait + identity + actions) -->
       <section class="char-preview">
         @if (selectedCharacter) {
-          <div class="detail__header">
-            <div class="detail__preview" [attr.data-tone]="selectedCharacter.portrait.tone">
-              <div
-                class="detail__portrait kae-char-portrait kae-char-portrait--active"
-                [attr.data-tone]="selectedCharacter.portrait.tone"
-                aria-hidden="true"
-              >
-                @if (selectedCharacter.portrait.imageUrl && !isPortraitImageFailed(selectedCharacter.portrait.imageUrl)) {
-                  <img
-                    class="kae-char-portrait__img"
-                    [src]="selectedCharacter.portrait.imageUrl"
-                    [alt]="''"
-                    (error)="onPortraitImageError(selectedCharacter.portrait.imageUrl)"
-                  />
-                } @else {
-                  <span class="kae-char-portrait__fallback">{{ selectedCharacter.portrait.monogram }}</span>
+          <article class="detail__hero-screen" [attr.data-tone]="selectedCharacter.portrait.tone">
+            <header class="detail__hero-head">
+              <div class="detail__identity">
+                <h2 class="detail__name">{{ selectedCharacter.name }}</h2>
+                @if (selectedCharacter.subtitle) {
+                  <p class="detail__subtitle">{{ selectedCharacter.subtitle }}</p>
                 }
-                <span class="kae-char-portrait__sigil">{{ selectedCharacter.portrait.sigil }}</span>
+                <div class="detail__identity-badges">
+                  <span class="detail__kit-badge detail__kit-badge--{{ selectedCharacter.kitBadge }}">{{ selectedCharacter.kitTypeLabel }}</span>
+                  @if (selectedCharacter.isProvisional) {
+                    <span class="detail__wip">WIP</span>
+                  }
+                </div>
               </div>
 
-              <div class="detail__preview-strip" aria-hidden="true">
+              @if (selectedCharacter.isActive) {
+                <span class="detail__hero-active">Active</span>
+              }
+            </header>
+
+            <div class="detail__hero-stage">
+              <div class="detail__hero-side" aria-hidden="true">
                 <div class="detail__preview-frame detail__preview-frame--run">
                   @if (selectedCharacter.portrait.runImageUrl && !isPortraitImageFailed(selectedCharacter.portrait.runImageUrl)) {
                     <img
@@ -154,52 +155,70 @@
                   }
                 </div>
               </div>
-            </div>
 
-            <div class="detail__identity">
-              <h2 class="detail__name">{{ selectedCharacter.name }}</h2>
-              @if (selectedCharacter.subtitle) {
-                <p class="detail__subtitle">{{ selectedCharacter.subtitle }}</p>
-              }
-              <div class="detail__identity-badges">
-                <span class="detail__kit-badge detail__kit-badge--{{ selectedCharacter.kitBadge }}">{{ selectedCharacter.kitTypeLabel }}</span>
-                @if (selectedCharacter.isProvisional) {
-                  <span class="detail__wip">WIP</span>
-                }
+              <div class="detail__hero-main">
+                <div
+                  class="detail__portrait kae-char-portrait kae-char-portrait--active"
+                  [attr.data-tone]="selectedCharacter.portrait.tone"
+                  aria-hidden="true"
+                >
+                  @if (selectedCharacter.portrait.imageUrl && !isPortraitImageFailed(selectedCharacter.portrait.imageUrl)) {
+                    <img
+                      class="kae-char-portrait__img"
+                      [src]="selectedCharacter.portrait.imageUrl"
+                      [alt]="''"
+                      (error)="onPortraitImageError(selectedCharacter.portrait.imageUrl)"
+                    />
+                  } @else {
+                    <span class="kae-char-portrait__fallback">{{ selectedCharacter.portrait.monogram }}</span>
+                  }
+                  <span class="kae-char-portrait__sigil">{{ selectedCharacter.portrait.sigil }}</span>
+                </div>
+              </div>
+
+              <div class="detail__hero-side detail__hero-side--stats">
+                <div class="detail__hero-stat">
+                  <span>Level</span>
+                  <strong>{{ selectedCharacter.level }}</strong>
+                </div>
+                <div class="detail__hero-stat">
+                  <span>XP</span>
+                  <strong>{{ selectedCharacter.xp }}</strong>
+                </div>
               </div>
             </div>
-          </div>
 
-          @if (selectedCharacter.playstyle) {
-            <p class="detail__playstyle">{{ selectedCharacter.playstyle }}</p>
-          }
-
-          <div class="detail__xp">
-            <div class="detail__xp-header">
-              <span>Level {{ selectedCharacter.level }}</span>
-              <span>{{ selectedCharacter.xp }} XP</span>
-            </div>
-            <div class="detail__xp-track">
-              <div class="detail__xp-fill" [style.width.%]="selectedCharacter.xpProgressPercent"></div>
-            </div>
-          </div>
-
-          <div class="detail__actions">
-            @if (selectedCharacter.isActive) {
-              <span class="detail__active-status">Active Character</span>
-              <a class="detail__enter-arena detail__enter-arena--primary" routerLink="/arena">Enter Arena</a>
-            } @else {
-              <button
-                type="button"
-                class="detail__set-active"
-                [disabled]="!!setActiveInFlightCharacterId"
-                (click)="setActiveCharacter(selectedCharacter.characterId)"
-              >
-                {{ isSetActiveInFlight(selectedCharacter.characterId) ? 'Setting...' : 'Set Active' }}
-              </button>
-              <a class="detail__enter-arena" routerLink="/arena">Enter Arena</a>
+            @if (selectedCharacter.playstyle) {
+              <p class="detail__playstyle">{{ selectedCharacter.playstyle }}</p>
             }
-          </div>
+
+            <div class="detail__xp">
+              <div class="detail__xp-header">
+                <span>Level {{ selectedCharacter.level }}</span>
+                <span>{{ selectedCharacter.xp }} XP</span>
+              </div>
+              <div class="detail__xp-track">
+                <div class="detail__xp-fill" [style.width.%]="selectedCharacter.xpProgressPercent"></div>
+              </div>
+            </div>
+
+            <div class="detail__actions">
+              @if (selectedCharacter.isActive) {
+                <span class="detail__active-status">Active Character</span>
+                <a class="detail__enter-arena detail__enter-arena--primary" routerLink="/arena">Enter Arena</a>
+              } @else {
+                <button
+                  type="button"
+                  class="detail__set-active"
+                  [disabled]="!!setActiveInFlightCharacterId"
+                  (click)="setActiveCharacter(selectedCharacter.characterId)"
+                >
+                  {{ isSetActiveInFlight(selectedCharacter.characterId) ? 'Setting...' : 'Set Active' }}
+                </button>
+                <a class="detail__enter-arena" routerLink="/arena">Enter Arena</a>
+              }
+            </div>
+          </article>
         } @else {
           <p class="detail__placeholder">Select a character from the roster.</p>
         }

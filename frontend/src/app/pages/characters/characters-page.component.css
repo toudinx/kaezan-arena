@@ -425,66 +425,106 @@
   animation-delay: 80ms;
 }
 
-/* Header row: portrait + identity side by side */
+/* Hero stage */
 
-.detail__header {
-  display: flex;
-  gap: 1rem;
-  align-items: flex-start;
-}
-
-.detail__preview {
+.detail__hero-screen {
   --preview-edge: rgba(100, 116, 139, 0.52);
   --preview-core: #94a3b8;
   display: flex;
-  align-items: flex-end;
-  gap: 0.46rem;
-  flex-shrink: 0;
+  flex-direction: column;
+  gap: 0.8rem;
+  padding: 0.95rem 1.05rem;
+  border: 1px solid #1a2a3a;
+  border-radius: 0.6rem;
+  background:
+    radial-gradient(circle at 52% 14%, color-mix(in srgb, var(--preview-core) 16%, transparent), transparent 64%),
+    linear-gradient(165deg, rgba(9, 15, 26, 0.98), rgba(12, 20, 32, 0.96));
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.08), 0 14px 26px rgba(2, 6, 23, 0.24);
 }
 
-.detail__preview[data-tone="amber"] {
+.detail__hero-screen[data-tone="amber"] {
   --preview-edge: rgba(245, 158, 11, 0.52);
   --preview-core: #f59e0b;
 }
 
-.detail__preview[data-tone="teal"] {
+.detail__hero-screen[data-tone="teal"] {
   --preview-edge: rgba(45, 212, 191, 0.52);
   --preview-core: #2dd4bf;
 }
 
-.detail__preview[data-tone="violet"] {
+.detail__hero-screen[data-tone="violet"] {
   --preview-edge: rgba(168, 85, 247, 0.52);
   --preview-core: #a855f7;
 }
 
-.detail__preview[data-tone="emerald"] {
+.detail__hero-screen[data-tone="emerald"] {
   --preview-edge: rgba(34, 197, 94, 0.52);
   --preview-core: #22c55e;
 }
 
+.detail__hero-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.detail__hero-active {
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #2dd4bf;
+  border: 1px solid rgba(45, 212, 191, 0.3);
+  background: rgba(45, 212, 191, 0.1);
+  border-radius: 999px;
+  padding: 0.14rem 0.5rem;
+  line-height: 1.5;
+  flex-shrink: 0;
+}
+
+.detail__hero-stage {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) 112px;
+  gap: 0.8rem;
+  align-items: stretch;
+  min-height: 340px;
+}
+
+.detail__hero-side {
+  display: flex;
+  flex-direction: column;
+  gap: 0.46rem;
+  justify-content: center;
+}
+
+.detail__hero-side--stats {
+  align-items: stretch;
+}
+
+.detail__hero-main {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .detail__portrait {
   aspect-ratio: 3 / 4;
-  width: 124px;
-  border-radius: 0.65rem;
-  box-shadow: 0 18px 28px rgba(2, 6, 23, 0.36), 0 0 22px color-mix(in srgb, var(--preview-core) 22%, transparent);
+  width: min(100%, 290px);
+  border-radius: 0.75rem;
+  box-shadow: 0 22px 32px rgba(2, 6, 23, 0.38), 0 0 26px color-mix(in srgb, var(--preview-core) 24%, transparent);
 }
 
 .detail__portrait .kae-char-portrait__fallback {
-  font-size: clamp(1.4rem, 2.8vw, 2.1rem);
-}
-
-.detail__preview-strip {
-  display: flex;
-  flex-direction: column;
-  gap: 0.34rem;
-  padding-bottom: 0.08rem;
+  font-size: clamp(1.7rem, 3.4vw, 2.4rem);
 }
 
 .detail__preview-frame {
   position: relative;
-  width: 44px;
-  height: 44px;
-  border-radius: 0.46rem;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 0.48rem;
   border: 1px solid var(--preview-edge);
   background: linear-gradient(165deg, rgba(2, 6, 23, 0.94), rgba(15, 23, 42, 0.9));
   box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.14);
@@ -520,11 +560,36 @@
   color: color-mix(in srgb, #f8fafc 76%, var(--preview-core));
 }
 
+.detail__hero-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.08rem;
+  align-items: center;
+  justify-content: center;
+  min-height: 58px;
+  border: 1px solid #1b3044;
+  border-radius: 0.42rem;
+  background: #0a1421;
+}
+
+.detail__hero-stat span {
+  font-size: 0.55rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: #486683;
+  font-weight: 700;
+}
+
+.detail__hero-stat strong {
+  font-size: 1.05rem;
+  color: #d2e4f6;
+  line-height: 1;
+}
+
 .detail__identity {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
-  padding-top: 0.15rem;
 }
 
 .detail__name {
@@ -1097,17 +1162,41 @@
     min-height: auto;
   }
 
-  .detail__preview {
-    align-items: center;
+  .detail__hero-screen {
+    padding: 0.78rem 0.85rem;
   }
 
-  .detail__portrait {
-    width: 96px;
+  .detail__hero-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .detail__hero-stage {
+    grid-template-columns: 1fr;
+    min-height: auto;
+    gap: 0.6rem;
+  }
+
+  .detail__hero-side {
+    flex-direction: row;
+    justify-content: center;
+  }
+
+  .detail__hero-side--stats {
+    justify-content: stretch;
   }
 
   .detail__preview-frame {
-    width: 38px;
-    height: 38px;
+    width: 54px;
+  }
+
+  .detail__hero-stat {
+    flex: 1 1 auto;
+    min-height: 52px;
+  }
+
+  .detail__portrait {
+    width: min(100%, 220px);
   }
 
   .detail__weapon-cards {
