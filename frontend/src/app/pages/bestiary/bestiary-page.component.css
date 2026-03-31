@@ -1,25 +1,29 @@
 /* ── Host ────────────────────────────────────────────────── */
 
 :host {
-  display: block;
+  display: flex;
   width: 100%;
   height: 100%;
+  flex: 1 1 auto;
   min-height: 0;
   background: #080d14;
   color: #dbe4f0;
-  overflow: auto;
+  overflow: hidden;
 }
 
 /* ── Shell ───────────────────────────────────────────────── */
 
 .bestiary-shell {
-  min-height: 100%;
+  flex: 1 1 auto;
+  height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
   padding: 1.25rem 1.5rem;
   max-width: 1180px;
   margin: 0 auto;
+  overflow: hidden;
   animation: bestiary-fade-in var(--motion-emphasis) var(--motion-ease-emphasis) both;
 }
 
@@ -190,10 +194,13 @@
 /* ── Two-column layout ───────────────────────────────────── */
 
 .bestiary-layout {
+  flex: 1 1 auto;
+  min-height: 0;
   display: grid;
   grid-template-columns: minmax(250px, 300px) minmax(0, 1fr);
   gap: 1rem;
-  align-items: start;
+  align-items: stretch;
+  overflow: hidden;
 }
 
 /* ── LEFT: Species list ──────────────────────────────────── */
@@ -201,7 +208,9 @@
 .bestiary-left {
   display: flex;
   flex-direction: column;
+  min-height: 0;
   gap: 0.45rem;
+  overflow: hidden;
 }
 
 .species-list {
@@ -210,7 +219,11 @@
   padding: 0;
   display: flex;
   flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
   gap: 0.4rem;
+  overflow: auto;
+  padding-right: 0.2rem;
 }
 
 .species-row {
@@ -251,6 +264,94 @@
 
 .species-row--zero:hover {
   opacity: 0.72;
+}
+
+.species-row__top {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.species-row__portrait {
+  --species-icon-edge: rgba(71, 85, 105, 0.72);
+  --species-icon-core: #94a3b8;
+  position: relative;
+  width: 38px;
+  height: 38px;
+  border-radius: 0.38rem;
+  border: 1px solid var(--species-icon-edge);
+  background: linear-gradient(160deg, rgba(15, 23, 42, 0.94), rgba(30, 41, 59, 0.9));
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.14);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.species-row__portrait::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 22%, color-mix(in srgb, var(--species-icon-core) 32%, transparent), transparent 66%);
+}
+
+.species-row__portrait[data-tone="amber"] {
+  --species-icon-edge: rgba(217, 119, 6, 0.62);
+  --species-icon-core: #f59e0b;
+}
+
+.species-row__portrait[data-tone="teal"] {
+  --species-icon-edge: rgba(20, 184, 166, 0.6);
+  --species-icon-core: #2dd4bf;
+}
+
+.species-row__portrait[data-tone="crimson"] {
+  --species-icon-edge: rgba(239, 68, 68, 0.62);
+  --species-icon-core: #f87171;
+}
+
+.species-row__portrait[data-tone="violet"] {
+  --species-icon-edge: rgba(168, 85, 247, 0.62);
+  --species-icon-core: #c084fc;
+}
+
+.species-row__portrait-image {
+  position: relative;
+  width: 76%;
+  height: 76%;
+  object-fit: contain;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 0 4px rgba(2, 6, 23, 0.6));
+  z-index: 2;
+}
+
+.species-row__portrait-fallback {
+  position: relative;
+  z-index: 2;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: color-mix(in srgb, #f8fafc 74%, var(--species-icon-core));
+}
+
+.species-row__portrait-sigil {
+  position: absolute;
+  right: 0.14rem;
+  bottom: 0.1rem;
+  z-index: 3;
+  font-size: 0.4rem;
+  font-weight: 700;
+  color: color-mix(in srgb, #f8fafc 76%, var(--species-icon-core));
+  text-shadow: 0 0 4px rgba(2, 6, 23, 0.6);
+}
+
+.species-row__identity {
+  display: flex;
+  flex-direction: column;
+  gap: 0.22rem;
+  min-width: 0;
+  flex: 1;
 }
 
 .species-row__zero-meta {
@@ -299,7 +400,9 @@
 
 .species-row__meta {
   display: flex;
+  align-items: center;
   justify-content: space-between;
+  gap: 0.4rem;
   font-size: 0.63rem;
   color: #4a6a88;
 }
@@ -323,7 +426,10 @@
 .bestiary-right {
   display: flex;
   flex-direction: column;
+  min-height: 0;
   gap: 0.85rem;
+  overflow: auto;
+  padding-right: 0.2rem;
 }
 
 /* Name + rank heading */
@@ -371,6 +477,113 @@
   border-color: rgba(94, 234, 212, 0.35);
   background: rgba(94, 234, 212, 0.08);
   color: #5eead4;
+}
+
+.species-detail__hero {
+  --species-hero-edge: rgba(71, 85, 105, 0.72);
+  --species-hero-core: #94a3b8;
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.68rem 0.78rem;
+  border: 1px solid #1a2a3a;
+  border-radius: 0.46rem;
+  background: #0c1420;
+}
+
+.species-detail__hero[data-tone="amber"] {
+  --species-hero-edge: rgba(217, 119, 6, 0.62);
+  --species-hero-core: #f59e0b;
+}
+
+.species-detail__hero[data-tone="teal"] {
+  --species-hero-edge: rgba(20, 184, 166, 0.6);
+  --species-hero-core: #2dd4bf;
+}
+
+.species-detail__hero[data-tone="crimson"] {
+  --species-hero-edge: rgba(239, 68, 68, 0.62);
+  --species-hero-core: #f87171;
+}
+
+.species-detail__hero[data-tone="violet"] {
+  --species-hero-edge: rgba(168, 85, 247, 0.62);
+  --species-hero-core: #c084fc;
+}
+
+.species-detail__portrait {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  border-radius: 0.58rem;
+  border: 1px solid var(--species-hero-edge);
+  background: linear-gradient(165deg, rgba(15, 23, 42, 0.96), rgba(30, 41, 59, 0.9));
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.14);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.species-detail__portrait::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 24%, color-mix(in srgb, var(--species-hero-core) 35%, transparent), transparent 64%);
+}
+
+.species-detail__portrait-image {
+  position: relative;
+  width: 78%;
+  height: 78%;
+  object-fit: contain;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 0 8px rgba(2, 6, 23, 0.55));
+  z-index: 2;
+}
+
+.species-detail__portrait-fallback {
+  position: relative;
+  z-index: 2;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: color-mix(in srgb, #f8fafc 80%, var(--species-hero-core));
+}
+
+.species-detail__portrait-sigil {
+  position: absolute;
+  right: 0.28rem;
+  bottom: 0.26rem;
+  z-index: 3;
+  font-size: 0.52rem;
+  font-weight: 700;
+  color: color-mix(in srgb, #f8fafc 78%, var(--species-hero-core));
+  text-shadow: 0 0 7px rgba(2, 6, 23, 0.68);
+}
+
+.species-detail__hero-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.species-detail__hero-kicker {
+  margin: 0;
+  font-size: 0.56rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+  color: #4a6a88;
+}
+
+.species-detail__hero-summary {
+  margin: 0;
+  font-size: 0.74rem;
+  line-height: 1.45;
+  color: #a9bfd4;
 }
 
 /* Stat tiles */
@@ -490,6 +703,215 @@
   justify-content: space-between;
   font-size: 0.6rem;
   color: #2e4a62;
+}
+
+.species-detail__loot {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.72rem 0.85rem;
+  border: 1px solid #1a2a3a;
+  border-radius: 0.4rem;
+  background: #0c1420;
+}
+
+.species-detail__loot-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  border-bottom: 1px solid #162030;
+  padding-bottom: 0.32rem;
+}
+
+.species-detail__loot-label {
+  margin: 0;
+  font-size: 0.57rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #2e4a62;
+}
+
+.species-detail__loot-count {
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: #7aa0c4;
+}
+
+.species-detail__loot-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.loot-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.32rem;
+}
+
+.loot-group__title {
+  margin: 0;
+  font-size: 0.55rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #5f83a5;
+}
+
+.loot-group__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 0.32rem;
+}
+
+.loot-card {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  border: 1px solid #1b2c3f;
+  border-left-width: 3px;
+  border-radius: 0.38rem;
+  background: #0d1825;
+  padding: 0.35rem 0.42rem;
+  transition: border-color var(--motion-fast) var(--motion-ease-standard),
+    transform var(--motion-fast) var(--motion-ease-standard),
+    box-shadow var(--motion-fast) var(--motion-ease-standard);
+}
+
+.loot-card:hover {
+  border-color: #2d4966;
+  transform: translateY(-1px);
+  box-shadow: 0 10px 16px rgba(2, 6, 23, 0.24);
+}
+
+.loot-card--common {
+  border-left-color: #64748b;
+}
+
+.loot-card--rare {
+  border-left-color: #3b82f6;
+}
+
+.loot-card--epic {
+  border-left-color: #7c3aed;
+}
+
+.loot-card--legendary {
+  border-left-color: #d97706;
+}
+
+.loot-card--ascendant {
+  border-left-color: #dc2626;
+}
+
+.loot-card__icon {
+  --loot-icon-edge: rgba(71, 85, 105, 0.72);
+  --loot-icon-core: #94a3b8;
+  position: relative;
+  width: 38px;
+  height: 38px;
+  border-radius: 0.38rem;
+  border: 1px solid var(--loot-icon-edge);
+  background: linear-gradient(165deg, rgba(15, 23, 42, 0.94), rgba(30, 41, 59, 0.9));
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.14);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.loot-card__icon::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 20%, color-mix(in srgb, var(--loot-icon-core) 32%, transparent), transparent 66%);
+}
+
+.loot-card__icon[data-tone="weapon"] {
+  --loot-icon-edge: rgba(59, 130, 246, 0.6);
+  --loot-icon-core: #60a5fa;
+}
+
+.loot-card__icon[data-tone="armor"] {
+  --loot-icon-edge: rgba(20, 184, 166, 0.58);
+  --loot-icon-core: #2dd4bf;
+}
+
+.loot-card__icon[data-tone="relic"] {
+  --loot-icon-edge: rgba(168, 85, 247, 0.58);
+  --loot-icon-core: #c084fc;
+}
+
+.loot-card__icon-image {
+  position: relative;
+  z-index: 2;
+  width: 75%;
+  height: 75%;
+  object-fit: contain;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 0 6px rgba(2, 6, 23, 0.58));
+}
+
+.loot-card__icon-glyph {
+  position: absolute;
+  left: 0.18rem;
+  bottom: 0.14rem;
+  z-index: 3;
+  font-size: 0.45rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1;
+  color: color-mix(in srgb, #f8fafc 74%, var(--loot-icon-core));
+  text-shadow: 0 0 5px rgba(2, 6, 23, 0.6);
+}
+
+.loot-card__icon-glyph--center {
+  position: relative;
+  left: auto;
+  bottom: auto;
+  font-size: 0.58rem;
+  letter-spacing: 0.08em;
+}
+
+.loot-card__copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.loot-card__copy strong {
+  font-size: 0.72rem;
+  color: #e8f0f8;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.loot-card__copy span {
+  font-size: 0.6rem;
+  color: #6f8fad;
+  line-height: 1.3;
+}
+
+.loot-card__equipped {
+  color: #5eead4 !important;
+  font-weight: 700;
+}
+
+.species-detail__loot-empty {
+  margin: 0;
+  font-size: 0.68rem;
+  color: #5a7a9a;
+  font-style: italic;
+  border: 1px dashed #23384f;
+  border-radius: 0.35rem;
+  background: #09101a;
+  padding: 0.55rem 0.62rem;
 }
 
 /* Actions panel */
@@ -794,6 +1216,33 @@
 
 @media (max-width: 900px) {
   .bestiary-layout {
+    grid-template-columns: 1fr;
+    align-items: start;
+    overflow: auto;
+  }
+
+  .bestiary-left,
+  .bestiary-right {
+    overflow: visible;
+    padding-right: 0;
+  }
+
+  .species-list {
+    overflow: visible;
+    padding-right: 0;
+  }
+
+  .species-detail__hero {
+    align-items: flex-start;
+  }
+
+  .species-detail__progress-milestone,
+  .species-detail__progress-tally {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .loot-group__grid {
     grid-template-columns: 1fr;
   }
 }

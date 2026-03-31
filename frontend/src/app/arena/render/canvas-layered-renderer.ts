@@ -12,6 +12,7 @@ import { computeDecalFadeAlpha } from "../engine/decal.helpers";
 import { PreloadedAsset } from "../assets/asset-manifest.types";
 import { getMobArchetypeAccentColor } from "../engine/mob-visuals";
 import { ProjectileAnimator } from "./projectile-animator";
+import { computeArenaBoardOrigin } from "./arena-board-layout.helpers";
 const PHYSICAL_ELEMENT: ElementTypeValue = 6;
 const FLOATING_NUMBER_PALETTE = {
   damageReceivedRed: "#ef4444",
@@ -1693,14 +1694,19 @@ export class CanvasLayeredRenderer {
     const scaleY = Math.max(1, Math.abs(transform.d));
     const canvasWidth = this.context.canvas.width / scaleX;
     const canvasHeight = this.context.canvas.height / scaleY;
-    const boardWidth = scene.columns * scene.tileSize;
-    const boardHeight = scene.rows * scene.tileSize;
+    const origin = computeArenaBoardOrigin({
+      columns: scene.columns,
+      rows: scene.rows,
+      tileSize: scene.tileSize,
+      canvasWidth,
+      canvasHeight
+    });
 
     return {
       canvasWidth,
       canvasHeight,
-      originX: Math.max(0, (canvasWidth - boardWidth) / 2),
-      originY: Math.max(0, (canvasHeight - boardHeight) / 2)
+      originX: origin.x,
+      originY: origin.y
     };
   }
 }

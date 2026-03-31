@@ -54,6 +54,114 @@
       ],
       "fps": 12
     },
+    "sprite.player.kina.idle": {
+      "type": "anim",
+      "frames": [
+        "sprites/knight_f_idle_anim_f0.png",
+        "sprites/knight_f_idle_anim_f1.png",
+        "sprites/knight_f_idle_anim_f2.png",
+        "sprites/knight_f_idle_anim_f3.png"
+      ],
+      "fps": 8
+    },
+    "sprite.player.kina.run": {
+      "type": "anim",
+      "frames": [
+        "sprites/knight_f_run_anim_f0.png",
+        "sprites/knight_f_run_anim_f1.png",
+        "sprites/knight_f_run_anim_f2.png",
+        "sprites/knight_f_run_anim_f3.png"
+      ],
+      "fps": 10
+    },
+    "sprite.player.kina.hit": {
+      "type": "anim",
+      "frames": [
+        "sprites/knight_f_hit_anim_f0.png"
+      ],
+      "fps": 12
+    },
+    "sprite.player.ranged_prototype.idle": {
+      "type": "anim",
+      "frames": [
+        "sprites/elf_m_idle_anim_f0.png",
+        "sprites/elf_m_idle_anim_f1.png",
+        "sprites/elf_m_idle_anim_f2.png",
+        "sprites/elf_m_idle_anim_f3.png"
+      ],
+      "fps": 8
+    },
+    "sprite.player.ranged_prototype.run": {
+      "type": "anim",
+      "frames": [
+        "sprites/elf_m_run_anim_f0.png",
+        "sprites/elf_m_run_anim_f1.png",
+        "sprites/elf_m_run_anim_f2.png",
+        "sprites/elf_m_run_anim_f3.png"
+      ],
+      "fps": 10
+    },
+    "sprite.player.ranged_prototype.hit": {
+      "type": "anim",
+      "frames": [
+        "sprites/elf_m_hit_anim_f0.png"
+      ],
+      "fps": 12
+    },
+    "sprite.player.kaelis_dawn.idle": {
+      "type": "anim",
+      "frames": [
+        "sprites/wizzard_f_idle_anim_f0.png",
+        "sprites/wizzard_f_idle_anim_f1.png",
+        "sprites/wizzard_f_idle_anim_f2.png",
+        "sprites/wizzard_f_idle_anim_f3.png"
+      ],
+      "fps": 8
+    },
+    "sprite.player.kaelis_dawn.run": {
+      "type": "anim",
+      "frames": [
+        "sprites/wizzard_f_run_anim_f0.png",
+        "sprites/wizzard_f_run_anim_f1.png",
+        "sprites/wizzard_f_run_anim_f2.png",
+        "sprites/wizzard_f_run_anim_f3.png"
+      ],
+      "fps": 10
+    },
+    "sprite.player.kaelis_dawn.hit": {
+      "type": "anim",
+      "frames": [
+        "sprites/wizzard_f_hit_anim_f0.png"
+      ],
+      "fps": 12
+    },
+    "sprite.player.kaelis_ember.idle": {
+      "type": "anim",
+      "frames": [
+        "sprites/wizzard_m_idle_anim_f0.png",
+        "sprites/wizzard_m_idle_anim_f1.png",
+        "sprites/wizzard_m_idle_anim_f2.png",
+        "sprites/wizzard_m_idle_anim_f3.png"
+      ],
+      "fps": 8
+    },
+    "sprite.player.kaelis_ember.run": {
+      "type": "anim",
+      "frames": [
+        "sprites/wizzard_m_run_anim_f0.png",
+        "sprites/wizzard_m_run_anim_f1.png",
+        "sprites/wizzard_m_run_anim_f2.png",
+        "sprites/wizzard_m_run_anim_f3.png"
+      ],
+      "fps": 10
+    },
+    "sprite.player.kaelis_ember.hit": {
+      "type": "anim",
+      "frames": [
+        "sprites/wizzard_m_hit_anim_f0.png"
+      ],
+      "fps": 12
+    },
     "sprite.mob.slime.idle": {
       "type": "anim",
       "frames": [
@@ -283,6 +391,18 @@
       "playerIdle": "sprite.player.idle",
       "playerRun": "sprite.player.run",
       "playerHit": "sprite.player.hit",
+      "playerKinaIdle": "sprite.player.kina.idle",
+      "playerKinaRun": "sprite.player.kina.run",
+      "playerKinaHit": "sprite.player.kina.hit",
+      "playerRangedPrototypeIdle": "sprite.player.ranged_prototype.idle",
+      "playerRangedPrototypeRun": "sprite.player.ranged_prototype.run",
+      "playerRangedPrototypeHit": "sprite.player.ranged_prototype.hit",
+      "playerKaelisDawnIdle": "sprite.player.kaelis_dawn.idle",
+      "playerKaelisDawnRun": "sprite.player.kaelis_dawn.run",
+      "playerKaelisDawnHit": "sprite.player.kaelis_dawn.hit",
+      "playerKaelisEmberIdle": "sprite.player.kaelis_ember.idle",
+      "playerKaelisEmberRun": "sprite.player.kaelis_ember.run",
+      "playerKaelisEmberHit": "sprite.player.kaelis_ember.hit",
       "mobSlimeIdle": "sprite.mob.slime.idle",
       "mobSlimeRun": "sprite.mob.slime.run",
       "mobSlimeHit": "sprite.mob.slime.hit",

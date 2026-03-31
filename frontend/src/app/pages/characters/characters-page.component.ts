@@ -206,16 +206,20 @@ export class CharactersPageComponent implements OnInit, OnDestroy {
     return this.setActiveInFlightCharacterId === characterId;
   }
 
-  isPortraitImageFailed(characterId: string): boolean {
-    return this.portraitImageFailures.has(characterId);
+  isPortraitImageFailed(imageUrl: string | null | undefined): boolean {
+    if (!imageUrl) {
+      return true;
+    }
+
+    return this.portraitImageFailures.has(imageUrl);
   }
 
-  onPortraitImageError(characterId: string): void {
-    if (!characterId) {
+  onPortraitImageError(imageUrl: string | null | undefined): void {
+    if (!imageUrl) {
       return;
     }
 
-    this.portraitImageFailures.add(characterId);
+    this.portraitImageFailures.add(imageUrl);
   }
 
   private toCharacterRow(character: CharacterState, account: AccountState): CharacterRow {

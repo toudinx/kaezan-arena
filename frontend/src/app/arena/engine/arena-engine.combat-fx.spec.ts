@@ -24,6 +24,25 @@ describe("ArenaEngine combat fx mapping", () => {
     ];
   }
 
+  it("uses backend-selected player actor id to resolve character skin in arena sprites", () => {
+    const engine = new ArenaEngine();
+    const scene = engine.createTestScene(7, 7, 32);
+    const actors: ArenaActorState[] = [
+      {
+        actorId: "character:ranged_prototype",
+        kind: "player",
+        tileX: 3,
+        tileY: 3,
+        hp: 100,
+        maxHp: 100
+      }
+    ];
+
+    const applied = engine.applyActorStates(scene, actors);
+    const playerSprite = applied.sprites.find((entry) => entry.actorId === "character:ranged_prototype");
+    expect(playerSprite?.semanticId).toBe("sprite.player.ranged_prototype.idle");
+  });
+
   it("maps attack_fx events into deterministic render instances", () => {
     const engine = new ArenaEngine();
     const scene = engine.createTestScene(7, 7, 32);

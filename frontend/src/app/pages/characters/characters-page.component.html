@@ -37,24 +37,39 @@
                 @if (row.isActive) {
                   <span class="roster-card__active-badge">ACTIVE</span>
                 }
-                <div
-                  class="roster-card__portrait kae-char-portrait"
-                  [class.kae-char-portrait--selected]="selectedCharacterId === row.characterId"
-                  [class.kae-char-portrait--active]="row.isActive"
-                  [attr.data-tone]="row.portrait.tone"
-                  aria-hidden="true"
-                >
-                  @if (row.portrait.imageUrl && !isPortraitImageFailed(row.characterId)) {
-                    <img
-                      class="kae-char-portrait__img"
-                      [src]="row.portrait.imageUrl"
-                      [alt]="''"
-                      (error)="onPortraitImageError(row.characterId)"
-                    />
-                  } @else {
-                    <span class="kae-char-portrait__fallback">{{ row.portrait.monogram }}</span>
-                  }
-                  <span class="kae-char-portrait__sigil">{{ row.portrait.sigil }}</span>
+                <div class="roster-card__visuals">
+                  <div
+                    class="roster-card__portrait kae-char-portrait"
+                    [class.kae-char-portrait--selected]="selectedCharacterId === row.characterId"
+                    [class.kae-char-portrait--active]="row.isActive"
+                    [attr.data-tone]="row.portrait.tone"
+                    aria-hidden="true"
+                  >
+                    @if (row.portrait.imageUrl && !isPortraitImageFailed(row.portrait.imageUrl)) {
+                      <img
+                        class="kae-char-portrait__img"
+                        [src]="row.portrait.imageUrl"
+                        [alt]="''"
+                        (error)="onPortraitImageError(row.portrait.imageUrl)"
+                      />
+                    } @else {
+                      <span class="kae-char-portrait__fallback">{{ row.portrait.monogram }}</span>
+                    }
+                    <span class="kae-char-portrait__sigil">{{ row.portrait.sigil }}</span>
+                  </div>
+
+                  <div class="roster-card__preview-chip" [attr.data-tone]="row.portrait.tone" aria-hidden="true">
+                    @if (row.portrait.runImageUrl && !isPortraitImageFailed(row.portrait.runImageUrl)) {
+                      <img
+                        class="roster-card__preview-chip-image"
+                        [src]="row.portrait.runImageUrl"
+                        [alt]="''"
+                        (error)="onPortraitImageError(row.portrait.runImageUrl)"
+                      />
+                    } @else {
+                      <span class="roster-card__preview-chip-label">RUN</span>
+                    }
+                  </div>
                 </div>
                 <div class="roster-card__body">
                   <div class="roster-card__name-row">
@@ -93,22 +108,52 @@
       <section class="detail">
         @if (selectedCharacter) {
           <div class="detail__header">
-            <div
-              class="detail__portrait kae-char-portrait kae-char-portrait--active"
-              [attr.data-tone]="selectedCharacter.portrait.tone"
-              aria-hidden="true"
-            >
-              @if (selectedCharacter.portrait.imageUrl && !isPortraitImageFailed(selectedCharacter.characterId)) {
-                <img
-                  class="kae-char-portrait__img"
-                  [src]="selectedCharacter.portrait.imageUrl"
-                  [alt]="''"
-                  (error)="onPortraitImageError(selectedCharacter.characterId)"
-                />
-              } @else {
-                <span class="kae-char-portrait__fallback">{{ selectedCharacter.portrait.monogram }}</span>
-              }
-              <span class="kae-char-portrait__sigil">{{ selectedCharacter.portrait.sigil }}</span>
+            <div class="detail__preview" [attr.data-tone]="selectedCharacter.portrait.tone">
+              <div
+                class="detail__portrait kae-char-portrait kae-char-portrait--active"
+                [attr.data-tone]="selectedCharacter.portrait.tone"
+                aria-hidden="true"
+              >
+                @if (selectedCharacter.portrait.imageUrl && !isPortraitImageFailed(selectedCharacter.portrait.imageUrl)) {
+                  <img
+                    class="kae-char-portrait__img"
+                    [src]="selectedCharacter.portrait.imageUrl"
+                    [alt]="''"
+                    (error)="onPortraitImageError(selectedCharacter.portrait.imageUrl)"
+                  />
+                } @else {
+                  <span class="kae-char-portrait__fallback">{{ selectedCharacter.portrait.monogram }}</span>
+                }
+                <span class="kae-char-portrait__sigil">{{ selectedCharacter.portrait.sigil }}</span>
+              </div>
+
+              <div class="detail__preview-strip" aria-hidden="true">
+                <div class="detail__preview-frame detail__preview-frame--run">
+                  @if (selectedCharacter.portrait.runImageUrl && !isPortraitImageFailed(selectedCharacter.portrait.runImageUrl)) {
+                    <img
+                      class="detail__preview-frame-image"
+                      [src]="selectedCharacter.portrait.runImageUrl"
+                      [alt]="''"
+                      (error)="onPortraitImageError(selectedCharacter.portrait.runImageUrl)"
+                    />
+                  } @else {
+                    <span class="detail__preview-frame-fallback">RUN</span>
+                  }
+                </div>
+
+                <div class="detail__preview-frame detail__preview-frame--hit">
+                  @if (selectedCharacter.portrait.hitImageUrl && !isPortraitImageFailed(selectedCharacter.portrait.hitImageUrl)) {
+                    <img
+                      class="detail__preview-frame-image"
+                      [src]="selectedCharacter.portrait.hitImageUrl"
+                      [alt]="''"
+                      (error)="onPortraitImageError(selectedCharacter.portrait.hitImageUrl)"
+                    />
+                  } @else {
+                    <span class="detail__preview-frame-fallback">HIT</span>
+                  }
+                </div>
+              </div>
             </div>
 
             <div class="detail__identity">

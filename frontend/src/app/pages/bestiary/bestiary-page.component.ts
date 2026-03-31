@@ -6,10 +6,13 @@ import {
 } from "../../api/account-api.service";
 import { AccountStore } from "../../account/account-store.service";
 import { mapInventoryToBackpackSlots } from "../../shared/backpack/backpack-inventory.helpers";
+import { type SpeciesVisual, resolveSpeciesVisual } from "../../shared/bestiary/species-visuals.helpers";
+import { type ItemIconTone } from "../../shared/items/item-visuals.helpers";
 
 type BestiaryRow = Readonly<{
   speciesId: string;
   displayName: string;
+  visual: SpeciesVisual;
   killsTotal: number;
   primalCoreBalance: number;
   nextKillMilestone: number;
@@ -22,9 +25,14 @@ type BestiaryRow = Readonly<{
 type InventoryRow = Readonly<{
   instanceId: string;
   displayName: string;
+  slotKey: string;
   slotLabel: string;
+  typeLabel: string;
   rarityLabel: string;
   rarityKey: string;
+  iconImageUrl: string | null;
+  iconGlyph: string;
+  iconTone: ItemIconTone;
   originSpeciesLabel: string | null;
   originSpeciesId: string | null;
   isEquipped: boolean;
@@ -42,6 +50,19 @@ type RefineRule = Readonly<{
   primalCoreCost: number;
   echoFragmentsCost: number;
 }>;
+
+type LootGroup = Readonly<{
+  slotKey: string;
+  slotLabel: string;
+  items: ReadonlyArray<InventoryRow>;
+}>;
+
+const LOOT_SLOT_ORDER: Readonly<Record<string, number>> = {
+  weapon: 0,
+  armor: 1,
+  relic: 2,
+  unknown: 3
+};
 
 const RANK_THRESHOLDS: ReadonlyArray<number> = [0, 10, 30, 60, 100];
 const MAX_RANK = RANK_THRESHOLDS.length; // 5
@@ -77,6 +98,8 @@ export class BestiaryPageComponent implements OnInit {
   salvagingItemInstanceId: string | null = null;
   actionFeedback: string | null = null;
   lastUpdatedItemInstanceId: string | null = null;
+  private readonly speciesImageFailures = new Set<string>();
+  private readonly itemIconFailures = new Set<string>();
   private readonly maintainSelectionEffect = effect(() => {
     const rows = this.speciesRowsSignal();
     const currentSelection = this.selectedSpeciesIdSignal();
@@ -189,6 +212,30 @@ export class BestiaryPageComponent implements OnInit {
     return `${selected.killsToNextMilestone} kills to milestone ${selected.nextKillMilestone}`;
   }
 
+  isSpeciesImageVisible(row: BestiaryRow): boolean {
+    return !!row.visual.imageUrl && !this.speciesImageFailures.has(row.speciesId);
+  }
+
+  onSpeciesImageError(speciesId: string): void {
+    if (!speciesId) {
+      return;
+    }
+
+    this.speciesImageFailures.add(speciesId);
+  }
+
+  shouldRenderItemIcon(item: InventoryRow): boolean {
+    return !!item.iconImageUrl && !this.itemIconFailures.has(item.instanceId);
+  }
+
+  onItemIconError(itemInstanceId: string): void {
+    if (!itemInstanceId) {
+      return;
+    }
+
+    this.itemIconFailures.add(itemInstanceId);
+  }
+
   selectSpecies(speciesId: string): void {
     this.selectedSpeciesIdSignal.set(speciesId);
   }
@@ -247,9 +294,14 @@ export class BestiaryPageComponent implements OnInit {
         return {
           instanceId: slot.instanceId,
           displayName: slot.displayName,
-          slotLabel: slot.slot,
+          slotKey: slot.slot,
+          slotLabel: slot.slotLabel,
+          typeLabel: slot.typeLabel,
           rarityLabel: this.formatRarityLabel(rarityKey),
           rarityKey,
+          iconImageUrl: slot.iconImageUrl,
+          iconGlyph: slot.iconGlyph,
+          iconTone: slot.iconTone,
           originSpeciesLabel: originSpeciesId ? this.toSpeciesLabel(originSpeciesId) : null,
           originSpeciesId,
           isEquipped: slot.isEquipped,
@@ -282,6 +334,39 @@ export class BestiaryPageComponent implements OnInit {
     }
 
     return this.inventoryRows.filter((item) => item.originSpeciesId === selected.speciesId);
+  }
+
+  get selectedSpeciesLootGroups(): LootGroup[] {
+    const items = this.selectedSpeciesInventoryRows;
+    if (items.length === 0) {
+      return [];
+    }
+
+    const groupedBySlot = new Map<string, InventoryRow[]>();
+    for (const item of items) {
+      const groupRows = groupedBySlot.get(item.slotKey) ?? [];
+      groupRows.push(item);
+      groupedBySlot.set(item.slotKey, groupRows);
+    }
+
+    return Array.from(groupedBySlot.entries())
+      .sort((left, right) => {
+        const leftWeight = LOOT_SLOT_ORDER[left[0]] ?? LOOT_SLOT_ORDER["unknown"];
+        const rightWeight = LOOT_SLOT_ORDER[right[0]] ?? LOOT_SLOT_ORDER["unknown"];
+        return leftWeight - rightWeight;
+      })
+      .map(([slotKey, rows]) => ({
+        slotKey,
+        slotLabel: rows[0]?.slotLabel ?? this.formatRarityLabel(slotKey),
+        items: [...rows].sort((left, right) => {
+          const byRarity = this.resolveRaritySortWeight(right.rarityKey) - this.resolveRaritySortWeight(left.rarityKey);
+          if (byRarity !== 0) {
+            return byRarity;
+          }
+
+          return left.displayName.localeCompare(right.displayName, undefined, { sensitivity: "base" });
+        })
+      }));
   }
 
   get selectedSpeciesRefineRows(): InventoryRow[] {
@@ -410,6 +495,7 @@ export class BestiaryPageComponent implements OnInit {
     return {
       speciesId,
       displayName,
+      visual: resolveSpeciesVisual({ speciesId, displayName }),
       killsTotal,
       primalCoreBalance: Math.max(0, primalCoreBySpecies[speciesId] ?? 0),
       nextKillMilestone,
@@ -445,6 +531,23 @@ export class BestiaryPageComponent implements OnInit {
         return 250;
       default:
         return null;
+    }
+  }
+
+  private resolveRaritySortWeight(rarity: string): number {
+    switch (rarity) {
+      case "ascendant":
+        return 5;
+      case "legendary":
+        return 4;
+      case "epic":
+        return 3;
+      case "rare":
+        return 2;
+      case "common":
+        return 1;
+      default:
+        return 0;
     }
   }
 

@@ -1,4 +1,5 @@
 import { TilePos } from "../../arena/engine/arena-engine.types";
+import { computeArenaBoardOrigin } from "../../arena/render/arena-board-layout.helpers";
 
 export interface CanvasRectLike {
   left: number;
@@ -111,10 +112,11 @@ export function resolvePointerCommand(
 }
 
 function computeBoardOrigin(layout: GridLayout): { x: number; y: number } {
-  const boardWidth = layout.columns * layout.tileSize;
-  const boardHeight = layout.rows * layout.tileSize;
-  return {
-    x: Math.max(0, (layout.canvasWidth - boardWidth) / 2),
-    y: Math.max(0, (layout.canvasHeight - boardHeight) / 2)
-  };
+  return computeArenaBoardOrigin({
+    columns: layout.columns,
+    rows: layout.rows,
+    tileSize: layout.tileSize,
+    canvasWidth: layout.canvasWidth,
+    canvasHeight: layout.canvasHeight
+  });
 }

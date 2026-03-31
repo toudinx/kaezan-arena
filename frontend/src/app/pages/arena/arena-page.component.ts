@@ -12,6 +12,7 @@ import { Router, RouterLink } from "@angular/router";
 import { AssetPreloaderService } from "../../arena/assets/asset-preloader.service";
 import { AssetResolverService } from "../../arena/assets/asset-resolver.service";
 import { ArenaEngine } from "../../arena/engine/arena-engine";
+import { getPlayerSpriteAssetIdsForPreload } from "../../arena/engine/player-visuals";
 import {
   ArenaActorState,
   ArenaBattleEvent,
@@ -26,6 +27,7 @@ import {
 } from "../../arena/engine/arena-engine.types";
 import { normalizeDecalKind, resolveDecalSemanticId } from "../../arena/engine/decal.helpers";
 import { CanvasLayeredRenderer } from "../../arena/render/canvas-layered-renderer";
+import { computeMaxTileSizeForViewport } from "../../arena/render/arena-board-layout.helpers";
 import type { UiWindowPositionChangedEvent } from "../../arena/ui/ui-window.component";
 import {
   AccountApiService,
@@ -328,12 +330,12 @@ type BootPhase =
   | "running"
   | "error";
 
-const DEV_LOG_ASSET_IDS = [
+const PLAYER_SPRITE_ASSET_IDS = getPlayerSpriteAssetIdsForPreload();
+
+const DEV_LOG_ASSET_IDS: ReadonlyArray<string> = [
   "tile.floor.default",
   "tile.wall.stone",
-  "sprite.player.idle",
-  "sprite.player.run",
-  "sprite.player.hit",
+  ...PLAYER_SPRITE_ASSET_IDS,
   "sprite.mob.slime.idle",
   "sprite.mob.slime.run",
   "sprite.mob.slime.hit",
@@ -359,7 +361,7 @@ const DEV_LOG_ASSET_IDS = [
   "fx.skill.exori_mas",
   "ui.hp.frame",
   "ui.cooldown.frame"
-] as const;
+];
 
 @Component({
   selector: "app-arena-page",
@@ -1139,12 +1141,11 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       this.logResolvedAssetPaths();
 
       this.bootPhase = "preloading_assets";
+      const playerSpritePreloads = PLAYER_SPRITE_ASSET_IDS.map((assetId) => this.preloader.preloadAsset(assetId));
       await Promise.all([
         this.preloader.preloadAsset("tile.floor.default"),
         this.preloader.preloadAsset("tile.wall.stone"),
-        this.preloader.preloadAsset("sprite.player.idle"),
-        this.preloader.preloadAsset("sprite.player.run"),
-        this.preloader.preloadAsset("sprite.player.hit"),
+        ...playerSpritePreloads,
         this.preloader.preloadAsset("sprite.mob.slime.idle"),
         this.preloader.preloadAsset("sprite.mob.slime.run"),
         this.preloader.preloadAsset("sprite.mob.slime.hit"),
@@ -6881,7 +6882,12 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     canvas.style.height = "100%";
     this.canvasContext.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    const rawTileSize = Math.floor(Math.min(cssWidth / this.scene.columns, cssHeight / this.scene.rows));
+    const rawTileSize = computeMaxTileSizeForViewport(
+      this.scene.columns,
+      this.scene.rows,
+      cssWidth,
+      cssHeight
+    );
     const nextTileSize = Math.max(16, Math.min(160, rawTileSize));
     if (nextTileSize <= 0) {
       this.canvasReady = false;

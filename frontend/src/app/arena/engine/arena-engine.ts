@@ -28,10 +28,7 @@ import {
 import { computeDirectionAngleRad, normalizeCombatFxKind } from "./attack-fx.helpers";
 import { planSquareAreaFx, spawnAreaFx, spawnFx, spawnFxPlan, tickFx } from "./fx-spawner";
 import { resolveMobSpriteSemanticId } from "./mob-visuals";
-
-const PLAYER_IDLE_SPRITE_ID = "sprite.player.idle";
-const PLAYER_RUN_SPRITE_ID = "sprite.player.run";
-const PLAYER_HIT_SPRITE_ID = "sprite.player.hit";
+import { resolvePlayerSpriteSemanticId } from "./player-visuals";
 const HIT_VISUAL_DURATION_MS = 200;
 const RUN_VISUAL_DURATION_MS = 300;
 const MOB_KNOCKBACK_SLIDE_DURATION_MS = 100;
@@ -81,7 +78,7 @@ export class ArenaEngine {
     const sprites: SpriteEntity[] = [
       {
         actorId: "preview.player",
-        semanticId: PLAYER_IDLE_SPRITE_ID,
+        semanticId: resolvePlayerSpriteSemanticId(null, "idle"),
         tilePos: playerTile,
         layer: "actors",
         animationElapsedMs: 0
@@ -796,22 +793,14 @@ export class ArenaEngine {
 
   private resolveSpriteSemanticId(actor: ArenaActorState, mode: ActorAnimationMode): string {
     if (actor.kind === "player") {
-      if (mode === "run") {
-        return PLAYER_RUN_SPRITE_ID;
-      }
-
-      if (mode === "hit") {
-        return PLAYER_HIT_SPRITE_ID;
-      }
-
-      return PLAYER_IDLE_SPRITE_ID;
+      return resolvePlayerSpriteSemanticId(actor.actorId, mode);
     }
 
     if (actor.kind === "mob") {
       return resolveMobSpriteSemanticId(actor.mobType, mode);
     }
 
-    return PLAYER_IDLE_SPRITE_ID;
+    return resolvePlayerSpriteSemanticId(null, "idle");
   }
 
   private toActorMap(actorStates: ReadonlyArray<ArenaActorState>): ArenaActorMap {

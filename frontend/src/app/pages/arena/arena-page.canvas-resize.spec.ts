@@ -54,7 +54,7 @@ describe("ArenaPageComponent canvas resize", () => {
     expect(canvas.style.width).toBe("100%");
     expect(canvas.style.height).toBe("100%");
     expect((component as any).canvasReady).toBe(true);
-    expect((component as any).scene.tileSize).toBe(98); // floor(min(686/7, 720/7)) = floor(98) = 98
+    expect((component as any).scene.tileSize).toBe(91); // safe-area constrained board fit
   });
 
   it("uses height as the tileSize constraint when viewport is wider than tall", () => {
@@ -69,8 +69,8 @@ describe("ArenaPageComponent canvas resize", () => {
 
     (component as any).syncCanvasSize();
 
-    // tileSize = floor(min(686/7 ≈ 98, 350/7 = 50)) = 50
-    expect((component as any).scene.tileSize).toBe(50);
+    // safe-area constrained tile size prefers height in this viewport
+    expect((component as any).scene.tileSize).toBe(44);
     expect(canvas.width).toBe(686);
     expect((component as any).canvasReady).toBe(true);
   });
@@ -88,15 +88,15 @@ describe("ArenaPageComponent canvas resize", () => {
 
     (component as any).syncCanvasSize();
     expect(canvas.width).toBe(686);
-    expect((component as any).scene.tileSize).toBe(98);
+    expect((component as any).scene.tileSize).toBe(91);
 
     // Simulate window resize growing the viewport
     viewport.getBoundingClientRect = () => ({ width: 980, height: 720 });
     (component as any).syncCanvasSize();
 
     expect(canvas.width).toBe(980);
-    // tileSize = floor(min(980/7 ≈ 140, 720/7 ≈ 102.8)) = 102
-    expect((component as any).scene.tileSize).toBe(102);
+    // safe-area constrained tile size remains height-limited after resize
+    expect((component as any).scene.tileSize).toBe(91);
     expect((component as any).canvasReady).toBe(true);
   });
 
