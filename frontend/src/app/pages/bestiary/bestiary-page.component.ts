@@ -1,4 +1,4 @@
-import { Component, OnInit, computed, effect, signal } from "@angular/core";
+import { Component, Input, OnInit, computed, effect, signal } from "@angular/core";
 import {
   type BestiaryCraftSlot,
   type BestiarySpecies,
@@ -88,11 +88,32 @@ function computeRank(killsTotal: number): number {
 export class BestiaryPageComponent implements OnInit {
   readonly primalCoreCost = 20;
   readonly echoFragmentsCost = 100;
+  readonly speciesPageSize = 8;
+  private readonly contextCharacterIdSignal = signal<string | null>(null);
   private readonly selectedSpeciesIdSignal = signal<string | null>(null);
+  private readonly searchQuerySignal = signal("");
+  private readonly speciesPageSignal = signal(0);
+  private readonly scopedCharacterSignal = computed(() => this.resolveScopedCharacter(this.contextCharacterIdSignal()));
   private readonly speciesRowsSignal = computed(() =>
-    this.buildRows(this.accountStore.catalogs().speciesCatalog, this.accountStore.activeCharacter())
+    this.buildRows(this.accountStore.catalogs().speciesCatalog, this.scopedCharacterSignal())
   );
-  searchQuery = "";
+  private readonly filteredSpeciesRowsSignal = computed(() => {
+    const query = this.searchQuerySignal().trim().toLowerCase();
+    const filtered = query.length === 0
+      ? this.speciesRowsSignal()
+      : this.speciesRowsSignal().filter((row) =>
+          row.displayName.toLowerCase().includes(query) ||
+          row.speciesId.toLowerCase().includes(query)
+        );
+    return [...filtered].sort((a, b) => {
+      const aHasKills = a.killsTotal > 0 ? 1 : 0;
+      const bHasKills = b.killsTotal > 0 ? 1 : 0;
+      if (aHasKills !== bHasKills) return bHasKills - aHasKills;
+      if (a.rank !== b.rank) return b.rank - a.rank;
+      if (a.killsTotal !== b.killsTotal) return b.killsTotal - a.killsTotal;
+      return a.displayName.localeCompare(b.displayName);
+    });
+  });
   isCrafting = false;
   refiningItemInstanceId: string | null = null;
   salvagingItemInstanceId: string | null = null;
@@ -101,7 +122,7 @@ export class BestiaryPageComponent implements OnInit {
   private readonly speciesImageFailures = new Set<string>();
   private readonly itemIconFailures = new Set<string>();
   private readonly maintainSelectionEffect = effect(() => {
-    const rows = this.speciesRowsSignal();
+    const rows = this.filteredSpeciesRowsSignal();
     const currentSelection = this.selectedSpeciesIdSignal();
 
     if (rows.length === 0) {
@@ -115,8 +136,22 @@ export class BestiaryPageComponent implements OnInit {
       this.selectedSpeciesIdSignal.set(rows[0].speciesId);
     }
   }, { allowSignalWrites: true });
+  private readonly maintainSpeciesPageEffect = effect(() => {
+    const rows = this.filteredSpeciesRowsSignal();
+    const currentPage = this.speciesPageSignal();
+    const clamped = this.clampSpeciesPage(currentPage, rows.length);
+    if (currentPage !== clamped) {
+      this.speciesPageSignal.set(clamped);
+    }
+  }, { allowSignalWrites: true });
 
   constructor(private readonly accountStore: AccountStore) {}
+
+  @Input() embedded = false;
+
+  @Input() set contextCharacterId(value: string | null | undefined) {
+    this.contextCharacterIdSignal.set(this.normalizeCharacterId(value));
+  }
 
   async ngOnInit(): Promise<void> {
     try {
@@ -135,7 +170,7 @@ export class BestiaryPageComponent implements OnInit {
   }
 
   get activeCharacter(): CharacterState | null {
-    return this.accountStore.activeCharacter();
+    return this.scopedCharacterSignal();
   }
 
   get hasCharacter(): boolean {
@@ -157,30 +192,56 @@ export class BestiaryPageComponent implements OnInit {
     return Math.max(0, this.accountStore.state()?.echoFragmentsBalance ?? 0);
   }
 
-  get totalKillsAcrossSpecies(): number {
-    return this.speciesRows.reduce((total, row) => total + row.killsTotal, 0);
-  }
-
-  get speciesUnlockedCount(): number {
-    return this.speciesRows.filter((row) => row.killsTotal > 0).length;
+  get searchQuery(): string {
+    return this.searchQuerySignal();
   }
 
   get filteredSpeciesRows(): BestiaryRow[] {
-    const query = this.searchQuery.trim().toLowerCase();
-    const filtered = query.length === 0
-      ? this.speciesRows
-      : this.speciesRows.filter((row) =>
-          row.displayName.toLowerCase().includes(query) ||
-          row.speciesId.toLowerCase().includes(query)
-        );
-    return [...filtered].sort((a, b) => {
-      const aHasKills = a.killsTotal > 0 ? 1 : 0;
-      const bHasKills = b.killsTotal > 0 ? 1 : 0;
-      if (aHasKills !== bHasKills) return bHasKills - aHasKills;
-      if (a.rank !== b.rank) return b.rank - a.rank;
-      if (a.killsTotal !== b.killsTotal) return b.killsTotal - a.killsTotal;
-      return a.displayName.localeCompare(b.displayName);
-    });
+    return this.filteredSpeciesRowsSignal();
+  }
+
+  get filteredSpeciesCount(): number {
+    return this.filteredSpeciesRows.length;
+  }
+
+  get filteredSpeciesKillsTotal(): number {
+    return this.filteredSpeciesRows.reduce((total, row) => total + row.killsTotal, 0);
+  }
+
+  get speciesPageCount(): number {
+    const count = this.filteredSpeciesRows.length;
+    if (count === 0) {
+      return 0;
+    }
+    return Math.ceil(count / this.speciesPageSize);
+  }
+
+  get speciesPageNumber(): number {
+    return this.speciesPageCount === 0 ? 0 : this.speciesPageSignal() + 1;
+  }
+
+  get isSpeciesPageStart(): boolean {
+    return this.speciesPageSignal() <= 0;
+  }
+
+  get isSpeciesPageEnd(): boolean {
+    return this.speciesPageSignal() >= Math.max(0, this.speciesPageCount - 1);
+  }
+
+  get speciesPageWindowLabel(): string {
+    const total = this.filteredSpeciesRows.length;
+    if (total === 0) {
+      return "0 / 0";
+    }
+
+    const start = this.speciesPageSignal() * this.speciesPageSize + 1;
+    const end = Math.min(total, start + this.speciesPageSize - 1);
+    return `${start}-${end} / ${total}`;
+  }
+
+  get pagedSpeciesRows(): BestiaryRow[] {
+    const start = this.speciesPageSignal() * this.speciesPageSize;
+    return this.filteredSpeciesRows.slice(start, start + this.speciesPageSize);
   }
 
   get selectedSpecies(): BestiaryRow | null {
@@ -210,6 +271,10 @@ export class BestiaryPageComponent implements OnInit {
     }
 
     return `${selected.killsToNextMilestone} kills to milestone ${selected.nextKillMilestone}`;
+  }
+
+  get selectedSpeciesLootCount(): number {
+    return this.selectedSpeciesInventoryRows.length;
   }
 
   shouldRenderSpeciesImage(imageUrl: string | null | undefined): boolean {
@@ -246,7 +311,17 @@ export class BestiaryPageComponent implements OnInit {
 
   onSearchInput(event: Event): void {
     const input = event.target;
-    this.searchQuery = input instanceof HTMLInputElement ? input.value : "";
+    this.searchQuerySignal.set(input instanceof HTMLInputElement ? input.value : "");
+    this.speciesPageSignal.set(0);
+  }
+
+  goToPreviousSpeciesPage(): void {
+    this.speciesPageSignal.update((page) => Math.max(0, page - 1));
+  }
+
+  goToNextSpeciesPage(): void {
+    const maxPage = Math.max(0, this.speciesPageCount - 1);
+    this.speciesPageSignal.update((page) => Math.min(maxPage, page + 1));
   }
 
   get canCraftSelectedSpecies(): boolean {
@@ -462,6 +537,29 @@ export class BestiaryPageComponent implements OnInit {
     await this.accountStore.load();
   }
 
+  private resolveScopedCharacter(contextCharacterId: string | null): CharacterState | null {
+    const state = this.accountStore.state();
+    if (!state) {
+      return null;
+    }
+
+    if (contextCharacterId && state.characters[contextCharacterId]) {
+      return state.characters[contextCharacterId];
+    }
+
+    const activeCharacterId = this.accountStore.activeCharacterId();
+    if (activeCharacterId && state.characters[activeCharacterId]) {
+      return state.characters[activeCharacterId];
+    }
+
+    const sorted = Object.values(state.characters).sort((left, right) => {
+      const byName = left.name.localeCompare(right.name, undefined, { sensitivity: "base" });
+      return byName !== 0 ? byName : left.characterId.localeCompare(right.characterId);
+    });
+
+    return sorted[0] ?? null;
+  }
+
   private buildRows(speciesCatalog: ReadonlyArray<BestiarySpecies>, character: CharacterState | null): BestiaryRow[] {
     const killsBySpecies = character?.bestiaryKillsBySpecies ?? {};
     const primalCoreBySpecies = character?.primalCoreBySpecies ?? {};
@@ -585,5 +683,19 @@ export class BestiaryPageComponent implements OnInit {
     }
 
     return error instanceof Error ? error.message : String(error);
+  }
+
+  private normalizeCharacterId(value: string | null | undefined): string | null {
+    const normalized = value?.trim() ?? "";
+    return normalized.length > 0 ? normalized : null;
+  }
+
+  private clampSpeciesPage(page: number, rowCount: number): number {
+    if (rowCount <= 0) {
+      return 0;
+    }
+
+    const maxPage = Math.max(0, Math.ceil(rowCount / this.speciesPageSize) - 1);
+    return Math.min(Math.max(page, 0), maxPage);
   }
 }

@@ -72,7 +72,8 @@ Current `docker-compose.yml` is a development skeleton with backend (`5080`) and
 
 ## Navigation
 
-The app uses a single navbar provided by `AppShellComponent` (Home / Characters / Bestiary / Arena + Backpack). The root `App` component (`app.html`) contains only the `<router-outlet>` — no secondary nav. The Arena page renders outside the shell (no nav intentional — full-screen game view).
+The app uses a single navbar provided by `AppShellComponent` (Home / Kaelis / Arena + Backpack). The root `App` component (`app.html`) contains only the `<router-outlet>` — no secondary nav. The Arena page renders outside the shell (no nav intentional — full-screen game view).
+Bestiary is now part of the Kaelis experience (Kaelis tabs: Overview / Loadout / Bestiary), not a top-level sibling page.
 
 ## Home Page Hub
 
@@ -82,22 +83,25 @@ The Home page is a full-page dark hub (`#080d14`) with a three-column layout at 
 - **CENTER — Enter Arena CTA + Last Run:** Dominant "Start Run" link button (teal), last run outcome (Victory/Defeat color-coded), duration, Kills / Elites / Damage / Chests stat tiles, card pills chosen.
 - **RIGHT — Progression snapshot:** Echo Fragments balance (large number, gold), Bestiary section with closest-to-milestone callout and top-3 species progress bars with kills-to-next.
 
-## Bestiary Page
+## Kaelis Bestiary Tab
 
-The Bestiary is a dark-themed (`#080d14`) two-column page matching the Home and Characters pages:
+Bestiary now lives as a Kaelis tab (`/characters/:id?tab=bestiary`) and always uses the currently selected Kaelis context from the Kaelis parent screen.
 
-- **Header:** "Bestiary" heading + active character display name subtitle + Echo Fragments balance (gold, top-right).
+- **Header context:** Bestiary heading + current Kaelis identity + Echo Fragments balance.
 - **Stats row:** Tracked species / Unlocked / Total kills — numbers large, labels small, in dark tiles.
 - **LEFT — Species list:** Each row shows display name, optional "Rank N" amber pill (rank > 0), kill count, kills-to-next label, and a progress bar (`linear-gradient` teal). Selected species highlighted with teal border.
-- **RIGHT — Detail panel:** Large species name heading, prominent "Rank N" badge (amber when earned), Kills + Primal Core stat tiles, large 8px progress bar toward next milestone labeled "Progress to Rank N+1", "AVAILABLE ACTIONS" section with Craft Weapon / Craft Armor / Craft Relic buttons. Refine and Salvage subsections only appear when there are actual items — empty state messages are hidden.
+- **CENTER — Species hero + loot:** Large species hero, rank/progress block, and discovered loot cards grouped by slot.
+- **RIGHT — Progression actions:** Craft / Refine / Salvage sections scoped to the selected species and current Kaelis.
 - No raw species IDs visible; catalog display names are shown for all known species.
 
 ## Characters Page
 
-The Characters page is a dark-themed character selection screen with two columns:
+The Kaelis page is a dark-themed parent experience with a persistent left selector rail and internal tabs:
 
-- **LEFT — Roster list:** Each character card shows a large portrait placeholder (color-coded per character: amber for Kina, teal for Ranged Prototype, purple for Kaelis Dawn, green for Kaelis Ember), character name, a kit type badge ("Melee Kit" / "Ranged Kit"), level, and fixed weapon pills. The active character has a teal border and an "ACTIVE" badge. Clicking a card selects it in the detail panel.
-- **RIGHT — Detail panel:** Large portrait, character name heading, kit identity line with optional "[WIP]" tag, XP progress bar, Fixed Kit as three weapon cards, a locked Rune Slot section, Equipped Gear (Weapon / Armor / Relic with empty state), and action buttons ("Set Active" CTA or "Active Character" badge, plus "Enter Arena" link).
+- **Tabs:** `Overview`, `Loadout`, and `Bestiary` are subviews under Kaelis.
+- **LEFT — Kaelis selector rail:** Stable ordered roster, 4-item viewport, and up/down controls.
+- **Overview/Loadout tabs:** Keep portrait/identity and Kaelis detail blocks (stats, loadout, actions).
+- **Bestiary tab:** Renders the bestiary system as a Kaelis-scoped subview instead of a separate top-level page.
 
 The Arena Preparation lobby (pre-run screen) was also redesigned as a full-width two-column overlay with character arrow navigation, kit pills, portrait placeholder, bestiary milestone teaser, Echo Fragments balance, and an absorbed "Start Run" CTA.
 

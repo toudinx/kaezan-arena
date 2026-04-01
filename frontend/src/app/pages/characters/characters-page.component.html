@@ -1,8 +1,7 @@
 <section class="characters-shell">
   <header class="characters-shell__header">
     <div>
-      <h1>Characters</h1>
-      <p>Choose your build identity and begin your run.</p>
+      <h1>Kaelis Hub</h1>
     </div>
   </header>
 
@@ -14,301 +13,328 @@
   }
 
   @if (isLoading) {
-    <p class="characters-shell__state">Loading characters...</p>
+    <p class="characters-shell__state">Loading Kaelis...</p>
   } @else if (loadError) {
     <p class="characters-shell__state characters-shell__state--error">{{ loadError }}</p>
   } @else if (characterRows.length === 0) {
-    <p class="characters-shell__state">No characters found for this account.</p>
+    <p class="characters-shell__state">No Kaelis found for this account.</p>
   } @else {
-    <div class="characters-shell__layout">
+    <section class="kaelis-strip-wrap" aria-label="Kaelis roster">
+      <div class="kaelis-strip">
+        @for (row of characterRows; track row.characterId) {
+          <button
+            type="button"
+            class="kaelis-strip__item"
+            [class.kaelis-strip__item--selected]="selectedCharacterId === row.characterId"
+            [class.kaelis-strip__item--active]="row.isActive"
+            [attr.title]="row.name"
+            [attr.aria-label]="row.name + (row.isActive ? ' (Active)' : '') + (row.isProvisional ? ' (WIP)' : '')"
+            [attr.aria-pressed]="selectedCharacterId === row.characterId"
+            (click)="selectCharacter(row.characterId)"
+          >
+            <div
+              class="kaelis-strip__portrait kae-char-portrait"
+              [class.kae-char-portrait--selected]="selectedCharacterId === row.characterId"
+              [class.kae-char-portrait--active]="row.isActive"
+              [attr.data-tone]="row.portrait.tone"
+              aria-hidden="true"
+            >
+              @if (row.portrait.imageUrl && !isPortraitImageFailed(row.portrait.imageUrl)) {
+                <img
+                  class="kae-char-portrait__img"
+                  [src]="row.portrait.imageUrl"
+                  [alt]="''"
+                  (error)="onPortraitImageError(row.portrait.imageUrl)"
+                />
+              } @else {
+                <span class="kae-char-portrait__fallback">{{ row.portrait.monogram }}</span>
+              }
+              <span class="kae-char-portrait__sigil">{{ row.portrait.sigil }}</span>
+            </div>
 
-      <!-- LEFT: roster list -->
-      <aside class="roster">
-        <ul class="roster__list">
-          @for (row of characterRows; track row.characterId) {
-            <li>
+            @if (row.isActive) {
+              <span class="kaelis-strip__marker kaelis-strip__marker--active" aria-hidden="true"></span>
+            }
+            @if (row.isProvisional) {
+              <span class="kaelis-strip__marker kaelis-strip__marker--wip" aria-hidden="true"></span>
+            }
+          </button>
+        }
+      </div>
+    </section>
+
+    <div
+      class="characters-hub"
+      [class.characters-hub--bestiary]="isBestiaryTab"
+      [class.characters-hub--switching]="isHubTransitioning"
+      [class.characters-hub--switching-section]="isSectionSwitching"
+      [class.characters-hub--switching-character]="isCharacterSwitching"
+      [attr.data-active-tab]="activeTab"
+    >
+      <aside class="characters-hub__sections">
+        <p class="characters-hub__section-label">Sections</p>
+        <nav class="section-nav" aria-label="Kaelis sections">
+          @for (section of sectionNavItems; track section.id) {
+            <a
+              class="section-nav__item"
+              [class.section-nav__item--active]="activeTab === section.id"
+              [routerLink]="selectedCharacterRouteCommands"
+              [queryParams]="{ tab: section.id }"
+              [attr.aria-current]="activeTab === section.id ? 'page' : null"
+              (click)="onSectionNavSelect(section.id)"
+            >
+              <span class="section-nav__title">{{ section.label }}</span>
+              <span class="section-nav__summary">{{ section.summary }}</span>
+            </a>
+          }
+        </nav>
+
+        @if (selectedCharacter) {
+          <section class="section-actions">
+            @if (selectedCharacter.isActive) {
+              <span class="section-actions__active">Active Kaelis</span>
+              <a class="section-actions__cta section-actions__cta--primary" routerLink="/arena">Enter Arena</a>
+            } @else {
               <button
                 type="button"
-                class="roster-card"
-                [class.roster-card--active]="row.isActive"
-                [class.roster-card--selected]="selectedCharacterId === row.characterId"
-                (click)="selectCharacter(row.characterId)"
+                class="section-actions__cta section-actions__cta--set-active"
+                [disabled]="!!setActiveInFlightCharacterId"
+                (click)="setActiveCharacter(selectedCharacter.characterId)"
               >
-                @if (row.isActive) {
-                  <span class="roster-card__active-badge">ACTIVE</span>
-                }
-                <div class="roster-card__visuals">
+                {{ isSetActiveInFlight(selectedCharacter.characterId) ? "Setting..." : "Set Active Kaelis" }}
+              </button>
+              <a class="section-actions__cta section-actions__cta--secondary" routerLink="/arena">Enter Arena (Current Active)</a>
+            }
+          </section>
+        }
+      </aside>
+
+      @if (isBestiaryTab) {
+        <section class="characters-hub__bestiary-stage">
+          <app-bestiary-page [embedded]="true" [contextCharacterId]="selectedCharacterId"></app-bestiary-page>
+        </section>
+      } @else {
+        <section class="characters-hub__stage">
+          @if (selectedCharacter) {
+            <article class="stage-panel" [attr.data-tone]="selectedCharacter.portrait.tone">
+              <header class="stage-panel__head">
+                <div>
+                  <p class="stage-panel__label">{{ stageLabel }}</p>
+                  <h2>{{ selectedCharacter.name }}</h2>
+                  @if (activeTab !== "overview") {
+                    <p class="stage-panel__description">{{ stageDescription }}</p>
+                  }
+                </div>
+                <div class="stage-panel__tags">
+                  <span class="stage-panel__tag stage-panel__tag--{{ selectedCharacter.kitBadge }}">{{ selectedCharacter.roleTag }}</span>
+                  @if (selectedCharacter.isProvisional) {
+                    <span class="stage-panel__tag stage-panel__tag--wip">WIP</span>
+                  }
+                  @if (selectedCharacter.isActive) {
+                    <span class="stage-panel__tag stage-panel__tag--active">Active</span>
+                  }
+                </div>
+              </header>
+
+              <div class="stage-panel__body">
+                <div class="stage-panel__hero" [class.stage-panel__hero--overview]="activeTab === 'overview'">
                   <div
-                    class="roster-card__portrait kae-char-portrait"
-                    [class.kae-char-portrait--selected]="selectedCharacterId === row.characterId"
-                    [class.kae-char-portrait--active]="row.isActive"
-                    [attr.data-tone]="row.portrait.tone"
+                    class="stage-panel__portrait kae-char-portrait kae-char-portrait--active"
+                    [class.stage-panel__portrait--overview]="activeTab === 'overview'"
+                    [attr.data-tone]="selectedCharacter.portrait.tone"
                     aria-hidden="true"
                   >
-                    @if (row.portrait.imageUrl && !isPortraitImageFailed(row.portrait.imageUrl)) {
+                    @if (selectedCharacter.portrait.imageUrl && !isPortraitImageFailed(selectedCharacter.portrait.imageUrl)) {
                       <img
                         class="kae-char-portrait__img"
-                        [src]="row.portrait.imageUrl"
+                        [src]="selectedCharacter.portrait.imageUrl"
                         [alt]="''"
-                        (error)="onPortraitImageError(row.portrait.imageUrl)"
+                        (error)="onPortraitImageError(selectedCharacter.portrait.imageUrl)"
                       />
                     } @else {
-                      <span class="kae-char-portrait__fallback">{{ row.portrait.monogram }}</span>
+                      <span class="kae-char-portrait__fallback">{{ selectedCharacter.portrait.monogram }}</span>
                     }
-                    <span class="kae-char-portrait__sigil">{{ row.portrait.sigil }}</span>
+                    <span class="kae-char-portrait__sigil">{{ selectedCharacter.portrait.sigil }}</span>
                   </div>
 
-                  <div class="roster-card__preview-chip" [attr.data-tone]="row.portrait.tone" aria-hidden="true">
-                    @if (row.portrait.runImageUrl && !isPortraitImageFailed(row.portrait.runImageUrl)) {
-                      <img
-                        class="roster-card__preview-chip-image"
-                        [src]="row.portrait.runImageUrl"
-                        [alt]="''"
-                        (error)="onPortraitImageError(row.portrait.runImageUrl)"
-                      />
-                    } @else {
-                      <span class="roster-card__preview-chip-label">RUN</span>
-                    }
-                  </div>
-                </div>
-                <div class="roster-card__body">
-                  <div class="roster-card__name-row">
-                    <strong class="roster-card__name">{{ row.name }}</strong>
-                    <span class="roster-card__level">Lv {{ row.level }}</span>
-                  </div>
-                  <div class="roster-card__badges">
-                    <span class="roster-card__kit-badge roster-card__kit-badge--{{ row.kitBadge }}">{{ row.kitTypeLabel }}</span>
-                    @if (row.isProvisional) {
-                      <span class="roster-card__wip-badge">WIP</span>
-                    }
-                  </div>
-                  @if (row.subtitle) {
-                    <span class="roster-card__subtitle">{{ row.subtitle }}</span>
+                  @if (activeTab === "loadout") {
+                    <p class="stage-panel__blurb stage-panel__blurb--loadout">
+                      Build focus is managed in the right panel: one Weapon lane and five Sigil slots. The current model maps Armor + Relic into Sigil I and Sigil II.
+                    </p>
                   }
-                  <div class="roster-card__pills">
-                    @for (weapon of row.fixedWeapons; track weapon.label) {
-                      <span
-                        class="roster-card__pill"
-                        [attr.data-skill-family]="weapon.family"
-                        [attr.data-skill-tier]="weapon.tier"
-                      >
-                        <span class="roster-card__pill-icon">{{ weapon.iconGlyph }}</span>
-                        <span class="roster-card__pill-label">{{ weapon.label }}</span>
-                      </span>
-                    }
-                  </div>
                 </div>
-              </button>
-            </li>
+              </div>
+            </article>
+          } @else {
+            <p class="characters-shell__state">Select a Kaelis from the portrait strip.</p>
           }
-        </ul>
-      </aside>
+        </section>
 
-      <!-- CENTER: character preview (portrait + identity + actions) -->
-      <section class="char-preview">
-        @if (selectedCharacter) {
-          <article class="detail__hero-screen" [attr.data-tone]="selectedCharacter.portrait.tone">
-            <header class="detail__hero-head">
-              <div class="detail__identity">
-                <h2 class="detail__name">{{ selectedCharacter.name }}</h2>
-                @if (selectedCharacter.subtitle) {
-                  <p class="detail__subtitle">{{ selectedCharacter.subtitle }}</p>
-                }
-                <div class="detail__identity-badges">
-                  <span class="detail__kit-badge detail__kit-badge--{{ selectedCharacter.kitBadge }}">{{ selectedCharacter.kitTypeLabel }}</span>
-                  @if (selectedCharacter.isProvisional) {
-                    <span class="detail__wip">WIP</span>
-                  }
-                </div>
-              </div>
-
-              @if (selectedCharacter.isActive) {
-                <span class="detail__hero-active">Active</span>
+        <aside class="characters-hub__details">
+          @if (selectedCharacter) {
+            @if (activeTab === "overview") {
+              @if (selectedCharacter.playstyle) {
+                <section class="detail-block detail-block--identity">
+                  <h3>Combat Identity</h3>
+                  <p class="detail-note">{{ selectedCharacter.playstyle }}</p>
+                </section>
               }
-            </header>
 
-            <div class="detail__hero-stage">
-              <div class="detail__hero-side" aria-hidden="true">
-                <div class="detail__preview-frame detail__preview-frame--run">
-                  @if (selectedCharacter.portrait.runImageUrl && !isPortraitImageFailed(selectedCharacter.portrait.runImageUrl)) {
-                    <img
-                      class="detail__preview-frame-image"
-                      [src]="selectedCharacter.portrait.runImageUrl"
-                      [alt]="''"
-                      (error)="onPortraitImageError(selectedCharacter.portrait.runImageUrl)"
-                    />
-                  } @else {
-                    <span class="detail__preview-frame-fallback">RUN</span>
-                  }
+              <section class="detail-block detail-block--stats">
+                <h3>Character Stats</h3>
+                <div class="stats-grid">
+                  <article class="stats-cell">
+                    <span>Level</span>
+                    <strong>{{ selectedCharacter.level }}</strong>
+                  </article>
+                  <article class="stats-cell">
+                    <span>XP</span>
+                    <strong>{{ selectedCharacter.xp }}</strong>
+                  </article>
+                  <article class="stats-cell">
+                    <span>Status</span>
+                    <strong>{{ selectedCharacter.isActive ? "Active" : "Standby" }}</strong>
+                  </article>
                 </div>
+                <div class="stats-xp">
+                  <div class="stats-xp__head">
+                    <span>Level {{ selectedCharacter.level }}</span>
+                    <span>{{ selectedCharacter.xp }} XP</span>
+                  </div>
+                  <div class="stats-xp__track">
+                    <div class="stats-xp__fill" [style.width.%]="selectedCharacter.xpProgressPercent"></div>
+                  </div>
+                </div>
+              </section>
 
-                <div class="detail__preview-frame detail__preview-frame--hit">
-                  @if (selectedCharacter.portrait.hitImageUrl && !isPortraitImageFailed(selectedCharacter.portrait.hitImageUrl)) {
-                    <img
-                      class="detail__preview-frame-image"
-                      [src]="selectedCharacter.portrait.hitImageUrl"
-                      [alt]="''"
-                      (error)="onPortraitImageError(selectedCharacter.portrait.hitImageUrl)"
-                    />
-                  } @else {
-                    <span class="detail__preview-frame-fallback">HIT</span>
-                  }
+              <section class="detail-block detail-block--progress">
+                <h3>Progress Snapshot</h3>
+                <div class="stats-grid stats-grid--progress">
+                  <article class="stats-cell">
+                    <span>Tracked Species</span>
+                    <strong>{{ selectedCharacter.bestiaryTrackedSpeciesCount }}</strong>
+                  </article>
+                  <article class="stats-cell">
+                    <span>Bestiary Kills</span>
+                    <strong>{{ selectedCharacter.bestiaryKillsTotal }}</strong>
+                  </article>
+                  <article class="stats-cell">
+                    <span>Primal Core</span>
+                    <strong>{{ selectedCharacter.primalCoreTotal }}</strong>
+                  </article>
                 </div>
-              </div>
-
-              <div class="detail__hero-main">
-                <div
-                  class="detail__portrait kae-char-portrait kae-char-portrait--active"
-                  [attr.data-tone]="selectedCharacter.portrait.tone"
-                  aria-hidden="true"
-                >
-                  @if (selectedCharacter.portrait.imageUrl && !isPortraitImageFailed(selectedCharacter.portrait.imageUrl)) {
-                    <img
-                      class="kae-char-portrait__img"
-                      [src]="selectedCharacter.portrait.imageUrl"
-                      [alt]="''"
-                      (error)="onPortraitImageError(selectedCharacter.portrait.imageUrl)"
-                    />
-                  } @else {
-                    <span class="kae-char-portrait__fallback">{{ selectedCharacter.portrait.monogram }}</span>
-                  }
-                  <span class="kae-char-portrait__sigil">{{ selectedCharacter.portrait.sigil }}</span>
-                </div>
-              </div>
-
-              <div class="detail__hero-side detail__hero-side--stats">
-                <div class="detail__hero-stat">
-                  <span>Level</span>
-                  <strong>{{ selectedCharacter.level }}</strong>
-                </div>
-                <div class="detail__hero-stat">
-                  <span>XP</span>
-                  <strong>{{ selectedCharacter.xp }}</strong>
-                </div>
-              </div>
-            </div>
-
-            @if (selectedCharacter.playstyle) {
-              <p class="detail__playstyle">{{ selectedCharacter.playstyle }}</p>
+                <p class="detail-note">Bestiary progression is tied to this Kaelis. Open Bestiary for species details and operations.</p>
+              </section>
             }
 
-            <div class="detail__xp">
-              <div class="detail__xp-header">
-                <span>Level {{ selectedCharacter.level }}</span>
-                <span>{{ selectedCharacter.xp }} XP</span>
-              </div>
-              <div class="detail__xp-track">
-                <div class="detail__xp-fill" [style.width.%]="selectedCharacter.xpProgressPercent"></div>
-              </div>
-            </div>
+            @if (activeTab === "loadout") {
+              <section class="detail-block detail-block--weapon">
+                <h3>Weapon</h3>
+                @if (selectedLoadoutWeapon; as weapon) {
+                  <article
+                    class="weapon-focus quick-tip"
+                    [class.weapon-focus--equipped]="weapon.stateLabel === 'Equipped'"
+                    [class.weapon-focus--empty]="weapon.stateLabel === 'Empty'"
+                    [class.weapon-focus--missing]="weapon.stateLabel === 'Missing'"
+                    [attr.data-tooltip]="weapon.tooltip"
+                  >
+                    <span class="weapon-focus__visual" [attr.data-tone]="weapon.iconTone" aria-hidden="true">{{ weapon.iconGlyph }}</span>
+                    <div class="weapon-focus__body">
+                      <div class="weapon-focus__top">
+                        <span class="weapon-focus__state">{{ weapon.stateLabel }}</span>
+                        <span class="weapon-focus__rarity weapon-focus__rarity--{{ weapon.rarityClass }}">{{ weapon.rarityLabel }}</span>
+                      </div>
+                      <strong class="weapon-focus__name">{{ weapon.displayName }}</strong>
+                      <span class="weapon-focus__type">{{ weapon.typeLabel }}</span>
+                      @if (selectedLoadoutWeaponDetailLines.length > 0) {
+                        <ul class="weapon-focus__stats">
+                          @for (line of selectedLoadoutWeaponDetailLines; track line) {
+                            <li>{{ line }}</li>
+                          }
+                        </ul>
+                      }
+                    </div>
+                  </article>
+                } @else {
+                  <p class="detail-empty">No weapon lane data available.</p>
+                }
+              </section>
 
-            <div class="detail__actions">
-              @if (selectedCharacter.isActive) {
-                <span class="detail__active-status">Active Character</span>
-                <a class="detail__enter-arena detail__enter-arena--primary" routerLink="/arena">Enter Arena</a>
-              } @else {
-                <button
-                  type="button"
-                  class="detail__set-active"
-                  [disabled]="!!setActiveInFlightCharacterId"
-                  (click)="setActiveCharacter(selectedCharacter.characterId)"
-                >
-                  {{ isSetActiveInFlight(selectedCharacter.characterId) ? 'Setting...' : 'Set Active' }}
-                </button>
-                <a class="detail__enter-arena" routerLink="/arena">Enter Arena</a>
-              }
-            </div>
-          </article>
-        } @else {
-          <p class="detail__placeholder">Select a character from the roster.</p>
-        }
-      </section>
-
-      <!-- RIGHT: loadout (kit + rune + gear) -->
-      <aside class="char-loadout">
-        @if (selectedCharacter) {
-          <section class="detail__section">
-            <h3 class="detail__section-title">Fixed Kit</h3>
-            <div class="detail__weapon-cards">
-              @for (weapon of selectedCharacter.fixedWeapons; track weapon.label) {
-                <div
-                  class="weapon-card"
-                  [attr.data-skill-family]="weapon.family"
-                  [attr.data-skill-tier]="weapon.tier"
-                  [title]="weapon.description"
-                >
-                  <span class="weapon-card__icon">{{ weapon.iconGlyph }}</span>
-                  <strong class="weapon-card__name">{{ weapon.label }}</strong>
-                  @if (weapon.description) {
-                    <span class="weapon-card__desc">{{ weapon.description }}</span>
+              <section class="detail-block detail-block--sigils">
+                <h3>Sigils</h3>
+                <p class="detail-note">Current persistent model exposes Armor + Relic. They map into Sigil I and Sigil II; remaining slots are reserved.</p>
+                <div class="sigil-grid">
+                  @for (sigil of selectedLoadoutSigils; track sigil.slotId) {
+                    <article
+                      class="sigil-slot quick-tip"
+                      [class.sigil-slot--equipped]="sigil.stateLabel === 'Equipped'"
+                      [class.sigil-slot--vacant]="sigil.stateLabel === 'Vacant'"
+                      [class.sigil-slot--missing]="sigil.stateLabel === 'Missing'"
+                      [class.sigil-slot--reserved]="sigil.stateLabel === 'Reserved'"
+                      [attr.data-tooltip]="sigil.tooltip"
+                    >
+                      <div class="sigil-slot__head">
+                        <span class="sigil-slot__label">{{ sigil.label }}</span>
+                        <span class="sigil-slot__state">{{ sigil.stateLabel }}</span>
+                      </div>
+                      <span class="sigil-slot__source">{{ sigil.sourceLabel }}</span>
+                      @if (sigil.gear) {
+                        <strong class="sigil-slot__name">{{ sigil.gear.displayName }}</strong>
+                        <span class="sigil-slot__meta">{{ sigil.gear.rarityLabel }} | {{ sigil.gear.typeLabel }}</span>
+                      } @else if (sigil.stateLabel === "Reserved") {
+                        <strong class="sigil-slot__name sigil-slot__name--muted">Reserved slot</strong>
+                        <span class="sigil-slot__meta">Unlocks with future sigil systems.</span>
+                      } @else {
+                        <strong class="sigil-slot__name sigil-slot__name--muted">Vacant</strong>
+                        <span class="sigil-slot__meta">No sigil equipped.</span>
+                      }
+                    </article>
                   }
                 </div>
-              }
-              @if (selectedCharacter.fixedWeapons.length === 0) {
-                <p class="detail__empty-section">No kit data available.</p>
-              }
-            </div>
-          </section>
+              </section>
+            }
 
-          <section class="detail__section">
-            <h3 class="detail__section-title">Free Slot</h3>
-            <div class="rune-slot">
-              <span class="rune-slot__lock" aria-hidden="true">&#x2B21;</span>
-              <div>
-                <p class="rune-slot__label">Rune Slot</p>
-                <p class="rune-slot__hint">One additional weapon chosen during each run</p>
-              </div>
-            </div>
-          </section>
+            @if (activeTab === "skills") {
+              <section class="detail-block detail-block--skills">
+                <h3>Passive / Fixed Kit / Free Slot</h3>
+                <article class="passive-card quick-tip" [attr.data-tooltip]="selectedKaelisPassive.tooltip" [class.passive-card--placeholder]="selectedKaelisPassive.isPlaceholder">
+                  <div class="passive-card__head">
+                    <strong>{{ selectedKaelisPassive.label }}</strong>
+                  </div>
+                  <p>{{ selectedKaelisPassive.summary }}</p>
+                </article>
 
-          <section class="detail__section">
-            <h3 class="detail__section-title">Equipped Gear</h3>
-            <div class="gear-slots">
-              @for (gear of selectedCharacter.equippedGearSlots; track gear.slot) {
-                <article
-                  class="gear-slot"
-                  [class.gear-slot--equipped]="gear.stateLabel === 'Equipped'"
-                  [class.gear-slot--empty]="gear.stateLabel === 'Empty'"
-                  [class.gear-slot--missing]="gear.stateLabel === 'Missing'"
-                >
-                  <span class="gear-slot__icon gear-slot__icon--{{ gear.slot }}" aria-hidden="true"></span>
-                  <div class="gear-slot__info">
-                    <div class="gear-slot__top">
-                      <span class="gear-slot__label">{{ gear.slotLabel }}</span>
-                      <span
-                        class="gear-slot__state"
-                        [class.gear-slot__state--equipped]="gear.stateLabel === 'Equipped'"
-                        [class.gear-slot__state--empty]="gear.stateLabel === 'Empty'"
-                        [class.gear-slot__state--missing]="gear.stateLabel === 'Missing'"
-                      >
-                        {{ gear.stateLabel }}
-                      </span>
-                    </div>
+                <div class="kit-grid">
+                  @for (weapon of selectedCharacter.fixedWeapons; track weapon.label) {
+                    <article
+                      class="kit-skill"
+                      [attr.data-skill-family]="weapon.family"
+                      [attr.data-skill-tier]="weapon.tier"
+                      [attr.data-tooltip]="weapon.description"
+                      [class.quick-tip]="!!weapon.description"
+                    >
+                      <span class="kit-skill__icon">{{ weapon.iconGlyph }}</span>
+                      <span class="kit-skill__name">{{ weapon.label }}</span>
+                    </article>
+                  }
+                  @if (selectedCharacter.fixedWeapons.length === 0) {
+                    <p class="detail-empty">No fixed kit data available.</p>
+                  }
+                </div>
 
-                    <strong class="gear-slot__name" [class.gear-slot__name--muted]="gear.stateLabel !== 'Equipped'">
-                      {{ gear.displayName }}
-                    </strong>
-
-                    @if (gear.stateLabel === 'Equipped') {
-                      <div class="gear-slot__meta">
-                        <span class="gear-slot__rarity gear-slot__rarity--{{ gear.rarityClass }}">
-                          {{ gear.rarityLabel }}
-                        </span>
-                        <span class="gear-slot__type">{{ gear.typeLabel }}</span>
-                      </div>
-                    }
-
-                    <span class="gear-slot__impact" [class.gear-slot__impact--muted]="gear.stateLabel !== 'Equipped'">
-                      {{ gear.impactSummary }}
-                    </span>
+                <article class="free-slot quick-tip" [attr.data-tooltip]="freeSlotTooltip">
+                  <span class="free-slot__icon" aria-hidden="true">&#x2B21;</span>
+                  <div>
+                    <p class="free-slot__title">Free Slot</p>
+                    <p class="free-slot__hint">Configured during run card choice.</p>
                   </div>
                 </article>
-              }
-            </div>
-          </section>
-        }
-      </aside>
-
+                <p class="detail-note">Fixed kit labels are normalized for readability and keep tooltip details one hover away.</p>
+              </section>
+            }
+          }
+        </aside>
+      }
     </div>
   }
 </section>

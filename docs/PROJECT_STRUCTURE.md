@@ -520,13 +520,13 @@ active character summary
 
 last run summary
 
-shortcuts to Arena / Characters / Bestiary
+shortcuts to Arena / Kaelis (including Bestiary tab)
 
 account progression overview
 
 pages/characters/
 
-Character management page.
+Kaelis parent page (character management + subviews).
 
 Responsibilities
 
@@ -536,11 +536,13 @@ set active character
 
 view character equipment
 
+host Kaelis subviews/tabs (Overview / Loadout / Bestiary)
+
 entry point to backpack / arena
 
 pages/bestiary/
 
-Permanent species progression page.
+Bestiary subview component consumed inside Kaelis.
 
 Responsibilities
 
@@ -550,7 +552,7 @@ progression thresholds
 
 craft/refine/salvage related UI
 
-bestiary progression visibility
+bestiary progression visibility scoped to the selected Kaelis context
 
 6.5 shared/
 

@@ -27,7 +27,7 @@ const SKILL_META: readonly SkillMeta[] = [
   {
     canonicalId: "exori_min",
     label: "Exori Min",
-    iconGlyph: "E-",
+    iconGlyph: "I",
     accentColor: "#ef4444",
     family: "exori",
     tier: "min",
@@ -37,7 +37,7 @@ const SKILL_META: readonly SkillMeta[] = [
   {
     canonicalId: "exori",
     label: "Exori",
-    iconGlyph: "EX",
+    iconGlyph: "II",
     accentColor: "#f97316",
     family: "exori",
     tier: "base",
@@ -47,7 +47,7 @@ const SKILL_META: readonly SkillMeta[] = [
   {
     canonicalId: "exori_mas",
     label: "Exori Mas",
-    iconGlyph: "E+",
+    iconGlyph: "III",
     accentColor: "#a855f7",
     family: "exori",
     tier: "mas",
@@ -169,7 +169,7 @@ export function resolveSkillPresentation(input: Readonly<{
       continue;
     }
 
-    const preferredLabel = normalizeLabel(input.displayName) ?? meta.label;
+    const preferredLabel = resolvePreferredLabel(meta, input.displayName);
     return {
       canonicalId: meta.canonicalId,
       label: preferredLabel,
@@ -255,6 +255,40 @@ function normalizeLabel(value: string | null | undefined): string | null {
       return part[0].toUpperCase() + part.slice(1);
     })
     .join(" ");
+}
+
+function resolvePreferredLabel(meta: SkillMeta, displayName: string | null | undefined): string {
+  const normalizedDisplayName = normalizeLabel(displayName);
+  if (!normalizedDisplayName) {
+    return meta.label;
+  }
+
+  if (meta.family !== "exori") {
+    return normalizedDisplayName;
+  }
+
+  const withoutPrefix = stripLegacyExoriPrefix(displayName);
+  const normalizedWithoutPrefix = normalizeLabel(withoutPrefix);
+  if (!normalizedWithoutPrefix) {
+    return meta.label;
+  }
+
+  return normalizedWithoutPrefix.toLowerCase().startsWith("exori")
+    ? normalizedWithoutPrefix
+    : meta.label;
+}
+
+function stripLegacyExoriPrefix(value: string | null | undefined): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  return trimmed.replace(/^(?:e[-+]|ex)(?:[\s:_-]+)+/i, "");
 }
 
 function buildFallbackGlyph(label: string): string {

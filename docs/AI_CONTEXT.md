@@ -92,7 +92,7 @@ positioning-aware
 
 Main loop:
 
-Home / Character / Bestiary
+Home / Kaelis (Overview + Loadout + Bestiary tab)
 ↓
 Enter Arena
 ↓
@@ -542,11 +542,10 @@ Arena page (player fixed at center, Vampire Survivors skill unlock, assist auto-
 
 Home page
 
-Characters page
+Kaelis page
   - Kina + Prototype are selectable
   - Prototype is explicitly marked as provisional ranged test character ("Ranged Kit [WIP]")
-
-Bestiary page
+  - Bestiary lives inside Kaelis as a character-context tab (not a top-level sibling page)
 
 Backpack drawer
 

@@ -22,6 +22,19 @@ describe("skill-presentation.helpers", () => {
     expect(min.tier).toBe("min");
     expect(base.tier).toBe("base");
     expect(mas.tier).toBe("mas");
+    expect(min.iconGlyph).toBe("I");
+    expect(base.iconGlyph).toBe("II");
+    expect(mas.iconGlyph).toBe("III");
+  });
+
+  it("strips legacy Exori prefixes from display names", () => {
+    const prefixedMin = resolveSkillPresentation({ skillId: "weapon:exori_min", displayName: "E- Exori Min" });
+    const prefixedBase = resolveSkillPresentation({ skillId: "weapon:exori", displayName: "EX Exori" });
+    const prefixedMas = resolveSkillPresentation({ skillId: "weapon:exori_mas", displayName: "E+ Exori Mas" });
+
+    expect(prefixedMin.label).toBe("Exori Min");
+    expect(prefixedBase.label).toBe("Exori");
+    expect(prefixedMas.label).toBe("Exori Mas");
   });
 
   it("builds deterministic fallback metadata for unknown skills", () => {
