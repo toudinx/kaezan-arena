@@ -1,5 +1,5 @@
 import type { ArenaSkillState } from "../../arena/engine/arena-engine.types";
-import { buildFreeSlotViewModel, mapStatusSkillSlots, resolveSkillIdForHotkeyKey } from "./status-skills.helpers";
+import { buildUltimateSlotViewModel, mapStatusSkillSlots, resolveSkillIdForHotkeyKey } from "./status-skills.helpers";
 
 describe("status-skills.helpers", () => {
   it("maps snapshot skill cooldowns into 3 fixed hotbar slots", () => {
@@ -19,7 +19,7 @@ describe("status-skills.helpers", () => {
     expect(slots[0].cooldownFraction).toBeGreaterThan(0);
     expect(slots[1].cooldownRemainingMs).toBe(0);
     expect(slots[1].disabled).toBe(false);
-    expect(slots.every((slot) => !slot.isFreeSlot)).toBe(true);
+    expect(slots.every((slot) => !slot.isUltimate)).toBe(true);
     expect(slots.map((slot) => slot.iconGlyph)).toEqual(["EX", "E-", "E+"]);
     expect(slots.map((slot) => slot.visualFamily)).toEqual(["exori", "exori", "exori"]);
   });
@@ -42,22 +42,21 @@ describe("status-skills.helpers", () => {
     expect(resolveSkillIdForHotkeyKey("9")).toBeNull();
   });
 
-  it("buildFreeSlotViewModel returns locked/empty slot when weapon name is null", () => {
-    const slot = buildFreeSlotViewModel(null);
+  it("buildUltimateSlotViewModel maps gauge progress for slot 4", () => {
+    const slot = buildUltimateSlotViewModel(49, 100, false);
     expect(slot.keyLabel).toBe("4");
-    expect(slot.label).toBe("Rune Slot");
-    expect(slot.isLocked).toBe(true);
-    expect(slot.isFreeSlot).toBe(true);
-    expect(slot.disabled).toBe(true);
+    expect(slot.label).toBe("ULTIMATE");
+    expect(slot.isLocked).toBe(false);
+    expect(slot.isUltimate).toBe(true);
+    expect(slot.gaugePercent).toBe(49);
+    expect(slot.ready).toBe(false);
   });
 
-  it("buildFreeSlotViewModel returns an active slot when a weapon name is provided", () => {
-    const slot = buildFreeSlotViewModel("Avalanche");
-    expect(slot.label).toBe("Avalanche");
-    expect(slot.iconGlyph).toBe("AV");
-    expect(slot.visualFamily).toBe("rune");
-    expect(slot.isLocked).toBe(false);
-    expect(slot.isFreeSlot).toBe(true);
-    expect(slot.disabled).toBe(false);
+  it("buildUltimateSlotViewModel marks slot as ready when gauge is full", () => {
+    const slot = buildUltimateSlotViewModel(100, 100, true);
+    expect(slot.isUltimate).toBe(true);
+    expect(slot.gaugePercent).toBe(100);
+    expect(slot.ready).toBe(true);
+    expect(slot.cooldownText).toBe("READY");
   });
 });

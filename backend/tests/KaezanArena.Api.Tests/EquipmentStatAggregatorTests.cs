@@ -5,64 +5,50 @@ namespace KaezanArena.Api.Tests;
 public sealed class EquipmentStatAggregatorTests
 {
     [Fact]
-    public void Aggregate_UsesWeaponArmorAndRelicSlots()
+    public void Aggregate_UsesWeaponSlot()
     {
         var equipment = new EquipmentState(
-            WeaponInstanceId: "eq.weapon.1",
-            ArmorInstanceId: "eq.armor.1",
-            RelicInstanceId: "eq.relic.1");
+            WeaponInstanceId: "eq.weapon.1");
         var instances = new Dictionary<string, OwnedEquipmentInstance>(StringComparer.Ordinal)
         {
-            ["eq.weapon.1"] = new OwnedEquipmentInstance("eq.weapon.1", "wpn.ember_staff", IsLocked: false),
-            ["eq.armor.1"] = new OwnedEquipmentInstance("eq.armor.1", "arm.dragon_mail", IsLocked: false),
-            ["eq.relic.1"] = new OwnedEquipmentInstance("eq.relic.1", "rel.rune_orb", IsLocked: false)
+            ["eq.weapon.1"] = new OwnedEquipmentInstance("eq.weapon.1", "wpn.ember_staff", IsLocked: false)
         };
 
         var totals = EquipmentStatAggregator.Aggregate(equipment, instances, AccountCatalog.EquipmentByItemId);
 
-        Assert.Equal(new EquipmentStatTotals(Attack: 18, Defense: 16, Vitality: 13), totals);
+        Assert.Equal(new EquipmentStatTotals(Attack: 14, Defense: 0, Vitality: 0), totals);
     }
 
     [Fact]
     public void Aggregate_RemovingItemFromSlot_RemovesStats()
     {
-        var withArmor = new EquipmentState(
-            WeaponInstanceId: "eq.weapon.1",
-            ArmorInstanceId: "eq.armor.1",
-            RelicInstanceId: "eq.relic.1");
-        var withoutArmor = withArmor with { ArmorInstanceId = null };
+        var withWeapon = new EquipmentState(
+            WeaponInstanceId: "eq.weapon.1");
+        var withoutWeapon = withWeapon with { WeaponInstanceId = null };
         var instances = new Dictionary<string, OwnedEquipmentInstance>(StringComparer.Ordinal)
         {
-            ["eq.weapon.1"] = new OwnedEquipmentInstance("eq.weapon.1", "wpn.iron_blade", IsLocked: false),
-            ["eq.armor.1"] = new OwnedEquipmentInstance("eq.armor.1", "arm.guard_plate", IsLocked: false),
-            ["eq.relic.1"] = new OwnedEquipmentInstance("eq.relic.1", "rel.rune_orb", IsLocked: false)
+            ["eq.weapon.1"] = new OwnedEquipmentInstance("eq.weapon.1", "wpn.iron_blade", IsLocked: false)
         };
 
-        var totalsWithArmor = EquipmentStatAggregator.Aggregate(withArmor, instances, AccountCatalog.EquipmentByItemId);
-        var totalsWithoutArmor = EquipmentStatAggregator.Aggregate(withoutArmor, instances, AccountCatalog.EquipmentByItemId);
+        var totalsWithWeapon = EquipmentStatAggregator.Aggregate(withWeapon, instances, AccountCatalog.EquipmentByItemId);
+        var totalsWithoutWeapon = EquipmentStatAggregator.Aggregate(withoutWeapon, instances, AccountCatalog.EquipmentByItemId);
 
-        Assert.Equal(new EquipmentStatTotals(Attack: 12, Defense: 10, Vitality: 9), totalsWithArmor);
-        Assert.Equal(new EquipmentStatTotals(Attack: 12, Defense: 0, Vitality: 4), totalsWithoutArmor);
+        Assert.Equal(new EquipmentStatTotals(Attack: 8, Defense: 0, Vitality: 0), totalsWithWeapon);
+        Assert.Equal(EquipmentStatTotals.Zero, totalsWithoutWeapon);
     }
 
     [Fact]
     public void Aggregate_IsDeterministicForEquivalentInput()
     {
         var equipment = new EquipmentState(
-            WeaponInstanceId: "w",
-            ArmorInstanceId: "a",
-            RelicInstanceId: "r");
+            WeaponInstanceId: "w");
         var firstInstances = new Dictionary<string, OwnedEquipmentInstance>(StringComparer.Ordinal)
         {
-            ["r"] = new OwnedEquipmentInstance("r", "rel.astral_codex", IsLocked: false),
-            ["w"] = new OwnedEquipmentInstance("w", "wpn.hunter_bow", IsLocked: false),
-            ["a"] = new OwnedEquipmentInstance("a", "arm.guard_plate", IsLocked: false)
+            ["w"] = new OwnedEquipmentInstance("w", "wpn.hunter_bow", IsLocked: false)
         };
         var secondInstances = new Dictionary<string, OwnedEquipmentInstance>(StringComparer.Ordinal)
         {
-            ["a"] = new OwnedEquipmentInstance("a", "arm.guard_plate", IsLocked: false),
-            ["w"] = new OwnedEquipmentInstance("w", "wpn.hunter_bow", IsLocked: false),
-            ["r"] = new OwnedEquipmentInstance("r", "rel.astral_codex", IsLocked: false)
+            ["w"] = new OwnedEquipmentInstance("w", "wpn.hunter_bow", IsLocked: false)
         };
 
         var first = EquipmentStatAggregator.Aggregate(equipment, firstInstances, AccountCatalog.EquipmentByItemId);

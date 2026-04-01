@@ -122,9 +122,13 @@
   opacity: 0.72;
 }
 
-.status-window__skill--free {
-  border-style: dashed;
-  opacity: 0.55;
+.status-window__skill--ultimate {
+  border-color: rgba(245, 158, 11, 0.9);
+  background: linear-gradient(180deg, rgba(74, 39, 10, 0.95), rgba(52, 30, 10, 0.95));
+}
+
+.status-window__skill--ultimate-ready {
+  box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.45), 0 0 12px rgba(245, 158, 11, 0.35);
 }
 
 .status-window__key {
@@ -173,6 +177,23 @@
   transform-origin: bottom center;
   background: rgba(2, 6, 23, 0.62);
   z-index: 1;
+}
+
+.status-window__ultimate-gauge {
+  position: relative;
+  z-index: 3;
+  width: 100%;
+  height: 4px;
+  border: 1px solid rgba(71, 85, 105, 0.8);
+  border-radius: 999px;
+  background: rgba(2, 6, 23, 0.75);
+  overflow: hidden;
+}
+
+.status-window__ultimate-gauge-fill {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #f59e0b, #facc15);
 }
 
 .status-window__buffs {

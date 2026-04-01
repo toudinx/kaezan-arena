@@ -47,5 +47,6 @@ public sealed record BattleStartResponseDto(
     string? PendingChoiceId,
     IReadOnlyList<BattleCardOfferDto> OfferedCards,
     IReadOnlyList<BattleCardOfferDto> SelectedCards,
-    string? FreeSlotWeaponId,
-    string? FreeSlotWeaponName);
+    int UltimateGauge,
+    int UltimateGaugeMax,
+    bool UltimateReady);

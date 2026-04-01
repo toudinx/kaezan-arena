@@ -152,6 +152,16 @@ public static class ArenaConfig
     public const int GuardPercentOfMaxHp = 10;
     #endregion
 
+    public static class UltimateConfig
+    {
+        public const int GaugeMax = 100;
+        public const int GaugePerKill = 12;
+        public const int GaugePerDamageTaken = 3; // per damage point received
+        public const int BaseDamage = 20;
+        public const int AoeRadius = 2;
+        public const string UltimateSkillId = "skill:ultimate";
+    }
+
     #region Player Class
     public const int KinaReflectPercent = 20;
     public const int KinaRangedReflectMultiplier = 2;
@@ -506,7 +516,7 @@ public static class ArenaConfig
             ? name
             : null;
 
-    // Maps stable WeaponIds back to simulation skill logic IDs for the Assist System free-slot check.
+    // Maps stable WeaponIds back to simulation skill logic IDs.
     private static readonly IReadOnlyDictionary<string, string> WeaponIdToSkillId =
         new Dictionary<string, string>(StringComparer.Ordinal)
         {

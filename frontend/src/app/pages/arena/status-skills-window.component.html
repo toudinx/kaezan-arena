@@ -24,7 +24,8 @@
         type="button"
         class="status-window__skill"
         [class.status-window__skill--disabled]="slot.disabled"
-        [class.status-window__skill--free]="slot.isFreeSlot"
+        [class.status-window__skill--ultimate]="slot.isUltimate"
+        [class.status-window__skill--ultimate-ready]="slot.isUltimate && slot.ready"
         [attr.data-skill-family]="slot.visualFamily"
         [attr.data-skill-tier]="slot.visualTier"
         [title]="slot.tooltip"
@@ -36,6 +37,11 @@
         <span class="status-window__name">{{ slot.label }}</span>
         @if (slot.cooldownText) {
           <span class="status-window__cooldown-text">{{ slot.cooldownText }}</span>
+        }
+        @if (slot.isUltimate) {
+          <span class="status-window__ultimate-gauge">
+            <span class="status-window__ultimate-gauge-fill" [style.width.%]="slot.gaugePercent"></span>
+          </span>
         }
         <span class="status-window__cooldown-mask" [style.transform]="'scaleY(' + slot.cooldownFraction + ')'"></span>
       </button>

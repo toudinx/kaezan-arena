@@ -115,9 +115,7 @@ public sealed class ItemsV1Controller : ControllerBase
                 MaterialStacks: materialStacks,
                 EquipmentInstances: equipmentInstances),
             Equipment: new CharacterEquipmentDto(
-                WeaponInstanceId: character.Equipment.WeaponInstanceId,
-                ArmorInstanceId: character.Equipment.ArmorInstanceId,
-                RelicInstanceId: character.Equipment.RelicInstanceId),
+                WeaponInstanceId: character.Equipment.WeaponInstanceId),
             BestiaryKillsBySpecies: ToSortedSpeciesCount(character.BestiaryKillsBySpecies),
             PrimalCoreBySpecies: ToSortedSpeciesCount(character.PrimalCoreBySpecies));
     }

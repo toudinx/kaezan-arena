@@ -79,7 +79,7 @@ Bestiary is now part of the Kaelis experience (Kaelis tabs: Overview / Loadout /
 
 The Home page is a full-page dark hub (`#080d14`) with a three-column layout at wide viewports (stacks single-column at `<900px`, center column first):
 
-- **LEFT — Active character card:** Portrait placeholder (color-coded), name, kit badge, XP progress bar, Fixed Kit pills, locked Rune Slot, Gear summary (Weapon / Armor / Relic), "View Characters" link.
+- **LEFT — Active character card:** Portrait placeholder (color-coded), name, kit badge, XP progress bar, Fixed Kit pills, Ultimate Slot (gauge-based auto fire), Gear summary (Weapon / Armor / Relic), "View Characters" link.
 - **CENTER — Enter Arena CTA + Last Run:** Dominant "Start Run" link button (teal), last run outcome (Victory/Defeat color-coded), duration, Kills / Elites / Damage / Chests stat tiles, card pills chosen.
 - **RIGHT — Progression snapshot:** Echo Fragments balance (large number, gold), Bestiary section with closest-to-milestone callout and top-3 species progress bars with kills-to-next.
 
@@ -125,16 +125,16 @@ Bestiary delta calculation: `runStartBestiaryKills` is captured from the account
 
 - Player is fixed at the center tile (3,3) - no WASD movement
 - All weapons fire automatically via the assist system - no manual casting
-- Each character has a **fixed 3-slot weapon kit** + **1 free slot (rune slot)**
+- Each character has a **fixed 3-slot weapon kit** + **1 Ultimate slot**
   - Kina kit: Exori Min + Exori + Exori Mas (fixed, unchanged)
   - Ranged prototype kit: Sigil Bolt + Shotgun + Void Ricochet (fixed)
   - Characters page exposes both selectable characters: `Kina` and provisional `Prototype` (`Ranged Kit [WIP]`)
   - Selecting the active character on Characters page carries into Arena start (`playerId`) and activates that character kit
-  - Free slot (`StoredBattle.FreeSlotWeaponId`) starts **null** every run - filled by the future rune system
-  - Assist order is class-kit-driven and potency-first (resolved from active class fixed kit, then free-slot weapon if set)
+  - Ultimate gauge starts at **0** each run and auto-fires when full
+  - Assist order is class-kit-driven and potency-first for fixed-kit skills, then Ultimate auto-fire if ready
     - Kina: ExoriMas -> Exori -> ExoriMin
     - Prototype: Void Ricochet -> Shotgun -> Sigil Bolt
-- Avalanche is **not** auto-cast from the fixed kit; it re-enters the assist once the rune system assigns it to the free slot
+- Ultimate applies a flat AoE burst (radius 2) around the player when charged
 - Heal and Guard removed from kit - survivability comes from passive cards only
 - **Left-click** a POI (chest, altar) to interact
 - **Right-click** a mob to lock it as the priority target

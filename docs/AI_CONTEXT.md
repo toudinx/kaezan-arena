@@ -208,24 +208,22 @@ Mage (future):
 Free weapon slot rules:
 
 Player chooses one attack/damage weapon per run via a card choice.
-Only attack/damage weapons are allowed in the free slot — no heal or shield.
-Example weapons: Avalanche (ground AoE zone), Ranged projectile rune, Elemental rune.
-This is the primary run customization vector.
-Runes (see section 8b) can only be equipped in the free slot.
+Ultimate is gauge-based and auto-fires when full (no manual equip per run).
+Current placeholder effect: flat AoE burst around the player.
+This is currently an always-available combat lane, not a run-configurable slot.
 
 All weapons fire automatically via the Assist System.
 
 Assist priority order (offensive only):
 
-Class-kit-driven potency-first order (resolved from active class fixed kit) -> [FreeSlotWeaponId if set]
+Class-kit-driven potency-first order (resolved from active class fixed kit), then Ultimate auto-fire when ready
   - Kina: Exori Mas -> Exori -> Exori Min
   - Ranged Prototype: Void Ricochet -> Shotgun -> Sigil Bolt
 
 Max 1 auto-cast per tick.
 
-Current state: free slot starts null every run. Avalanche is no longer in the fixed assist
-priority — it re-enters automatically once the rune system sets StoredBattle.FreeSlotWeaponId
-= ArenaConfig.WeaponIds.Avalanche.
+Current state: Ultimate gauge starts at 0 every run and fills via kills/damage taken.
+When full, Ultimate auto-fires during assist evaluation and resets to 0.
 
 Ranged weapons:
 
@@ -723,11 +721,11 @@ player is fixed at tile (3,3) — no WASD movement
 
 all weapons fire via the assist system — no manual casting
 
-each character has a fixed 3-slot weapon kit + 1 free weapon slot (rune slot) per run
+each character has a fixed 3-slot weapon kit + 1 Ultimate slot
 
-the free weapon slot (StoredBattle.FreeSlotWeaponId) starts null every run — filled by the future rune system
+the Ultimate gauge starts at 0 every run and charges via combat events
 
-Avalanche is no longer auto-cast from the fixed assist; it re-enters once the rune system assigns it to FreeSlotWeaponId
+Ultimate is no longer rune-equipped; it auto-fires from gauge when ready
 
 Heal and Guard are removed from kit — survivability comes from passives only
 
@@ -737,7 +735,7 @@ chests offer passive cards only — never skill cards or weapon cards
 
 passive card caps: max 4 distinct types, max 3 stacks per type
 
-runes can only be equipped in the free weapon slot; prerequisites apply
+rune-equipping flow is superseded by the Ultimate gauge system
 
 all constants are in ArenaConfig.cs — never hardcode simulation values
 

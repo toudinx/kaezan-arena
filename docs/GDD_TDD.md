@@ -192,15 +192,14 @@ Todas as armas disparam automaticamente via Assist System — sem casting manual
 
 Ordem de prioridade do Assist (apenas ofensivo):
 
-Ordem potency-first baseada no kit fixo da classe ativa -> [FreeSlotWeaponId se definido]
+Ordem potency-first baseada no kit fixo da classe ativa, seguida de Ultimate auto-fire quando pronto
   - Kina: Exori Mas -> Exori -> Exori Min
   - Ranged Prototype: Void Ricochet -> Shotgun -> Sigil Bolt
 
 Máx 1 auto-cast por tick.
 
-Estado atual: slot livre começa null a cada run. Avalanche não está mais na prioridade fixa
-do Assist — retorna automaticamente quando o sistema de runes definir
-StoredBattle.FreeSlotWeaponId = ArenaConfig.WeaponIds.Avalanche.
+Estado atual: medidor de Ultimate começa em 0 a cada run, acumula por kills/dano recebido
+e dispara automaticamente no Assist quando atinge o máximo.
 
 Armas ranged:
 
@@ -540,13 +539,13 @@ O MVP já possui:
 arena combat (player fixo em centro, armas automáticas via Assist)
 enemy spawn + pacing progressivo
 elite commander system
-kit de armas fixo por personagem (3 slots fixos + 1 slot livre / rune slot)
-slot livre (FreeSlotWeaponId) começa null a cada run — rune system a implementar
-Avalanche não está mais no Assist fixo — aguarda o rune system
+kit de armas fixo por personagem (3 slots fixos + 1 slot Ultimate)
+medidor de Ultimate começa em 0 a cada run — sistema ativo
+Ultimate não depende mais de rune slot
 Heal e Guard removidos do kit — sobrevivência via passivos
 card system: passive cards (chests + level-up); skill upgrade cards adiadas
 passive card caps (máx 4 distintos, máx 3 stacks cada)
-assist system (armas fixas disparam automaticamente; slot livre incluído quando preenchido)
+assist system (armas fixas disparam automaticamente; Ultimate dispara quando o gauge enche)
 POI interaction: left-click (chests, altar)
 right-click target lock
 ArenaConfig com todos os constants (clean config system)

@@ -49,5 +49,6 @@ public sealed record BattleStepResponseDto(
     IReadOnlyList<BattleCardOfferDto> SelectedCards,
     IReadOnlyList<BattleEventDto> Events,
     IReadOnlyList<CommandResultDto> CommandResults,
-    string? FreeSlotWeaponId,
-    string? FreeSlotWeaponName);
+    int UltimateGauge,
+    int UltimateGaugeMax,
+    bool UltimateReady);

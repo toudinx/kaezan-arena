@@ -227,8 +227,9 @@ public sealed class BattleV1Controller : ControllerBase
             PendingChoiceId: snapshot.PendingChoiceId,
             OfferedCards: snapshot.OfferedCards,
             SelectedCards: snapshot.SelectedCards,
-            FreeSlotWeaponId: snapshot.FreeSlotWeaponId,
-            FreeSlotWeaponName: snapshot.FreeSlotWeaponName);
+            UltimateGauge: snapshot.UltimateGauge,
+            UltimateGaugeMax: snapshot.UltimateGaugeMax,
+            UltimateReady: snapshot.UltimateReady);
     }
 
     private BattleStepResponseDto ToStepResponse(BattleSnapshot snapshot)
@@ -282,8 +283,9 @@ public sealed class BattleV1Controller : ControllerBase
             SelectedCards: snapshot.SelectedCards,
             Events: snapshot.Events,
             CommandResults: snapshot.CommandResults,
-            FreeSlotWeaponId: snapshot.FreeSlotWeaponId,
-            FreeSlotWeaponName: snapshot.FreeSlotWeaponName);
+            UltimateGauge: snapshot.UltimateGauge,
+            UltimateGaugeMax: snapshot.UltimateGaugeMax,
+            UltimateReady: snapshot.UltimateReady);
     }
 
     private ApiErrorDto BuildValidationError(string message)

@@ -18,9 +18,8 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         MobArchetype.MeleeDemon,
         MobArchetype.RangedDragon
     ];
-    // Offensive priority for the Assist: ExoriMas → Exori → ExoriMin → [FreeSlotWeaponId if set].
-    // Avalanche is no longer in this fixed list — it returns automatically once the rune system
-    // sets StoredBattle.FreeSlotWeaponId = ArenaConfig.WeaponIds.Avalanche.
+    // Offensive priority for the Assist: ExoriMas -> Exori -> ExoriMin.
+    // Ultimate auto-cast is handled separately by the Ultimate gauge.
     // Heal and Guard are excluded — defensive survivability is now passive-card-only.
     private static readonly IReadOnlyDictionary<string, IReadOnlyList<string>> FixedWeaponKitByPlayerClassId =
         new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal)
@@ -372,7 +371,9 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             selectedCardStacks: new Dictionary<string, int>(StringComparer.Ordinal),
             cardSelectionsGranted: 0,
             nextCardChoiceSequence: 1,
-            replayActions: []);
+            replayActions: [],
+            ultimateGauge: 0,
+            ultimateReady: false);
 
         var initialMobCap = ResolveSpawnPacingDirector(state).MaxAliveMobs;
         foreach (var slot in state.MobSlots.Values.OrderBy(value => value.SlotIndex))
@@ -1249,7 +1250,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
     }
 
     // Defensive cast path (Heal / Guard) is intentionally absent from the Assist.
-    // Heal and Guard skill implementations are preserved for future use as free-slot runes.
+    // Heal and Guard skill implementations are preserved for future expansion.
 
     private static bool TryApplyAssistOffensiveCast(
         StoredBattle state,
@@ -1263,10 +1264,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             return false;
         }
 
-        if (ResolveEffectivePlayerAutoAttackTarget(state, player) is null)
-        {
-            return false;
-        }
+        var hasAutoAttackTarget = ResolveEffectivePlayerAutoAttackTarget(state, player) is not null;
 
         var offenseSkillPriority = ResolveAssistOffenseSkillPriority(state);
         if (string.Equals(state.PlayerClassId, ArenaConfig.PlayerClassKina, StringComparison.Ordinal))
@@ -1290,81 +1288,76 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             }
         }
 
-        foreach (var skillId in offenseSkillPriority)
+        if (hasAutoAttackTarget)
         {
-            if (!assist.AutoSkills.TryGetValue(skillId, out var isEnabled) || !isEnabled)
+            foreach (var skillId in offenseSkillPriority)
             {
-                continue;
-            }
-
-            if (string.Equals(skillId, ArenaConfig.SigilBoltSkillId, StringComparison.Ordinal))
-            {
-                if (string.Equals(state.PlayerClassId, ArenaConfig.PlayerClassKina, StringComparison.Ordinal))
+                if (!assist.AutoSkills.TryGetValue(skillId, out var isEnabled) || !isEnabled)
                 {
-                    throw new InvalidOperationException(
-                        "Critical invariant violation: Sigil Bolt entered Kina assist priority.");
+                    continue;
                 }
 
-                if (TryExecuteSigilBolt(state, events))
+                if (string.Equals(skillId, ArenaConfig.SigilBoltSkillId, StringComparison.Ordinal))
                 {
-                    events.Add(new AssistCastEventDto(ArenaConfig.SigilBoltSkillId, ArenaConfig.AssistReasonAutoOffense));
+                    if (string.Equals(state.PlayerClassId, ArenaConfig.PlayerClassKina, StringComparison.Ordinal))
+                    {
+                        throw new InvalidOperationException(
+                            "Critical invariant violation: Sigil Bolt entered Kina assist priority.");
+                    }
+
+                    if (TryExecuteSigilBolt(state, events))
+                    {
+                        events.Add(new AssistCastEventDto(ArenaConfig.SigilBoltSkillId, ArenaConfig.AssistReasonAutoOffense));
+                        return true;
+                    }
+
+                    continue;
+                }
+
+                if (string.Equals(skillId, ArenaConfig.ShotgunSkillId, StringComparison.Ordinal))
+                {
+                    if (string.Equals(state.PlayerClassId, ArenaConfig.PlayerClassKina, StringComparison.Ordinal))
+                    {
+                        throw new InvalidOperationException(
+                            "Critical invariant violation: Shotgun entered Kina assist priority.");
+                    }
+
+                    if (TryExecuteShotgun(state, events))
+                    {
+                        events.Add(new AssistCastEventDto(ArenaConfig.ShotgunSkillId, ArenaConfig.AssistReasonAutoOffense));
+                        return true;
+                    }
+
+                    continue;
+                }
+
+                if (string.Equals(skillId, ArenaConfig.VoidRicochetSkillId, StringComparison.Ordinal))
+                {
+                    if (string.Equals(state.PlayerClassId, ArenaConfig.PlayerClassKina, StringComparison.Ordinal))
+                    {
+                        throw new InvalidOperationException(
+                            "Critical invariant violation: Void Ricochet entered Kina assist priority.");
+                    }
+
+                    if (TryExecuteVoidRicochet(state, events))
+                    {
+                        events.Add(new AssistCastEventDto(ArenaConfig.VoidRicochetSkillId, ArenaConfig.AssistReasonAutoOffense));
+                        return true;
+                    }
+
+                    continue;
+                }
+
+                if (TryApplyAssistSkillCast(state, events, skillId, ArenaConfig.AssistReasonAutoOffense, ref pendingLifeLeechHeal))
+                {
                     return true;
                 }
-
-                continue;
-            }
-
-            if (string.Equals(skillId, ArenaConfig.ShotgunSkillId, StringComparison.Ordinal))
-            {
-                if (string.Equals(state.PlayerClassId, ArenaConfig.PlayerClassKina, StringComparison.Ordinal))
-                {
-                    throw new InvalidOperationException(
-                        "Critical invariant violation: Shotgun entered Kina assist priority.");
-                }
-
-                if (TryExecuteShotgun(state, events))
-                {
-                    events.Add(new AssistCastEventDto(ArenaConfig.ShotgunSkillId, ArenaConfig.AssistReasonAutoOffense));
-                    return true;
-                }
-
-                continue;
-            }
-
-            if (string.Equals(skillId, ArenaConfig.VoidRicochetSkillId, StringComparison.Ordinal))
-            {
-                if (string.Equals(state.PlayerClassId, ArenaConfig.PlayerClassKina, StringComparison.Ordinal))
-                {
-                    throw new InvalidOperationException(
-                        "Critical invariant violation: Void Ricochet entered Kina assist priority.");
-                }
-
-                if (TryExecuteVoidRicochet(state, events))
-                {
-                    events.Add(new AssistCastEventDto(ArenaConfig.VoidRicochetSkillId, ArenaConfig.AssistReasonAutoOffense));
-                    return true;
-                }
-
-                continue;
-            }
-
-            if (TryApplyAssistSkillCast(state, events, skillId, ArenaConfig.AssistReasonAutoOffense, ref pendingLifeLeechHeal))
-            {
-                return true;
             }
         }
 
-        // Free slot: if a rune weapon is equipped, try to auto-cast it last.
-        // The free slot fires whenever AutoOffenseEnabled is true — no separate AutoSkills entry needed.
-        // Avalanche re-enters here automatically once FreeSlotWeaponId = WeaponIds.Avalanche.
-        if (state.FreeSlotWeaponId is string freeWeaponId)
+        if (TryFireUltimate(state, events, player, ref pendingLifeLeechHeal))
         {
-            var freeSkillId = ArenaConfig.GetSkillIdForWeaponId(freeWeaponId);
-            if (freeSkillId is not null
-                && TryApplyAssistSkillCast(state, events, freeSkillId, ArenaConfig.AssistReasonAutoOffense, ref pendingLifeLeechHeal))
-            {
-                return true;
-            }
+            return true;
         }
 
         return false;
@@ -1385,6 +1378,49 @@ public sealed partial class InMemoryBattleStore : IBattleStore
 
         events.Add(new AssistCastEventDto(skillId, reason));
         return true;
+    }
+
+    private static bool TryFireUltimate(
+        StoredBattle state,
+        List<BattleEventDto> events,
+        StoredActor player,
+        ref int pendingLifeLeechHeal)
+    {
+        if (!state.UltimateReady)
+        {
+            return false;
+        }
+
+        _ = ApplyAreaSquareSkill(
+            state,
+            events,
+            player,
+            ArenaConfig.UltimateConfig.AoeRadius,
+            ArenaConfig.UltimateConfig.BaseDamage,
+            ArenaConfig.AvalancheFxId,
+            GetPlayerBaseElement(state),
+            ref pendingLifeLeechHeal);
+
+        state.UltimateGauge = 0;
+        state.UltimateReady = false;
+        Console.WriteLine("Ultimate fired");
+        events.Add(new AssistCastEventDto(
+            ArenaConfig.UltimateConfig.UltimateSkillId,
+            ArenaConfig.AssistReasonAutoOffense));
+        return true;
+    }
+
+    private static void AddUltimateGauge(StoredBattle state, int amount)
+    {
+        if (amount <= 0)
+        {
+            return;
+        }
+
+        var normalizedGauge = Math.Max(0, state.UltimateGauge);
+        var nextGauge = normalizedGauge + amount;
+        state.UltimateGauge = Math.Min(nextGauge, ArenaConfig.UltimateConfig.GaugeMax);
+        state.UltimateReady = state.UltimateGauge >= ArenaConfig.UltimateConfig.GaugeMax;
     }
 
     private static bool TrySpawnMobInSlot(StoredBattle state, MobSlotState slot, List<BattleEventDto>? events = null)
@@ -2175,6 +2211,10 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             HpDamageAmount: hpDamageApplied,
             HitKind: hitKind));
 
+        AddUltimateGauge(
+            state,
+            damageAppliedToPlayer * ArenaConfig.UltimateConfig.GaugePerDamageTaken);
+
         if (isCrit)
         {
             EmitCritTextEvent(events, player.TileX, player.TileY, nowMs);
@@ -2451,6 +2491,8 @@ public sealed partial class InMemoryBattleStore : IBattleStore
 
     private static void RegisterBestiaryKill(StoredBattle state, List<BattleEventDto> events, StoredActor mob)
     {
+        AddUltimateGauge(state, ArenaConfig.UltimateConfig.GaugePerKill);
+
         if (mob.IsElite)
         {
             state.EliteKills += 1;
@@ -3607,6 +3649,19 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                 $"Run summary counters are invalid: kills={state.TotalKills}, eliteKills={state.EliteKills}, chestsOpened={state.ChestsOpened}.");
         }
 
+        if (state.UltimateGauge < 0 || state.UltimateGauge > ArenaConfig.UltimateConfig.GaugeMax)
+        {
+            throw new InvalidOperationException(
+                $"Ultimate gauge is invalid: gauge={state.UltimateGauge}, max={ArenaConfig.UltimateConfig.GaugeMax}.");
+        }
+
+        var shouldBeReady = state.UltimateGauge >= ArenaConfig.UltimateConfig.GaugeMax;
+        if (state.UltimateReady != shouldBeReady)
+        {
+            throw new InvalidOperationException(
+                $"Ultimate ready flag is inconsistent: ready={state.UltimateReady}, gauge={state.UltimateGauge}.");
+        }
+
         if (state.IsRunEnded)
         {
             if (string.IsNullOrWhiteSpace(state.RunEndReason))
@@ -3934,7 +3989,9 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             Dictionary<string, int> selectedCardStacks,
             int cardSelectionsGranted,
             int nextCardChoiceSequence,
-            List<BattleReplayActionDto> replayActions)
+            List<BattleReplayActionDto> replayActions,
+            int ultimateGauge,
+            bool ultimateReady)
         {
             BattleId = battleId;
             ArenaId = arenaId;
@@ -3985,6 +4042,8 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             CardSelectionsGranted = cardSelectionsGranted;
             NextCardChoiceSequence = nextCardChoiceSequence;
             ReplayActions = replayActions;
+            UltimateGauge = ultimateGauge;
+            UltimateReady = ultimateReady;
         }
 
         public object Sync { get; } = new();
@@ -4089,11 +4148,9 @@ public sealed partial class InMemoryBattleStore : IBattleStore
 
         public List<BattleReplayActionDto> ReplayActions { get; }
 
-        /// <summary>
-        /// The weapon in the free (rune) slot. Null until the rune system assigns a weapon.
-        /// When set to a WeaponIds constant, the Assist System auto-casts it after the 3 fixed skills.
-        /// </summary>
-        public string? FreeSlotWeaponId { get; set; }
+        public int UltimateGauge { get; set; }
+
+        public bool UltimateReady { get; set; }
     }
 
     private sealed record SpawnPacingDirector(

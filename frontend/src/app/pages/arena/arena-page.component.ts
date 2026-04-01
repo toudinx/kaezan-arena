@@ -72,7 +72,7 @@ import type { BackpackEquipMode, BackpackEquipRequest } from "./backpack-window.
 import {
   type StatusBuffViewModel,
   type StatusSkillSlotViewModel,
-  buildFreeSlotViewModel,
+  buildUltimateSlotViewModel,
   mapStatusBuffs,
   mapStatusSkillSlots
 } from "./status-skills.helpers";
@@ -318,8 +318,9 @@ type ArenaUiState = Readonly<{
   tick: number;
   status: string;
   facing: FacingDirection;
-  /** Weapon name in the free (rune) slot. Null until the rune system assigns a weapon. */
-  freeSlotWeaponName: string | null;
+  ultimateGauge: number;
+  ultimateGaugeMax: number;
+  ultimateReady: boolean;
 }>;
 type BootPhase =
   | "measuring_canvas"
@@ -513,7 +514,9 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     tick: 0,
     status: "idle",
     facing: "up",
-    freeSlotWeaponName: null
+    ultimateGauge: 0,
+    ultimateGaugeMax: 100,
+    ultimateReady: false
   };
 
   private readonly engine = new ArenaEngine();
@@ -841,7 +844,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     const gcdTotal = this.ui.player.globalCooldownTotalMs;
     return [
       ...mapStatusSkillSlots(this.ui.skills, gcd, gcdTotal),
-      buildFreeSlotViewModel(this.ui.freeSlotWeaponName, this.ui.skills, gcd)
+      buildUltimateSlotViewModel(this.ui.ultimateGauge, this.ui.ultimateGaugeMax, this.ui.ultimateReady)
     ];
   }
 
@@ -3065,7 +3068,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         this.applyRunProgressFromSnapshot(response);
         this.applyScalingTelemetryFromSnapshot(response);
         this.applyCardChoiceStateFromSnapshot(response);
-        this.applyFreeSlotFromSnapshot(response);
+        this.applyUltimateFromSnapshot(response);
         this.runResultLogger.startRun({
           battleSeed: this.currentSeed,
           stepDeltaMs: this.stepIntervalMs,
@@ -3569,7 +3572,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.applyScalingTelemetryFromSnapshot(response);
     this.applyCardChoiceStateFromSnapshot(response);
     this.updateCardChoicePresentationFromEvents(response.events);
-    this.applyFreeSlotFromSnapshot(response);
+    this.applyUltimateFromSnapshot(response);
     this.activeFxCount = this.getActiveFxCount(this.scene);
     this.appendDamageLogs(applied.damageNumbers);
     this.appendDamageConsoleLogs(applied.damageNumbers);
@@ -4504,13 +4507,25 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.altarCooldownRemainingMs = remainingMs;
   }
 
-  private applyFreeSlotFromSnapshot(snapshot: StartBattleResponse | StepBattleResponse): void {
+  private applyUltimateFromSnapshot(snapshot: StartBattleResponse | StepBattleResponse): void {
     const record = snapshot as Record<string, unknown>;
-    const rawName = record["freeSlotWeaponName"];
-    const freeSlotWeaponName = typeof rawName === "string" ? rawName : null;
-    if (freeSlotWeaponName !== this.ui.freeSlotWeaponName) {
-      this.ui = { ...this.ui, freeSlotWeaponName };
-    }
+    const rawGauge = this.readNumber(record["ultimateGauge"]);
+    const rawGaugeMax = this.readNumber(record["ultimateGaugeMax"]);
+    const rawReady = this.readBoolean(record["ultimateReady"]);
+
+    const ultimateGaugeMax = Math.max(1, Math.floor(rawGaugeMax ?? this.ui.ultimateGaugeMax));
+    const ultimateGauge = Math.max(
+      0,
+      Math.min(ultimateGaugeMax, Math.floor(rawGauge ?? this.ui.ultimateGauge))
+    );
+    const ultimateReady = rawReady ?? this.ui.ultimateReady;
+
+    this.ui = {
+      ...this.ui,
+      ultimateGauge,
+      ultimateGaugeMax,
+      ultimateReady
+    };
   }
 
   private applyRunProgressFromSnapshot(snapshot: StartBattleResponse | StepBattleResponse): void {

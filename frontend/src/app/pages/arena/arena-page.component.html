@@ -386,7 +386,8 @@
               [class.bottom-hotbar__skill--disabled]="slot.disabled"
               [class.bottom-hotbar__skill--locked]="slot.isLocked"
               [class.bottom-hotbar__skill--ready]="!slot.disabled && !slot.isLocked"
-              [class.bottom-hotbar__skill--free]="slot.isFreeSlot"
+              [class.bottom-hotbar__skill--ultimate]="slot.isUltimate"
+              [class.bottom-hotbar__skill--ultimate-ready]="slot.isUltimate && slot.ready"
               [attr.data-skill-family]="slot.visualFamily"
               [attr.data-skill-tier]="slot.visualTier"
               [title]="slot.tooltip"
@@ -395,10 +396,17 @@
                 <span class="bottom-hotbar__skill-key">{{ slot.keyLabel }}</span>
                 <span class="bottom-hotbar__skill-icon">{{ slot.iconGlyph }}</span>
                 <span class="bottom-hotbar__skill-name">{{ slot.label }}</span>
-                @if (slot.cooldownText) {
+                @if (slot.isUltimate && slot.ready) {
+                  <span class="bottom-hotbar__skill-ready">READY</span>
+                } @else if (slot.cooldownText) {
                   <span class="bottom-hotbar__skill-cd">{{ slot.cooldownText }}</span>
                 } @else {
                   <span class="bottom-hotbar__skill-ready">Ready</span>
+                }
+                @if (slot.isUltimate) {
+                  <span class="bottom-hotbar__ultimate-gauge">
+                    <span class="bottom-hotbar__ultimate-gauge-fill" [style.width.%]="slot.gaugePercent"></span>
+                  </span>
                 }
                 @if (slot.cooldownFraction > 0) {
                   <span
@@ -406,9 +414,9 @@
                     [style.transform]="'scaleY(' + slot.cooldownFraction + ')'"
                   ></span>
                 }
-              } @else if (slot.isFreeSlot) {
+              } @else if (slot.isUltimate) {
                 <span class="bottom-hotbar__skill-key">{{ slot.keyLabel }}</span>
-                <span class="bottom-hotbar__skill-name bottom-hotbar__skill-name--muted">Rune Slot</span>
+                <span class="bottom-hotbar__skill-name bottom-hotbar__skill-name--muted">ULTIMATE</span>
               }
             </div>
           }
@@ -495,7 +503,8 @@
                       <div
                         class="right-panel-skill-row"
                         [class.right-panel-skill-row--locked]="slot.isLocked"
-                        [class.right-panel-skill-row--free]="slot.isFreeSlot"
+                        [class.right-panel-skill-row--ultimate]="slot.isUltimate"
+                        [class.right-panel-skill-row--ultimate-ready]="slot.isUltimate && slot.ready"
                         [attr.data-skill-family]="slot.visualFamily"
                         [attr.data-skill-tier]="slot.visualTier"
                         [title]="slot.tooltip"
@@ -503,12 +512,19 @@
                         @if (!slot.isLocked) {
                           <span class="right-panel-skill-row__icon">{{ slot.iconGlyph }}</span>
                           <span class="right-panel-skill-row__name">{{ slot.label }}</span>
-                          @if (slot.cooldownText) {
+                          @if (slot.isUltimate && slot.ready) {
+                            <span class="right-panel-skill-row__ready">READY</span>
+                          } @else if (slot.cooldownText) {
                             <span class="right-panel-skill-row__cd">{{ slot.cooldownText }}</span>
                           } @else {
                             <span class="right-panel-skill-row__ready">Ready</span>
                           }
-                        } @else if (slot.isFreeSlot) {
+                          @if (slot.isUltimate) {
+                            <span class="right-panel-skill-row__gauge">
+                              <span [style.width.%]="slot.gaugePercent"></span>
+                            </span>
+                          }
+                        } @else if (slot.isUltimate) {
                           <span class="right-panel-skill-row__name right-panel-skill-row__name--muted">{{ slot.label }}</span>
                         }
                       </div>
@@ -593,9 +609,9 @@
                 </div>
               </div>
 
-              <div class="pre-run-lobby__rune-slot">
-                <span class="pre-run-lobby__kit-label">Rune Slot</span>
-                <span class="pre-run-lobby__pill pre-run-lobby__pill--locked">Locked</span>
+              <div class="pre-run-lobby__ultimate-slot">
+                <span class="pre-run-lobby__kit-label">Ultimate Slot</span>
+                <span class="pre-run-lobby__pill pre-run-lobby__pill--locked">Gauge-based (Auto Fire)</span>
               </div>
 
               <div class="pre-run-lobby__gear">

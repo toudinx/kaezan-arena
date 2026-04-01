@@ -1,6 +1,5 @@
 import type { ArenaBuffState, ArenaSkillState } from "../../arena/engine/arena-engine.types";
 import {
-  normalizeSkillToken,
   resolveSkillPresentation,
   type SkillVisualFamily,
   type SkillVisualTier
@@ -12,7 +11,7 @@ export type StatusSkillBinding = Readonly<{
   skillId: string;
 }>;
 
-// Fixed 3-slot kit bindings. Avalanche lives in the free slot (rune system).
+// Fixed 3-slot kit bindings. Slot 4 is reserved for the Ultimate gauge.
 export const STATUS_SKILL_BINDINGS: readonly StatusSkillBinding[] = [
   { keyLabel: "1", skillId: "exori" },
   { keyLabel: "2", skillId: "exori_min" },
@@ -35,8 +34,10 @@ export type StatusSkillSlotViewModel = Readonly<{
   blockedByGlobalCooldown: boolean;
   disabled: boolean;
   isLocked: boolean;
-  /** True for the fourth free (rune) slot - styled distinctly from the 3 fixed slots. */
-  isFreeSlot: boolean;
+  /** True only for the fourth Ultimate slot. */
+  isUltimate: boolean;
+  gaugePercent: number;
+  ready: boolean;
 }>;
 
 export type StatusBuffViewModel = Readonly<{
@@ -70,6 +71,7 @@ export function mapStatusSkillSlots(
     const remainingMs = Math.max(0, state?.cooldownRemainingMs ?? 0);
     const totalMs = Math.max(0, state?.cooldownTotalMs ?? 0);
     const blockedByGcd = !isLocked && isReadyButBlockedByGcd(remainingMs, gcdRemaining);
+    const isReady = !isLocked && remainingMs <= 0 && !blockedByGcd;
     const cooldownText = remainingMs > 0
       ? formatCooldownSeconds(remainingMs)
       : blockedByGcd
@@ -92,65 +94,43 @@ export function mapStatusSkillSlots(
       blockedByGlobalCooldown: blockedByGcd,
       disabled: isLocked || remainingMs > 0 || blockedByGcd,
       isLocked,
-      isFreeSlot: false
+      isUltimate: false,
+      gaugePercent: 0,
+      ready: isReady
     };
   });
 }
 
-/**
- * Builds the view-model for the free (rune) weapon slot.
- * When freeSlotWeaponName is null the slot is rendered as empty/locked.
- * When a rune weapon is equipped the server populates both the name and
- * a matching entry in the skills array so cooldown data flows naturally.
- */
-export function buildFreeSlotViewModel(
-  freeSlotWeaponName: string | null | undefined,
-  skillStates: ReadonlyArray<ArenaSkillState> = [],
-  globalCooldownRemainingMs = 0
+export function buildUltimateSlotViewModel(
+  gauge: number,
+  gaugeMax: number,
+  ready: boolean
 ): StatusSkillSlotViewModel {
-  const isLocked = !freeSlotWeaponName;
-  const fallbackLabel = freeSlotWeaponName ?? "Rune Slot";
-  const freeSlotToken = normalizeSkillToken(freeSlotWeaponName);
-
-  const state = skillStates.find((entry) => {
-    const stateTokenFromId = normalizeSkillToken(entry.skillId);
-    const stateTokenFromName = normalizeSkillToken(entry.displayName ?? null);
-    return freeSlotToken !== null && (stateTokenFromId === freeSlotToken || stateTokenFromName === freeSlotToken);
-  });
-
-  const presentation = resolveSkillPresentation({
-    skillId: state?.skillId ?? freeSlotToken,
-    displayName: freeSlotWeaponName ?? state?.displayName ?? null,
-    fallbackLabel
-  });
-
-  const gcdRemaining = Math.max(0, globalCooldownRemainingMs);
-  const remainingMs = Math.max(0, state?.cooldownRemainingMs ?? 0);
-  const totalMs = Math.max(0, state?.cooldownTotalMs ?? 0);
-  const blockedByGcd = !isLocked && isReadyButBlockedByGcd(remainingMs, gcdRemaining);
-  const cooldownText = remainingMs > 0
-    ? formatCooldownSeconds(remainingMs)
-    : blockedByGcd
-      ? `GCD ${formatCooldownSeconds(gcdRemaining)}`
-      : "";
+  const safeGaugeMax = Math.max(1, Math.round(gaugeMax));
+  const safeGauge = Math.max(0, Math.min(Math.round(gauge), safeGaugeMax));
+  const gaugePercent = Math.round((safeGauge / safeGaugeMax) * 100);
+  const cooldownText = ready ? "READY" : `${gaugePercent}%`;
+  const tooltip = buildSkillTooltip("ULTIMATE", cooldownText, false, true, ready, gaugePercent);
 
   return {
     keyLabel: "4",
-    skillId: state?.skillId ?? freeSlotWeaponName ?? "__free_slot__",
-    label: presentation.label,
-    iconGlyph: presentation.iconGlyph,
-    accentColor: presentation.accentColor,
-    visualFamily: presentation.family,
-    visualTier: presentation.tier,
-    cooldownRemainingMs: remainingMs,
-    cooldownTotalMs: totalMs,
-    cooldownFraction: computeCooldownFraction(remainingMs, totalMs),
+    skillId: "skill:ultimate",
+    label: "ULTIMATE",
+    iconGlyph: "UT",
+    accentColor: "#f59e0b",
+    visualFamily: "support",
+    visualTier: "heavy",
+    cooldownRemainingMs: 0,
+    cooldownTotalMs: 0,
+    cooldownFraction: 0,
     cooldownText,
-    tooltip: buildSkillTooltip(presentation.label, cooldownText, isLocked, true),
-    blockedByGlobalCooldown: blockedByGcd,
-    disabled: isLocked || remainingMs > 0 || blockedByGcd,
-    isLocked,
-    isFreeSlot: true
+    tooltip,
+    blockedByGlobalCooldown: false,
+    disabled: false,
+    isLocked: false,
+    isUltimate: true,
+    gaugePercent,
+    ready
   };
 }
 
@@ -177,9 +157,23 @@ export function resolveSkillIdForHotkeyKey(
   return matched?.skillId ?? null;
 }
 
-function buildSkillTooltip(label: string, cooldownText: string, isLocked: boolean, isFreeSlot: boolean): string {
+function buildSkillTooltip(
+  label: string,
+  cooldownText: string,
+  isLocked: boolean,
+  isUltimate: boolean,
+  ready = false,
+  gaugePercent = 0
+): string {
   if (isLocked) {
-    return isFreeSlot ? "Rune slot is empty." : `${label} is currently unavailable.`;
+    return `${label} is currently unavailable.`;
+  }
+
+  if (isUltimate) {
+    if (ready) {
+      return "Ultimate is charged and will fire automatically.";
+    }
+    return `Ultimate charge: ${gaugePercent}%`;
   }
 
   if (cooldownText.length > 0) {

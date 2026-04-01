@@ -169,11 +169,9 @@ public sealed partial class InMemoryBattleStore
             SelectedCards: selectedCards,
             Events: events,
             CommandResults: commandResults,
-            FreeSlotWeaponId: state.FreeSlotWeaponId,
-            FreeSlotWeaponName: state.FreeSlotWeaponId is string freeId
-                && ArenaConfig.DisplayNames.TryGetValue(freeId, out var freeName)
-                    ? freeName
-                    : null);
+            UltimateGauge: state.UltimateGauge,
+            UltimateGaugeMax: ArenaConfig.UltimateConfig.GaugeMax,
+            UltimateReady: state.UltimateReady);
     }
 
     private static BattleRangedConfigDto BuildRangedConfigDto()
