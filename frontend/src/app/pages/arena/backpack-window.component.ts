@@ -21,7 +21,7 @@ export type BackpackEquipRequest = Readonly<{
   slot: EquipmentSlot;
 }>;
 
-export type BackpackEquipMode = "weapon" | "armor" | "relic" | null;
+export type BackpackEquipMode = "weapon" | null;
 
 @Component({
   selector: "app-backpack-window",
@@ -44,7 +44,7 @@ export class BackpackWindowComponent implements OnChanges, OnDestroy {
   @Output() readonly equipRequested = new EventEmitter<BackpackEquipRequest>();
   @Output() readonly salvageRequested = new EventEmitter<string>();
 
-  readonly filters: ReadonlyArray<BackpackFilter> = ["all", "weapons", "armor", "relics"];
+  readonly filters: ReadonlyArray<BackpackFilter> = ["all", "weapons"];
   selectedFilter: BackpackFilter = "all";
   selectedSlotId: string | null = null;
   inspectSlotId: string | null = null;
@@ -348,7 +348,7 @@ export class BackpackWindowComponent implements OnChanges, OnDestroy {
       return null;
     }
 
-    if (slot.slot === "weapon" || slot.slot === "armor" || slot.slot === "relic") {
+    if (slot.slot === "weapon") {
       return slot.slot;
     }
 
@@ -356,14 +356,6 @@ export class BackpackWindowComponent implements OnChanges, OnDestroy {
   }
 
   private resolveFilterForEquipMode(equipMode: Exclude<BackpackEquipMode, null>): BackpackFilter {
-    if (equipMode === "weapon") {
-      return "weapons";
-    }
-
-    if (equipMode === "armor") {
-      return "armor";
-    }
-
-    return "relics";
+    return "weapons";
   }
 }

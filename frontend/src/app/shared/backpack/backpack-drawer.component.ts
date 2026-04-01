@@ -70,14 +70,6 @@ export class BackpackDrawerComponent implements OnInit, OnChanges {
       total += 1;
     }
 
-    if (character.equipment.armorInstanceId) {
-      total += 1;
-    }
-
-    if (character.equipment.relicInstanceId) {
-      total += 1;
-    }
-
     return total;
   }
 

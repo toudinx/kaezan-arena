@@ -2,9 +2,7 @@ namespace KaezanArena.Api.Account;
 
 public enum EquipmentSlot
 {
-    Weapon = 0,
-    Armor = 1,
-    Relic = 2
+    Weapon = 0
 }
 
 public sealed record AccountState(
@@ -37,17 +35,13 @@ public sealed record OwnedEquipmentInstance(
     string? Rarity = null);
 
 public sealed record EquipmentState(
-    string? WeaponInstanceId,
-    string? ArmorInstanceId,
-    string? RelicInstanceId)
+    string? WeaponInstanceId)
 {
     public string? GetInstanceId(EquipmentSlot slot)
     {
         return slot switch
         {
             EquipmentSlot.Weapon => WeaponInstanceId,
-            EquipmentSlot.Armor => ArmorInstanceId,
-            EquipmentSlot.Relic => RelicInstanceId,
             _ => null
         };
     }
@@ -57,17 +51,13 @@ public sealed record EquipmentState(
         return slot switch
         {
             EquipmentSlot.Weapon => this with { WeaponInstanceId = instanceId },
-            EquipmentSlot.Armor => this with { ArmorInstanceId = instanceId },
-            EquipmentSlot.Relic => this with { RelicInstanceId = instanceId },
             _ => this
         };
     }
 
     public static IReadOnlyList<EquipmentSlot> OrderedSlots { get; } =
     [
-        EquipmentSlot.Weapon,
-        EquipmentSlot.Armor,
-        EquipmentSlot.Relic
+        EquipmentSlot.Weapon
     ];
 }
 
@@ -183,18 +173,6 @@ public static class EquipmentSlotMapper
             return true;
         }
 
-        if (string.Equals(normalized, "armor", StringComparison.OrdinalIgnoreCase))
-        {
-            result = EquipmentSlot.Armor;
-            return true;
-        }
-
-        if (string.Equals(normalized, "relic", StringComparison.OrdinalIgnoreCase))
-        {
-            result = EquipmentSlot.Relic;
-            return true;
-        }
-
         return false;
     }
 
@@ -203,8 +181,6 @@ public static class EquipmentSlotMapper
         return slot switch
         {
             EquipmentSlot.Weapon => "weapon",
-            EquipmentSlot.Armor => "armor",
-            EquipmentSlot.Relic => "relic",
             _ => "weapon"
         };
     }

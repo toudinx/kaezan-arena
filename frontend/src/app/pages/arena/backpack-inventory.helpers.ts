@@ -5,9 +5,9 @@ import type {
   OwnedEquipmentInstance
 } from "../../api/account-api.service";
 
-export type BackpackFilter = "all" | "weapons" | "armor" | "relics";
+export type BackpackFilter = "all" | "weapons";
 
-type BackpackEquipmentSlot = "weapon" | "armor" | "relic" | "unknown";
+type BackpackEquipmentSlot = "weapon" | "unknown";
 
 export type BackpackSlot = Readonly<{
   slotId: string;
@@ -48,11 +48,7 @@ export function mapInventoryToBackpackSlots(
   }
 
   const equippedInstanceIds = new Set<string>(
-    [
-      character.equipment.weaponInstanceId,
-      character.equipment.armorInstanceId,
-      character.equipment.relicInstanceId
-    ].filter((value): value is string => !!value)
+    [character.equipment.weaponInstanceId].filter((value): value is string => !!value)
   );
 
   return Object.values(character.inventory.equipmentInstances)
@@ -73,15 +69,7 @@ export function filterBackpackSlots(slots: ReadonlyArray<BackpackSlot>, filter: 
     return [...slots];
   }
 
-  if (filter === "weapons") {
-    return slots.filter((slot) => slot.slot === "weapon");
-  }
-
-  if (filter === "armor") {
-    return slots.filter((slot) => slot.slot === "armor");
-  }
-
-  return slots.filter((slot) => slot.slot === "relic");
+  return slots.filter((slot) => slot.slot === "weapon");
 }
 
 function toNamedEquipmentInstance(
@@ -132,14 +120,6 @@ function normalizeSlot(value: string | null): BackpackEquipmentSlot {
   const normalized = (value ?? "").trim().toLowerCase();
   if (normalized === "weapon") {
     return "weapon";
-  }
-
-  if (normalized === "armor") {
-    return "armor";
-  }
-
-  if (normalized === "relic") {
-    return "relic";
   }
 
   return "unknown";

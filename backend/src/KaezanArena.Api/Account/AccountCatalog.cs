@@ -39,15 +39,7 @@ public static class AccountCatalog
         new ItemDefinition("wpn.ember_staff", "Ember Staff", "equipment", false, "rare"),
         new ItemDefinition("wpn.drake_fang", "Drake Fang", "equipment", false, "epic"),
         new ItemDefinition("wpn.primal_forged_blade", "Primal Forged Blade", "equipment", false, "common"),
-        new ItemDefinition("wpn.ascendant_forged_blade", "Ascendant Forged Blade", "equipment", false, "ascendant"),
-        new ItemDefinition("arm.guard_plate", "Guard Plate", "equipment", false, "common"),
-        new ItemDefinition("arm.dragon_mail", "Dragon Mail", "equipment", false, "epic"),
-        new ItemDefinition("arm.primal_forged_mail", "Primal Forged Mail", "equipment", false, "common"),
-        new ItemDefinition("arm.ascendant_forged_mail", "Ascendant Forged Mail", "equipment", false, "ascendant"),
-        new ItemDefinition("rel.rune_orb", "Rune Orb", "equipment", false, "rare"),
-        new ItemDefinition("rel.astral_codex", "Astral Codex", "equipment", false, "legendary"),
-        new ItemDefinition("rel.primal_forged_emblem", "Primal Forged Emblem", "equipment", false, "common"),
-        new ItemDefinition("rel.ascendant_forged_emblem", "Ascendant Forged Emblem", "equipment", false, "ascendant")
+        new ItemDefinition("wpn.ascendant_forged_blade", "Ascendant Forged Blade", "equipment", false, "ascendant")
     ];
 
     public static IReadOnlyList<EquipmentDefinition> EquipmentDefinitions { get; } =
@@ -112,94 +104,6 @@ public static class AccountCatalog
                 ["basic_combo"] = "cleave_short",
                 ["stat.attack"] = "28"
             }),
-        new EquipmentDefinition(
-            "arm.guard_plate",
-            Slot: "armor",
-            WeaponClass: "",
-            WeaponElement: null,
-            GameplayModifiers: new Dictionary<string, string>(StringComparer.Ordinal)
-            {
-                ["damage_profile"] = "sturdy",
-                ["stat.defense"] = "10",
-                ["stat.vitality"] = "5"
-            }),
-        new EquipmentDefinition(
-            "arm.dragon_mail",
-            Slot: "armor",
-            WeaponClass: "",
-            WeaponElement: null,
-            GameplayModifiers: new Dictionary<string, string>(StringComparer.Ordinal)
-            {
-                ["damage_profile"] = "obsidian_guard",
-                ["stat.defense"] = "16",
-                ["stat.vitality"] = "9"
-            }),
-        new EquipmentDefinition(
-            "arm.primal_forged_mail",
-            Slot: "armor",
-            WeaponClass: "",
-            WeaponElement: null,
-            GameplayModifiers: new Dictionary<string, string>(StringComparer.Ordinal)
-            {
-                ["damage_profile"] = "sturdy",
-                ["stat.defense"] = "9",
-                ["stat.vitality"] = "6"
-            }),
-        new EquipmentDefinition(
-            "arm.ascendant_forged_mail",
-            Slot: "armor",
-            WeaponClass: "",
-            WeaponElement: null,
-            GameplayModifiers: new Dictionary<string, string>(StringComparer.Ordinal)
-            {
-                ["damage_profile"] = "obsidian_guard",
-                ["stat.defense"] = "24",
-                ["stat.vitality"] = "14"
-            }),
-        new EquipmentDefinition(
-            "rel.rune_orb",
-            Slot: "relic",
-            WeaponClass: "",
-            WeaponElement: null,
-            GameplayModifiers: new Dictionary<string, string>(StringComparer.Ordinal)
-            {
-                ["focus"] = "mana_echo",
-                ["stat.attack"] = "4",
-                ["stat.vitality"] = "4"
-            }),
-        new EquipmentDefinition(
-            "rel.astral_codex",
-            Slot: "relic",
-            WeaponClass: "",
-            WeaponElement: null,
-            GameplayModifiers: new Dictionary<string, string>(StringComparer.Ordinal)
-            {
-                ["focus"] = "astral_overdrive",
-                ["stat.attack"] = "7",
-                ["stat.vitality"] = "8"
-            }),
-        new EquipmentDefinition(
-            "rel.primal_forged_emblem",
-            Slot: "relic",
-            WeaponClass: "",
-            WeaponElement: null,
-            GameplayModifiers: new Dictionary<string, string>(StringComparer.Ordinal)
-            {
-                ["focus"] = "mana_echo",
-                ["stat.attack"] = "3",
-                ["stat.vitality"] = "4"
-            }),
-        new EquipmentDefinition(
-            "rel.ascendant_forged_emblem",
-            Slot: "relic",
-            WeaponClass: "",
-            WeaponElement: null,
-            GameplayModifiers: new Dictionary<string, string>(StringComparer.Ordinal)
-            {
-                ["focus"] = "astral_overdrive",
-                ["stat.attack"] = "12",
-                ["stat.vitality"] = "12"
-            })
     ];
 
     public static IReadOnlyDictionary<string, ItemDefinition> ItemsById { get; } =
@@ -219,11 +123,7 @@ public static class AccountCatalog
                     new DropEntry("wpn.iron_blade", Weight: 35, MinQuantity: 1, MaxQuantity: 1),
                     new DropEntry("wpn.hunter_bow", Weight: 18, MinQuantity: 1, MaxQuantity: 1),
                     new DropEntry("wpn.ember_staff", Weight: 11, MinQuantity: 1, MaxQuantity: 1),
-                    new DropEntry("wpn.drake_fang", Weight: 3, MinQuantity: 1, MaxQuantity: 1),
-                    new DropEntry("arm.guard_plate", Weight: 20, MinQuantity: 1, MaxQuantity: 1),
-                    new DropEntry("arm.dragon_mail", Weight: 4, MinQuantity: 1, MaxQuantity: 1),
-                    new DropEntry("rel.rune_orb", Weight: 8, MinQuantity: 1, MaxQuantity: 1),
-                    new DropEntry("rel.astral_codex", Weight: 1, MinQuantity: 1, MaxQuantity: 1)
+                    new DropEntry("wpn.drake_fang", Weight: 3, MinQuantity: 1, MaxQuantity: 1)
                 ]),
             ["chest:default"] = new DropTable(
                 "chest.default",
@@ -233,11 +133,7 @@ public static class AccountCatalog
                     new DropEntry("wpn.iron_blade", Weight: 24, MinQuantity: 1, MaxQuantity: 1),
                     new DropEntry("wpn.hunter_bow", Weight: 24, MinQuantity: 1, MaxQuantity: 1),
                     new DropEntry("wpn.ember_staff", Weight: 16, MinQuantity: 1, MaxQuantity: 1),
-                    new DropEntry("wpn.drake_fang", Weight: 8, MinQuantity: 1, MaxQuantity: 1),
-                    new DropEntry("arm.guard_plate", Weight: 16, MinQuantity: 1, MaxQuantity: 1),
-                    new DropEntry("arm.dragon_mail", Weight: 7, MinQuantity: 1, MaxQuantity: 1),
-                    new DropEntry("rel.rune_orb", Weight: 4, MinQuantity: 1, MaxQuantity: 1),
-                    new DropEntry("rel.astral_codex", Weight: 1, MinQuantity: 1, MaxQuantity: 1)
+                    new DropEntry("wpn.drake_fang", Weight: 8, MinQuantity: 1, MaxQuantity: 1)
                 ])
         };
 
@@ -294,8 +190,6 @@ public static class AccountCatalog
         return slot switch
         {
             EquipmentSlot.Weapon => "wpn.primal_forged_blade",
-            EquipmentSlot.Armor => "arm.primal_forged_mail",
-            EquipmentSlot.Relic => "rel.primal_forged_emblem",
             _ => "wpn.primal_forged_blade"
         };
     }
@@ -305,8 +199,6 @@ public static class AccountCatalog
         return slot switch
         {
             EquipmentSlot.Weapon => "wpn.ascendant_forged_blade",
-            EquipmentSlot.Armor => "arm.ascendant_forged_mail",
-            EquipmentSlot.Relic => "rel.ascendant_forged_emblem",
             _ => "wpn.ascendant_forged_blade"
         };
     }

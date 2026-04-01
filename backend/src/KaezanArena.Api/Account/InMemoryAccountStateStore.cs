@@ -929,16 +929,10 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
                 EquipmentInstances: new Dictionary<string, OwnedEquipmentInstance>(StringComparer.Ordinal)
                 {
                     [$"{accountId}.{kaelisOneId}.wpn_01"] = new OwnedEquipmentInstance($"{accountId}.{kaelisOneId}.wpn_01", "wpn.iron_blade", IsLocked: false),
-                    [$"{accountId}.{kaelisOneId}.wpn_02"] = new OwnedEquipmentInstance($"{accountId}.{kaelisOneId}.wpn_02", "wpn.hunter_bow", IsLocked: false),
-                    [$"{accountId}.{kaelisOneId}.arm_01"] = new OwnedEquipmentInstance($"{accountId}.{kaelisOneId}.arm_01", "arm.guard_plate", IsLocked: false),
-                    [$"{accountId}.{kaelisOneId}.arm_02"] = new OwnedEquipmentInstance($"{accountId}.{kaelisOneId}.arm_02", "arm.dragon_mail", IsLocked: false),
-                    [$"{accountId}.{kaelisOneId}.rel_01"] = new OwnedEquipmentInstance($"{accountId}.{kaelisOneId}.rel_01", "rel.rune_orb", IsLocked: false),
-                    [$"{accountId}.{kaelisOneId}.rel_02"] = new OwnedEquipmentInstance($"{accountId}.{kaelisOneId}.rel_02", "rel.astral_codex", IsLocked: false)
+                    [$"{accountId}.{kaelisOneId}.wpn_02"] = new OwnedEquipmentInstance($"{accountId}.{kaelisOneId}.wpn_02", "wpn.hunter_bow", IsLocked: false)
                 }),
             Equipment: new EquipmentState(
-                WeaponInstanceId: $"{accountId}.{kaelisOneId}.wpn_01",
-                ArmorInstanceId: $"{accountId}.{kaelisOneId}.arm_01",
-                RelicInstanceId: $"{accountId}.{kaelisOneId}.rel_01"),
+                WeaponInstanceId: $"{accountId}.{kaelisOneId}.wpn_01"),
             BestiaryKillsBySpecies: new Dictionary<string, int>(StringComparer.Ordinal),
             PrimalCoreBySpecies: new Dictionary<string, int>(StringComparer.Ordinal));
 
@@ -952,14 +946,10 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
                 EquipmentInstances: new Dictionary<string, OwnedEquipmentInstance>(StringComparer.Ordinal)
                 {
                     [$"{accountId}.{kaelisTwoId}.wpn_01"] = new OwnedEquipmentInstance($"{accountId}.{kaelisTwoId}.wpn_01", "wpn.ember_staff", IsLocked: false),
-                    [$"{accountId}.{kaelisTwoId}.wpn_02"] = new OwnedEquipmentInstance($"{accountId}.{kaelisTwoId}.wpn_02", "wpn.iron_blade", IsLocked: false),
-                    [$"{accountId}.{kaelisTwoId}.arm_01"] = new OwnedEquipmentInstance($"{accountId}.{kaelisTwoId}.arm_01", "arm.guard_plate", IsLocked: false),
-                    [$"{accountId}.{kaelisTwoId}.rel_01"] = new OwnedEquipmentInstance($"{accountId}.{kaelisTwoId}.rel_01", "rel.rune_orb", IsLocked: false)
+                    [$"{accountId}.{kaelisTwoId}.wpn_02"] = new OwnedEquipmentInstance($"{accountId}.{kaelisTwoId}.wpn_02", "wpn.iron_blade", IsLocked: false)
                 }),
             Equipment: new EquipmentState(
-                WeaponInstanceId: $"{accountId}.{kaelisTwoId}.wpn_01",
-                ArmorInstanceId: $"{accountId}.{kaelisTwoId}.arm_01",
-                RelicInstanceId: $"{accountId}.{kaelisTwoId}.rel_01"),
+                WeaponInstanceId: $"{accountId}.{kaelisTwoId}.wpn_01"),
             BestiaryKillsBySpecies: new Dictionary<string, int>(StringComparer.Ordinal),
             PrimalCoreBySpecies: new Dictionary<string, int>(StringComparer.Ordinal));
 

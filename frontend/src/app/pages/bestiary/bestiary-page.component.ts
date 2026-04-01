@@ -59,9 +59,7 @@ type LootGroup = Readonly<{
 
 const LOOT_SLOT_ORDER: Readonly<Record<string, number>> = {
   weapon: 0,
-  armor: 1,
-  relic: 2,
-  unknown: 3
+  unknown: 1
 };
 
 const RANK_THRESHOLDS: ReadonlyArray<number> = [0, 10, 30, 60, 100];
@@ -458,14 +456,6 @@ export class BestiaryPageComponent implements OnInit {
 
   async craftWeapon(): Promise<void> {
     await this.craftSelectedSpecies("Weapon");
-  }
-
-  async craftArmor(): Promise<void> {
-    await this.craftSelectedSpecies("Armor");
-  }
-
-  async craftRelic(): Promise<void> {
-    await this.craftSelectedSpecies("Relic");
   }
 
   private async craftSelectedSpecies(slot: BestiaryCraftSlot): Promise<void> {

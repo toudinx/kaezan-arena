@@ -16,8 +16,6 @@ export interface CharacterInventory {
 
 export interface CharacterEquipment {
   weaponInstanceId?: string | null;
-  armorInstanceId?: string | null;
-  relicInstanceId?: string | null;
 }
 
 export interface CharacterState {
@@ -111,7 +109,7 @@ export interface BestiaryOverviewResponse {
   character: CharacterBestiaryState;
 }
 
-export type BestiaryCraftSlot = "Weapon" | "Armor" | "Relic";
+export type BestiaryCraftSlot = "Weapon";
 
 export interface BestiaryCraftResponse {
   echoFragmentsBalance: number;
@@ -138,7 +136,7 @@ export interface AwardDropsResponse {
   character: CharacterState;
 }
 
-export type EquipmentSlot = "weapon" | "armor" | "relic";
+export type EquipmentSlot = "weapon";
 
 @Injectable({ providedIn: "root" })
 export class AccountApiService {

@@ -38,7 +38,7 @@ public sealed class BestiaryV1Controller : ControllerBase
 
         if (!Enum.TryParse<EquipmentSlot>(request.Slot.Trim(), ignoreCase: true, out var slot))
         {
-            return BadRequest(BuildValidationError("slot must be one of: Weapon, Armor, Relic"));
+            return BadRequest(BuildValidationError("slot must be: Weapon"));
         }
 
         var normalizedAccountId = string.IsNullOrWhiteSpace(accountId) ? "dev_account" : accountId.Trim();
@@ -91,9 +91,7 @@ public sealed class BestiaryV1Controller : ControllerBase
                 MaterialStacks: materialStacks,
                 EquipmentInstances: equipmentInstances),
             Equipment: new CharacterEquipmentDto(
-                WeaponInstanceId: character.Equipment.WeaponInstanceId,
-                ArmorInstanceId: character.Equipment.ArmorInstanceId,
-                RelicInstanceId: character.Equipment.RelicInstanceId),
+                WeaponInstanceId: character.Equipment.WeaponInstanceId),
             BestiaryKillsBySpecies: ToSortedSpeciesCount(character.BestiaryKillsBySpecies),
             PrimalCoreBySpecies: ToSortedSpeciesCount(character.PrimalCoreBySpecies));
     }

@@ -141,7 +141,7 @@ public sealed class AccountV1Controller : ControllerBase
 
         if (!EquipmentSlotMapper.TryFromCatalogSlot(request.Slot, out var slot))
         {
-            return BadRequest(BuildValidationError("slot must be one of: weapon, armor, relic"));
+            return BadRequest(BuildValidationError("slot must be: weapon"));
         }
 
         if (string.IsNullOrWhiteSpace(request.EquipmentInstanceId))
@@ -302,9 +302,7 @@ public sealed class AccountV1Controller : ControllerBase
                 MaterialStacks: materialStacks,
                 EquipmentInstances: equipmentInstances),
             Equipment: new CharacterEquipmentDto(
-                WeaponInstanceId: character.Equipment.WeaponInstanceId,
-                ArmorInstanceId: character.Equipment.ArmorInstanceId,
-                RelicInstanceId: character.Equipment.RelicInstanceId),
+                WeaponInstanceId: character.Equipment.WeaponInstanceId),
             BestiaryKillsBySpecies: ToSortedSpeciesCount(character.BestiaryKillsBySpecies),
             PrimalCoreBySpecies: ToSortedSpeciesCount(character.PrimalCoreBySpecies));
     }

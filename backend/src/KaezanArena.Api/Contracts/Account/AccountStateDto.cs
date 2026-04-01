@@ -30,6 +30,4 @@ public sealed record OwnedEquipmentInstanceDto(
     string? Rarity = null);
 
 public sealed record CharacterEquipmentDto(
-    string? WeaponInstanceId,
-    string? ArmorInstanceId,
-    string? RelicInstanceId);
+    string? WeaponInstanceId);

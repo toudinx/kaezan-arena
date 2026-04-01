@@ -56,7 +56,7 @@ type CharacterRow = Readonly<{
   xpProgressPercent: number;
 }>;
 
-type CharacterGearSlot = "weapon" | "armor" | "relic";
+type CharacterGearSlot = "weapon";
 
 type CharacterGearSlotRow = Readonly<{
   slot: CharacterGearSlot;
@@ -118,7 +118,7 @@ const KAELIS_SECTION_NAV_ITEMS: ReadonlyArray<KaelisSectionNavItem> = [
   }
 ] as const;
 
-const CHARACTER_GEAR_SLOT_ORDER: readonly CharacterGearSlot[] = ["weapon", "armor", "relic"];
+const CHARACTER_GEAR_SLOT_ORDER: readonly CharacterGearSlot[] = ["weapon"];
 const LOADOUT_SIGIL_LABELS: ReadonlyArray<string> = ["Sigil I", "Sigil II", "Sigil III", "Sigil IV", "Sigil V"];
 const FREE_SLOT_TOOLTIP = "One additional attack weapon can be chosen during each run.";
 const PASSIVE_PLACEHOLDER: KaelisPassiveViewModel = {
@@ -339,13 +339,9 @@ export class CharactersPageComponent implements OnInit, OnDestroy {
   }
 
   get selectedLoadoutSigils(): ReadonlyArray<LoadoutSigilSlotRow> {
-    const selected = this.selectedCharacter;
-    const armor = selected?.equippedGearSlots.find((gear) => gear.slot === "armor") ?? null;
-    const relic = selected?.equippedGearSlots.find((gear) => gear.slot === "relic") ?? null;
-
     return [
-      this.mapGearToSigilSlot("sigil-1", LOADOUT_SIGIL_LABELS[0] ?? "Sigil I", "Armor", armor),
-      this.mapGearToSigilSlot("sigil-2", LOADOUT_SIGIL_LABELS[1] ?? "Sigil II", "Relic", relic),
+      this.createReservedSigilSlot("sigil-1", LOADOUT_SIGIL_LABELS[0] ?? "Sigil I"),
+      this.createReservedSigilSlot("sigil-2", LOADOUT_SIGIL_LABELS[1] ?? "Sigil II"),
       this.createReservedSigilSlot("sigil-3", LOADOUT_SIGIL_LABELS[2] ?? "Sigil III"),
       this.createReservedSigilSlot("sigil-4", LOADOUT_SIGIL_LABELS[3] ?? "Sigil IV"),
       this.createReservedSigilSlot("sigil-5", LOADOUT_SIGIL_LABELS[4] ?? "Sigil V")
@@ -547,7 +543,7 @@ export class CharactersPageComponent implements OnInit, OnDestroy {
   private createEquippedGearSlotRow(slot: BackpackSlot): CharacterGearSlotRow {
     const impactSummary = slot.impactBadges.length > 0 ? slot.impactBadges.slice(0, 2).join(" | ") : slot.shortStatSummary;
     return {
-      slot: slot.slot === "weapon" || slot.slot === "armor" || slot.slot === "relic" ? slot.slot : "weapon",
+      slot: slot.slot === "weapon" ? slot.slot : "weapon",
       slotLabel: slot.slotLabel,
       displayName: slot.displayName,
       typeLabel: slot.typeLabel,
@@ -606,11 +602,7 @@ export class CharactersPageComponent implements OnInit, OnDestroy {
       return character.equipment.weaponInstanceId ?? null;
     }
 
-    if (slot === "armor") {
-      return character.equipment.armorInstanceId ?? null;
-    }
-
-    return character.equipment.relicInstanceId ?? null;
+    return null;
   }
 
   private resolveSlotLabel(slot: CharacterGearSlot): string {
@@ -618,11 +610,7 @@ export class CharactersPageComponent implements OnInit, OnDestroy {
       return "Weapon";
     }
 
-    if (slot === "armor") {
-      return "Armor";
-    }
-
-    return "Relic";
+    return "Weapon";
   }
 
   private resolveRarityClass(rarity: string): "common" | "rare" | "epic" | "legendary" | "ascendant" {
@@ -651,11 +639,7 @@ export class CharactersPageComponent implements OnInit, OnDestroy {
       return "WP";
     }
 
-    if (slot === "armor") {
-      return "AR";
-    }
-
-    return "RL";
+    return "WP";
   }
 
   private resolveGearIconTone(slot: CharacterGearSlot): ItemIconTone {
@@ -663,11 +647,7 @@ export class CharactersPageComponent implements OnInit, OnDestroy {
       return "weapon";
     }
 
-    if (slot === "armor") {
-      return "armor";
-    }
-
-    return "relic";
+    return "weapon";
   }
 
   private resolveCharacterName(characterId: string): string {

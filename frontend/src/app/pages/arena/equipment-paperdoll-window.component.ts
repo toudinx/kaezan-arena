@@ -2,7 +2,7 @@ import { CommonModule } from "@angular/common";
 import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from "@angular/core";
 import type { CharacterState } from "../../api/account-api.service";
 
-type BackpackEquipMode = "weapon" | "armor" | "relic" | null;
+type BackpackEquipMode = "weapon" | null;
 
 @Component({
   selector: "app-equipment-paperdoll-window",
@@ -15,40 +15,18 @@ type BackpackEquipMode = "weapon" | "armor" | "relic" | null;
 export class EquipmentPaperdollWindowComponent {
   @Input() character: CharacterState | null = null;
   @Input() equippedWeaponLabel = "None";
-  @Input() equippedArmorLabel = "None";
-  @Input() equippedRelicLabel = "None";
   @Input() weaponRarity: string | null = null;
-  @Input() armorRarity: string | null = null;
-  @Input() relicRarity: string | null = null;
   @Input() equipMode: BackpackEquipMode = null;
 
   @Output() readonly weaponSlotActivated = new EventEmitter<void>();
-  @Output() readonly armorSlotActivated = new EventEmitter<void>();
-  @Output() readonly relicSlotActivated = new EventEmitter<void>();
 
   onWeaponSlotClick(): void {
     this.weaponSlotActivated.emit();
   }
 
-  onArmorSlotClick(): void {
-    this.armorSlotActivated.emit();
-  }
-
-  onRelicSlotClick(): void {
-    this.relicSlotActivated.emit();
-  }
-
   get equipModeHint(): string {
     if (this.equipMode === "weapon") {
       return "Select a weapon to equip.";
-    }
-
-    if (this.equipMode === "armor") {
-      return "Select armor to equip.";
-    }
-
-    if (this.equipMode === "relic") {
-      return "Select a relic to equip.";
     }
 
     return "";

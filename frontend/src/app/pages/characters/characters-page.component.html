@@ -159,7 +159,7 @@
 
                   @if (activeTab === "loadout") {
                     <p class="stage-panel__blurb stage-panel__blurb--loadout">
-                      Build focus is managed in the right panel: one Weapon lane and five Sigil slots. The current model maps Armor + Relic into Sigil I and Sigil II.
+                      Build focus is managed in the right panel: one Weapon lane and five Sigil slots.
                     </p>
                   }
                 </div>
@@ -262,7 +262,7 @@
 
               <section class="detail-block detail-block--sigils">
                 <h3>Sigils</h3>
-                <p class="detail-note">Current persistent model exposes Armor + Relic. They map into Sigil I and Sigil II; remaining slots are reserved.</p>
+                <p class="detail-note">All sigil slots are reserved for future sigil systems.</p>
                 <div class="sigil-grid">
                   @for (sigil of selectedLoadoutSigils; track sigil.slotId) {
                     <article

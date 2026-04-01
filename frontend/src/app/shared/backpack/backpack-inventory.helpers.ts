@@ -6,10 +6,10 @@ import type {
 } from "../../api/account-api.service";
 import { resolveItemVisual, type ItemIconTone } from "../items/item-visuals.helpers";
 
-export type BackpackFilter = "all" | "weapons" | "armor" | "relics";
+export type BackpackFilter = "all" | "weapons";
 export type BackpackRarityClass = "common" | "rare" | "epic" | "legendary" | "ascendant";
 
-type BackpackEquipmentSlot = "weapon" | "armor" | "relic" | "unknown";
+type BackpackEquipmentSlot = "weapon" | "unknown";
 
 export type BackpackSlot = Readonly<{
   slotId: string;
@@ -55,16 +55,12 @@ type NamedEquipmentInstance = Readonly<{
 
 const SLOT_LABELS: Readonly<Record<BackpackEquipmentSlot, string>> = {
   weapon: "Weapon",
-  armor: "Armor",
-  relic: "Relic",
   unknown: "Equipment"
 };
 
 const SLOT_SORT_ORDER: Readonly<Record<BackpackEquipmentSlot, number>> = {
   weapon: 0,
-  armor: 1,
-  relic: 2,
-  unknown: 3
+  unknown: 1
 };
 
 const RARITY_SORT_ORDER: Readonly<Record<string, number>> = {
@@ -85,11 +81,7 @@ export function mapInventoryToBackpackSlots(
   }
 
   const equippedInstanceIds = new Set<string>(
-    [
-      character.equipment.weaponInstanceId,
-      character.equipment.armorInstanceId,
-      character.equipment.relicInstanceId
-    ].filter((value): value is string => !!value)
+    [character.equipment.weaponInstanceId].filter((value): value is string => !!value)
   );
 
   return Object.values(character.inventory.equipmentInstances)
@@ -110,15 +102,7 @@ export function filterBackpackSlots(slots: ReadonlyArray<BackpackSlot>, filter: 
     return [...slots];
   }
 
-  if (filter === "weapons") {
-    return slots.filter((slot) => slot.slot === "weapon");
-  }
-
-  if (filter === "armor") {
-    return slots.filter((slot) => slot.slot === "armor");
-  }
-
-  return slots.filter((slot) => slot.slot === "relic");
+  return slots.filter((slot) => slot.slot === "weapon");
 }
 
 function toNamedEquipmentInstance(
@@ -200,14 +184,6 @@ function normalizeSlot(value: string | null): BackpackEquipmentSlot {
   const normalized = (value ?? "").trim().toLowerCase();
   if (normalized === "weapon") {
     return "weapon";
-  }
-
-  if (normalized === "armor") {
-    return "armor";
-  }
-
-  if (normalized === "relic") {
-    return "relic";
   }
 
   return "unknown";
@@ -300,14 +276,6 @@ function resolveTypeLabel(
       ? ` (${toTitleLabel(weaponElement)})`
       : "";
     return `${classLabel}${elementLabel}`;
-  }
-
-  if (slot === "armor") {
-    return "Defensive Gear";
-  }
-
-  if (slot === "relic") {
-    return "Relic Focus";
   }
 
   return "Unknown Type";

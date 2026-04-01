@@ -440,15 +440,9 @@
             <app-equipment-paperdoll-window
               [character]="selectedCharacter"
               [equippedWeaponLabel]="selectedCharacterWeaponLabel"
-              [equippedArmorLabel]="selectedCharacterArmorLabel"
-              [equippedRelicLabel]="selectedCharacterRelicLabel"
               [weaponRarity]="selectedCharacterWeaponRarity"
-              [armorRarity]="selectedCharacterArmorRarity"
-              [relicRarity]="selectedCharacterRelicRarity"
               [equipMode]="backpackEquipMode"
               (weaponSlotActivated)="onEquipmentWeaponSlotActivated()"
-              (armorSlotActivated)="onEquipmentArmorSlotActivated()"
-              (relicSlotActivated)="onEquipmentRelicSlotActivated()"
             ></app-equipment-paperdoll-window>
           </div>
         </section>
@@ -606,8 +600,6 @@
 
               <div class="pre-run-lobby__gear">
                 <p><span>Weapon</span><strong>{{ selectedCharacterWeaponLabel }}</strong></p>
-                <p><span>Armor</span><strong>{{ selectedCharacterArmorLabel }}</strong></p>
-                <p><span>Relic</span><strong>{{ selectedCharacterRelicLabel }}</strong></p>
               </div>
             </div>
           </aside>

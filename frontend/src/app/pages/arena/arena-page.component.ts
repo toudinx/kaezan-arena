@@ -1434,14 +1434,6 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.activateBackpackEquipMode("weapon");
   }
 
-  onEquipmentArmorSlotActivated(): void {
-    this.activateBackpackEquipMode("armor");
-  }
-
-  onEquipmentRelicSlotActivated(): void {
-    this.activateBackpackEquipMode("relic");
-  }
-
   private activateBackpackEquipMode(slot: Exclude<BackpackEquipMode, null>): void {
     this.backpackEquipMode = slot;
     this.backpackForcedFilter = this.toBackpackFilter(slot);
@@ -2265,24 +2257,8 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     return this.resolveSelectedEquipmentLabel("weapon");
   }
 
-  get selectedCharacterArmorLabel(): string {
-    return this.resolveSelectedEquipmentLabel("armor");
-  }
-
-  get selectedCharacterRelicLabel(): string {
-    return this.resolveSelectedEquipmentLabel("relic");
-  }
-
   get selectedCharacterWeaponRarity(): string | null {
     return this.resolveSelectedEquipmentRarity("weapon");
-  }
-
-  get selectedCharacterArmorRarity(): string | null {
-    return this.resolveSelectedEquipmentRarity("armor");
-  }
-
-  get selectedCharacterRelicRarity(): string | null {
-    return this.resolveSelectedEquipmentRarity("relic");
   }
 
   get selectedCharacterSummaryLabel(): string {
@@ -2436,7 +2412,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     await this.loadAccountState(true);
   }
 
-  async equipItemFromInventory(equipmentInstanceId: string, slot: "weapon" | "armor" | "relic"): Promise<boolean> {
+  async equipItemFromInventory(equipmentInstanceId: string, slot: "weapon"): Promise<boolean> {
     const character = this.selectedCharacter;
     if (!character) {
       return false;
@@ -3346,7 +3322,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     return this.resolveSelectedEquipmentDefinition("weapon");
   }
 
-  private resolveSelectedEquipmentLabel(slot: "weapon" | "armor" | "relic"): string {
+  private resolveSelectedEquipmentLabel(slot: "weapon"): string {
     const character = this.selectedCharacter;
     if (!character) {
       return "None";
@@ -3355,7 +3331,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     return this.resolveEquippedItemLabel(character, slot);
   }
 
-  private resolveSelectedEquipmentRarity(slot: "weapon" | "armor" | "relic"): string | null {
+  private resolveSelectedEquipmentRarity(slot: "weapon"): string | null {
     const character = this.selectedCharacter;
     if (!character) {
       return null;
@@ -3381,7 +3357,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     return normalizedItemRarity.length > 0 ? normalizedItemRarity : null;
   }
 
-  private resolveSelectedEquipmentDefinition(slot: "weapon" | "armor" | "relic"): EquipmentDefinition | null {
+  private resolveSelectedEquipmentDefinition(slot: "weapon"): EquipmentDefinition | null {
     const character = this.selectedCharacter;
     if (!character) {
       return null;
@@ -3405,7 +3381,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     return definition.slot.toLowerCase() === slot ? definition : null;
   }
 
-  private resolveEquippedItemLabel(character: CharacterState, slot: "weapon" | "armor" | "relic"): string {
+  private resolveEquippedItemLabel(character: CharacterState, slot: "weapon"): string {
     const instanceId = this.resolveEquippedInstanceId(character, slot);
     if (!instanceId) {
       return "None";
@@ -3419,16 +3395,12 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     return this.resolveItemDisplayName(equipped.definitionId);
   }
 
-  private resolveEquippedInstanceId(character: CharacterState, slot: "weapon" | "armor" | "relic"): string | null {
+  private resolveEquippedInstanceId(character: CharacterState, slot: "weapon"): string | null {
     if (slot === "weapon") {
       return character.equipment.weaponInstanceId ?? null;
     }
 
-    if (slot === "armor") {
-      return character.equipment.armorInstanceId ?? null;
-    }
-
-    return character.equipment.relicInstanceId ?? null;
+    return null;
   }
 
   private normalizeModifierKey(value: string): string {
@@ -6514,16 +6486,8 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.backpackEquipMode = null;
   }
 
-  private toBackpackFilter(slot: Exclude<BackpackEquipMode, null>): BackpackFilter {
-    if (slot === "weapon") {
-      return "weapons";
-    }
-
-    if (slot === "armor") {
-      return "armor";
-    }
-
-    return "relics";
+  private toBackpackFilter(_slot: Exclude<BackpackEquipMode, null>): BackpackFilter {
+    return "weapons";
   }
 
   private focusDamageConsole(): void {

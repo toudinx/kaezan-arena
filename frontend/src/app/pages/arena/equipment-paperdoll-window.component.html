@@ -1,7 +1,7 @@
 <section class="paperdoll">
   <header class="paperdoll__header">
     <strong>{{ character?.name ?? "Unknown" }}</strong>
-    <span>3 Slots</span>
+    <span>1 Slot</span>
   </header>
 
   <div class="paperdoll__slots">
@@ -17,34 +17,6 @@
       </button>
       <span class="paperdoll__slot-name">Weapon</span>
       <span class="paperdoll__slot-item">{{ equippedWeaponLabel || "Empty" }}</span>
-    </div>
-
-    <div class="paperdoll__slot-wrap">
-      <button
-        type="button"
-        class="paperdoll__slot"
-        [ngClass]="getSlotRarityClass(armorRarity)"
-        [title]="slotTooltip('Armor', equippedArmorLabel)"
-        (click)="onArmorSlotClick()"
-      >
-        <span class="paperdoll__slot-glyph">A</span>
-      </button>
-      <span class="paperdoll__slot-name">Armor</span>
-      <span class="paperdoll__slot-item">{{ equippedArmorLabel || "Empty" }}</span>
-    </div>
-
-    <div class="paperdoll__slot-wrap">
-      <button
-        type="button"
-        class="paperdoll__slot"
-        [ngClass]="getSlotRarityClass(relicRarity)"
-        [title]="slotTooltip('Relic', equippedRelicLabel)"
-        (click)="onRelicSlotClick()"
-      >
-        <span class="paperdoll__slot-glyph">R</span>
-      </button>
-      <span class="paperdoll__slot-name">Relic</span>
-      <span class="paperdoll__slot-item">{{ equippedRelicLabel || "Empty" }}</span>
     </div>
   </div>
 

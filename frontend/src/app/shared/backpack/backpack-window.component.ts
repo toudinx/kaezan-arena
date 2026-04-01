@@ -21,15 +21,15 @@ export type BackpackEquipRequest = Readonly<{
   slot: EquipmentSlot;
 }>;
 
-export type BackpackEquipMode = "weapon" | "armor" | "relic" | null;
+export type BackpackEquipMode = "weapon" | null;
 
 type EquippedBackpackSlotViewModel = Readonly<{
-  slot: "weapon" | "armor" | "relic";
+  slot: "weapon";
   slotLabel: string;
   item: BackpackSlot | null;
 }>;
 
-const EQUIPPED_SLOT_ORDER: readonly ("weapon" | "armor" | "relic")[] = ["weapon", "armor", "relic"];
+const EQUIPPED_SLOT_ORDER: readonly ("weapon")[] = ["weapon"];
 
 @Component({
   selector: "app-backpack-window",
@@ -52,7 +52,7 @@ export class BackpackWindowComponent implements OnChanges, OnDestroy {
   @Output() readonly equipRequested = new EventEmitter<BackpackEquipRequest>();
   @Output() readonly salvageRequested = new EventEmitter<string>();
 
-  readonly filters: ReadonlyArray<BackpackFilter> = ["all", "weapons", "armor", "relics"];
+  readonly filters: ReadonlyArray<BackpackFilter> = ["all", "weapons"];
   selectedFilter: BackpackFilter = "all";
   selectedSlotId: string | null = null;
   inspectSlotId: string | null = null;
@@ -103,11 +103,7 @@ export class BackpackWindowComponent implements OnChanges, OnDestroy {
   get equippedSlots(): ReadonlyArray<EquippedBackpackSlotViewModel> {
     return EQUIPPED_SLOT_ORDER.map((slot) => {
       const item = this.allSlots.find((entry) => entry.isEquipped && entry.slot === slot) ?? null;
-      const slotLabel = slot === "weapon"
-        ? "Weapon"
-        : slot === "armor"
-          ? "Armor"
-          : "Relic";
+      const slotLabel = "Weapon";
       return { slot, slotLabel, item };
     });
   }
@@ -228,14 +224,6 @@ export class BackpackWindowComponent implements OnChanges, OnDestroy {
       return "Select a weapon to equip.";
     }
 
-    if (this.equipMode === "armor") {
-      return "Select armor to equip.";
-    }
-
-    if (this.equipMode === "relic") {
-      return "Select a relic to equip.";
-    }
-
     return "";
   }
 
@@ -262,7 +250,7 @@ export class BackpackWindowComponent implements OnChanges, OnDestroy {
       return null;
     }
 
-    if (selectedSlot.slot !== "weapon" && selectedSlot.slot !== "armor" && selectedSlot.slot !== "relic") {
+    if (selectedSlot.slot !== "weapon") {
       return null;
     }
 
@@ -340,24 +328,12 @@ export class BackpackWindowComponent implements OnChanges, OnDestroy {
     this.iconImageFailures.add(slotId);
   }
 
-  getSlotFallbackGlyph(slot: "weapon" | "armor" | "relic"): string {
-    if (slot === "weapon") {
-      return "WP";
-    }
-    if (slot === "armor") {
-      return "AR";
-    }
-    return "RL";
+  getSlotFallbackGlyph(slot: "weapon"): string {
+    return "WP";
   }
 
-  getSlotFallbackTone(slot: "weapon" | "armor" | "relic"): string {
-    if (slot === "weapon") {
-      return "weapon";
-    }
-    if (slot === "armor") {
-      return "armor";
-    }
-    return "relic";
+  getSlotFallbackTone(slot: "weapon"): string {
+    return "weapon";
   }
 
   trackSlotById(_index: number, slot: BackpackSlot): string {
@@ -469,7 +445,7 @@ export class BackpackWindowComponent implements OnChanges, OnDestroy {
       return null;
     }
 
-    if (slot.slot === "weapon" || slot.slot === "armor" || slot.slot === "relic") {
+    if (slot.slot === "weapon") {
       return slot.slot;
     }
 
@@ -477,14 +453,6 @@ export class BackpackWindowComponent implements OnChanges, OnDestroy {
   }
 
   private resolveFilterForEquipMode(equipMode: Exclude<BackpackEquipMode, null>): BackpackFilter {
-    if (equipMode === "weapon") {
-      return "weapons";
-    }
-
-    if (equipMode === "armor") {
-      return "armor";
-    }
-
-    return "relics";
+    return "weapons";
   }
 }

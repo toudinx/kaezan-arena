@@ -166,14 +166,6 @@ export class HomePageComponent implements OnInit {
     return this.resolveEquippedName("weapon");
   }
 
-  get equippedArmorName(): string {
-    return this.resolveEquippedName("armor");
-  }
-
-  get equippedRelicName(): string {
-    return this.resolveEquippedName("relic");
-  }
-
   get bestiaryTopRows(): ReadonlyArray<Readonly<{
     speciesName: string;
     killsTotal: number;
@@ -278,15 +270,11 @@ export class HomePageComponent implements OnInit {
     this.portraitImageFailures.add(activeCharacterId);
   }
 
-  private resolveEquippedName(slot: "weapon" | "armor" | "relic"): string {
+  private resolveEquippedName(slot: "weapon"): string {
     const character = this.activeCharacter;
     if (!character) return "None";
 
-    const instanceId = slot === "weapon"
-      ? character.equipment.weaponInstanceId
-      : slot === "armor"
-        ? character.equipment.armorInstanceId
-        : character.equipment.relicInstanceId;
+    const instanceId = character.equipment.weaponInstanceId;
     if (!instanceId) return "None";
 
     const instance = character.inventory.equipmentInstances[instanceId];
