@@ -138,7 +138,6 @@ type ApiCardOffer = {
   tags?: unknown;
   rarityWeight?: unknown;
   maxStacks?: unknown;
-  isSkillCard?: unknown;
   currentStacks?: unknown;
 };
 type StepCommand = NonNullable<StepBattleRequest["commands"]>[number];
@@ -228,7 +227,6 @@ type ArenaCardOffer = Readonly<{
   tags: ReadonlyArray<string>;
   rarityWeight: number;
   maxStacks: number;
-  isSkillCard: boolean;
   currentStacks: number;
   rarityTierLabel: string;
   categoryLabel: string;
@@ -849,7 +847,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   }
 
   get hudPassiveSlots(): ReadonlyArray<ArenaCardOffer> {
-    return this.selectedCards.filter((card) => !card.isSkillCard).slice(0, 4);
+    return this.selectedCards.slice(0, 4);
   }
 
   get preRunCharacters(): ReadonlyArray<PreRunCharacterViewModel> {
@@ -4694,11 +4692,10 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
 
         seenIds.add(id);
         const tags: string[] = [];
-        const isSkillCard = false;
         const rarityWeight = 100;
         const maxStacks = 3;
         const currentStacks = 0;
-        const stackState = this.resolveCardStackPresentation(currentStacks, maxStacks, isSkillCard);
+        const stackState = this.resolveCardStackPresentation(currentStacks, maxStacks);
         offers.push({
           id,
           name: this.formatCardNameFromId(id),
@@ -4706,10 +4703,9 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
           tags,
           rarityWeight,
           maxStacks,
-          isSkillCard,
           currentStacks,
-          rarityTierLabel: this.resolveCardRarityTierLabel(rarityWeight, isSkillCard),
-          categoryLabel: this.resolveCardCategoryLabel(tags, isSkillCard),
+          rarityTierLabel: this.resolveCardRarityTierLabel(rarityWeight),
+          categoryLabel: this.resolveCardCategoryLabel(tags),
           impactLines: [],
           stackStateLabel: stackState.label,
           stackStateTone: stackState.tone
@@ -4732,9 +4728,8 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       const tags = this.toCardTags(typedEntry.tags);
       const rarityWeight = Math.max(1, Math.floor(this.readNumber(typedEntry.rarityWeight) ?? 100));
       const maxStacks = Math.max(1, Math.floor(this.readNumber(typedEntry.maxStacks) ?? 3));
-      const isSkillCard = typedEntry.isSkillCard === true;
       const currentStacks = Math.max(0, Math.min(maxStacks, Math.floor(this.readNumber(typedEntry.currentStacks) ?? 0)));
-      const stackState = this.resolveCardStackPresentation(currentStacks, maxStacks, isSkillCard);
+      const stackState = this.resolveCardStackPresentation(currentStacks, maxStacks);
       seenIds.add(id);
       offers.push({
         id,
@@ -4743,11 +4738,10 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         tags,
         rarityWeight,
         maxStacks,
-        isSkillCard,
         currentStacks,
-        rarityTierLabel: this.resolveCardRarityTierLabel(rarityWeight, isSkillCard),
-        categoryLabel: this.resolveCardCategoryLabel(tags, isSkillCard),
-        impactLines: this.resolveCardImpactLines(description, isSkillCard),
+        rarityTierLabel: this.resolveCardRarityTierLabel(rarityWeight),
+        categoryLabel: this.resolveCardCategoryLabel(tags),
+        impactLines: this.resolveCardImpactLines(description),
         stackStateLabel: stackState.label,
         stackStateTone: stackState.tone
       });
@@ -4769,11 +4763,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     return Array.from(new Set(normalized));
   }
 
-  private resolveCardRarityTierLabel(rarityWeight: number, isSkillCard: boolean): string {
-    if (isSkillCard) {
-      return "Signature";
-    }
-
+  private resolveCardRarityTierLabel(rarityWeight: number): string {
     if (rarityWeight <= 40) {
       return "Epic";
     }
@@ -4789,11 +4779,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     return "Common";
   }
 
-  private resolveCardCategoryLabel(tags: ReadonlyArray<string>, isSkillCard: boolean): string {
-    if (isSkillCard) {
-      return "Skill Unlock";
-    }
-
+  private resolveCardCategoryLabel(tags: ReadonlyArray<string>): string {
     const firstTag = tags.find((tag) => tag !== "skill");
     if (!firstTag) {
       return "Passive";
@@ -4822,7 +4808,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     return this.formatCardNameFromId(firstTag);
   }
 
-  private resolveCardImpactLines(description: string, isSkillCard: boolean): string[] {
+  private resolveCardImpactLines(description: string): string[] {
     const normalizedDescription = description.trim().replace(/\s+/g, " ");
     if (!normalizedDescription) {
       return [];
@@ -4845,15 +4831,6 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.tryPushCardImpactLine(statLines, normalizedDescription, /([+-]\d+%?)\s*hp on hit/i, (value) => `${value} HP On Hit`);
     if (statLines.length > 0) {
       return statLines.slice(0, 3);
-    }
-
-    if (isSkillCard && normalizedDescription.includes(":")) {
-      const segments = normalizedDescription
-        .split(":")
-        .map((segment) => segment.trim())
-        .filter((segment) => segment.length > 0)
-        .map((segment) => segment.replace(/\.$/, ""));
-      return segments.slice(0, 2);
     }
 
     return normalizedDescription
@@ -4883,14 +4860,9 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
 
   private resolveCardStackPresentation(
     currentStacks: number,
-    maxStacks: number,
-    isSkillCard: boolean
+    maxStacks: number
   ): Readonly<{ label: string; tone: CardOfferStackTone }> {
     if (maxStacks <= 1) {
-      if (isSkillCard) {
-        return { label: "One-time unlock", tone: "new" };
-      }
-
       return { label: "Single stack card", tone: "new" };
     }
 

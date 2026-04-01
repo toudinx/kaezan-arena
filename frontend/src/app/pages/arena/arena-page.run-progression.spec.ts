@@ -244,7 +244,6 @@ describe("ArenaPageComponent run progression", () => {
           rarityWeight: 90,
           maxStacks: 3,
           currentStacks: 1,
-          isSkillCard: false
         }
       ],
       selectedCards: []

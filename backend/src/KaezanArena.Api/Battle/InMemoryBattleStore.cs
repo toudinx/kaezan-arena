@@ -194,40 +194,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             RarityWeight: 50,
             MaxStacks: 3,
             ScalingParams: new CardScalingParams(BaseStackMultiplierPercent: 100, AdditionalStackMultiplierPercent: 85),
-            Effects: new CardEffectBundle(FlatDamageBonus: 8, GlobalCooldownReductionPercent: 20)),
-        new(
-            Id: "skill_exori",
-            Name: "Exori",
-            Description: "Unlock Exori: square AoE strike around you.",
-            Tags: [ArenaConfig.CardTagSkill, ArenaConfig.CardTagOffense],
-            RarityWeight: 80,
-            MaxStacks: 1,
-            ScalingParams: new CardScalingParams(BaseStackMultiplierPercent: 100, AdditionalStackMultiplierPercent: 100),
-            Effects: new CardEffectBundle(),
-            IsSkillCard: true,
-            SkillId: ArenaConfig.ExoriSkillId),
-        new(
-            Id: "skill_exori_mas",
-            Name: "Exori Mas",
-            Description: "Unlock Exori Mas: wide diamond AoE strike.",
-            Tags: [ArenaConfig.CardTagSkill, ArenaConfig.CardTagOffense],
-            RarityWeight: 50,
-            MaxStacks: 1,
-            ScalingParams: new CardScalingParams(BaseStackMultiplierPercent: 100, AdditionalStackMultiplierPercent: 100),
-            Effects: new CardEffectBundle(),
-            IsSkillCard: true,
-            SkillId: ArenaConfig.ExoriMasSkillId),
-        new(
-            Id: "skill_avalanche",
-            Name: "Avalanche",
-            Description: "Unlock Avalanche: place a ground AoE zone.",
-            Tags: [ArenaConfig.CardTagSkill, ArenaConfig.CardTagUtility],
-            RarityWeight: 40,
-            MaxStacks: 1,
-            ScalingParams: new CardScalingParams(BaseStackMultiplierPercent: 100, AdditionalStackMultiplierPercent: 100),
-            Effects: new CardEffectBundle(),
-            IsSkillCard: true,
-            SkillId: ArenaConfig.AvalancheSkillId)
+            Effects: new CardEffectBundle(FlatDamageBonus: 8, GlobalCooldownReductionPercent: 20))
     ];
     private static readonly IReadOnlyDictionary<string, CardDefinition> CardById =
         CardPool.ToDictionary(card => card.Id, StringComparer.Ordinal);
@@ -2628,15 +2595,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
 
     private static bool CanOfferCard(StoredBattle state, CardDefinition card, CardOfferSource source)
     {
-        if (card.IsSkillCard)
-        {
-            if (source == CardOfferSource.Chest)
-            {
-                return false;
-            }
-
-            return card.SkillId is not null && !state.Skills.ContainsKey(card.SkillId);
-        }
+        _ = source;
 
         var currentStacks = GetCardStackCount(state, card.Id);
         if (currentStacks >= card.MaxStacks)
@@ -2683,10 +2642,9 @@ public sealed partial class InMemoryBattleStore : IBattleStore
 
     private static bool ExceedsDistinctPassiveCap(StoredBattle state, CardDefinition card)
     {
-        if (card.IsSkillCard) return false;
-        if (GetCardStackCount(state, card.Id) > 0) return false; // already owned â€” stacking OK
+        if (GetCardStackCount(state, card.Id) > 0) return false; // already owned, stacking OK
         var distinctPassiveCount = state.SelectedCardStacks
-            .Count(kvp => kvp.Value > 0 && CardById.TryGetValue(kvp.Key, out var def) && !def.IsSkillCard);
+            .Count(kvp => kvp.Value > 0 && CardById.ContainsKey(kvp.Key));
         return distinctPassiveCount >= ArenaConfig.MaxDistinctPassiveCards;
     }
 
@@ -2749,20 +2707,6 @@ public sealed partial class InMemoryBattleStore : IBattleStore
 
     private static void ApplyCardEffects(StoredBattle state, StoredActor player, CardDefinition card, int nextStack)
     {
-        if (card.IsSkillCard && card.SkillId is not null)
-        {
-            if (!state.Skills.ContainsKey(card.SkillId))
-            {
-                state.Skills[card.SkillId] = new StoredSkill(
-                    skillId: card.SkillId,
-                    cooldownRemainingMs: 0,
-                    cooldownTotalMs: ResolveBaseSkillCooldownTotalMs(card.SkillId),
-                    level: ArenaConfig.SkillInitialLevel);
-            }
-
-            return;
-        }
-
         var previousMaxHp = player.MaxHp;
         var scaledEffects = ScaleCardEffectsForStack(card, nextStack);
 
@@ -3138,8 +3082,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             CurrentStacks: GetCardStackCount(state, card.Id),
             ScalingParams: new BattleCardScalingParamsDto(
                 BaseStackMultiplierPercent: scaling.BaseStackMultiplierPercent,
-                AdditionalStackMultiplierPercent: scaling.AdditionalStackMultiplierPercent),
-            IsSkillCard: card.IsSkillCard);
+                AdditionalStackMultiplierPercent: scaling.AdditionalStackMultiplierPercent));
     }
 
     private static string BuildMobActorId(int slotIndex)
@@ -4201,9 +4144,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         int RarityWeight,
         int MaxStacks,
         CardScalingParams ScalingParams,
-        CardEffectBundle Effects,
-        bool IsSkillCard = false,
-        string? SkillId = null);
+        CardEffectBundle Effects);
 
     private sealed record CardScalingParams(
         int BaseStackMultiplierPercent = 100,
@@ -4507,3 +4448,4 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         public int CommitTicksRemaining { get; set; }
     }
 }
+

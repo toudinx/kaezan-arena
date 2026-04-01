@@ -138,7 +138,7 @@ Bestiary delta calculation: `runStartBestiaryKills` is captured from the account
 - Heal and Guard removed from kit - survivability comes from passive cards only
 - **Left-click** a POI (chest, altar) to interact
 - **Right-click** a mob to lock it as the priority target
-- Level-up card choices offer passive cards (skill upgrade cards postponed)
+- Level-up and chest card choices draw from the same passive-only card pool
 - Chest card choices offer passive cards only (max 4 distinct types, max 3 stacks per type)
 - All simulation constants are in `backend/src/KaezanArena.Api/Battle/ArenaConfig.cs`
 - Ranged weapon infrastructure is implemented and shared by all ranged weapons:

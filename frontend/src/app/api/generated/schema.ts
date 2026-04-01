@@ -871,7 +871,6 @@ export interface components {
             /** Format: int32 */
             currentStacks?: number;
             scalingParams?: components["schemas"]["BattleCardScalingParamsDto"];
-            isSkillCard?: boolean;
         };
         BattleCardScalingParamsDto: {
             /** Format: int32 */

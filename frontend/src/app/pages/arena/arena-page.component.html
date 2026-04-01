@@ -698,8 +698,6 @@
             <button
               type="button"
               class="card-offer reward-card-offer"
-              [class.card-offer--skill]="card.isSkillCard"
-              [class.card-offer--passive]="!card.isSkillCard"
               [class.reward-card-offer--selected]="pendingCardSelectionId === card.id"
               [class.reward-card-offer--dimmed]="cardChoiceRequestInFlight && pendingCardSelectionId !== null && pendingCardSelectionId !== card.id"
               (click)="onCardChoiceSelected(card.id)"
@@ -707,7 +705,7 @@
               [style.--reward-order]="cardIndex"
             >
               <span class="reward-card-offer__topline">
-                <span class="card-offer__tag">{{ card.isSkillCard ? "SKILL" : "PASSIVE" }}</span>
+                <span class="card-offer__tag">PASSIVE</span>
                 <span class="reward-card-offer__rarity" [attr.data-rarity-tier]="card.rarityTierLabel.toLowerCase()">{{ card.rarityTierLabel }}</span>
               </span>
               <span class="card-offer__name">{{ card.name }}</span>
@@ -721,7 +719,7 @@
               }
               <span class="card-offer__desc">{{ card.description }}</span>
               <span class="reward-card-offer__meta-row">
-                <span class="reward-card-offer__meta">{{ card.isSkillCard ? "Skill unlock" : "Passive reward" }}</span>
+                <span class="reward-card-offer__meta">Passive reward</span>
                 <span class="reward-card-offer__stack" [attr.data-stack-tone]="card.stackStateTone">{{ card.stackStateLabel }}</span>
               </span>
               @if (pendingCardSelectionId === card.id && cardChoiceRequestInFlight) {
