@@ -41,8 +41,11 @@ type CharacterRow = Readonly<{
   name: string;
   subtitle: string;
   playstyle: string;
-  level: number;
-  xp: number;
+  masteryLevel: number;
+  masteryXp: number;
+  masteryXpForCurrentLevel: number;
+  masteryXpRequiredForNextLevel: number;
+  unlockedSigilSlots: number;
   isActive: boolean;
   isProvisional: boolean;
   equippedGearSlots: ReadonlyArray<CharacterGearSlotRow>;
@@ -53,7 +56,7 @@ type CharacterRow = Readonly<{
   bestiaryKillsTotal: number;
   primalCoreTotal: number;
   portrait: CharacterPortraitVisual;
-  xpProgressPercent: number;
+  masteryProgressPercent: number;
 }>;
 
 type CharacterGearSlot = "weapon";
@@ -99,7 +102,7 @@ const KAELIS_SECTION_NAV_ITEMS: ReadonlyArray<KaelisSectionNavItem> = [
   {
     id: "overview",
     label: "Overview",
-    summary: "Identity, level progress, and account-facing snapshot."
+    summary: "Identity, mastery progress, and account-facing snapshot."
   },
   {
     id: "loadout",
@@ -109,7 +112,7 @@ const KAELIS_SECTION_NAV_ITEMS: ReadonlyArray<KaelisSectionNavItem> = [
   {
     id: "skills",
     label: "Skills",
-    summary: "Passive, fixed kit, and free-slot combat context."
+    summary: "Passive, fixed kit, and ultimate-slot combat context."
   },
   {
     id: "bestiary",
@@ -120,7 +123,7 @@ const KAELIS_SECTION_NAV_ITEMS: ReadonlyArray<KaelisSectionNavItem> = [
 
 const CHARACTER_GEAR_SLOT_ORDER: readonly CharacterGearSlot[] = ["weapon"];
 const LOADOUT_SIGIL_LABELS: ReadonlyArray<string> = ["Sigil I", "Sigil II", "Sigil III", "Sigil IV", "Sigil V"];
-const FREE_SLOT_TOOLTIP = "One additional attack weapon can be chosen during each run.";
+const ULTIMATE_SLOT_TOOLTIP = "Gauge-based Ultimate that auto-fires when charged.";
 const PASSIVE_PLACEHOLDER: KaelisPassiveViewModel = {
   label: "Passive not surfaced",
   summary: "Passive metadata is not exposed by the current account catalog yet.",
@@ -141,7 +144,7 @@ export class CharactersPageComponent implements OnInit, OnDestroy {
   setActiveInFlightCharacterId: string | null = null;
   isHubTransitioning = false;
   hubTransitionKind: HubTransitionKind | null = null;
-  readonly freeSlotTooltip = FREE_SLOT_TOOLTIP;
+  readonly ultimateSlotTooltip = ULTIMATE_SLOT_TOOLTIP;
   readonly sectionNavItems = KAELIS_SECTION_NAV_ITEMS;
 
   private localSelectedCharacterId: string | null = null;
@@ -241,7 +244,7 @@ export class CharactersPageComponent implements OnInit, OnDestroy {
     return Object.values(state.characters)
       .map((character) => this.toCharacterRow(character, state))
       .sort((left, right) => {
-        const byLevel = right.level - left.level;
+        const byLevel = right.masteryLevel - left.masteryLevel;
         if (byLevel !== 0) {
           return byLevel;
         }
@@ -289,6 +292,14 @@ export class CharactersPageComponent implements OnInit, OnDestroy {
     return PASSIVE_PLACEHOLDER;
   }
 
+  get echoFragmentsBalance(): number {
+    return Math.max(0, this.accountStore.state()?.echoFragmentsBalance ?? 0);
+  }
+
+  get kaerosBalance(): number {
+    return Math.max(0, this.accountStore.state()?.kaerosBalance ?? 0);
+  }
+
   get stageLabel(): string {
     if (this.activeTab === "overview") {
       return "Overview Stage";
@@ -315,7 +326,7 @@ export class CharactersPageComponent implements OnInit, OnDestroy {
     }
 
     if (this.activeTab === "skills") {
-      return "Passive, fixed kit, and free-slot readiness in one combat lane.";
+      return "Passive, fixed kit, and ultimate-slot readiness in one combat lane.";
     }
 
     return "Species progression stage for the selected Kaelis.";
@@ -423,8 +434,11 @@ export class CharactersPageComponent implements OnInit, OnDestroy {
       characterId: character.characterId,
       displayName: name
     });
-    const xpThreshold = Math.max(1, character.level * 100);
-    const xpProgressPercent = Math.min(100, Math.max(0, (character.xp / xpThreshold) * 100));
+    const masteryXpRequiredForNextLevel = Math.max(0, character.masteryXpRequiredForNextLevel ?? 0);
+    const masteryXpForCurrentLevel = Math.max(0, character.masteryXpForCurrentLevel ?? 0);
+    const masteryProgressPercent = masteryXpRequiredForNextLevel <= 0
+      ? 100
+      : Math.min(100, Math.max(0, (masteryXpForCurrentLevel / masteryXpRequiredForNextLevel) * 100));
     const bestiaryKillsEntries = Object.entries(character.bestiaryKillsBySpecies ?? {});
     const bestiaryTrackedSpeciesCount = bestiaryKillsEntries.filter(([, kills]) => Math.max(0, kills ?? 0) > 0).length;
     const bestiaryKillsTotal = bestiaryKillsEntries.reduce((total, [, kills]) => total + Math.max(0, kills ?? 0), 0);
@@ -435,8 +449,11 @@ export class CharactersPageComponent implements OnInit, OnDestroy {
       name,
       subtitle: catalogEntry?.subtitle ?? "",
       playstyle: CHARACTER_PLAYSTYLE[character.characterId] ?? "",
-      level: character.level,
-      xp: character.xp,
+      masteryLevel: Math.max(1, character.masteryLevel ?? 1),
+      masteryXp: Math.max(0, character.masteryXp ?? 0),
+      masteryXpForCurrentLevel,
+      masteryXpRequiredForNextLevel,
+      unlockedSigilSlots: Math.max(1, Math.min(5, character.unlockedSigilSlots ?? 1)),
       isActive: account.activeCharacterId === character.characterId,
       isProvisional: catalogEntry?.isProvisional ?? false,
       equippedGearSlots: this.resolveEquippedGearSlots(character),
@@ -447,7 +464,7 @@ export class CharactersPageComponent implements OnInit, OnDestroy {
       bestiaryKillsTotal,
       primalCoreTotal,
       portrait,
-      xpProgressPercent
+      masteryProgressPercent
     };
   }
 

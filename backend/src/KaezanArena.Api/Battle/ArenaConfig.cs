@@ -162,6 +162,27 @@ public static class ArenaConfig
         public const string UltimateSkillId = "skill:ultimate";
     }
 
+    public static class MasteryConfig
+    {
+        public const int XpPerRunCompleted = 100;
+        public const int XpPerKill = 2;
+        public const int XpRequiredPerLevelMultiplier = 120;
+        public const int XpRequiredPerLevelBase = 80;
+        public const int MasteryLevelCap = 50;
+        public const int MilestoneLevelInterval = 10;
+        public const int InitialUnlockedSigilSlots = 1;
+        public const int MaxUnlockedSigilSlots = 5;
+
+        // Milestone rewards per milestone index (0 = level 10, 1 = level 20, etc.)
+        public static readonly int[] KaerosRewardPerMilestone = [30, 40, 50, 60, 100];
+        public static readonly int[] EchoFragmentsRewardPerMilestone = [200, 350, 500, 700, 1000];
+        public static readonly int[] SigilSlotsUnlockedPerMilestone = [2, 3, 4, 5, 5];
+
+        // Barrier materials
+        public const string HollowEssenceId = "material:hollow_essence";
+        public const int HollowEssenceCostForMilestone1 = 20; // 10 -> 11
+    }
+
     #region Player Class
     public const int KinaReflectPercent = 20;
     public const int KinaRangedReflectMultiplier = 2;

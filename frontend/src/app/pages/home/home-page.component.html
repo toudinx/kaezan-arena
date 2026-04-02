@@ -38,11 +38,11 @@
 
           <div class="hub-char__xp">
             <div class="hub-char__xp-header">
-              <span>Level {{ activeCharacter?.level ?? 0 }}</span>
-              <span>{{ activeCharacter?.xp ?? 0 }} XP</span>
+              <span>Mastery {{ activeCharacter?.masteryLevel ?? 0 }}</span>
+              <span>{{ activeCharacter?.masteryXpForCurrentLevel ?? 0 }} / {{ activeCharacter?.masteryXpRequiredForNextLevel ?? 0 }} XP</span>
             </div>
             <div class="hub-char__xp-track">
-              <div class="hub-char__xp-fill" [style.width.%]="activeCharacterXpProgressPercent"></div>
+              <div class="hub-char__xp-fill" [style.width.%]="activeCharacterMasteryProgressPercent"></div>
             </div>
           </div>
 
@@ -66,10 +66,10 @@
           </div>
 
           <div class="hub-char__section">
-            <p class="hub-char__section-title">Rune Slot</p>
+            <p class="hub-char__section-title">Ultimate Slot</p>
             <div class="hub-char__rune-slot">
               <span class="hub-char__rune-lock" aria-hidden="true">&#x2B21;</span>
-              <span class="hub-char__rune-label">Locked</span>
+              <span class="hub-char__rune-label">Auto when charged</span>
             </div>
           </div>
 
@@ -170,6 +170,11 @@
           <p class="hub-echo__label">Echo Fragments</p>
           <p class="hub-echo__value">{{ echoFragmentsBalance }}</p>
           <p class="hub-echo__sublabel">Fragmentos de Eco</p>
+        </div>
+        <div class="hub-echo">
+          <p class="hub-echo__label">Kaeros</p>
+          <p class="hub-echo__value">{{ kaerosBalance }}</p>
+          <p class="hub-echo__sublabel">Mastery currency</p>
         </div>
 
         <div class="hub-bestiary">

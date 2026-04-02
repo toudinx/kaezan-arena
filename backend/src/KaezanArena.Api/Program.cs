@@ -185,7 +185,6 @@ builder.Services.AddSwaggerGen(options =>
         return null;
     });
 });
-builder.Services.AddSingleton<IBattleStore>(_ => new InMemoryBattleStore(resolvedStepDeltaMs));
 builder.Services.AddSingleton<IAccountStatePersistence>(
     serviceProvider =>
     {
@@ -200,6 +199,10 @@ builder.Services.AddSingleton<IAccountStatePersistence>(
         return new JsonFileAccountStatePersistence(resolvedStoragePath);
     });
 builder.Services.AddSingleton<IAccountStateStore, InMemoryAccountStateStore>();
+builder.Services.AddSingleton<IBattleStore>(serviceProvider =>
+    new InMemoryBattleStore(
+        resolvedStepDeltaMs,
+        serviceProvider.GetRequiredService<IAccountStateStore>()));
 builder.Services.AddScoped<ITileAoeFxPlanner, TileAoeFxPlanner>();
 
 var app = builder.Build();

@@ -25,8 +25,11 @@ describe("BackpackWindowComponent", () => {
     const character: CharacterState = {
       characterId: "char-01",
       name: "Kaelis",
-      level: 13,
-      xp: 1500,
+      masteryLevel: 13,
+      masteryXp: 1500,
+      masteryXpForCurrentLevel: 0,
+      masteryXpRequiredForNextLevel: 1640,
+      unlockedSigilSlots: 2,
       equipment: {
         weaponInstanceId: null,
         armorInstanceId: null,

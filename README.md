@@ -125,6 +125,9 @@ Bestiary delta calculation: `runStartBestiaryKills` is captured from the account
 
 - Player is fixed at the center tile (3,3) - no WASD movement
 - All weapons fire automatically via the assist system - no manual casting
+- Character progression uses Mastery (Mastery Level + Mastery XP), earned from run completion and kills
+- Mastery milestones every 10 levels grant Kaeros, Echo Fragments, and additional Sigil slots (up to 5)
+- The first mastery barrier is at level 10: progression to level 11 requires spending Hollow Essence
 - Each character has a **fixed 3-slot weapon kit** + **1 Ultimate slot**
   - Kina kit: Exori Min + Exori + Exori Mas (fixed, unchanged)
   - Ranged prototype kit: Sigil Bolt + Shotgun + Void Ricochet (fixed)

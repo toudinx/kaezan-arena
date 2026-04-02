@@ -47,12 +47,12 @@ export class BackpackDrawerComponent implements OnInit, OnChanges {
     return this.activeCharacter?.name ?? "No active character";
   }
 
-  get activeCharacterLevel(): number {
-    return Math.max(0, this.activeCharacter?.level ?? 0);
+  get activeCharacterMasteryLevel(): number {
+    return Math.max(0, this.activeCharacter?.masteryLevel ?? 0);
   }
 
-  get activeCharacterXp(): number {
-    return Math.max(0, this.activeCharacter?.xp ?? 0);
+  get activeCharacterMasteryXp(): number {
+    return Math.max(0, this.activeCharacter?.masteryXp ?? 0);
   }
 
   get echoFragmentsBalance(): number {

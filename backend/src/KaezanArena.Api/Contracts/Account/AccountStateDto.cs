@@ -5,13 +5,17 @@ public sealed record AccountStateDto(
     string ActiveCharacterId,
     int Version,
     long EchoFragmentsBalance,
+    long KaerosBalance,
     IReadOnlyDictionary<string, CharacterStateDto> Characters);
 
 public sealed record CharacterStateDto(
     string CharacterId,
     string Name,
-    int Level,
-    long Xp,
+    int MasteryLevel,
+    long MasteryXp,
+    int MasteryXpForCurrentLevel,
+    int MasteryXpRequiredForNextLevel,
+    int UnlockedSigilSlots,
     CharacterInventoryDto Inventory,
     CharacterEquipmentDto Equipment,
     IReadOnlyDictionary<string, int> BestiaryKillsBySpecies,

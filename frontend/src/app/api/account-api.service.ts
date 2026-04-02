@@ -21,8 +21,11 @@ export interface CharacterEquipment {
 export interface CharacterState {
   characterId: string;
   name: string;
-  level: number;
-  xp: number;
+  masteryLevel: number;
+  masteryXp: number;
+  masteryXpForCurrentLevel: number;
+  masteryXpRequiredForNextLevel: number;
+  unlockedSigilSlots: number;
   inventory: CharacterInventory;
   equipment: CharacterEquipment;
   bestiaryKillsBySpecies: Record<string, number>;
@@ -34,6 +37,7 @@ export interface AccountState {
   activeCharacterId: string;
   version: number;
   echoFragmentsBalance: number;
+  kaerosBalance: number;
   characters: Record<string, CharacterState>;
 }
 
@@ -153,6 +157,15 @@ export class AccountApiService {
       "/api/v1/account/active-character",
       { accountId, characterId },
       "Set active character"
+    );
+  }
+
+  async spendHollowEssenceBarrier(accountId: string, characterId: string): Promise<AccountState> {
+    const encodedAccountId = encodeURIComponent(accountId.trim());
+    return this.postJson<{ characterId: string }, AccountState>(
+      `/api/v1/account/spend-hollow-essence-barrier?accountId=${encodedAccountId}`,
+      { characterId },
+      "Spend Hollow Essence barrier"
     );
   }
 

@@ -123,6 +123,22 @@ export class AccountStore {
     }
   }
 
+  async spendHollowEssenceBarrier(characterId: string): Promise<AccountState> {
+    const normalizedCharacterId = this.normalizeRequired(characterId, "Character ID");
+    const accountId = this.session.accountId();
+    this.errorSignal.set(null);
+
+    try {
+      const updated = await this.accountApi.spendHollowEssenceBarrier(accountId, normalizedCharacterId);
+      this.stateSignal.set(this.normalizeAccountState(updated));
+      this.syncSessionFromAccount(updated);
+      return updated;
+    } catch (error) {
+      this.errorSignal.set(this.stringifyError(error));
+      throw error;
+    }
+  }
+
   async equipItem(
     characterId: string,
     slot: EquipmentSlot,

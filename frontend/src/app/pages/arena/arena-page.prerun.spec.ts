@@ -21,12 +21,16 @@ describe("ArenaPageComponent pre-run account loading", () => {
         activeCharacterId: "char_b",
         version: 1,
         echoFragmentsBalance: 0,
+        kaerosBalance: 0,
         characters: {
           char_a: {
             characterId: "char_a",
             name: "Ares",
-            level: 3,
-            xp: 210,
+            masteryLevel: 3,
+            masteryXp: 210,
+            masteryXpForCurrentLevel: 10,
+            masteryXpRequiredForNextLevel: 440,
+            unlockedSigilSlots: 1,
             equipment: { weaponInstanceId: "wpn_a" },
             inventory: {
               materialStacks: {},
@@ -40,8 +44,11 @@ describe("ArenaPageComponent pre-run account loading", () => {
           char_b: {
             characterId: "char_b",
             name: "Zeda",
-            level: 5,
-            xp: 540,
+            masteryLevel: 5,
+            masteryXp: 540,
+            masteryXpForCurrentLevel: 40,
+            masteryXpRequiredForNextLevel: 680,
+            unlockedSigilSlots: 1,
             equipment: { weaponInstanceId: "wpn_b" },
             inventory: {
               materialStacks: {},
@@ -79,12 +86,16 @@ describe("ArenaPageComponent pre-run account loading", () => {
         activeCharacterId: "char_active",
         version: 1,
         echoFragmentsBalance: 0,
+        kaerosBalance: 0,
         characters: {
           char_active: {
             characterId: "char_active",
             name: "Kina",
-            level: 7,
-            xp: 1337,
+            masteryLevel: 7,
+            masteryXp: 1337,
+            masteryXpForCurrentLevel: 97,
+            masteryXpRequiredForNextLevel: 920,
+            unlockedSigilSlots: 1,
             equipment: {},
             inventory: { materialStacks: {}, equipmentInstances: {} },
             bestiaryKillsBySpecies: {},
@@ -110,6 +121,7 @@ describe("ArenaPageComponent pre-run account loading", () => {
         activeCharacterId: "",
         version: 1,
         echoFragmentsBalance: 0,
+        kaerosBalance: 0,
         characters: {}
       },
       characterCatalog: [],

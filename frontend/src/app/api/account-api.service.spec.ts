@@ -51,6 +51,7 @@ function buildAccountStateResponse(): AccountStateResponse {
       activeCharacterId: "char-1",
       version: 1,
       echoFragmentsBalance: 0,
+      kaerosBalance: 0,
       characters: {}
     },
     characterCatalog: [],
@@ -63,8 +64,11 @@ function buildCharacterState(): CharacterState {
   return {
     characterId: "char-1",
     name: "Kaelis",
-    level: 1,
-    xp: 0,
+    masteryLevel: 1,
+    masteryXp: 0,
+    masteryXpForCurrentLevel: 0,
+    masteryXpRequiredForNextLevel: 200,
+    unlockedSigilSlots: 1,
     inventory: {
       materialStacks: {},
       equipmentInstances: {}

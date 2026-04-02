@@ -151,15 +151,24 @@ export class HomePageComponent implements OnInit {
     );
   }
 
-  get activeCharacterXpProgressPercent(): number {
+  get activeCharacterMasteryProgressPercent(): number {
     const char = this.activeCharacter;
     if (!char) return 0;
-    const threshold = Math.max(1, char.level * 100);
-    return Math.min(100, Math.max(0, (char.xp / threshold) * 100));
+    const required = Math.max(0, char.masteryXpRequiredForNextLevel ?? 0);
+    const current = Math.max(0, char.masteryXpForCurrentLevel ?? 0);
+    if (required <= 0) {
+      return 100;
+    }
+
+    return Math.min(100, Math.max(0, (current / required) * 100));
   }
 
   get echoFragmentsBalance(): number {
     return Math.max(0, this.accountStore.state()?.echoFragmentsBalance ?? 0);
+  }
+
+  get kaerosBalance(): number {
+    return Math.max(0, this.accountStore.state()?.kaerosBalance ?? 0);
   }
 
   get equippedWeaponName(): string {

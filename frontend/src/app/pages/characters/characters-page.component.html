@@ -2,6 +2,7 @@
   <header class="characters-shell__header">
     <div>
       <h1>Kaelis Hub</h1>
+      <p class="detail-note">Echo {{ echoFragmentsBalance }} | Kaeros {{ kaerosBalance }}</p>
     </div>
   </header>
 
@@ -184,25 +185,29 @@
                 <h3>Character Stats</h3>
                 <div class="stats-grid">
                   <article class="stats-cell">
-                    <span>Level</span>
-                    <strong>{{ selectedCharacter.level }}</strong>
+                    <span>Mastery Level</span>
+                    <strong>{{ selectedCharacter.masteryLevel }}</strong>
                   </article>
                   <article class="stats-cell">
-                    <span>XP</span>
-                    <strong>{{ selectedCharacter.xp }}</strong>
+                    <span>Total Mastery XP</span>
+                    <strong>{{ selectedCharacter.masteryXp }}</strong>
                   </article>
                   <article class="stats-cell">
                     <span>Status</span>
                     <strong>{{ selectedCharacter.isActive ? "Active" : "Standby" }}</strong>
                   </article>
+                  <article class="stats-cell">
+                    <span>Sigil Slots</span>
+                    <strong>{{ selectedCharacter.unlockedSigilSlots }} / 5</strong>
+                  </article>
                 </div>
                 <div class="stats-xp">
                   <div class="stats-xp__head">
-                    <span>Level {{ selectedCharacter.level }}</span>
-                    <span>{{ selectedCharacter.xp }} XP</span>
+                    <span>Mastery {{ selectedCharacter.masteryLevel }}</span>
+                    <span>{{ selectedCharacter.masteryXpForCurrentLevel }} / {{ selectedCharacter.masteryXpRequiredForNextLevel }} XP</span>
                   </div>
                   <div class="stats-xp__track">
-                    <div class="stats-xp__fill" [style.width.%]="selectedCharacter.xpProgressPercent"></div>
+                    <div class="stats-xp__fill" [style.width.%]="selectedCharacter.masteryProgressPercent"></div>
                   </div>
                 </div>
               </section>
@@ -296,7 +301,7 @@
 
             @if (activeTab === "skills") {
               <section class="detail-block detail-block--skills">
-                <h3>Passive / Fixed Kit / Free Slot</h3>
+                <h3>Passive / Fixed Kit / Ultimate Slot</h3>
                 <article class="passive-card quick-tip" [attr.data-tooltip]="selectedKaelisPassive.tooltip" [class.passive-card--placeholder]="selectedKaelisPassive.isPlaceholder">
                   <div class="passive-card__head">
                     <strong>{{ selectedKaelisPassive.label }}</strong>
@@ -322,11 +327,11 @@
                   }
                 </div>
 
-                <article class="free-slot quick-tip" [attr.data-tooltip]="freeSlotTooltip">
+                <article class="free-slot quick-tip" [attr.data-tooltip]="ultimateSlotTooltip">
                   <span class="free-slot__icon" aria-hidden="true">&#x2B21;</span>
                   <div>
-                    <p class="free-slot__title">Free Slot</p>
-                    <p class="free-slot__hint">Configured during run card choice.</p>
+                    <p class="free-slot__title">Ultimate Slot</p>
+                    <p class="free-slot__hint">Fires automatically when the gauge is full.</p>
                   </div>
                 </article>
                 <p class="detail-note">Fixed kit labels are normalized for readability and keep tooltip details one hover away.</p>

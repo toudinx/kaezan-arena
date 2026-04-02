@@ -728,6 +728,8 @@ export interface components {
             version?: number;
             /** Format: int64 */
             echoFragmentsBalance?: number;
+            /** Format: int64 */
+            kaerosBalance?: number;
             characters?: {
                 [key: string]: components["schemas"]["CharacterStateDto"];
             } | null;
@@ -1224,9 +1226,15 @@ export interface components {
             characterId?: string | null;
             name?: string | null;
             /** Format: int32 */
-            level?: number;
+            masteryLevel?: number;
             /** Format: int64 */
-            xp?: number;
+            masteryXp?: number;
+            /** Format: int32 */
+            masteryXpForCurrentLevel?: number;
+            /** Format: int32 */
+            masteryXpRequiredForNextLevel?: number;
+            /** Format: int32 */
+            unlockedSigilSlots?: number;
             inventory?: components["schemas"]["CharacterInventoryDto"];
             equipment?: components["schemas"]["CharacterEquipmentDto"];
             bestiaryKillsBySpecies?: {

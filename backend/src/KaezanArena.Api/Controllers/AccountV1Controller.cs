@@ -255,6 +255,33 @@ public sealed class AccountV1Controller : ControllerBase
         }
     }
 
+    [HttpPost("spend-hollow-essence-barrier")]
+    public ActionResult<AccountStateDto> SpendHollowEssenceBarrier(
+        [FromBody] SpendHollowEssenceBarrierRequestDto request,
+        [FromQuery] string? accountId)
+    {
+        if (request is null)
+        {
+            return BadRequest(BuildValidationError("request body is required"));
+        }
+
+        if (string.IsNullOrWhiteSpace(request.CharacterId))
+        {
+            return BadRequest(BuildValidationError("characterId is required"));
+        }
+
+        var normalizedAccountId = string.IsNullOrWhiteSpace(accountId) ? "dev_account" : accountId.Trim();
+        var result = _accountStateStore.SpendHollowEssenceForMilestoneBarrier(
+            accountId: normalizedAccountId,
+            characterId: request.CharacterId.Trim());
+        if (!result.Success)
+        {
+            return BadRequest(BuildValidationError(result.FailureReason ?? "Unable to spend Hollow Essence barrier."));
+        }
+
+        return Ok(ToAccountDto(result.Account));
+    }
+
     private ApiErrorDto BuildValidationError(string message)
     {
         return new ApiErrorDto(
@@ -276,6 +303,7 @@ public sealed class AccountV1Controller : ControllerBase
             ActiveCharacterId: account.ActiveCharacterId,
             Version: account.Version,
             EchoFragmentsBalance: account.EchoFragmentsBalance,
+            KaerosBalance: account.KaerosBalance,
             Characters: characters);
     }
 
@@ -296,8 +324,11 @@ public sealed class AccountV1Controller : ControllerBase
         return new CharacterStateDto(
             CharacterId: character.CharacterId,
             Name: character.Name,
-            Level: character.Level,
-            Xp: character.Xp,
+            MasteryLevel: character.MasteryLevel,
+            MasteryXp: character.MasteryXp,
+            MasteryXpForCurrentLevel: ResolveMasteryXpForCurrentLevel(character),
+            MasteryXpRequiredForNextLevel: ResolveMasteryXpRequiredForNextLevel(character),
+            UnlockedSigilSlots: character.UnlockedSigilSlots,
             Inventory: new CharacterInventoryDto(
                 MaterialStacks: materialStacks,
                 EquipmentInstances: equipmentInstances),
@@ -305,6 +336,55 @@ public sealed class AccountV1Controller : ControllerBase
                 WeaponInstanceId: character.Equipment.WeaponInstanceId),
             BestiaryKillsBySpecies: ToSortedSpeciesCount(character.BestiaryKillsBySpecies),
             PrimalCoreBySpecies: ToSortedSpeciesCount(character.PrimalCoreBySpecies));
+    }
+
+    private static int ResolveMasteryXpForCurrentLevel(CharacterState character)
+    {
+        var masteryLevel = Math.Clamp(character.MasteryLevel, 1, ArenaConfig.MasteryConfig.MasteryLevelCap);
+        if (masteryLevel >= ArenaConfig.MasteryConfig.MasteryLevelCap)
+        {
+            return 0;
+        }
+
+        var levelStartXp = ResolveTotalXpRequiredToReachLevel(masteryLevel);
+        var xpInLevel = Math.Max(0L, character.MasteryXp - levelStartXp);
+        var requiredForNextLevel = ResolveMasteryXpRequiredForNextLevel(character);
+        if (requiredForNextLevel <= 0)
+        {
+            return 0;
+        }
+
+        return (int)Math.Min(requiredForNextLevel, xpInLevel);
+    }
+
+    private static int ResolveMasteryXpRequiredForNextLevel(CharacterState character)
+    {
+        var masteryLevel = Math.Clamp(character.MasteryLevel, 1, ArenaConfig.MasteryConfig.MasteryLevelCap);
+        if (masteryLevel >= ArenaConfig.MasteryConfig.MasteryLevelCap)
+        {
+            return 0;
+        }
+
+        return ResolveMasteryXpRequiredForLevel(masteryLevel);
+    }
+
+    private static long ResolveTotalXpRequiredToReachLevel(int targetLevelInclusive)
+    {
+        var cappedTargetLevel = Math.Clamp(targetLevelInclusive, 1, ArenaConfig.MasteryConfig.MasteryLevelCap);
+        long total = 0;
+        for (var level = 1; level < cappedTargetLevel; level += 1)
+        {
+            total += ResolveMasteryXpRequiredForLevel(level);
+        }
+
+        return total;
+    }
+
+    private static int ResolveMasteryXpRequiredForLevel(int level)
+    {
+        var safeLevel = Math.Max(1, level);
+        return (safeLevel * ArenaConfig.MasteryConfig.XpRequiredPerLevelMultiplier) +
+               ArenaConfig.MasteryConfig.XpRequiredPerLevelBase;
     }
 
     private static IReadOnlyDictionary<string, int> ToSortedSpeciesCount(IReadOnlyDictionary<string, int> source)

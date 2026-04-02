@@ -1,12 +1,14 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Threading;
+using KaezanArena.Api.Account;
 using KaezanArena.Api.Contracts.Battle;
 
 namespace KaezanArena.Api.Battle;
 
 public sealed partial class InMemoryBattleStore : IBattleStore
 {
+    private const string DefaultAccountId = "dev_account";
     // Deterministic simulation delta per battle step.
     private static int StepDeltaMs = ArenaConfig.DefaultStepDeltaMs;
     private static readonly int[] BestiaryRankKillThresholds = [0, 10, 30, 60, 100];
@@ -200,6 +202,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         CardPool.ToDictionary(card => card.Id, StringComparer.Ordinal);
 
     private readonly ConcurrentDictionary<string, StoredBattle> _battles = new();
+    private readonly IAccountStateStore? _accountStateStore;
     private int _sequence;
     private static readonly IReadOnlyDictionary<MobArchetype, MobArchetypeConfig> MobConfigs =
         new Dictionary<MobArchetype, MobArchetypeConfig>
@@ -254,9 +257,10 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             [MobArchetype.RangedDragon] = new RangedDragonBehavior()
         };
 
-    public InMemoryBattleStore(int? stepDeltaMs = null)
+    public InMemoryBattleStore(int? stepDeltaMs = null, IAccountStateStore? accountStateStore = null)
     {
         StepDeltaMs = ArenaConfig.NormalizeStepDeltaMs(stepDeltaMs);
+        _accountStateStore = accountStateStore;
     }
 
     public BattleSnapshot StartBattle(string arenaId, string playerId, int? seed)
@@ -340,7 +344,8 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             nextCardChoiceSequence: 1,
             replayActions: [],
             ultimateGauge: 0,
-            ultimateReady: false);
+            ultimateReady: false,
+            masteryXpAwardedAtRunEnd: false);
 
         var initialMobCap = ResolveSpawnPacingDirector(state).MaxAliveMobs;
         foreach (var slot in state.MobSlots.Values.OrderBy(value => value.SlotIndex))
@@ -372,6 +377,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
 
             if (state.IsRunEnded)
             {
+                TryAwardRunEndMasteryXp(state);
                 state.TickEventCounter = 0;
                 ValidateInvariants(state);
                 return ToSnapshot(state, [], []);
@@ -420,6 +426,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                 }
             }
 
+            TryAwardRunEndMasteryXp(state);
             ValidateInvariants(state);
             return ToSnapshot(state, allEvents, finalCommandResults);
         }
@@ -3012,6 +3019,39 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         return deltaX <= 1 && deltaY <= 1 && (deltaX != 0 || deltaY != 0);
     }
 
+    private void TryAwardRunEndMasteryXp(StoredBattle state)
+    {
+        if (!state.IsRunEnded || state.MasteryXpAwardedAtRunEnd)
+        {
+            return;
+        }
+
+        state.MasteryXpAwardedAtRunEnd = true;
+        if (_accountStateStore is null)
+        {
+            return;
+        }
+
+        var masteryXpAward = ArenaConfig.MasteryConfig.XpPerRunCompleted +
+                             (Math.Max(0, state.TotalKills) * ArenaConfig.MasteryConfig.XpPerKill);
+        if (masteryXpAward <= 0)
+        {
+            return;
+        }
+
+        try
+        {
+            _accountStateStore.AwardMasteryXp(
+                accountId: DefaultAccountId,
+                characterId: state.PlayerActorId,
+                xpAmount: masteryXpAward);
+        }
+        catch
+        {
+            // Keep battle completion robust even if account progression sync fails.
+        }
+    }
+
     private static StoredActor? ResolveLockedTargetMobAnyDistance(StoredBattle state)
     {
         if (string.IsNullOrWhiteSpace(state.LockedTargetEntityId))
@@ -3934,7 +3974,8 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             int nextCardChoiceSequence,
             List<BattleReplayActionDto> replayActions,
             int ultimateGauge,
-            bool ultimateReady)
+            bool ultimateReady,
+            bool masteryXpAwardedAtRunEnd)
         {
             BattleId = battleId;
             ArenaId = arenaId;
@@ -3987,6 +4028,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             ReplayActions = replayActions;
             UltimateGauge = ultimateGauge;
             UltimateReady = ultimateReady;
+            MasteryXpAwardedAtRunEnd = masteryXpAwardedAtRunEnd;
         }
 
         public object Sync { get; } = new();
@@ -4094,6 +4136,8 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         public int UltimateGauge { get; set; }
 
         public bool UltimateReady { get; set; }
+
+        public bool MasteryXpAwardedAtRunEnd { get; set; }
     }
 
     private sealed record SpawnPacingDirector(

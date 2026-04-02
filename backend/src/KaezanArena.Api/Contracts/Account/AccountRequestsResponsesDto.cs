@@ -31,3 +31,6 @@ public sealed record AwardDropsRequestDto(
 public sealed record AwardDropsResponseDto(
     IReadOnlyList<DropEventDto> Awarded,
     CharacterStateDto Character);
+
+public sealed record SpendHollowEssenceBarrierRequestDto(
+    string CharacterId);

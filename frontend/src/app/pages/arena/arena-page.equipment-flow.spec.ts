@@ -39,8 +39,11 @@ describe("ArenaPageComponent equipment flow", () => {
     return {
       characterId: "char-1",
       name: "Kaelis",
-      level: 10,
-      xp: 3000,
+      masteryLevel: 10,
+      masteryXp: 3000,
+      masteryXpForCurrentLevel: 120,
+      masteryXpRequiredForNextLevel: 1280,
+      unlockedSigilSlots: 2,
       equipment: {
         weaponInstanceId: equipment.weaponInstanceId,
         armorInstanceId: equipment.armorInstanceId,
@@ -103,6 +106,7 @@ describe("ArenaPageComponent equipment flow", () => {
       activeCharacterId: "char-1",
       version: 1,
       echoFragmentsBalance: 0,
+      kaerosBalance: 0,
       characters: {
         "char-1": before
       }
@@ -145,6 +149,7 @@ describe("ArenaPageComponent equipment flow", () => {
       activeCharacterId: "char-1",
       version: 1,
       echoFragmentsBalance: 0,
+      kaerosBalance: 0,
       characters: {
         "char-1": before
       }
@@ -180,6 +185,7 @@ describe("ArenaPageComponent equipment flow", () => {
       activeCharacterId: "char-1",
       version: 1,
       echoFragmentsBalance: 0,
+      kaerosBalance: 0,
       characters: {
         "char-1": character
       }

@@ -10,6 +10,10 @@ public interface IAccountStateStore
 
     CharacterState EquipWeapon(string accountId, string characterId, string weaponInstanceId);
 
+    AccountState AwardMasteryXp(string accountId, string characterId, int xpAmount);
+
+    SpendHollowEssenceBarrierResult SpendHollowEssenceForMilestoneBarrier(string accountId, string characterId);
+
     AwardDropsResult AwardDrops(
         string accountId,
         string characterId,

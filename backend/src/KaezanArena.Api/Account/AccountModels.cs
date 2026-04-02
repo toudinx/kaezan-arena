@@ -1,3 +1,5 @@
+using KaezanArena.Api.Battle;
+
 namespace KaezanArena.Api.Account;
 
 public enum EquipmentSlot
@@ -10,17 +12,20 @@ public sealed record AccountState(
     string ActiveCharacterId,
     int Version,
     long EchoFragmentsBalance,
-    IReadOnlyDictionary<string, CharacterState> Characters);
+    IReadOnlyDictionary<string, CharacterState> Characters,
+    long KaerosBalance = 0);
 
 public sealed record CharacterState(
     string CharacterId,
     string Name,
-    int Level,
-    long Xp,
     CharacterInventory Inventory,
     EquipmentState Equipment,
     IReadOnlyDictionary<string, int> BestiaryKillsBySpecies,
-    IReadOnlyDictionary<string, int> PrimalCoreBySpecies);
+    IReadOnlyDictionary<string, int> PrimalCoreBySpecies,
+    int MasteryLevel = 1,
+    long MasteryXp = 0,
+    int UnlockedSigilSlots = ArenaConfig.MasteryConfig.InitialUnlockedSigilSlots,
+    bool HollowEssenceBarrierCleared = false);
 
 public sealed record CharacterInventory(
     IReadOnlyDictionary<string, long> MaterialStacks,
@@ -139,6 +144,11 @@ public sealed record ItemSalvageResult(
     string SalvagedItemInstanceId,
     string SpeciesId,
     int PrimalCoreAwarded);
+
+public sealed record SpendHollowEssenceBarrierResult(
+    bool Success,
+    string? FailureReason,
+    AccountState Account);
 
 public sealed record EquipmentStatTotals(
     int Attack,

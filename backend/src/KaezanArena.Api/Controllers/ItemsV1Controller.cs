@@ -1,4 +1,5 @@
 using KaezanArena.Api.Account;
+using KaezanArena.Api.Battle;
 using KaezanArena.Api.Contracts.Account;
 using KaezanArena.Api.Contracts.Common;
 using Microsoft.AspNetCore.Mvc;
@@ -109,8 +110,11 @@ public sealed class ItemsV1Controller : ControllerBase
         return new CharacterStateDto(
             CharacterId: character.CharacterId,
             Name: character.Name,
-            Level: character.Level,
-            Xp: character.Xp,
+            MasteryLevel: character.MasteryLevel,
+            MasteryXp: character.MasteryXp,
+            MasteryXpForCurrentLevel: ResolveMasteryXpForCurrentLevel(character),
+            MasteryXpRequiredForNextLevel: ResolveMasteryXpRequiredForNextLevel(character),
+            UnlockedSigilSlots: character.UnlockedSigilSlots,
             Inventory: new CharacterInventoryDto(
                 MaterialStacks: materialStacks,
                 EquipmentInstances: equipmentInstances),
@@ -118,6 +122,55 @@ public sealed class ItemsV1Controller : ControllerBase
                 WeaponInstanceId: character.Equipment.WeaponInstanceId),
             BestiaryKillsBySpecies: ToSortedSpeciesCount(character.BestiaryKillsBySpecies),
             PrimalCoreBySpecies: ToSortedSpeciesCount(character.PrimalCoreBySpecies));
+    }
+
+    private static int ResolveMasteryXpForCurrentLevel(CharacterState character)
+    {
+        var masteryLevel = Math.Clamp(character.MasteryLevel, 1, ArenaConfig.MasteryConfig.MasteryLevelCap);
+        if (masteryLevel >= ArenaConfig.MasteryConfig.MasteryLevelCap)
+        {
+            return 0;
+        }
+
+        var levelStartXp = ResolveTotalXpRequiredToReachLevel(masteryLevel);
+        var xpInLevel = Math.Max(0L, character.MasteryXp - levelStartXp);
+        var requiredForNextLevel = ResolveMasteryXpRequiredForNextLevel(character);
+        if (requiredForNextLevel <= 0)
+        {
+            return 0;
+        }
+
+        return (int)Math.Min(requiredForNextLevel, xpInLevel);
+    }
+
+    private static int ResolveMasteryXpRequiredForNextLevel(CharacterState character)
+    {
+        var masteryLevel = Math.Clamp(character.MasteryLevel, 1, ArenaConfig.MasteryConfig.MasteryLevelCap);
+        if (masteryLevel >= ArenaConfig.MasteryConfig.MasteryLevelCap)
+        {
+            return 0;
+        }
+
+        return ResolveMasteryXpRequiredForLevel(masteryLevel);
+    }
+
+    private static long ResolveTotalXpRequiredToReachLevel(int targetLevelInclusive)
+    {
+        var cappedTargetLevel = Math.Clamp(targetLevelInclusive, 1, ArenaConfig.MasteryConfig.MasteryLevelCap);
+        long total = 0;
+        for (var level = 1; level < cappedTargetLevel; level += 1)
+        {
+            total += ResolveMasteryXpRequiredForLevel(level);
+        }
+
+        return total;
+    }
+
+    private static int ResolveMasteryXpRequiredForLevel(int level)
+    {
+        var safeLevel = Math.Max(1, level);
+        return (safeLevel * ArenaConfig.MasteryConfig.XpRequiredPerLevelMultiplier) +
+               ArenaConfig.MasteryConfig.XpRequiredPerLevelBase;
     }
 
     private static IReadOnlyDictionary<string, int> ToSortedSpeciesCount(IReadOnlyDictionary<string, int> source)

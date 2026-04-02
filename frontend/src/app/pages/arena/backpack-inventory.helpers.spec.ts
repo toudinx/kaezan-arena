@@ -6,8 +6,11 @@ describe("backpack-inventory.helpers", () => {
     return {
       characterId: "char-01",
       name: "Kaelis",
-      level: 12,
-      xp: 999,
+      masteryLevel: 12,
+      masteryXp: 999,
+      masteryXpForCurrentLevel: 0,
+      masteryXpRequiredForNextLevel: 1520,
+      unlockedSigilSlots: 2,
       equipment: {
         weaponInstanceId: "wpn-02"
       },

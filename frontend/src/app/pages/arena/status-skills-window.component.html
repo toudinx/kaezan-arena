@@ -2,8 +2,8 @@
   <header class="status-window__header">
     <div class="status-window__identity">
       <strong>{{ character?.name ?? "Unknown" }}</strong>
-      <span>Lv {{ character?.level ?? 0 }}</span>
-      <span>XP {{ character?.xp ?? 0 }}</span>
+      <span>Mastery {{ character?.masteryLevel ?? 0 }}</span>
+      <span>XP {{ character?.masteryXp ?? 0 }}</span>
     </div>
     @if (healingAmplifierActive) {
       <span class="status-window__healing-indicator" title="Healing amplifier active">+</span>

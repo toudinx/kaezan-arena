@@ -196,8 +196,8 @@ type EventFeedEntry = Readonly<{
 type PreRunCharacterViewModel = Readonly<{
   id: string;
   name: string;
-  level: number;
-  xp: number;
+  masteryLevel: number;
+  masteryXp: number;
   equippedWeaponName: string;
   isActive: boolean;
 }>;
@@ -859,8 +859,8 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     const characters = Object.values(state.characters).map((character) => ({
       id: character.characterId,
       name: character.name,
-      level: character.level,
-      xp: character.xp,
+      masteryLevel: character.masteryLevel,
+      masteryXp: character.masteryXp,
       equippedWeaponName: this.resolveEquippedWeaponName(character),
       isActive: character.characterId === state.activeCharacterId
     }));
@@ -2265,10 +2265,10 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   get selectedCharacterSummaryLabel(): string {
     const character = this.selectedPreRunCharacter;
     if (!character) {
-      return "Unknown Adventurer (Lv 0)";
+      return "Unknown Adventurer (M 0)";
     }
 
-    return `${character.name} (Lv ${character.level})`;
+    return `${character.name} (M ${character.masteryLevel})`;
   }
 
   get isSelectedCharacterActive(): boolean {
