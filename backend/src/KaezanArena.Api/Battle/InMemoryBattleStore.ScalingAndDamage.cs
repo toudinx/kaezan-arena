@@ -95,6 +95,7 @@ public sealed partial class InMemoryBattleStore
             adjusted = ApplyPercentIncrease(adjusted, ArenaConfig.EliteCommanderDamageBonusPercent);
         }
 
+        adjusted = ScaleByMultiplier(adjusted, ResolveZoneDmgMultiplier(state.ZoneIndex));
         return Math.Max(1, adjusted);
     }
 
@@ -122,11 +123,24 @@ public sealed partial class InMemoryBattleStore
     {
         var nowMs = GetElapsedMsForTick(state.Tick);
         var scaling = ResolveScalingDirectorV2(nowMs, state.RunLevel);
-        return ScaleByMultiplier(
+        var scaledHp = ScaleByMultiplier(
             config.MaxHp,
             isElite
                 ? scaling.EliteHpMult
                 : scaling.NormalHpMult);
+        return ScaleByMultiplier(scaledHp, ResolveZoneHpMultiplier(state.ZoneIndex));
+    }
+
+    private static double ResolveZoneHpMultiplier(int zoneIndex)
+    {
+        var safeZoneIndex = Math.Clamp(zoneIndex, 1, ArenaConfig.ZoneConfig.ZoneCount);
+        return ArenaConfig.ZoneConfig.ZoneHpMultiplier[safeZoneIndex - 1];
+    }
+
+    private static double ResolveZoneDmgMultiplier(int zoneIndex)
+    {
+        var safeZoneIndex = Math.Clamp(zoneIndex, 1, ArenaConfig.ZoneConfig.ZoneCount);
+        return ArenaConfig.ZoneConfig.ZoneDmgMultiplier[safeZoneIndex - 1];
     }
 
     private static ScalingDirectorV2 ResolveScalingDirectorV2(long nowMs, int runLevel)

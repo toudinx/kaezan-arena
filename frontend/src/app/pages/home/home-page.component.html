@@ -96,12 +96,34 @@
       <!-- CENTER: Enter Arena CTA + Last Run summary -->
       <main class="hub-center">
         <div class="hub-cta">
-          <a class="hub-cta__btn" routerLink="/arena">Start Run</a>
+          <div class="hub-zone-picker">
+            <p class="hub-zone-picker__label">Select Zone</p>
+            <div class="hub-zone-picker__grid">
+              @for (zone of zoneOptions; track zone.zoneIndex) {
+                <button
+                  type="button"
+                  class="hub-zone-picker__btn"
+                  [class.hub-zone-picker__btn--selected]="zone.isSelected"
+                  [class.hub-zone-picker__btn--locked]="!zone.isUnlocked"
+                  [disabled]="!zone.isUnlocked"
+                  (click)="onSelectZone(zone.zoneIndex)"
+                >
+                  <span class="hub-zone-picker__btn-title">Zone {{ zone.zoneIndex }}</span>
+                  @if (!zone.isUnlocked) {
+                    <span class="hub-zone-picker__btn-lock">Account Lv.{{ zone.unlockLevel }} required</span>
+                  }
+                </button>
+              }
+            </div>
+          </div>
+          <a class="hub-cta__btn" routerLink="/arena" [queryParams]="startRunQueryParams">Start Run</a>
           @if (hasActiveCharacter) {
             <p class="hub-cta__hint">
               <span class="hub-cta__hint-char">{{ activeCharacterName }}</span>
               <span class="hub-cta__hint-sep" aria-hidden="true"> · </span>
               <span>{{ activeCharacterKitTypeLabel }}</span>
+              <span class="hub-cta__hint-sep" aria-hidden="true"> · </span>
+              <span>Zone {{ selectedZoneIndex }}</span>
             </p>
           }
         </div>
@@ -166,15 +188,51 @@
 
       <!-- RIGHT: Progression snapshot -->
       <aside class="hub-progress">
+        <div class="hub-account-level">
+          <p class="hub-account-level__label">Account Level {{ accountLevel }}</p>
+          <p class="hub-account-level__xp">{{ accountXpProgressLabel }}</p>
+          <div class="hub-account-level__track">
+            <div class="hub-account-level__fill" [style.width.%]="accountXpProgressPercent"></div>
+          </div>
+          <p class="hub-account-level__zones">Unlocked Zones: {{ unlockedZoneCount }} / 5</p>
+        </div>
         <div class="hub-echo">
           <p class="hub-echo__label">Echo Fragments</p>
           <p class="hub-echo__value">{{ echoFragmentsBalance }}</p>
           <p class="hub-echo__sublabel">Fragmentos de Eco</p>
         </div>
-        <div class="hub-echo">
-          <p class="hub-echo__label">Kaeros</p>
+        <div class="hub-echo hub-kaeros">
+          <p class="hub-echo__label">Kaeros ⬡</p>
           <p class="hub-echo__value">{{ kaerosBalance }}</p>
           <p class="hub-echo__sublabel">Mastery currency</p>
+        </div>
+
+        <div class="hub-contracts">
+          <p class="hub-contracts__heading">Daily Contracts</p>
+          @if (dailyContracts.length > 0) {
+            <ul class="hub-contracts__list">
+              @for (contract of dailyContracts; track contract.contractId) {
+                <li class="hub-contracts__row" [class.hub-contracts__row--completed]="contract.isCompleted">
+                  <div class="hub-contracts__content">
+                    <span class="hub-contracts__desc">{{ contract.description }}</span>
+                    <span class="hub-contracts__progress">
+                      @if (contract.isCompleted) {
+                        ✓
+                      } @else if (contract.showProgress) {
+                        {{ contract.progressText }}
+                      } @else {
+                        In progress
+                      }
+                    </span>
+                  </div>
+                  <span class="hub-contracts__reward">+{{ contract.kaerosReward }} ⬡</span>
+                </li>
+              }
+            </ul>
+          } @else {
+            <p class="hub-contracts__empty">No contracts available.</p>
+          }
+          <p class="hub-contracts__reset">Resets at midnight UTC</p>
         </div>
 
         <div class="hub-bestiary">

@@ -125,12 +125,20 @@ Bestiary delta calculation: `runStartBestiaryKills` is captured from the account
 
 - Player is fixed at the center tile (3,3) - no WASD movement
 - All weapons fire automatically via the assist system - no manual casting
+- Account progression now includes Account Level + Account XP (Lv. 1-100), earned from runs and kills
+- Zone selection happens before each run (Zone 1-5), with unlock gates at Account Lv. 1/21/41/61/81
+- Zone multipliers scale mob HP and outgoing damage on top of normal run scaling
+- Daily Contracts system assigns 3 deterministic account-specific contracts per UTC day (resets at midnight UTC)
+- Kaeros is primarily earned through Daily Contracts completion (not regular kill/run baseline rewards)
+- Completing Daily Contracts also grants Account XP rewards in addition to Kaeros
 - Character progression uses Mastery (Mastery Level + Mastery XP), earned from run completion and kills
 - Mastery milestones every 10 levels grant Kaeros, Echo Fragments, and additional Sigil slots (up to 5)
 - The first mastery barrier is at level 10: progression to level 11 requires spending Hollow Essence
 - Sigils are account-wide inventory items and are equipped per character in 5 ordered slots
   - Slot tiers are fixed by level range: Hollow (1-20), Brave (21-40), Awakened (41-60), Exalted (61-80), Ascendant (81-95)
   - Slot prerequisites apply: slot N requires slot N-1 already equipped
+  - Mob kills roll Sigil drops independently at 8% per kill (species-based), currently generating Hollow-tier levels (1-20)
+  - Dropped Sigils go directly to account inventory during runs; equip/unequip remains in Characters page only
 - Each character has a **fixed 3-slot weapon kit** + **1 Ultimate slot**
   - Kina kit: Exori Min + Exori + Exori Mas (fixed, unchanged)
   - Ranged prototype kit: Sigil Bolt + Shotgun + Void Ricochet (fixed)

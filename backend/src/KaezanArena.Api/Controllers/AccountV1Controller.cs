@@ -382,8 +382,43 @@ public sealed class AccountV1Controller : ControllerBase
             Version: account.Version,
             EchoFragmentsBalance: account.EchoFragmentsBalance,
             KaerosBalance: account.KaerosBalance,
+            AccountLevel: account.AccountLevel,
+            AccountXp: account.AccountXp,
+            AccountXpForCurrentLevel: ResolveAccountXpForCurrentLevel(account),
+            AccountXpRequiredForNextLevel: ResolveAccountXpRequiredForNextLevel(account),
+            UnlockedZoneCount: ResolveUnlockedZoneCount(account.AccountLevel),
+            DailyContracts: ToDailyContractsDto(account),
             SigilInventory: sigilInventory,
             Characters: characters);
+    }
+
+    private static DailyContractsDto ToDailyContractsDto(AccountState account)
+    {
+        var todayUtc = DateOnly.FromDateTime(DateTime.UtcNow);
+        var dailyContracts = account.DailyContracts ?? new DailyContractsState(
+            AssignedDate: todayUtc,
+            Contracts: []);
+        var contractDtos = new List<ContractDto>(dailyContracts.Contracts.Count);
+        foreach (var contractState in dailyContracts.Contracts)
+        {
+            if (!DailyContractCatalog.ContractById.TryGetValue(contractState.ContractId, out var definition))
+            {
+                continue;
+            }
+
+            contractDtos.Add(new ContractDto(
+                ContractId: definition.ContractId,
+                Description: definition.Description,
+                IsCompleted: contractState.IsCompleted,
+                CurrentProgress: Math.Max(0, contractState.CurrentProgress),
+                TargetValue: Math.Max(1, definition.TargetValue),
+                KaerosReward: Math.Max(0, definition.KaerosReward),
+                Type: definition.Type));
+        }
+
+        return new DailyContractsDto(
+            AssignedDate: dailyContracts.AssignedDate,
+            Contracts: contractDtos);
     }
 
     private static CharacterStateDto ToCharacterDto(
@@ -521,6 +556,65 @@ public sealed class AccountV1Controller : ControllerBase
                ArenaConfig.MasteryConfig.XpRequiredPerLevelBase;
     }
 
+    private static int ResolveAccountXpForCurrentLevel(AccountState account)
+    {
+        var accountLevel = Math.Clamp(account.AccountLevel, 1, ArenaConfig.ZoneConfig.AccountLevelCap);
+        if (accountLevel >= ArenaConfig.ZoneConfig.AccountLevelCap)
+        {
+            return 0;
+        }
+
+        var levelStartXp = ResolveTotalAccountXpRequiredToReachLevel(accountLevel);
+        var xpInLevel = Math.Max(0L, account.AccountXp - levelStartXp);
+        var requiredForNextLevel = ResolveAccountXpRequiredForNextLevel(account);
+        if (requiredForNextLevel <= 0)
+        {
+            return 0;
+        }
+
+        return (int)Math.Min(requiredForNextLevel, xpInLevel);
+    }
+
+    private static int ResolveAccountXpRequiredForNextLevel(AccountState account)
+    {
+        var accountLevel = Math.Clamp(account.AccountLevel, 1, ArenaConfig.ZoneConfig.AccountLevelCap);
+        if (accountLevel >= ArenaConfig.ZoneConfig.AccountLevelCap)
+        {
+            return 0;
+        }
+
+        return ArenaConfig.ZoneConfig.XpRequiredForLevel(accountLevel);
+    }
+
+    private static long ResolveTotalAccountXpRequiredToReachLevel(int targetLevelInclusive)
+    {
+        var cappedTargetLevel = Math.Clamp(targetLevelInclusive, 1, ArenaConfig.ZoneConfig.AccountLevelCap);
+        long total = 0;
+        for (var level = 1; level < cappedTargetLevel; level += 1)
+        {
+            total += ArenaConfig.ZoneConfig.XpRequiredForLevel(level);
+        }
+
+        return total;
+    }
+
+    private static int ResolveUnlockedZoneCount(int accountLevel)
+    {
+        var safeLevel = Math.Max(1, accountLevel);
+        var unlocked = 1;
+        for (var index = 0; index < ArenaConfig.ZoneConfig.AccountLevelToUnlockZone.Length; index += 1)
+        {
+            if (safeLevel < ArenaConfig.ZoneConfig.AccountLevelToUnlockZone[index])
+            {
+                break;
+            }
+
+            unlocked = index + 1;
+        }
+
+        return Math.Clamp(unlocked, 1, ArenaConfig.ZoneConfig.ZoneCount);
+    }
+
     private static IReadOnlyDictionary<string, int> ToSortedSpeciesCount(IReadOnlyDictionary<string, int> source)
     {
         var sorted = new SortedDictionary<string, int>(StringComparer.Ordinal);
@@ -584,7 +678,9 @@ public sealed class AccountV1Controller : ControllerBase
             EquipmentInstanceId: dropEvent.EquipmentInstanceId,
             RewardKind: dropEvent.RewardKind,
             Species: dropEvent.Species,
-            AwardedAtUtc: dropEvent.AwardedAtUtc);
+            AwardedAtUtc: dropEvent.AwardedAtUtc,
+            SigilLevel: dropEvent.SigilLevel,
+            SlotIndex: dropEvent.SlotIndex);
     }
 
     private static OwnedEquipmentInstanceDto ToOwnedEquipmentInstanceDto(OwnedEquipmentInstance instance)

@@ -12,6 +12,10 @@ public interface IAccountStateStore
 
     AccountState AwardMasteryXp(string accountId, string characterId, int xpAmount);
 
+    AccountState AwardAccountXp(string accountId, int xpAmount);
+
+    AccountState EvaluateContractsAfterRun(string accountId, RunSummary runSummary);
+
     SpendHollowEssenceBarrierResult SpendHollowEssenceForMilestoneBarrier(string accountId, string characterId);
 
     AccountState EquipSigil(string accountId, string characterId, string sigilInstanceId);

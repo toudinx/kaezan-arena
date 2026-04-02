@@ -8,7 +8,7 @@ import {
   OnDestroy,
   ViewChild
 } from "@angular/core";
-import { Router, RouterLink } from "@angular/router";
+import { ActivatedRoute, Router, RouterLink } from "@angular/router";
 import { AssetPreloaderService } from "../../arena/assets/asset-preloader.service";
 import { AssetResolverService } from "../../arena/assets/asset-resolver.service";
 import { ArenaEngine } from "../../arena/engine/arena-engine";
@@ -266,6 +266,8 @@ const RUN_INITIAL_XP = 0;
 const RUN_LEVEL_XP_BASE = 25;
 const RUN_LEVEL_XP_INCREMENT_PER_LEVEL = 15;
 const DEFAULT_RUN_DURATION_MS = 180_000;
+const DEFAULT_ZONE_INDEX = 1;
+const MAX_ZONE_INDEX = 5;
 const EXP_CONSOLE_MAX_ENTRIES = 200;
 const EVENT_FEED_MAX_ENTRIES = 250;
 const COMBAT_DETAILS_MAX_LINES = 200;
@@ -494,6 +496,8 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   runLevel = RUN_INITIAL_LEVEL;
   runXp = RUN_INITIAL_XP;
   xpToNextLevel = this.computeRunXpToNextLevel(RUN_INITIAL_LEVEL);
+  selectedZoneIndex = DEFAULT_ZONE_INDEX;
+  activeZoneIndex = DEFAULT_ZONE_INDEX;
   lastRunRecording: RunRecording | null = null;
   isReplayInProgress = false;
   private expLogSequence = 0;
@@ -587,6 +591,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     private readonly preloader: AssetPreloaderService,
     private readonly battleApi: BattleApiService,
     private readonly router: Router,
+    private readonly route: ActivatedRoute,
     private readonly ngZone: NgZone,
     private readonly cdr: ChangeDetectorRef,
     accountApi: AccountApiService = new AccountApiService(),
@@ -684,6 +689,10 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     const selected = this.selectedCharacter ?? this.selectedPreRunCharacter;
     const name = selected?.name ?? "Unknown Adventurer";
     return `${name} (Run Lv. ${this.runLevel})`;
+  }
+
+  get currentZoneLabel(): string {
+    return `Zone ${Math.max(DEFAULT_ZONE_INDEX, this.activeZoneIndex)}`;
   }
 
   get runExpProgressLabel(): string {
@@ -917,6 +926,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   get statusTabRows(): ReadonlyArray<Readonly<{ label: string; value: string }>> {
     return [
       { label: "Run level", value: String(this.runLevel) },
+      { label: "Zone", value: this.currentZoneLabel },
       { label: "Run XP", value: `${this.runXp} / ${this.xpToNextLevel}` },
       { label: "XP to next", value: String(this.xpToNextLevel) },
       { label: "Attack", value: this.resolveStatusModifier(["attack", "atk", "power"]) },
@@ -1114,6 +1124,8 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   }
 
   async ngAfterViewInit(): Promise<void> {
+    this.selectedZoneIndex = this.resolveZoneIndexFromRoute();
+    this.activeZoneIndex = this.selectedZoneIndex;
     this.scene = this.engine.createTestScene();
     this.activeFxCount = 0;
     await this.loadAccountState();
@@ -1887,6 +1899,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.runLevel = RUN_INITIAL_LEVEL;
     this.runXp = RUN_INITIAL_XP;
     this.xpToNextLevel = this.computeRunXpToNextLevel(RUN_INITIAL_LEVEL);
+    this.activeZoneIndex = this.selectedZoneIndex;
     this.expLogSequence = 0;
     this.bootErrorMessage = "";
     this.readyPulseSkillIds = new Set<string>();
@@ -2455,6 +2468,17 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   }
 
   formatLootEntry(dropEvent: DropEvent): string {
+    if (dropEvent.rewardKind === "sigil") {
+      const speciesId = dropEvent.species?.trim() ?? "";
+      const speciesById = this.accountStore.catalogs().speciesById;
+      const speciesName = speciesId.length > 0
+        ? (speciesById[speciesId]?.displayName ?? speciesId)
+        : "Unknown";
+      const sigilLevel = Math.max(1, Math.floor(dropEvent.sigilLevel ?? 1));
+      const slotIndex = Math.max(1, Math.floor(dropEvent.slotIndex ?? 1));
+      return `+1 Sigil - ${speciesName} Lv.${sigilLevel} (Slot ${slotIndex})`;
+    }
+
     const itemName = this.resolveItemDisplayName(dropEvent.itemId);
     const quantity = Math.max(1, dropEvent.quantity ?? 1);
     return quantity > 1 ? `${itemName} x${quantity}` : itemName;
@@ -3032,7 +3056,8 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         "player_demo";
       const request: StartBattleRequest & { seedOverride?: number | null } = {
         arenaId: "arena_demo",
-        playerId
+        playerId,
+        zoneIndex: this.selectedZoneIndex
       };
       if (typeof seedOverride === "number") {
         request.seed = seedOverride;
@@ -3067,6 +3092,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         this.applyScalingTelemetryFromSnapshot(response);
         this.applyCardChoiceStateFromSnapshot(response);
         this.applyUltimateFromSnapshot(response);
+        this.applyZoneFromSnapshot(response);
         this.runResultLogger.startRun({
           battleSeed: this.currentSeed,
           stepDeltaMs: this.stepIntervalMs,
@@ -3571,6 +3597,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.applyCardChoiceStateFromSnapshot(response);
     this.updateCardChoicePresentationFromEvents(response.events);
     this.applyUltimateFromSnapshot(response);
+    this.applyZoneFromSnapshot(response);
     this.activeFxCount = this.getActiveFxCount(this.scene);
     this.appendDamageLogs(applied.damageNumbers);
     this.appendDamageConsoleLogs(applied.damageNumbers);
@@ -4524,6 +4551,18 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       ultimateGaugeMax,
       ultimateReady
     };
+  }
+
+  private applyZoneFromSnapshot(snapshot: StartBattleResponse | StepBattleResponse): void {
+    const record = snapshot as Record<string, unknown>;
+    const parsedZoneIndex = this.readNumber(record["zoneIndex"]);
+    if (typeof parsedZoneIndex !== "number" || !Number.isFinite(parsedZoneIndex)) {
+      return;
+    }
+
+    const normalizedZoneIndex = this.clampZoneIndex(parsedZoneIndex);
+    this.activeZoneIndex = normalizedZoneIndex;
+    this.selectedZoneIndex = normalizedZoneIndex;
   }
 
   private applyRunProgressFromSnapshot(snapshot: StartBattleResponse | StepBattleResponse): void {
@@ -6161,6 +6200,29 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
 
   private readString(value: unknown): string | null {
     return typeof value === "string" && value.trim().length > 0 ? value : null;
+  }
+
+  private resolveZoneIndexFromRoute(): number {
+    const queryParamMap = this.route.snapshot.queryParamMap;
+    const rawZone = queryParamMap.get("zoneIndex") ?? queryParamMap.get("zone");
+    if (!rawZone) {
+      return DEFAULT_ZONE_INDEX;
+    }
+
+    const parsedZone = Number.parseInt(rawZone, 10);
+    if (!Number.isFinite(parsedZone)) {
+      return DEFAULT_ZONE_INDEX;
+    }
+
+    return this.clampZoneIndex(parsedZone);
+  }
+
+  private clampZoneIndex(zoneIndex: number): number {
+    if (!Number.isFinite(zoneIndex)) {
+      return DEFAULT_ZONE_INDEX;
+    }
+
+    return Math.max(DEFAULT_ZONE_INDEX, Math.min(MAX_ZONE_INDEX, Math.floor(zoneIndex)));
   }
 
   private readNumber(value: unknown): number | null {

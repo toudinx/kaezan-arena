@@ -13,10 +13,58 @@ public sealed record AccountState(
     int Version,
     long EchoFragmentsBalance,
     IReadOnlyDictionary<string, CharacterState> Characters,
-    long KaerosBalance = 0)
+    long KaerosBalance = 0,
+    int AccountLevel = 1,
+    long AccountXp = 0,
+    DailyContractsState? DailyContracts = null)
 {
     public IReadOnlyDictionary<string, SigilInstance> SigilInventory { get; init; } =
         new Dictionary<string, SigilInstance>(StringComparer.Ordinal);
+}
+
+public sealed record ContractDefinition(
+    string ContractId,
+    string Type,
+    string Description,
+    int TargetValue,
+    int KaerosReward,
+    int AccountXpReward);
+
+public sealed record DailyContractState(
+    string ContractId,
+    bool IsCompleted,
+    int CurrentProgress,
+    DateOnly AssignedDate);
+
+public sealed record DailyContractsState(
+    DateOnly AssignedDate,
+    IReadOnlyList<DailyContractState> Contracts);
+
+public sealed record RunSummary(
+    int KillCount,
+    int EliteKillCount,
+    int ChestsOpened,
+    int RunLevel,
+    bool RunCompleted);
+
+public static class DailyContractCatalog
+{
+    public static readonly IReadOnlyList<ContractDefinition> ContractPool =
+    [
+        new("contract_001", ArenaConfig.ContractConfig.TypeCompleteRun, "Complete any run", 1, ArenaConfig.ContractConfig.KaerosRewardPerContract, ArenaConfig.ContractConfig.AccountXpRewardPerContract),
+        new("contract_002", ArenaConfig.ContractConfig.TypeReachRunLevel, "Complete a run above Level 6", 6, ArenaConfig.ContractConfig.KaerosRewardPerContract, ArenaConfig.ContractConfig.AccountXpRewardPerContract),
+        new("contract_003", ArenaConfig.ContractConfig.TypeReachRunLevel, "Complete a run above Level 10", 10, ArenaConfig.ContractConfig.KaerosRewardPerContract, ArenaConfig.ContractConfig.AccountXpRewardPerContract),
+        new("contract_004", ArenaConfig.ContractConfig.TypeKillCount, "Kill 20 enemies in a single run", 20, ArenaConfig.ContractConfig.KaerosRewardPerContract, ArenaConfig.ContractConfig.AccountXpRewardPerContract),
+        new("contract_005", ArenaConfig.ContractConfig.TypeKillCount, "Kill 40 enemies in a single run", 40, ArenaConfig.ContractConfig.KaerosRewardPerContract, ArenaConfig.ContractConfig.AccountXpRewardPerContract),
+        new("contract_006", ArenaConfig.ContractConfig.TypeOpenChests, "Open 2 chests in a single run", 2, ArenaConfig.ContractConfig.KaerosRewardPerContract, ArenaConfig.ContractConfig.AccountXpRewardPerContract),
+        new("contract_007", ArenaConfig.ContractConfig.TypeOpenChests, "Open 3 chests in any run", 3, ArenaConfig.ContractConfig.KaerosRewardPerContract, ArenaConfig.ContractConfig.AccountXpRewardPerContract),
+        new("contract_008", ArenaConfig.ContractConfig.TypeKillElites, "Kill 5 Elite enemies in a single run", 5, ArenaConfig.ContractConfig.KaerosRewardPerContract, ArenaConfig.ContractConfig.AccountXpRewardPerContract),
+        new("contract_009", ArenaConfig.ContractConfig.TypeKillElites, "Kill 10 Elite enemies in any run", 10, ArenaConfig.ContractConfig.KaerosRewardPerContract, ArenaConfig.ContractConfig.AccountXpRewardPerContract),
+        new("contract_010", ArenaConfig.ContractConfig.TypeCompleteRun, "Complete 2 runs in a day", 2, ArenaConfig.ContractConfig.KaerosRewardPerContract, ArenaConfig.ContractConfig.AccountXpRewardPerContract)
+    ];
+
+    public static readonly IReadOnlyDictionary<string, ContractDefinition> ContractById =
+        ContractPool.ToDictionary(contract => contract.ContractId, StringComparer.Ordinal);
 }
 
 public sealed record CharacterState(
@@ -175,7 +223,9 @@ public sealed record DropEvent(
     string? EquipmentInstanceId,
     string RewardKind,
     string? Species,
-    DateTimeOffset AwardedAtUtc);
+    DateTimeOffset AwardedAtUtc,
+    int? SigilLevel = null,
+    int? SlotIndex = null);
 
 public sealed record DropEntry(
     string ItemId,

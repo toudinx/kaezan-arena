@@ -263,10 +263,11 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         _accountStateStore = accountStateStore;
     }
 
-    public BattleSnapshot StartBattle(string arenaId, string playerId, int? seed)
+    public BattleSnapshot StartBattle(string arenaId, string playerId, int? seed, int zoneIndex = 1)
     {
         var normalizedArena = string.IsNullOrWhiteSpace(arenaId) ? "arena" : arenaId.Trim();
         var normalizedPlayer = string.IsNullOrWhiteSpace(playerId) ? "player" : playerId.Trim();
+        var normalizedZoneIndex = Math.Clamp(zoneIndex, 1, ArenaConfig.ZoneConfig.ZoneCount);
         var battleIndex = Interlocked.Increment(ref _sequence);
         var battleId = $"battle-v1-{battleIndex:D4}";
         var resolvedSeed = seed ?? GenerateSeed(battleIndex);
@@ -343,6 +344,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             cardSelectionsGranted: 0,
             nextCardChoiceSequence: 1,
             replayActions: [],
+            zoneIndex: normalizedZoneIndex,
             ultimateGauge: 0,
             ultimateReady: false,
             masteryXpAwardedAtRunEnd: false);
@@ -3032,24 +3034,64 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             return;
         }
 
+        var totalKills = ResolveTotalKillsForRunRewards(state);
         var masteryXpAward = ArenaConfig.MasteryConfig.XpPerRunCompleted +
-                             (Math.Max(0, state.TotalKills) * ArenaConfig.MasteryConfig.XpPerKill);
-        if (masteryXpAward <= 0)
+                             (totalKills * ArenaConfig.MasteryConfig.XpPerKill);
+        if (masteryXpAward > 0)
         {
-            return;
+            try
+            {
+                _accountStateStore.AwardMasteryXp(
+                    accountId: DefaultAccountId,
+                    characterId: state.PlayerActorId,
+                    xpAmount: masteryXpAward);
+            }
+            catch
+            {
+                // Keep battle completion robust even if account progression sync fails.
+            }
         }
+
+        var accountXpAward = ArenaConfig.ZoneConfig.AccountXpPerRunCompleted +
+                             (totalKills * ArenaConfig.ZoneConfig.AccountXpPerKill);
+        if (accountXpAward > 0)
+        {
+            try
+            {
+                _accountStateStore.AwardAccountXp(
+                    accountId: DefaultAccountId,
+                    xpAmount: accountXpAward);
+            }
+            catch
+            {
+                // Keep battle completion robust even if account progression sync fails.
+            }
+        }
+
+        var runCompleted = !string.Equals(
+            state.RunEndReason,
+            ArenaConfig.RunEndReasonDefeatDeath,
+            StringComparison.Ordinal);
+        var runSummary = new RunSummary(
+            KillCount: totalKills,
+            EliteKillCount: Math.Max(0, state.EliteKills),
+            ChestsOpened: Math.Max(0, state.ChestsOpened),
+            RunLevel: Math.Max(ArenaConfig.RunInitialLevel, state.RunLevel),
+            RunCompleted: runCompleted);
 
         try
         {
-            _accountStateStore.AwardMasteryXp(
-                accountId: DefaultAccountId,
-                characterId: state.PlayerActorId,
-                xpAmount: masteryXpAward);
+            _accountStateStore.EvaluateContractsAfterRun(DefaultAccountId, runSummary);
         }
         catch
         {
             // Keep battle completion robust even if account progression sync fails.
         }
+    }
+
+    private static int ResolveTotalKillsForRunRewards(StoredBattle state)
+    {
+        return Math.Max(0, state.TotalKills) + Math.Max(0, state.EliteKills);
     }
 
     private static StoredActor? ResolveLockedTargetMobAnyDistance(StoredBattle state)
@@ -3632,6 +3674,12 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                 $"Run summary counters are invalid: kills={state.TotalKills}, eliteKills={state.EliteKills}, chestsOpened={state.ChestsOpened}.");
         }
 
+        if (state.ZoneIndex < 1 || state.ZoneIndex > ArenaConfig.ZoneConfig.ZoneCount)
+        {
+            throw new InvalidOperationException(
+                $"Zone index is invalid: zoneIndex={state.ZoneIndex}, max={ArenaConfig.ZoneConfig.ZoneCount}.");
+        }
+
         if (state.UltimateGauge < 0 || state.UltimateGauge > ArenaConfig.UltimateConfig.GaugeMax)
         {
             throw new InvalidOperationException(
@@ -3973,6 +4021,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             int cardSelectionsGranted,
             int nextCardChoiceSequence,
             List<BattleReplayActionDto> replayActions,
+            int zoneIndex,
             int ultimateGauge,
             bool ultimateReady,
             bool masteryXpAwardedAtRunEnd)
@@ -4026,6 +4075,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             CardSelectionsGranted = cardSelectionsGranted;
             NextCardChoiceSequence = nextCardChoiceSequence;
             ReplayActions = replayActions;
+            ZoneIndex = zoneIndex;
             UltimateGauge = ultimateGauge;
             UltimateReady = ultimateReady;
             MasteryXpAwardedAtRunEnd = masteryXpAwardedAtRunEnd;
@@ -4132,6 +4182,8 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         public int NextCardChoiceSequence { get; set; }
 
         public List<BattleReplayActionDto> ReplayActions { get; }
+
+        public int ZoneIndex { get; set; }
 
         public int UltimateGauge { get; set; }
 

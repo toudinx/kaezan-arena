@@ -162,6 +162,30 @@ describe("loot-console.helpers", () => {
     expect(formatLootConsoleLineText(lines[0])).toBe("Loot (mob@111): +1 Echo Fragments, +1 Primal Core (Melee Brute)");
   });
 
+  it("renders sigil drops with level and slot metadata", () => {
+    const lines = groupDropEventsToLootConsoleLines(
+      [
+        createDropEvent({
+          dropEventId: "s1",
+          tick: 112,
+          sourceId: "mob.445",
+          itemId: "sigil_abc123",
+          quantity: 1,
+          rewardKind: "sigil",
+          species: "melee_brute",
+          sigilLevel: 7,
+          slotIndex: 1
+        })
+      ],
+      {}
+    );
+
+    expect(lines).toHaveLength(1);
+    expect(lines[0].items[0].displayName).toBe("Sigil - Melee Brute Lv.7 (Slot 1)");
+    expect(lootItemRarityClass(lines[0].items[0])).toBe("loot-console__item-link--sigil");
+    expect(formatLootConsoleLineText(lines[0])).toBe("Loot (mob@112): +1 Sigil - Melee Brute Lv.7 (Slot 1)");
+  });
+
   it("autoscroll helper only sticks when near bottom", () => {
     expect(shouldAutoScrollConsole(300, 200, 520)).toBe(true);
     expect(shouldAutoScrollConsole(200, 200, 520)).toBe(false);

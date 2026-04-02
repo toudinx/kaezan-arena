@@ -27,6 +27,7 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
     private const string RewardKindItem = "item";
     private const string RewardKindEchoFragments = "echo_fragments";
     private const string RewardKindPrimalCore = "primal_core";
+    private const string RewardKindSigil = "sigil";
     private const string EchoFragmentsItemId = "currency.echo_fragments";
     private const string UnknownSpeciesId = "unknown_species";
     private const string SeedSigilInstanceId = "sigil_test_001";
@@ -63,6 +64,7 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
         var account = GetOrCreateAccount(accountId);
         lock (account.Sync)
         {
+            EnsureDailyContractsRefreshed(account);
             return CloneAccountState(account.State);
         }
     }
@@ -72,6 +74,7 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
         var account = GetOrCreateAccount(accountId);
         lock (account.Sync)
         {
+            EnsureDailyContractsRefreshed(account);
             if (!account.State.Characters.ContainsKey(characterId))
             {
                 throw new InvalidOperationException($"Character '{characterId}' was not found.");
@@ -96,6 +99,7 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
         var account = GetOrCreateAccount(accountId);
         lock (account.Sync)
         {
+            EnsureDailyContractsRefreshed(account);
             var character = GetCharacterOrThrow(account.State, characterId);
             if (!character.Inventory.EquipmentInstances.TryGetValue(equipmentInstanceId, out var equipmentInstance))
             {
@@ -144,6 +148,7 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
         var account = GetOrCreateAccount(accountId);
         lock (account.Sync)
         {
+            EnsureDailyContractsRefreshed(account);
             if (string.IsNullOrWhiteSpace(sigilInstanceId))
             {
                 throw new InvalidOperationException("sigilInstanceId is required.");
@@ -206,6 +211,7 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
         var account = GetOrCreateAccount(accountId);
         lock (account.Sync)
         {
+            EnsureDailyContractsRefreshed(account);
             ValidateSigilSlotIndex(slotIndex);
             var character = GetCharacterOrThrow(account.State, characterId);
             var loadout = character.SigilLoadout;
@@ -240,6 +246,7 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
         var account = GetOrCreateAccount(accountId);
         lock (account.Sync)
         {
+            EnsureDailyContractsRefreshed(account);
             var character = GetCharacterOrThrow(account.State, characterId);
             var safeXpAmount = Math.Max(0, xpAmount);
             if (safeXpAmount <= 0)
@@ -299,11 +306,97 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
         }
     }
 
+    public AccountState AwardAccountXp(string accountId, int xpAmount)
+    {
+        var account = GetOrCreateAccount(accountId);
+        lock (account.Sync)
+        {
+            EnsureDailyContractsRefreshed(account);
+            var updatedState = ApplyAccountXpAward(account.State, xpAmount);
+            if (updatedState == account.State)
+            {
+                return CloneAccountState(account.State);
+            }
+
+            account.State = updatedState with { Version = account.State.Version + 1 };
+            PersistAccount(account);
+            return CloneAccountState(account.State);
+        }
+    }
+
+    public AccountState EvaluateContractsAfterRun(string accountId, RunSummary runSummary)
+    {
+        var account = GetOrCreateAccount(accountId);
+        lock (account.Sync)
+        {
+            EnsureDailyContractsRefreshed(account);
+            var dailyContracts = account.State.DailyContracts;
+            if (dailyContracts is null || dailyContracts.Contracts.Count == 0)
+            {
+                return CloneAccountState(account.State);
+            }
+
+            var normalizedRunSummary = NormalizeRunSummary(runSummary);
+
+            var didChangeAnyContract = false;
+            long kaerosAward = 0;
+            var accountXpAward = 0;
+            var nextContracts = new List<DailyContractState>(dailyContracts.Contracts.Count);
+            foreach (var contractState in dailyContracts.Contracts)
+            {
+                if (!DailyContractCatalog.ContractById.TryGetValue(contractState.ContractId, out var contractDefinition))
+                {
+                    nextContracts.Add(contractState);
+                    continue;
+                }
+
+                if (contractState.IsCompleted)
+                {
+                    nextContracts.Add(contractState);
+                    continue;
+                }
+
+                var updatedContractState = EvaluateContractProgress(contractState, contractDefinition, normalizedRunSummary);
+                if (updatedContractState != contractState)
+                {
+                    didChangeAnyContract = true;
+                }
+
+                if (!contractState.IsCompleted && updatedContractState.IsCompleted)
+                {
+                    kaerosAward += contractDefinition.KaerosReward;
+                    accountXpAward += contractDefinition.AccountXpReward;
+                }
+
+                nextContracts.Add(updatedContractState);
+            }
+
+            if (!didChangeAnyContract && kaerosAward <= 0 && accountXpAward <= 0)
+            {
+                return CloneAccountState(account.State);
+            }
+
+            var nextDailyContracts = new DailyContractsState(
+                AssignedDate: dailyContracts.AssignedDate,
+                Contracts: nextContracts);
+            var nextState = account.State with
+            {
+                DailyContracts = nextDailyContracts,
+                KaerosBalance = account.State.KaerosBalance + Math.Max(0, kaerosAward)
+            };
+            nextState = ApplyAccountXpAward(nextState, accountXpAward);
+            account.State = nextState with { Version = account.State.Version + 1 };
+            PersistAccount(account);
+            return CloneAccountState(account.State);
+        }
+    }
+
     public SpendHollowEssenceBarrierResult SpendHollowEssenceForMilestoneBarrier(string accountId, string characterId)
     {
         var account = GetOrCreateAccount(accountId);
         lock (account.Sync)
         {
+            EnsureDailyContractsRefreshed(account);
             var character = GetCharacterOrThrow(account.State, characterId);
             if (character.MasteryLevel != ArenaConfig.MasteryConfig.MilestoneLevelInterval)
             {
@@ -385,8 +478,10 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
         var account = GetOrCreateAccount(accountId);
         lock (account.Sync)
         {
+            EnsureDailyContractsRefreshed(account);
             var character = GetCharacterOrThrow(account.State, characterId);
             var equipmentInstances = new Dictionary<string, OwnedEquipmentInstance>(character.Inventory.EquipmentInstances, StringComparer.Ordinal);
+            var sigilInventory = new Dictionary<string, SigilInstance>(account.State.SigilInventory, StringComparer.Ordinal);
             var bestiaryKillsBySpecies = new Dictionary<string, int>(character.BestiaryKillsBySpecies, StringComparer.Ordinal);
             var primalCoreBySpecies = new Dictionary<string, int>(character.PrimalCoreBySpecies, StringComparer.Ordinal);
             var echoFragmentsBalance = account.State.EchoFragmentsBalance;
@@ -423,6 +518,7 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
                     source: source,
                     sourceKey: sourceKey,
                     equipmentInstances: equipmentInstances,
+                    sigilInventory: sigilInventory,
                     battleSeed: battleSeed,
                     killsTotalForSpecies: killsTotalForSpecies);
 
@@ -451,6 +547,10 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
                 };
 
                 account.State = UpdateAccountAfterDropAward(account.State, updatedCharacter, echoFragmentsBalance);
+                account.State = account.State with
+                {
+                    SigilInventory = new Dictionary<string, SigilInstance>(sigilInventory, StringComparer.Ordinal)
+                };
                 character = updatedCharacter;
                 PersistAccount(account);
             }
@@ -466,6 +566,7 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
         var account = GetOrCreateAccount(accountId);
         lock (account.Sync)
         {
+            EnsureDailyContractsRefreshed(account);
             if (string.IsNullOrWhiteSpace(speciesId))
             {
                 throw new InvalidOperationException("speciesId is required.");
@@ -548,6 +649,7 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
         var account = GetOrCreateAccount(accountId);
         lock (account.Sync)
         {
+            EnsureDailyContractsRefreshed(account);
             if (string.IsNullOrWhiteSpace(itemInstanceId))
             {
                 throw new InvalidOperationException("itemInstanceId is required.");
@@ -623,6 +725,7 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
         var account = GetOrCreateAccount(accountId);
         lock (account.Sync)
         {
+            EnsureDailyContractsRefreshed(account);
             if (string.IsNullOrWhiteSpace(itemInstanceId))
             {
                 throw new InvalidOperationException("itemInstanceId is required.");
@@ -691,6 +794,7 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
         DropSource source,
         string sourceKey,
         IDictionary<string, OwnedEquipmentInstance> equipmentInstances,
+        IDictionary<string, SigilInstance> sigilInventory,
         int? battleSeed,
         int killsTotalForSpecies)
     {
@@ -815,6 +919,39 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
                     RewardKind: RewardKindItem,
                     Species: ascendantSpecies,
                     AwardedAtUtc: nowUtc));
+            }
+
+            var sigilSpecies = NormalizeSpecies(source.Species);
+            if (ArenaConfig.SigilConfig.ValidSpeciesIds.Contains(sigilSpecies, StringComparer.Ordinal) &&
+                rng.Next(100) < ArenaConfig.SigilConfig.SigilDropChancePercent)
+            {
+                var sigilLevel = rng.Next(
+                    ArenaConfig.SigilConfig.HollowSigilLevelMin,
+                    ArenaConfig.SigilConfig.HollowSigilLevelMax + 1);
+                var slotIndex = SigilSlotResolver.ResolveSlotIndexForLevel(sigilLevel);
+                var sigilInstanceId = $"sigil_{Guid.NewGuid():N}";
+                sigilInventory[sigilInstanceId] = new SigilInstance(
+                    InstanceId: sigilInstanceId,
+                    SpeciesId: sigilSpecies,
+                    SigilLevel: sigilLevel,
+                    SlotIndex: slotIndex);
+
+                events.Add(new DropEvent(
+                    DropEventId: DeterministicSeed.HashId("dropevt", accountId, characterId, sourceKey, sigilInstanceId, "sigil"),
+                    AccountId: accountId,
+                    CharacterId: characterId,
+                    BattleId: battleId,
+                    Tick: source.Tick,
+                    SourceType: normalizedSourceType,
+                    SourceId: source.SourceId,
+                    ItemId: sigilInstanceId,
+                    Quantity: 1,
+                    EquipmentInstanceId: null,
+                    RewardKind: RewardKindSigil,
+                    Species: sigilSpecies,
+                    AwardedAtUtc: nowUtc,
+                    SigilLevel: sigilLevel,
+                    SlotIndex: slotIndex));
             }
         }
 
@@ -960,6 +1097,147 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
         return IsMobSourceType(sourceType) ? EchoFragmentsPerMobKill : 0;
     }
 
+    private void EnsureDailyContractsRefreshed(StoredAccount account)
+    {
+        var todayUtc = DateOnly.FromDateTime(DateTime.UtcNow);
+        if (account.State.DailyContracts is not null &&
+            account.State.DailyContracts.AssignedDate >= todayUtc)
+        {
+            return;
+        }
+
+        account.State = account.State with
+        {
+            DailyContracts = BuildDailyContractsState(account.State.AccountId, todayUtc),
+            Version = account.State.Version + 1
+        };
+        PersistAccount(account);
+    }
+
+    private static DailyContractsState BuildDailyContractsState(string accountId, DateOnly assignedDate)
+    {
+        var pool = DailyContractCatalog.ContractPool;
+        var contractCount = Math.Min(ArenaConfig.ContractConfig.DailyContractCount, pool.Count);
+        var normalizedAccountId = string.IsNullOrWhiteSpace(accountId) ? "dev_account" : accountId.Trim();
+        var rngSeed = DeterministicSeed.FromParts(
+            "daily_contracts",
+            normalizedAccountId,
+            assignedDate.ToString("yyyy-MM-dd"));
+        var rng = new Random(rngSeed);
+        var randomizedPool = pool
+            .OrderBy(_ => rng.Next())
+            .Take(contractCount)
+            .Select(definition => new DailyContractState(
+                ContractId: definition.ContractId,
+                IsCompleted: false,
+                CurrentProgress: 0,
+                AssignedDate: assignedDate))
+            .ToList();
+
+        return new DailyContractsState(
+            AssignedDate: assignedDate,
+            Contracts: randomizedPool);
+    }
+
+    private static RunSummary NormalizeRunSummary(RunSummary runSummary)
+    {
+        return new RunSummary(
+            KillCount: Math.Max(0, runSummary.KillCount),
+            EliteKillCount: Math.Max(0, runSummary.EliteKillCount),
+            ChestsOpened: Math.Max(0, runSummary.ChestsOpened),
+            RunLevel: Math.Max(0, runSummary.RunLevel),
+            RunCompleted: runSummary.RunCompleted);
+    }
+
+    private static DailyContractState EvaluateContractProgress(
+        DailyContractState contractState,
+        ContractDefinition definition,
+        RunSummary runSummary)
+    {
+        var targetValue = Math.Max(1, definition.TargetValue);
+        var currentProgress = Math.Max(0, contractState.CurrentProgress);
+        var isCompleted = contractState.IsCompleted;
+
+        switch (definition.Type)
+        {
+            case ArenaConfig.ContractConfig.TypeCompleteRun:
+                if (runSummary.RunCompleted)
+                {
+                    currentProgress += 1;
+                    isCompleted = currentProgress >= targetValue;
+                }
+
+                break;
+
+            case ArenaConfig.ContractConfig.TypeReachRunLevel:
+                if (runSummary.RunCompleted)
+                {
+                    currentProgress = Math.Max(currentProgress, runSummary.RunLevel);
+                    isCompleted = currentProgress >= targetValue;
+                }
+
+                break;
+
+            case ArenaConfig.ContractConfig.TypeKillCount:
+                currentProgress += runSummary.KillCount;
+                isCompleted = currentProgress >= targetValue;
+                break;
+
+            case ArenaConfig.ContractConfig.TypeOpenChests:
+                currentProgress += runSummary.ChestsOpened;
+                isCompleted = currentProgress >= targetValue;
+                break;
+
+            case ArenaConfig.ContractConfig.TypeKillElites:
+                currentProgress += runSummary.EliteKillCount;
+                isCompleted = currentProgress >= targetValue;
+                break;
+        }
+
+        var normalizedProgress = isCompleted
+            ? Math.Max(targetValue, currentProgress)
+            : currentProgress;
+        return contractState with
+        {
+            IsCompleted = isCompleted,
+            CurrentProgress = normalizedProgress
+        };
+    }
+
+    private static AccountState ApplyAccountXpAward(AccountState state, int xpAmount)
+    {
+        var safeXpAmount = Math.Max(0, xpAmount);
+        if (safeXpAmount == 0)
+        {
+            return state;
+        }
+
+        var currentAccountXp = Math.Max(0L, state.AccountXp);
+        long nextAccountXp;
+        try
+        {
+            nextAccountXp = checked(currentAccountXp + safeXpAmount);
+        }
+        catch (OverflowException)
+        {
+            nextAccountXp = long.MaxValue;
+        }
+
+        var accountXpAtCap = ResolveTotalAccountXpRequiredToReachLevel(ArenaConfig.ZoneConfig.AccountLevelCap);
+        var cappedAccountXp = Math.Min(nextAccountXp, accountXpAtCap);
+        var nextAccountLevel = ResolveAccountLevelFromTotalXp(cappedAccountXp);
+        if (cappedAccountXp == state.AccountXp && nextAccountLevel == state.AccountLevel)
+        {
+            return state;
+        }
+
+        return state with
+        {
+            AccountXp = cappedAccountXp,
+            AccountLevel = nextAccountLevel
+        };
+    }
+
     private static long ResolveTotalXpRequiredToReachLevel(int targetLevelInclusive)
     {
         var cappedTargetLevel = Math.Clamp(
@@ -997,6 +1275,43 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
             }
 
             var requiredXp = ResolveMasteryXpRequiredForLevel(level);
+            if (remainingXp < requiredXp)
+            {
+                break;
+            }
+
+            remainingXp -= requiredXp;
+            level += 1;
+        }
+
+        return Math.Clamp(level, 1, levelCap);
+    }
+
+    private static long ResolveTotalAccountXpRequiredToReachLevel(int targetLevelInclusive)
+    {
+        var cappedTargetLevel = Math.Clamp(
+            targetLevelInclusive,
+            1,
+            ArenaConfig.ZoneConfig.AccountLevelCap);
+        long total = 0;
+        for (var level = 1; level < cappedTargetLevel; level += 1)
+        {
+            total += ArenaConfig.ZoneConfig.XpRequiredForLevel(level);
+        }
+
+        return total;
+    }
+
+    private static int ResolveAccountLevelFromTotalXp(long totalXp)
+    {
+        var safeXp = Math.Max(0L, totalXp);
+        var level = 1;
+        var remainingXp = safeXp;
+        var levelCap = ArenaConfig.ZoneConfig.AccountLevelCap;
+
+        while (level < levelCap)
+        {
+            var requiredXp = ArenaConfig.ZoneConfig.XpRequiredForLevel(level);
             if (remainingXp < requiredXp)
             {
                 break;
@@ -1406,6 +1721,8 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
             Version: 1,
             EchoFragmentsBalance: initialEchoFragments,
             KaerosBalance: 0L,
+            AccountLevel: 1,
+            AccountXp: 0L,
             Characters: new Dictionary<string, CharacterState>(StringComparer.Ordinal)
             {
                 [kaelisOneId] = kaelisOne with
@@ -1434,10 +1751,21 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
             sigilInventory[instanceId] = sigil;
         }
 
+        DailyContractsState? clonedDailyContracts = null;
+        if (state.DailyContracts is not null)
+        {
+            clonedDailyContracts = new DailyContractsState(
+                AssignedDate: state.DailyContracts.AssignedDate,
+                Contracts: state.DailyContracts.Contracts
+                    .Select(contract => contract with { })
+                    .ToList());
+        }
+
         return state with
         {
             Characters = characters,
-            SigilInventory = sigilInventory
+            SigilInventory = sigilInventory,
+            DailyContracts = clonedDailyContracts
         };
     }
 

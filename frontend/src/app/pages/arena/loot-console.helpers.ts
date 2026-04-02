@@ -1,6 +1,6 @@
 import type { DropEvent, ItemDefinition } from "../../api/account-api.service";
 
-export type LootConsoleRarity = "common" | "rare" | "epic" | "legendary" | "ascendant" | "other";
+export type LootConsoleRarity = "common" | "rare" | "epic" | "legendary" | "ascendant" | "sigil" | "other";
 export type LootConsoleRewardKind = DropEvent["rewardKind"];
 
 export type LootConsoleLineItem = Readonly<{
@@ -29,6 +29,8 @@ type MutableLootItemTotal = {
   quantity: number;
   rewardKind: LootConsoleRewardKind;
   species: string | null;
+  sigilLevel: number | null;
+  slotIndex: number | null;
 };
 
 type MutableLootLineGroup = {
@@ -53,7 +55,9 @@ export function groupDropEventsToLootConsoleLines(
   for (const event of events) {
     const rewardKind = normalizeRewardKind(event.rewardKind);
     const species = normalizeSpecies(event.species);
-    const itemKey = buildLineItemKey(rewardKind, event.itemId, species);
+    const sigilLevel = normalizeOptionalNumber(event.sigilLevel);
+    const slotIndex = normalizeOptionalNumber(event.slotIndex);
+    const itemKey = buildLineItemKey(rewardKind, event.itemId, species, sigilLevel, slotIndex);
     const groupKey = buildLootConsoleGroupKey(event);
     const existingGroup = byKey.get(groupKey);
     if (!existingGroup) {
@@ -70,7 +74,9 @@ export function groupDropEventsToLootConsoleLines(
             itemId: event.itemId,
             quantity: Math.max(1, event.quantity),
             rewardKind,
-            species
+            species,
+            sigilLevel,
+            slotIndex
           }
         }
       });
@@ -84,7 +90,9 @@ export function groupDropEventsToLootConsoleLines(
         itemId: event.itemId,
         quantity: Math.max(1, event.quantity),
         rewardKind,
-        species
+        species,
+        sigilLevel,
+        slotIndex
       };
     } else {
       existingItem.quantity += Math.max(1, event.quantity);
@@ -126,6 +134,10 @@ export function formatLootConsoleItemText(item: LootConsoleLineItem): string {
 }
 
 export function lootItemRarityClass(item: Pick<LootConsoleLineItem, "rarity">): string {
+  if (item.rarity === "sigil") {
+    return "loot-console__item-link--sigil";
+  }
+
   if (item.rarity === "ascendant") {
     return "loot-console__item-link--ascendant";
   }
@@ -228,7 +240,7 @@ function toEpochMs(value: string): number | null {
 }
 
 function normalizeRewardKind(value: DropEvent["rewardKind"] | undefined): LootConsoleRewardKind {
-  if (value === "echo_fragments" || value === "primal_core") {
+  if (value === "echo_fragments" || value === "primal_core" || value === "sigil") {
     return value;
   }
 
@@ -244,8 +256,14 @@ function normalizeSpecies(value: string | null | undefined): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
-function buildLineItemKey(rewardKind: LootConsoleRewardKind, itemId: string, species: string | null): string {
-  return `${rewardKind}|${itemId}|${species ?? ""}`;
+function buildLineItemKey(
+  rewardKind: LootConsoleRewardKind,
+  itemId: string,
+  species: string | null,
+  sigilLevel: number | null,
+  slotIndex: number | null
+): string {
+  return `${rewardKind}|${itemId}|${species ?? ""}|${sigilLevel ?? ""}|${slotIndex ?? ""}`;
 }
 
 function toLineItem(
@@ -279,6 +297,22 @@ function toLineItem(
     };
   }
 
+  if (item.rewardKind === "sigil") {
+    const species = item.species ?? "unknown_species";
+    const safeLevel = Math.max(1, item.sigilLevel ?? 1);
+    const safeSlotIndex = Math.max(1, item.slotIndex ?? 1);
+    return {
+      itemKey: item.itemKey,
+      itemId: item.itemId,
+      displayName: `Sigil - ${formatSpeciesLabel(species)} Lv.${safeLevel} (Slot ${safeSlotIndex})`,
+      quantity: item.quantity,
+      rarity: "sigil",
+      rewardKind: item.rewardKind,
+      species: item.species,
+      isInventoryItem: false
+    };
+  }
+
   const definition = itemCatalogById[item.itemId];
   return {
     itemKey: item.itemKey,
@@ -290,6 +324,14 @@ function toLineItem(
     species: item.species,
     isInventoryItem: true
   };
+}
+
+function normalizeOptionalNumber(value: number | null | undefined): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return null;
+  }
+
+  return Math.floor(value);
 }
 
 function formatSpeciesLabel(species: string): string {

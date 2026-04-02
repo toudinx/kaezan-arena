@@ -50,6 +50,7 @@ public sealed record BattleSnapshot(
     IReadOnlyList<BattleCardOfferDto> SelectedCards,
     IReadOnlyList<BattleEventDto> Events,
     IReadOnlyList<CommandResultDto> CommandResults,
+    int ZoneIndex,
     int UltimateGauge,
     int UltimateGaugeMax,
     bool UltimateReady);

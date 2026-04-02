@@ -15,8 +15,11 @@ import {
 } from "../../shared/skills/skill-presentation.helpers";
 
 const RUN_RESULT_STORAGE_KEY = "kaezan_run_results_v1";
+const ZONE_SELECTION_STORAGE_KEY = "kaezan_zone_selection_v1";
 const RANK_THRESHOLDS: ReadonlyArray<number> = [0, 10, 30, 60, 100];
 const MAX_RANK = RANK_THRESHOLDS.length;
+const ZONE_UNLOCK_LEVELS: ReadonlyArray<number> = [1, 21, 41, 61, 81];
+const MAX_ZONE_INDEX = 5;
 
 function computeRank(killsTotal: number): number {
   const kills = Math.max(0, killsTotal);
@@ -36,6 +39,22 @@ type HomeFixedWeaponViewModel = Readonly<{
   iconGlyph: string;
   family: SkillVisualFamily;
   tier: SkillVisualTier;
+}>;
+
+type HomeZoneOption = Readonly<{
+  zoneIndex: number;
+  unlockLevel: number;
+  isUnlocked: boolean;
+  isSelected: boolean;
+}>;
+
+type HomeDailyContractViewModel = Readonly<{
+  contractId: string;
+  description: string;
+  isCompleted: boolean;
+  showProgress: boolean;
+  progressText: string;
+  kaerosReward: number;
 }>;
 
 function formatMs(ms: number): string {
@@ -62,17 +81,20 @@ function formatTokenId(id: string): string {
 })
 export class HomePageComponent implements OnInit {
   lastRunSummary: RunResultV1 | null = null;
+  selectedZoneIndex = 1;
   private readonly portraitImageFailures = new Set<string>();
 
   constructor(private readonly accountStore: AccountStore) {}
 
   async ngOnInit(): Promise<void> {
+    this.selectedZoneIndex = this.readPersistedZoneSelection();
     try {
       await this.accountStore.load();
     } catch {
       // Render uses store error state.
     }
 
+    this.syncSelectedZoneWithUnlockState();
     this.lastRunSummary = this.readLastRunSummary();
   }
 
@@ -169,6 +191,78 @@ export class HomePageComponent implements OnInit {
 
   get kaerosBalance(): number {
     return Math.max(0, this.accountStore.state()?.kaerosBalance ?? 0);
+  }
+
+  get dailyContracts(): ReadonlyArray<HomeDailyContractViewModel> {
+    const contracts = this.accountStore.state()?.dailyContracts?.contracts ?? [];
+    return contracts.slice(0, 3).map((contract) => {
+      const targetValue = Math.max(1, Math.floor(contract.targetValue ?? 1));
+      const currentProgress = Math.max(0, Math.floor(contract.currentProgress ?? 0));
+      const showProgress = this.isAccumulatingContractType(contract.type ?? "");
+      return {
+        contractId: contract.contractId,
+        description: contract.description,
+        isCompleted: !!contract.isCompleted,
+        showProgress,
+        progressText: `${Math.min(targetValue, currentProgress)} / ${targetValue}`,
+        kaerosReward: Math.max(0, Math.floor(contract.kaerosReward ?? 0))
+      };
+    });
+  }
+
+  get accountLevel(): number {
+    return Math.max(1, Math.floor(this.accountStore.state()?.accountLevel ?? 1));
+  }
+
+  get accountXpProgressPercent(): number {
+    const required = Math.max(0, Math.floor(this.accountStore.state()?.accountXpRequiredForNextLevel ?? 0));
+    const current = Math.max(0, Math.floor(this.accountStore.state()?.accountXpForCurrentLevel ?? 0));
+    if (required <= 0) {
+      return 100;
+    }
+
+    return Math.min(100, Math.max(0, (current / required) * 100));
+  }
+
+  get accountXpProgressLabel(): string {
+    const current = Math.max(0, Math.floor(this.accountStore.state()?.accountXpForCurrentLevel ?? 0));
+    const required = Math.max(0, Math.floor(this.accountStore.state()?.accountXpRequiredForNextLevel ?? 0));
+    return `${current} / ${required} XP`;
+  }
+
+  get unlockedZoneCount(): number {
+    const raw = Math.floor(this.accountStore.state()?.unlockedZoneCount ?? 1);
+    return Math.max(1, Math.min(MAX_ZONE_INDEX, raw));
+  }
+
+  get zoneOptions(): ReadonlyArray<HomeZoneOption> {
+    const options: HomeZoneOption[] = [];
+    const unlockedZoneCount = this.unlockedZoneCount;
+    const selectedZoneIndex = this.clampZoneIndex(this.selectedZoneIndex);
+    for (let index = 1; index <= MAX_ZONE_INDEX; index += 1) {
+      options.push({
+        zoneIndex: index,
+        unlockLevel: ZONE_UNLOCK_LEVELS[index - 1] ?? 1,
+        isUnlocked: index <= unlockedZoneCount,
+        isSelected: index === selectedZoneIndex
+      });
+    }
+
+    return options;
+  }
+
+  get startRunQueryParams(): Readonly<{ zoneIndex: number }> {
+    return { zoneIndex: this.clampZoneIndex(this.selectedZoneIndex) };
+  }
+
+  onSelectZone(zoneIndex: number): void {
+    const safeZoneIndex = this.clampZoneIndex(zoneIndex);
+    if (safeZoneIndex > this.unlockedZoneCount) {
+      return;
+    }
+
+    this.selectedZoneIndex = safeZoneIndex;
+    this.persistZoneSelection(safeZoneIndex);
   }
 
   get equippedWeaponName(): string {
@@ -324,6 +418,64 @@ export class HomePageComponent implements OnInit {
       return candidate as RunResultV1;
     } catch {
       return null;
+    }
+  }
+
+  private syncSelectedZoneWithUnlockState(): void {
+    const clampedSelectedZone = this.clampZoneIndex(this.selectedZoneIndex);
+    const unlockedZoneCount = this.unlockedZoneCount;
+    if (clampedSelectedZone <= unlockedZoneCount) {
+      this.selectedZoneIndex = clampedSelectedZone;
+      return;
+    }
+
+    this.selectedZoneIndex = unlockedZoneCount;
+    this.persistZoneSelection(this.selectedZoneIndex);
+  }
+
+  private readPersistedZoneSelection(): number {
+    if (typeof window === "undefined" || typeof window.localStorage === "undefined") {
+      return 1;
+    }
+
+    const raw = window.localStorage.getItem(ZONE_SELECTION_STORAGE_KEY);
+    if (!raw) {
+      return 1;
+    }
+
+    const parsed = Number.parseInt(raw, 10);
+    if (!Number.isFinite(parsed)) {
+      return 1;
+    }
+
+    return this.clampZoneIndex(parsed);
+  }
+
+  private persistZoneSelection(zoneIndex: number): void {
+    if (typeof window === "undefined" || typeof window.localStorage === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(ZONE_SELECTION_STORAGE_KEY, String(this.clampZoneIndex(zoneIndex)));
+  }
+
+  private clampZoneIndex(zoneIndex: number): number {
+    if (!Number.isFinite(zoneIndex)) {
+      return 1;
+    }
+
+    return Math.max(1, Math.min(MAX_ZONE_INDEX, Math.floor(zoneIndex)));
+  }
+
+  private isAccumulatingContractType(type: string): boolean {
+    switch ((type ?? "").trim().toLowerCase()) {
+      case "complete_run":
+      case "kill_count":
+      case "open_chests":
+      case "kill_elites":
+        return true;
+      default:
+        return false;
     }
   }
 }

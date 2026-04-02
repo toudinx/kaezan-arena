@@ -51,12 +51,33 @@ export interface CharacterState {
   primalCoreBySpecies: Record<string, number>;
 }
 
+export interface ContractDto {
+  contractId: string;
+  description: string;
+  isCompleted: boolean;
+  currentProgress: number;
+  targetValue: number;
+  kaerosReward: number;
+  type: string;
+}
+
+export interface DailyContractsDto {
+  assignedDate: string;
+  contracts: ContractDto[];
+}
+
 export interface AccountState {
   accountId: string;
   activeCharacterId: string;
   version: number;
   echoFragmentsBalance: number;
   kaerosBalance: number;
+  accountLevel: number;
+  accountXp: number;
+  accountXpForCurrentLevel: number;
+  accountXpRequiredForNextLevel: number;
+  unlockedZoneCount: number;
+  dailyContracts: DailyContractsDto;
   sigilInventory: SigilInstance[];
   characters: Record<string, CharacterState>;
 }
@@ -104,9 +125,11 @@ export interface DropEvent {
   itemId: string;
   quantity: number;
   equipmentInstanceId?: string | null;
-  rewardKind: "item" | "echo_fragments" | "primal_core";
+  rewardKind: "item" | "echo_fragments" | "primal_core" | "sigil";
   species?: string | null;
   awardedAtUtc: string;
+  sigilLevel?: number | null;
+  slotIndex?: number | null;
 }
 
 export interface AccountStateResponse {

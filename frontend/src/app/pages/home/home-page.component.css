@@ -414,6 +414,77 @@
   box-shadow: var(--motion-shadow-soft);
 }
 
+.hub-zone-picker {
+  width: 100%;
+  max-width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.hub-zone-picker__label {
+  margin: 0;
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #5a7a9a;
+}
+
+.hub-zone-picker__grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.3rem;
+}
+
+.hub-zone-picker__btn {
+  border: 1px solid #27425e;
+  border-radius: 0.45rem;
+  background: #0a1420;
+  color: #c5d8ec;
+  min-height: 2.5rem;
+  padding: 0.24rem 0.2rem;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 0.12rem;
+  transition: border-color var(--motion-fast) var(--motion-ease-standard),
+    background-color var(--motion-fast) var(--motion-ease-standard),
+    transform var(--motion-fast) var(--motion-ease-standard);
+}
+
+.hub-zone-picker__btn:hover:not(:disabled) {
+  border-color: #3b82f6;
+  background: #112033;
+  transform: translateY(-1px);
+}
+
+.hub-zone-picker__btn--selected {
+  border-color: #2dd4bf;
+  background: rgba(20, 184, 166, 0.15);
+  color: #ccfbf1;
+}
+
+.hub-zone-picker__btn--locked {
+  border-color: #1a2a3a;
+  background: #090f1a;
+  color: #4a5568;
+  cursor: not-allowed;
+}
+
+.hub-zone-picker__btn-title {
+  font-size: 0.62rem;
+  font-weight: 700;
+}
+
+.hub-zone-picker__btn-lock {
+  font-size: 0.48rem;
+  line-height: 1.15;
+  text-align: center;
+}
+
 .hub-cta__btn {
   display: block;
   width: 100%;
@@ -627,6 +698,51 @@
   animation-delay: 90ms;
 }
 
+.hub-account-level {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.85rem 0.95rem;
+  border: 1px solid #1a2a3a;
+  border-radius: 0.55rem;
+  background: #0c1420;
+}
+
+.hub-account-level__label {
+  margin: 0;
+  font-size: 0.64rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #7dd3fc;
+}
+
+.hub-account-level__xp {
+  margin: 0;
+  font-size: 0.68rem;
+  color: #93a4bd;
+}
+
+.hub-account-level__track {
+  height: 5px;
+  background: #162030;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.hub-account-level__fill {
+  height: 100%;
+  background: linear-gradient(90deg, #0ea5e9, #2dd4bf);
+  border-radius: 999px;
+  transition: width var(--motion-base) var(--motion-ease-standard);
+}
+
+.hub-account-level__zones {
+  margin: 0;
+  font-size: 0.58rem;
+  color: #5a7a9a;
+}
+
 /* Echo Fragments */
 
 .hub-echo {
@@ -671,6 +787,105 @@
   font-size: 0.52rem;
   color: #2e4a62;
   letter-spacing: 0.06em;
+}
+
+.hub-kaeros {
+  border-color: #5b4b17;
+  background: linear-gradient(180deg, #131005 0%, #0c1420 100%);
+}
+
+.hub-kaeros .hub-echo__label {
+  color: #c8a743;
+}
+
+.hub-kaeros .hub-echo__value {
+  color: #ffd36b;
+}
+
+.hub-kaeros .hub-echo__sublabel {
+  color: #9a7c2d;
+}
+
+/* Daily Contracts */
+
+.hub-contracts {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid #1a2a3a;
+  border-radius: 0.55rem;
+  background: #0c1420;
+}
+
+.hub-contracts__heading {
+  margin: 0;
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #5ecad4;
+}
+
+.hub-contracts__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.hub-contracts__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+  padding: 0.5rem 0.55rem;
+  border: 1px solid #203244;
+  border-radius: 0.4rem;
+  background: #0a111b;
+}
+
+.hub-contracts__row--completed {
+  opacity: 0.7;
+  border-color: #29425a;
+}
+
+.hub-contracts__content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.hub-contracts__desc {
+  font-size: 0.64rem;
+  color: #aec3d9;
+}
+
+.hub-contracts__progress {
+  font-size: 0.58rem;
+  color: #6f8ca8;
+}
+
+.hub-contracts__reward {
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: #ffd36b;
+  white-space: nowrap;
+}
+
+.hub-contracts__empty {
+  margin: 0;
+  font-size: 0.68rem;
+  color: #59738f;
+}
+
+.hub-contracts__reset {
+  margin: 0;
+  font-size: 0.56rem;
+  color: #5d768f;
 }
 
 /* Bestiary */
@@ -846,6 +1061,10 @@
 
   .hub-lastrun__stats {
     grid-template-columns: repeat(2, 1fr);
+  }
+
+  .hub-zone-picker__grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 

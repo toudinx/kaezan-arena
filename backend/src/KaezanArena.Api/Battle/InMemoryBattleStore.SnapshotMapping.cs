@@ -67,8 +67,11 @@ public sealed partial class InMemoryBattleStore
         var spawnPacing = ResolveSpawnPacingDirector(state);
         var scaling = ResolveScalingDirectorV2(nowMs, state.RunLevel);
         var aliveMobs = state.Actors.Values.Count(actor => string.Equals(actor.Kind, "mob", StringComparison.Ordinal));
-        var currentMobHpMult = scaling.NormalHpMult;
-        var currentMobDmgMult = scaling.NormalDmgMult;
+        var safeZoneIndex = Math.Clamp(state.ZoneIndex, 1, ArenaConfig.ZoneConfig.ZoneCount);
+        var zoneHpMult = ArenaConfig.ZoneConfig.ZoneHpMultiplier[safeZoneIndex - 1];
+        var zoneDmgMult = ArenaConfig.ZoneConfig.ZoneDmgMultiplier[safeZoneIndex - 1];
+        var currentMobHpMult = scaling.NormalHpMult * zoneHpMult;
+        var currentMobDmgMult = scaling.NormalDmgMult * zoneDmgMult;
         var activeBuffs = state.ActiveBuffs.Values
             .Where(buff => buff.ExpiresAtMs > nowMs)
             .OrderBy(buff => buff.BuffId, StringComparer.Ordinal)
@@ -169,6 +172,7 @@ public sealed partial class InMemoryBattleStore
             SelectedCards: selectedCards,
             Events: events,
             CommandResults: commandResults,
+            ZoneIndex: safeZoneIndex,
             UltimateGauge: state.UltimateGauge,
             UltimateGaugeMax: ArenaConfig.UltimateConfig.GaugeMax,
             UltimateReady: state.UltimateReady);

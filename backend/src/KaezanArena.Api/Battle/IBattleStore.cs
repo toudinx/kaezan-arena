@@ -4,7 +4,7 @@ namespace KaezanArena.Api.Battle;
 
 public interface IBattleStore
 {
-    BattleSnapshot StartBattle(string arenaId, string playerId, int? seed);
+    BattleSnapshot StartBattle(string arenaId, string playerId, int? seed, int zoneIndex = 1);
 
     BattleSnapshot StepBattle(string battleId, int? clientTick, IReadOnlyList<BattleCommandDto>? commands, int? stepCount = null);
 

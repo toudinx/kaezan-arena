@@ -1113,6 +1113,17 @@
   font-weight: 500;
 }
 
+.top-hud__zone {
+  border: 1px solid #155e75;
+  border-radius: 999px;
+  padding: 0.06rem 0.42rem;
+  background: rgba(8, 47, 73, 0.72);
+  color: #67e8f9;
+  font-size: 0.58rem;
+  white-space: nowrap;
+  letter-spacing: 0.02em;
+}
+
 .top-hud__target-lock {
   border: 1px solid #475569;
   border-radius: 999px;

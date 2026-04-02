@@ -1,3 +1,4 @@
+using KaezanArena.Api.Account;
 using KaezanArena.Api.Battle;
 using KaezanArena.Api.Contracts.Battle;
 using KaezanArena.Api.Contracts.Common;
@@ -9,20 +10,38 @@ namespace KaezanArena.Api.Controllers;
 [Route("api/v1/battle")]
 public sealed class BattleV1Controller : ControllerBase
 {
+    private const string DefaultAccountId = "dev_account";
     private readonly IBattleStore _battleStore;
+    private readonly IAccountStateStore _accountStateStore;
     private readonly int _stepDeltaMs;
 
-    public BattleV1Controller(IBattleStore battleStore, IConfiguration configuration)
+    public BattleV1Controller(IBattleStore battleStore, IAccountStateStore accountStateStore, IConfiguration configuration)
     {
         _battleStore = battleStore;
+        _accountStateStore = accountStateStore;
         _stepDeltaMs = ArenaConfig.NormalizeStepDeltaMs(configuration.GetValue<int?>("Battle:StepDeltaMs"));
     }
 
     [HttpPost("start")]
     public ActionResult<BattleStartResponseDto> Start([FromBody] BattleStartRequestDto request)
     {
+        var zoneIndex = request.ZoneIndex ?? 1;
+        if (zoneIndex < 1 || zoneIndex > ArenaConfig.ZoneConfig.ZoneCount)
+        {
+            return BadRequest(BuildValidationError(
+                $"zoneIndex must be between 1 and {ArenaConfig.ZoneConfig.ZoneCount}."));
+        }
+
+        var accountState = _accountStateStore.GetAccountState(DefaultAccountId);
+        var requiredLevel = ArenaConfig.ZoneConfig.AccountLevelToUnlockZone[zoneIndex - 1];
+        if (accountState.AccountLevel < requiredLevel)
+        {
+            return BadRequest(BuildZoneLockedError(
+                $"Zone {zoneIndex} is locked. Account Lv.{requiredLevel} required."));
+        }
+
         var resolvedSeed = request.SeedOverride ?? request.Seed;
-        var snapshot = _battleStore.StartBattle(request.ArenaId, request.PlayerId, resolvedSeed);
+        var snapshot = _battleStore.StartBattle(request.ArenaId, request.PlayerId, resolvedSeed, zoneIndex);
         return Ok(ToStartResponse(snapshot));
     }
 
@@ -119,7 +138,7 @@ public sealed class BattleV1Controller : ControllerBase
         BattleSnapshot snapshot;
         try
         {
-            snapshot = _battleStore.StartBattle(replay.ArenaId, replay.PlayerId, replay.Seed);
+            snapshot = _battleStore.StartBattle(replay.ArenaId, replay.PlayerId, replay.Seed, zoneIndex: 1);
         }
         catch (ArgumentException ex)
         {
@@ -227,6 +246,7 @@ public sealed class BattleV1Controller : ControllerBase
             PendingChoiceId: snapshot.PendingChoiceId,
             OfferedCards: snapshot.OfferedCards,
             SelectedCards: snapshot.SelectedCards,
+            ZoneIndex: snapshot.ZoneIndex,
             UltimateGauge: snapshot.UltimateGauge,
             UltimateGaugeMax: snapshot.UltimateGaugeMax,
             UltimateReady: snapshot.UltimateReady);
@@ -283,6 +303,7 @@ public sealed class BattleV1Controller : ControllerBase
             SelectedCards: snapshot.SelectedCards,
             Events: snapshot.Events,
             CommandResults: snapshot.CommandResults,
+            ZoneIndex: snapshot.ZoneIndex,
             UltimateGauge: snapshot.UltimateGauge,
             UltimateGaugeMax: snapshot.UltimateGaugeMax,
             UltimateReady: snapshot.UltimateReady);
@@ -292,6 +313,14 @@ public sealed class BattleV1Controller : ControllerBase
     {
         return new ApiErrorDto(
             Code: "validation_error",
+            Message: message,
+            TraceId: HttpContext.TraceIdentifier);
+    }
+
+    private ApiErrorDto BuildZoneLockedError(string message)
+    {
+        return new ApiErrorDto(
+            Code: "zone_locked",
             Message: message,
             TraceId: HttpContext.TraceIdentifier);
     }

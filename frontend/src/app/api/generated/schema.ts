@@ -730,6 +730,16 @@ export interface components {
             echoFragmentsBalance?: number;
             /** Format: int64 */
             kaerosBalance?: number;
+            /** Format: int32 */
+            accountLevel?: number;
+            /** Format: int64 */
+            accountXp?: number;
+            /** Format: int32 */
+            accountXpForCurrentLevel?: number;
+            /** Format: int32 */
+            accountXpRequiredForNextLevel?: number;
+            /** Format: int32 */
+            unlockedZoneCount?: number;
             characters?: {
                 [key: string]: components["schemas"]["CharacterStateDto"];
             } | null;
@@ -978,6 +988,8 @@ export interface components {
             seed?: number | null;
             /** Format: int32 */
             seedOverride?: number | null;
+            /** Format: int32 */
+            zoneIndex?: number | null;
         };
         BattleStartResponseDto: {
             battleId?: string | null;
@@ -1042,6 +1054,8 @@ export interface components {
             pendingChoiceId?: string | null;
             offeredCards?: components["schemas"]["BattleCardOfferDto"][] | null;
             selectedCards?: components["schemas"]["BattleCardOfferDto"][] | null;
+            /** Format: int32 */
+            zoneIndex?: number;
             /** Format: int32 */
             ultimateGauge?: number;
             /** Format: int32 */
@@ -1121,6 +1135,8 @@ export interface components {
             selectedCards?: components["schemas"]["BattleCardOfferDto"][] | null;
             events?: (components["schemas"]["FxSpawnEventDto"] | components["schemas"]["DamageNumberEventDto"] | components["schemas"]["AttackFxEventDto"] | components["schemas"]["DeathEventDto"] | components["schemas"]["HealNumberEventDto"] | components["schemas"]["ReflectEventDto"] | components["schemas"]["AssistCastEventDto"] | components["schemas"]["PoiInteractedEventDto"] | components["schemas"]["InteractFailedEventDto"] | components["schemas"]["BuffAppliedEventDto"] | components["schemas"]["AltarActivatedEventDto"] | components["schemas"]["SpeciesChestSpawnedEventDto"] | components["schemas"]["SpeciesChestOpenedEventDto"] | components["schemas"]["CritTextEventDto"] | components["schemas"]["LevelUpEventDto"] | components["schemas"]["XpGainedEventDto"] | components["schemas"]["CardChoiceOfferedEventDto"] | components["schemas"]["CardChosenEventDto"] | components["schemas"]["EliteSpawnedEventDto"] | components["schemas"]["EliteBuffAppliedEventDto"] | components["schemas"]["EliteBuffRemovedEventDto"] | components["schemas"]["EliteDiedEventDto"] | components["schemas"]["RangedProjectileFiredEventDto"] | components["schemas"]["MobKnockedBackEventDto"] | components["schemas"]["RunEndedEventDto"])[] | null;
             commandResults?: components["schemas"]["CommandResultDto"][] | null;
+            /** Format: int32 */
+            zoneIndex?: number;
             /** Format: int32 */
             ultimateGauge?: number;
             /** Format: int32 */
@@ -1361,6 +1377,10 @@ export interface components {
             species?: string | null;
             /** Format: date-time */
             awardedAtUtc?: string;
+            /** Format: int32 */
+            sigilLevel?: number | null;
+            /** Format: int32 */
+            slotIndex?: number | null;
         };
         DropSourceDto: {
             /** Format: int32 */

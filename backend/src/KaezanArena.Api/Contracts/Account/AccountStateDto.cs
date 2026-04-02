@@ -6,8 +6,27 @@ public sealed record AccountStateDto(
     int Version,
     long EchoFragmentsBalance,
     long KaerosBalance,
+    int AccountLevel,
+    long AccountXp,
+    int AccountXpForCurrentLevel,
+    int AccountXpRequiredForNextLevel,
+    int UnlockedZoneCount,
+    DailyContractsDto DailyContracts,
     IReadOnlyList<SigilInstanceDto> SigilInventory,
     IReadOnlyDictionary<string, CharacterStateDto> Characters);
+
+public sealed record ContractDto(
+    string ContractId,
+    string Description,
+    bool IsCompleted,
+    int CurrentProgress,
+    int TargetValue,
+    int KaerosReward,
+    string Type);
+
+public sealed record DailyContractsDto(
+    DateOnly AssignedDate,
+    IReadOnlyList<ContractDto> Contracts);
 
 public sealed record CharacterStateDto(
     string CharacterId,

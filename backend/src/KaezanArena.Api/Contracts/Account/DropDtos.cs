@@ -13,7 +13,9 @@ public sealed record DropEventDto(
     string? EquipmentInstanceId,
     string RewardKind,
     string? Species,
-    DateTimeOffset AwardedAtUtc);
+    DateTimeOffset AwardedAtUtc,
+    int? SigilLevel = null,
+    int? SlotIndex = null);
 
 public sealed record DropSourceDto(
     int Tick,

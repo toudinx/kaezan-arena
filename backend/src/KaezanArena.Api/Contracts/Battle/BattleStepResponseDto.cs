@@ -49,6 +49,7 @@ public sealed record BattleStepResponseDto(
     IReadOnlyList<BattleCardOfferDto> SelectedCards,
     IReadOnlyList<BattleEventDto> Events,
     IReadOnlyList<CommandResultDto> CommandResults,
+    int ZoneIndex,
     int UltimateGauge,
     int UltimateGaugeMax,
     bool UltimateReady);

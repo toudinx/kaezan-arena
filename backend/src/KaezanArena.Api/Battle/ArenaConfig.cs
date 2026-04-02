@@ -204,6 +204,43 @@ public static class ArenaConfig
         // Species IDs that can drop Sigils (mirrors ArenaConfig.SpeciesIds)
         public static readonly string[] ValidSpeciesIds =
             [SpeciesIds.MeleeBrute, SpeciesIds.RangedArcher, SpeciesIds.MeleeDemon, SpeciesIds.RangedDragon];
+
+        // Sigil drops
+        public const int SigilDropChancePercent = 8; // per kill of the species
+        public const int HollowSigilLevelMin = 1;
+        public const int HollowSigilLevelMax = 20;
+    }
+
+    public static class ZoneConfig
+    {
+        public const int ZoneCount = 5;
+        public const int AccountLevelCap = 100;
+        public static readonly int[] AccountLevelToUnlockZone = [1, 21, 41, 61, 81];
+
+        // HP and damage multipliers per zone (applied on top of existing run scaling)
+        public static readonly float[] ZoneHpMultiplier = [1.0f, 1.5f, 2.2f, 3.2f, 4.5f];
+        public static readonly float[] ZoneDmgMultiplier = [1.0f, 1.4f, 2.0f, 2.8f, 3.8f];
+
+        // Account XP sources
+        public const int AccountXpPerRunCompleted = 50;
+        public const int AccountXpPerKill = 1;
+
+        // XP required per account level (linear: level * 200 + 100)
+        public static int XpRequiredForLevel(int level) => (Math.Max(1, level) * 200) + 100;
+    }
+
+    public static class ContractConfig
+    {
+        public const int DailyContractCount = 3;
+        public const int KaerosRewardPerContract = 20;
+        public const int AccountXpRewardPerContract = 80;
+
+        // Contract type IDs
+        public const string TypeCompleteRun = "complete_run";
+        public const string TypeReachRunLevel = "reach_run_level";
+        public const string TypeKillCount = "kill_count";
+        public const string TypeOpenChests = "open_chests";
+        public const string TypeKillElites = "kill_elites";
     }
 
     #region Player Class

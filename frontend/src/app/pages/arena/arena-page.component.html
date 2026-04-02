@@ -335,6 +335,7 @@
               <span>{{ runHudTimerElapsedLabel }}</span>
               <span class="top-hud__timer-total">/ {{ runHudTimerTotalLabel }}</span>
             </div>
+            <span class="top-hud__zone">{{ currentZoneLabel }}</span>
             @if (lockedTargetLabel) {
               <span class="top-hud__target-lock" [class.top-hud__target-lock--elite]="isLockedTargetElite">
                 &#8857; {{ lockedTargetLabel }}
