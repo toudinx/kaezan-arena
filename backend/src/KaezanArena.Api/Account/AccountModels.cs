@@ -13,7 +13,11 @@ public sealed record AccountState(
     int Version,
     long EchoFragmentsBalance,
     IReadOnlyDictionary<string, CharacterState> Characters,
-    long KaerosBalance = 0);
+    long KaerosBalance = 0)
+{
+    public IReadOnlyDictionary<string, SigilInstance> SigilInventory { get; init; } =
+        new Dictionary<string, SigilInstance>(StringComparer.Ordinal);
+}
 
 public sealed record CharacterState(
     string CharacterId,
@@ -25,7 +29,73 @@ public sealed record CharacterState(
     int MasteryLevel = 1,
     long MasteryXp = 0,
     int UnlockedSigilSlots = ArenaConfig.MasteryConfig.InitialUnlockedSigilSlots,
-    bool HollowEssenceBarrierCleared = false);
+    bool HollowEssenceBarrierCleared = false)
+{
+    public CharacterSigilLoadout SigilLoadout { get; init; } = new(
+        Slot1SigilInstanceId: null,
+        Slot2SigilInstanceId: null,
+        Slot3SigilInstanceId: null,
+        Slot4SigilInstanceId: null,
+        Slot5SigilInstanceId: null);
+}
+
+public sealed record SigilInstance(
+    string InstanceId,       // unique ID e.g. "sigil_abc123"
+    string SpeciesId,        // which mob species this came from
+    int SigilLevel,          // 1-95
+    int SlotIndex);          // 1-5, which slot tier this belongs to
+
+public sealed record CharacterSigilLoadout(
+    string? Slot1SigilInstanceId,
+    string? Slot2SigilInstanceId,
+    string? Slot3SigilInstanceId,
+    string? Slot4SigilInstanceId,
+    string? Slot5SigilInstanceId)
+{
+    public string? GetSlotInstanceId(int slotIndex)
+    {
+        return slotIndex switch
+        {
+            1 => Slot1SigilInstanceId,
+            2 => Slot2SigilInstanceId,
+            3 => Slot3SigilInstanceId,
+            4 => Slot4SigilInstanceId,
+            5 => Slot5SigilInstanceId,
+            _ => null
+        };
+    }
+
+    public CharacterSigilLoadout SetSlotInstanceId(int slotIndex, string? sigilInstanceId)
+    {
+        return slotIndex switch
+        {
+            1 => this with { Slot1SigilInstanceId = sigilInstanceId },
+            2 => this with { Slot2SigilInstanceId = sigilInstanceId },
+            3 => this with { Slot3SigilInstanceId = sigilInstanceId },
+            4 => this with { Slot4SigilInstanceId = sigilInstanceId },
+            5 => this with { Slot5SigilInstanceId = sigilInstanceId },
+            _ => this
+        };
+    }
+}
+
+public static class SigilSlotResolver
+{
+    public static int ResolveSlotIndexForLevel(int sigilLevel)
+    {
+        for (var index = 0; index < ArenaConfig.SigilConfig.SlotLevelRanges.Length; index += 1)
+        {
+            var (min, max) = ArenaConfig.SigilConfig.SlotLevelRanges[index];
+            if (sigilLevel >= min && sigilLevel <= max)
+            {
+                return index + 1; // 1-based
+            }
+        }
+
+        throw new InvalidOperationException(
+            $"Sigil level '{sigilLevel}' is outside configured slot ranges.");
+    }
+}
 
 public sealed record CharacterInventory(
     IReadOnlyDictionary<string, long> MaterialStacks,

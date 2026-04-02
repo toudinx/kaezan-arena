@@ -29,6 +29,9 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
     private const string RewardKindPrimalCore = "primal_core";
     private const string EchoFragmentsItemId = "currency.echo_fragments";
     private const string UnknownSpeciesId = "unknown_species";
+    private const string SeedSigilInstanceId = "sigil_test_001";
+    private const string SeedSigilSpeciesId = ArenaConfig.SpeciesIds.MeleeBrute;
+    private const int SeedSigilLevel = 7;
     private readonly ConcurrentDictionary<string, StoredAccount> _accounts = new(StringComparer.Ordinal);
     private readonly IAccountStatePersistence _persistence;
 
@@ -134,6 +137,102 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
     public CharacterState EquipWeapon(string accountId, string characterId, string weaponInstanceId)
     {
         return EquipItem(accountId, characterId, EquipmentSlot.Weapon, weaponInstanceId);
+    }
+
+    public AccountState EquipSigil(string accountId, string characterId, string sigilInstanceId)
+    {
+        var account = GetOrCreateAccount(accountId);
+        lock (account.Sync)
+        {
+            if (string.IsNullOrWhiteSpace(sigilInstanceId))
+            {
+                throw new InvalidOperationException("sigilInstanceId is required.");
+            }
+
+            var normalizedSigilInstanceId = sigilInstanceId.Trim();
+            if (!account.State.SigilInventory.TryGetValue(normalizedSigilInstanceId, out var sigil))
+            {
+                throw new InvalidOperationException(
+                    $"Sigil '{normalizedSigilInstanceId}' was not found in account inventory.");
+            }
+
+            if (!ArenaConfig.SigilConfig.ValidSpeciesIds.Contains(sigil.SpeciesId, StringComparer.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    $"Sigil '{normalizedSigilInstanceId}' has invalid species '{sigil.SpeciesId}'.");
+            }
+
+            var character = GetCharacterOrThrow(account.State, characterId);
+            var slotIndex = sigil.SlotIndex;
+            ValidateSigilSlotIndex(slotIndex);
+            if (slotIndex > character.UnlockedSigilSlots)
+            {
+                throw new InvalidOperationException(
+                    $"Sigil slot {slotIndex} is locked for character '{characterId}'.");
+            }
+
+            var loadout = character.SigilLoadout;
+            if (slotIndex > 1 && string.IsNullOrWhiteSpace(loadout.GetSlotInstanceId(slotIndex - 1)))
+            {
+                throw new InvalidOperationException(
+                    $"Cannot equip slot {slotIndex} without slot {slotIndex - 1} filled.");
+            }
+
+            var expectedSlotIndex = SigilSlotResolver.ResolveSlotIndexForLevel(sigil.SigilLevel);
+            if (expectedSlotIndex != slotIndex)
+            {
+                throw new InvalidOperationException(
+                    $"Sigil '{normalizedSigilInstanceId}' has inconsistent slot mapping for level {sigil.SigilLevel}.");
+            }
+
+            var updatedCharacter = character with
+            {
+                SigilLoadout = loadout.SetSlotInstanceId(slotIndex, normalizedSigilInstanceId)
+            };
+
+            if (updatedCharacter == character)
+            {
+                return CloneAccountState(account.State);
+            }
+
+            account.State = UpdateCharacter(account.State, updatedCharacter, versionIncrement: 1);
+            PersistAccount(account);
+            return CloneAccountState(account.State);
+        }
+    }
+
+    public AccountState UnequipSigil(string accountId, string characterId, int slotIndex)
+    {
+        var account = GetOrCreateAccount(accountId);
+        lock (account.Sync)
+        {
+            ValidateSigilSlotIndex(slotIndex);
+            var character = GetCharacterOrThrow(account.State, characterId);
+            var loadout = character.SigilLoadout;
+
+            for (var higherSlotIndex = slotIndex + 1; higherSlotIndex <= ArenaConfig.SigilConfig.SlotLevelRanges.Length; higherSlotIndex += 1)
+            {
+                if (!string.IsNullOrWhiteSpace(loadout.GetSlotInstanceId(higherSlotIndex)))
+                {
+                    throw new InvalidOperationException(
+                        $"Cannot unequip slot {slotIndex} while slot {higherSlotIndex} is filled.");
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(loadout.GetSlotInstanceId(slotIndex)))
+            {
+                return CloneAccountState(account.State);
+            }
+
+            var updatedCharacter = character with
+            {
+                SigilLoadout = loadout.SetSlotInstanceId(slotIndex, null)
+            };
+
+            account.State = UpdateCharacter(account.State, updatedCharacter, versionIncrement: 1);
+            PersistAccount(account);
+            return CloneAccountState(account.State);
+        }
     }
 
     public AccountState AwardMasteryXp(string accountId, string characterId, int xpAmount)
@@ -957,6 +1056,28 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
                 ArenaConfig.MasteryConfig.MaxUnlockedSigilSlots));
     }
 
+    private static void ValidateSigilSlotIndex(int slotIndex)
+    {
+        if (slotIndex < 1 || slotIndex > ArenaConfig.SigilConfig.SlotLevelRanges.Length)
+        {
+            throw new InvalidOperationException(
+                $"slotIndex must be between 1 and {ArenaConfig.SigilConfig.SlotLevelRanges.Length}.");
+        }
+    }
+
+    private static IReadOnlyDictionary<string, SigilInstance> BuildSeedSigilInventory()
+    {
+        var slotIndex = SigilSlotResolver.ResolveSlotIndexForLevel(SeedSigilLevel);
+        return new Dictionary<string, SigilInstance>(StringComparer.Ordinal)
+        {
+            [SeedSigilInstanceId] = new SigilInstance(
+                InstanceId: SeedSigilInstanceId,
+                SpeciesId: SeedSigilSpeciesId,
+                SigilLevel: SeedSigilLevel,
+                SlotIndex: slotIndex)
+        };
+    }
+
     private static bool IsMobSourceType(string sourceType)
     {
         return string.Equals(NormalizeSourceType(sourceType), "mob", StringComparison.Ordinal);
@@ -1114,6 +1235,7 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
         {
             var seededAccount = CreateSeededAccount(account.State.AccountId);
             var characters = new Dictionary<string, CharacterState>(account.State.Characters, StringComparer.Ordinal);
+            var sigilInventory = new Dictionary<string, SigilInstance>(account.State.SigilInventory, StringComparer.Ordinal);
             var changed = false;
             foreach (var characterDefinition in AccountCatalog.CharacterDefinitions)
             {
@@ -1127,6 +1249,17 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
                     characters[characterDefinition.CharacterId] = seededCharacter;
                     changed = true;
                 }
+            }
+
+            foreach (var (instanceId, sigil) in seededAccount.SigilInventory)
+            {
+                if (sigilInventory.ContainsKey(instanceId))
+                {
+                    continue;
+                }
+
+                sigilInventory[instanceId] = sigil;
+                changed = true;
             }
 
             if (!changed)
@@ -1144,7 +1277,8 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
             {
                 ActiveCharacterId = nextActiveCharacterId,
                 Version = account.State.Version + 1,
-                Characters = characters
+                Characters = characters,
+                SigilInventory = sigilInventory
             };
             PersistAccount(account);
         }
@@ -1280,7 +1414,10 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
                     PrimalCoreBySpecies = initialPrimalCoreBySpecies
                 },
                 [kaelisTwoId] = kaelisTwo
-            });
+            })
+        {
+            SigilInventory = BuildSeedSigilInventory()
+        };
     }
 
     private static AccountState CloneAccountState(AccountState state)
@@ -1291,9 +1428,16 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
             characters[characterId] = CloneCharacterState(character);
         }
 
+        var sigilInventory = new SortedDictionary<string, SigilInstance>(StringComparer.Ordinal);
+        foreach (var (instanceId, sigil) in state.SigilInventory.OrderBy(entry => entry.Key, StringComparer.Ordinal))
+        {
+            sigilInventory[instanceId] = sigil;
+        }
+
         return state with
         {
-            Characters = characters
+            Characters = characters,
+            SigilInventory = sigilInventory
         };
     }
 

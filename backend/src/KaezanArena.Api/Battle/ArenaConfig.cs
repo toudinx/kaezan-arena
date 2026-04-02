@@ -183,6 +183,29 @@ public static class ArenaConfig
         public const int HollowEssenceCostForMilestone1 = 20; // 10 -> 11
     }
 
+    public static class SigilConfig
+    {
+        // Slot index (1-based) -> level range [min, max]
+        public static readonly (int Min, int Max)[] SlotLevelRanges =
+        [
+            (1, 20),   // Slot 1 - Hollow
+            (21, 40),  // Slot 2 - Brave
+            (41, 60),  // Slot 3 - Awakened
+            (61, 80),  // Slot 4 - Exalted
+            (81, 95)   // Slot 5 - Ascendant tier 5
+        ];
+
+        public static readonly string[] SlotTierNames =
+            ["Hollow", "Brave", "Awakened", "Exalted", "Ascendant"];
+
+        // Stat bonus per sigil level (flat HP bonus for now)
+        public const int HpBonusPerSigilLevel = 2;
+
+        // Species IDs that can drop Sigils (mirrors ArenaConfig.SpeciesIds)
+        public static readonly string[] ValidSpeciesIds =
+            [SpeciesIds.MeleeBrute, SpeciesIds.RangedArcher, SpeciesIds.MeleeDemon, SpeciesIds.RangedDragon];
+    }
+
     #region Player Class
     public const int KinaReflectPercent = 20;
     public const int KinaRangedReflectMultiplier = 2;

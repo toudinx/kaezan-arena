@@ -109,11 +109,13 @@ public sealed class AccountV1Controller : ControllerBase
 
         try
         {
+            var normalizedAccountId = request.AccountId.Trim();
             var character = _accountStateStore.EquipWeapon(
-                accountId: request.AccountId.Trim(),
+                accountId: normalizedAccountId,
                 characterId: request.CharacterId.Trim(),
                 weaponInstanceId: request.WeaponInstanceId.Trim());
-            return Ok(ToCharacterDto(character));
+            var account = _accountStateStore.GetAccountState(normalizedAccountId);
+            return Ok(ToCharacterDto(character, account.SigilInventory));
         }
         catch (InvalidOperationException ex)
         {
@@ -151,12 +153,14 @@ public sealed class AccountV1Controller : ControllerBase
 
         try
         {
+            var normalizedAccountId = request.AccountId.Trim();
             var character = _accountStateStore.EquipItem(
-                accountId: request.AccountId.Trim(),
+                accountId: normalizedAccountId,
                 characterId: request.CharacterId.Trim(),
                 slot: slot,
                 equipmentInstanceId: request.EquipmentInstanceId.Trim());
-            return Ok(ToCharacterDto(character));
+            var account = _accountStateStore.GetAccountState(normalizedAccountId);
+            return Ok(ToCharacterDto(character, account.SigilInventory));
         }
         catch (InvalidOperationException ex)
         {
@@ -242,12 +246,13 @@ public sealed class AccountV1Controller : ControllerBase
                 sources: parsedSources,
                 runId: normalizedRunId,
                 battleSeed: battleSeed);
+            var account = _accountStateStore.GetAccountState(request.AccountId.Trim());
 
             return Ok(new AwardDropsResponseDto(
                 Awarded: result.Awarded
                     .Select(ToDropEventDto)
                     .ToList(),
-                Character: ToCharacterDto(result.Character)));
+                Character: ToCharacterDto(result.Character, account.SigilInventory)));
         }
         catch (InvalidOperationException ex)
         {
@@ -282,6 +287,71 @@ public sealed class AccountV1Controller : ControllerBase
         return Ok(ToAccountDto(result.Account));
     }
 
+    [HttpPost("equip-sigil")]
+    public ActionResult<AccountStateDto> EquipSigil(
+        [FromBody] EquipSigilRequestDto request,
+        [FromQuery] string? accountId)
+    {
+        if (request is null)
+        {
+            return BadRequest(BuildValidationError("request body is required"));
+        }
+
+        if (string.IsNullOrWhiteSpace(request.CharacterId))
+        {
+            return BadRequest(BuildValidationError("characterId is required"));
+        }
+
+        if (string.IsNullOrWhiteSpace(request.SigilInstanceId))
+        {
+            return BadRequest(BuildValidationError("sigilInstanceId is required"));
+        }
+
+        var normalizedAccountId = string.IsNullOrWhiteSpace(accountId) ? "dev_account" : accountId.Trim();
+        try
+        {
+            var account = _accountStateStore.EquipSigil(
+                accountId: normalizedAccountId,
+                characterId: request.CharacterId.Trim(),
+                sigilInstanceId: request.SigilInstanceId.Trim());
+            return Ok(ToAccountDto(account));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(BuildValidationError(ex.Message));
+        }
+    }
+
+    [HttpPost("unequip-sigil")]
+    public ActionResult<AccountStateDto> UnequipSigil(
+        [FromBody] UnequipSigilRequestDto request,
+        [FromQuery] string? accountId)
+    {
+        if (request is null)
+        {
+            return BadRequest(BuildValidationError("request body is required"));
+        }
+
+        if (string.IsNullOrWhiteSpace(request.CharacterId))
+        {
+            return BadRequest(BuildValidationError("characterId is required"));
+        }
+
+        var normalizedAccountId = string.IsNullOrWhiteSpace(accountId) ? "dev_account" : accountId.Trim();
+        try
+        {
+            var account = _accountStateStore.UnequipSigil(
+                accountId: normalizedAccountId,
+                characterId: request.CharacterId.Trim(),
+                slotIndex: request.SlotIndex);
+            return Ok(ToAccountDto(account));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(BuildValidationError(ex.Message));
+        }
+    }
+
     private ApiErrorDto BuildValidationError(string message)
     {
         return new ApiErrorDto(
@@ -292,10 +362,18 @@ public sealed class AccountV1Controller : ControllerBase
 
     private static AccountStateDto ToAccountDto(AccountState account)
     {
+        var sigilInventory = account.SigilInventory
+            .Values
+            .OrderBy(sigil => sigil.SlotIndex)
+            .ThenBy(sigil => sigil.SigilLevel)
+            .ThenBy(sigil => sigil.InstanceId, StringComparer.Ordinal)
+            .Select(ToSigilInstanceDto)
+            .ToList();
+
         var characters = new SortedDictionary<string, CharacterStateDto>(StringComparer.Ordinal);
         foreach (var (characterId, character) in account.Characters.OrderBy(entry => entry.Key, StringComparer.Ordinal))
         {
-            characters[characterId] = ToCharacterDto(character);
+            characters[characterId] = ToCharacterDto(character, account.SigilInventory);
         }
 
         return new AccountStateDto(
@@ -304,10 +382,13 @@ public sealed class AccountV1Controller : ControllerBase
             Version: account.Version,
             EchoFragmentsBalance: account.EchoFragmentsBalance,
             KaerosBalance: account.KaerosBalance,
+            SigilInventory: sigilInventory,
             Characters: characters);
     }
 
-    private static CharacterStateDto ToCharacterDto(CharacterState character)
+    private static CharacterStateDto ToCharacterDto(
+        CharacterState character,
+        IReadOnlyDictionary<string, SigilInstance> sigilInventory)
     {
         var materialStacks = new SortedDictionary<string, long>(StringComparer.Ordinal);
         foreach (var (itemId, quantity) in character.Inventory.MaterialStacks.OrderBy(entry => entry.Key, StringComparer.Ordinal))
@@ -329,6 +410,7 @@ public sealed class AccountV1Controller : ControllerBase
             MasteryXpForCurrentLevel: ResolveMasteryXpForCurrentLevel(character),
             MasteryXpRequiredForNextLevel: ResolveMasteryXpRequiredForNextLevel(character),
             UnlockedSigilSlots: character.UnlockedSigilSlots,
+            SigilLoadout: ToCharacterSigilLoadoutDto(character.SigilLoadout, sigilInventory),
             Inventory: new CharacterInventoryDto(
                 MaterialStacks: materialStacks,
                 EquipmentInstances: equipmentInstances),
@@ -336,6 +418,58 @@ public sealed class AccountV1Controller : ControllerBase
                 WeaponInstanceId: character.Equipment.WeaponInstanceId),
             BestiaryKillsBySpecies: ToSortedSpeciesCount(character.BestiaryKillsBySpecies),
             PrimalCoreBySpecies: ToSortedSpeciesCount(character.PrimalCoreBySpecies));
+    }
+
+    private static CharacterSigilLoadoutDto ToCharacterSigilLoadoutDto(
+        CharacterSigilLoadout loadout,
+        IReadOnlyDictionary<string, SigilInstance> sigilInventory)
+    {
+        return new CharacterSigilLoadoutDto(
+            Slot1: ResolveEquippedSigilDto(loadout.Slot1SigilInstanceId, sigilInventory),
+            Slot2: ResolveEquippedSigilDto(loadout.Slot2SigilInstanceId, sigilInventory),
+            Slot3: ResolveEquippedSigilDto(loadout.Slot3SigilInstanceId, sigilInventory),
+            Slot4: ResolveEquippedSigilDto(loadout.Slot4SigilInstanceId, sigilInventory),
+            Slot5: ResolveEquippedSigilDto(loadout.Slot5SigilInstanceId, sigilInventory));
+    }
+
+    private static SigilInstanceDto? ResolveEquippedSigilDto(
+        string? sigilInstanceId,
+        IReadOnlyDictionary<string, SigilInstance> sigilInventory)
+    {
+        if (string.IsNullOrWhiteSpace(sigilInstanceId))
+        {
+            return null;
+        }
+
+        return sigilInventory.TryGetValue(sigilInstanceId, out var sigil)
+            ? ToSigilInstanceDto(sigil)
+            : null;
+    }
+
+    private static SigilInstanceDto ToSigilInstanceDto(SigilInstance sigil)
+    {
+        var safeLevel = Math.Max(1, sigil.SigilLevel);
+        return new SigilInstanceDto(
+            InstanceId: sigil.InstanceId,
+            SpeciesId: sigil.SpeciesId,
+            SpeciesDisplayName: ResolveSpeciesDisplayName(sigil.SpeciesId),
+            SigilLevel: safeLevel,
+            SlotIndex: sigil.SlotIndex,
+            TierName: ResolveSigilTierName(sigil.SlotIndex),
+            HpBonus: safeLevel * ArenaConfig.SigilConfig.HpBonusPerSigilLevel);
+    }
+
+    private static string ResolveSpeciesDisplayName(string speciesId)
+    {
+        return ArenaConfig.DisplayNames.TryGetValue(speciesId, out var displayName)
+            ? displayName
+            : speciesId;
+    }
+
+    private static string ResolveSigilTierName(int slotIndex)
+    {
+        var safeIndex = Math.Clamp(slotIndex, 1, ArenaConfig.SigilConfig.SlotTierNames.Length);
+        return ArenaConfig.SigilConfig.SlotTierNames[safeIndex - 1];
     }
 
     private static int ResolveMasteryXpForCurrentLevel(CharacterState character)

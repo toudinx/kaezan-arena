@@ -128,6 +128,9 @@ Bestiary delta calculation: `runStartBestiaryKills` is captured from the account
 - Character progression uses Mastery (Mastery Level + Mastery XP), earned from run completion and kills
 - Mastery milestones every 10 levels grant Kaeros, Echo Fragments, and additional Sigil slots (up to 5)
 - The first mastery barrier is at level 10: progression to level 11 requires spending Hollow Essence
+- Sigils are account-wide inventory items and are equipped per character in 5 ordered slots
+  - Slot tiers are fixed by level range: Hollow (1-20), Brave (21-40), Awakened (41-60), Exalted (61-80), Ascendant (81-95)
+  - Slot prerequisites apply: slot N requires slot N-1 already equipped
 - Each character has a **fixed 3-slot weapon kit** + **1 Ultimate slot**
   - Kina kit: Exori Min + Exori + Exori Mas (fixed, unchanged)
   - Ranged prototype kit: Sigil Bolt + Shotgun + Void Ricochet (fixed)

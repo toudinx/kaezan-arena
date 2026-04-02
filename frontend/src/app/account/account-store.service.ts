@@ -139,6 +139,40 @@ export class AccountStore {
     }
   }
 
+  async equipSigil(characterId: string, sigilInstanceId: string): Promise<AccountState> {
+    const normalizedCharacterId = this.normalizeRequired(characterId, "Character ID");
+    const normalizedSigilInstanceId = this.normalizeRequired(sigilInstanceId, "Sigil instance ID");
+    const accountId = this.session.accountId();
+    this.errorSignal.set(null);
+
+    try {
+      const updated = await this.accountApi.equipSigil(accountId, normalizedCharacterId, normalizedSigilInstanceId);
+      this.stateSignal.set(this.normalizeAccountState(updated));
+      this.syncSessionFromAccount(updated);
+      return updated;
+    } catch (error) {
+      this.errorSignal.set(this.stringifyError(error));
+      throw error;
+    }
+  }
+
+  async unequipSigil(characterId: string, slotIndex: number): Promise<AccountState> {
+    const normalizedCharacterId = this.normalizeRequired(characterId, "Character ID");
+    const normalizedSlotIndex = Math.max(1, Math.floor(slotIndex));
+    const accountId = this.session.accountId();
+    this.errorSignal.set(null);
+
+    try {
+      const updated = await this.accountApi.unequipSigil(accountId, normalizedCharacterId, normalizedSlotIndex);
+      this.stateSignal.set(this.normalizeAccountState(updated));
+      this.syncSessionFromAccount(updated);
+      return updated;
+    } catch (error) {
+      this.errorSignal.set(this.stringifyError(error));
+      throw error;
+    }
+  }
+
   async equipItem(
     characterId: string,
     slot: EquipmentSlot,

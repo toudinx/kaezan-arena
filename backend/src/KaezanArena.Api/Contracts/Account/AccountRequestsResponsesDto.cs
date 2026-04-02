@@ -34,3 +34,11 @@ public sealed record AwardDropsResponseDto(
 
 public sealed record SpendHollowEssenceBarrierRequestDto(
     string CharacterId);
+
+public sealed record EquipSigilRequestDto(
+    string CharacterId,
+    string SigilInstanceId);
+
+public sealed record UnequipSigilRequestDto(
+    string CharacterId,
+    int SlotIndex);

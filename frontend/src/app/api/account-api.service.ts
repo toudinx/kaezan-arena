@@ -18,6 +18,24 @@ export interface CharacterEquipment {
   weaponInstanceId?: string | null;
 }
 
+export interface SigilInstance {
+  instanceId: string;
+  speciesId: string;
+  speciesDisplayName: string;
+  sigilLevel: number;
+  slotIndex: number;
+  tierName: string;
+  hpBonus: number;
+}
+
+export interface CharacterSigilLoadout {
+  slot1?: SigilInstance | null;
+  slot2?: SigilInstance | null;
+  slot3?: SigilInstance | null;
+  slot4?: SigilInstance | null;
+  slot5?: SigilInstance | null;
+}
+
 export interface CharacterState {
   characterId: string;
   name: string;
@@ -26,6 +44,7 @@ export interface CharacterState {
   masteryXpForCurrentLevel: number;
   masteryXpRequiredForNextLevel: number;
   unlockedSigilSlots: number;
+  sigilLoadout: CharacterSigilLoadout;
   inventory: CharacterInventory;
   equipment: CharacterEquipment;
   bestiaryKillsBySpecies: Record<string, number>;
@@ -38,6 +57,7 @@ export interface AccountState {
   version: number;
   echoFragmentsBalance: number;
   kaerosBalance: number;
+  sigilInventory: SigilInstance[];
   characters: Record<string, CharacterState>;
 }
 
@@ -166,6 +186,24 @@ export class AccountApiService {
       `/api/v1/account/spend-hollow-essence-barrier?accountId=${encodedAccountId}`,
       { characterId },
       "Spend Hollow Essence barrier"
+    );
+  }
+
+  async equipSigil(accountId: string, characterId: string, sigilInstanceId: string): Promise<AccountState> {
+    const encodedAccountId = encodeURIComponent(accountId.trim());
+    return this.postJson<{ characterId: string; sigilInstanceId: string }, AccountState>(
+      `/api/v1/account/equip-sigil?accountId=${encodedAccountId}`,
+      { characterId, sigilInstanceId },
+      "Equip sigil"
+    );
+  }
+
+  async unequipSigil(accountId: string, characterId: string, slotIndex: number): Promise<AccountState> {
+    const encodedAccountId = encodeURIComponent(accountId.trim());
+    return this.postJson<{ characterId: string; slotIndex: number }, AccountState>(
+      `/api/v1/account/unequip-sigil?accountId=${encodedAccountId}`,
+      { characterId, slotIndex },
+      "Unequip sigil"
     );
   }
 

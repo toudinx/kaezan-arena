@@ -267,35 +267,70 @@
 
               <section class="detail-block detail-block--sigils">
                 <h3>Sigils</h3>
-                <p class="detail-note">All sigil slots are reserved for future sigil systems.</p>
+                <p class="detail-note">Sigils are account-wide and equipped per Kaelis. Slot order is mandatory.</p>
                 <div class="sigil-grid">
-                  @for (sigil of selectedLoadoutSigils; track sigil.slotId) {
+                  @for (sigilSlot of selectedLoadoutSigils; track sigilSlot.slotIndex) {
                     <article
                       class="sigil-slot quick-tip"
-                      [class.sigil-slot--equipped]="sigil.stateLabel === 'Equipped'"
-                      [class.sigil-slot--vacant]="sigil.stateLabel === 'Vacant'"
-                      [class.sigil-slot--missing]="sigil.stateLabel === 'Missing'"
-                      [class.sigil-slot--reserved]="sigil.stateLabel === 'Reserved'"
-                      [attr.data-tooltip]="sigil.tooltip"
+                      [class.sigil-slot--equipped]="!!sigilSlot.equipped"
+                      [class.sigil-slot--reserved]="!sigilSlot.isUnlocked"
                     >
                       <div class="sigil-slot__head">
-                        <span class="sigil-slot__label">{{ sigil.label }}</span>
-                        <span class="sigil-slot__state">{{ sigil.stateLabel }}</span>
+                        <span class="sigil-slot__label">Slot {{ sigilSlot.slotIndex }} - {{ sigilSlot.tierName }}</span>
+                        <span class="sigil-slot__state">{{ sigilSlot.levelRangeLabel }}</span>
                       </div>
-                      <span class="sigil-slot__source">{{ sigil.sourceLabel }}</span>
-                      @if (sigil.gear) {
-                        <strong class="sigil-slot__name">{{ sigil.gear.displayName }}</strong>
-                        <span class="sigil-slot__meta">{{ sigil.gear.rarityLabel }} | {{ sigil.gear.typeLabel }}</span>
-                      } @else if (sigil.stateLabel === "Reserved") {
-                        <strong class="sigil-slot__name sigil-slot__name--muted">Reserved slot</strong>
-                        <span class="sigil-slot__meta">Unlocks with future sigil systems.</span>
+                      @if (!sigilSlot.isUnlocked) {
+                        <strong class="sigil-slot__name sigil-slot__name--muted">{{ sigilSlot.lockLabel }}</strong>
+                      } @else if (sigilSlot.equipped) {
+                        <strong class="sigil-slot__name">{{ sigilSlot.equipped.speciesDisplayName }} Sigil Lv {{ sigilSlot.equipped.sigilLevel }}</strong>
+                        <span class="sigil-slot__meta">+{{ sigilSlot.equipped.hpBonus }} HP</span>
+                        <button
+                          type="button"
+                          class="section-actions__cta section-actions__cta--secondary"
+                          [disabled]="isSigilActionInFlight('unequip:' + sigilSlot.slotIndex)"
+                          (click)="unequipSigil(sigilSlot.slotIndex, $event)"
+                        >
+                          {{ isSigilActionInFlight('unequip:' + sigilSlot.slotIndex) ? "Unequipping..." : "Unequip" }}
+                        </button>
                       } @else {
-                        <strong class="sigil-slot__name sigil-slot__name--muted">Vacant</strong>
+                        <strong class="sigil-slot__name sigil-slot__name--muted">Empty</strong>
                         <span class="sigil-slot__meta">No sigil equipped.</span>
                       }
                     </article>
                   }
                 </div>
+
+                <h3>Account Sigil Inventory</h3>
+                @if (selectedCharacterSigilInventoryRows.length === 0) {
+                  <p class="detail-empty">No sigils in account inventory.</p>
+                } @else {
+                  <div class="sigil-grid">
+                    @for (sigilRow of selectedCharacterSigilInventoryRows; track sigilRow.sigil.instanceId) {
+                      <article class="sigil-slot" [class.sigil-slot--equipped]="sigilRow.isEquippedInSelectedSlot">
+                        <div class="sigil-slot__head">
+                          <span class="sigil-slot__label">{{ sigilRow.sigil.tierName }} - Slot {{ sigilRow.sigil.slotIndex }}</span>
+                          <span class="sigil-slot__state">Lv {{ sigilRow.sigil.sigilLevel }}</span>
+                        </div>
+                        <strong class="sigil-slot__name">{{ sigilRow.sigil.speciesDisplayName }}</strong>
+                        <span class="sigil-slot__meta">+{{ sigilRow.sigil.hpBonus }} HP</span>
+                        <button
+                          type="button"
+                          class="section-actions__cta section-actions__cta--secondary"
+                          [disabled]="!sigilRow.canEquip || isSigilActionInFlight('equip:' + sigilRow.sigil.instanceId)"
+                          (click)="equipSigil(sigilRow.sigil.instanceId, $event)"
+                        >
+                          @if (isSigilActionInFlight('equip:' + sigilRow.sigil.instanceId)) {
+                            Equipping...
+                          } @else if (sigilRow.canEquip) {
+                            Equip
+                          } @else {
+                            {{ sigilRow.disabledReason }}
+                          }
+                        </button>
+                      </article>
+                    }
+                  </div>
+                }
               </section>
             }
 

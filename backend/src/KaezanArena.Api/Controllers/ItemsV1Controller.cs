@@ -41,7 +41,7 @@ public sealed class ItemsV1Controller : ControllerBase
 
             return Ok(new ItemRefineResponseDto(
                 EchoFragmentsBalance: result.Account.EchoFragmentsBalance,
-                Character: ToCharacterDto(result.Character),
+                Character: ToCharacterDto(result.Character, result.Account.SigilInventory),
                 RefinedItem: ToOwnedEquipmentInstanceDto(result.RefinedItem)));
         }
         catch (InvalidOperationException ex)
@@ -74,7 +74,7 @@ public sealed class ItemsV1Controller : ControllerBase
 
             return Ok(new ItemSalvageResponseDto(
                 EchoFragmentsBalance: result.Account.EchoFragmentsBalance,
-                Character: ToCharacterDto(result.Character),
+                Character: ToCharacterDto(result.Character, result.Account.SigilInventory),
                 SalvagedItemInstanceId: result.SalvagedItemInstanceId,
                 SpeciesId: result.SpeciesId,
                 PrimalCoreAwarded: result.PrimalCoreAwarded));
@@ -93,7 +93,9 @@ public sealed class ItemsV1Controller : ControllerBase
             TraceId: HttpContext.TraceIdentifier);
     }
 
-    private static CharacterStateDto ToCharacterDto(CharacterState character)
+    private static CharacterStateDto ToCharacterDto(
+        CharacterState character,
+        IReadOnlyDictionary<string, SigilInstance> sigilInventory)
     {
         var materialStacks = new SortedDictionary<string, long>(StringComparer.Ordinal);
         foreach (var (itemId, quantity) in character.Inventory.MaterialStacks.OrderBy(entry => entry.Key, StringComparer.Ordinal))
@@ -115,6 +117,7 @@ public sealed class ItemsV1Controller : ControllerBase
             MasteryXpForCurrentLevel: ResolveMasteryXpForCurrentLevel(character),
             MasteryXpRequiredForNextLevel: ResolveMasteryXpRequiredForNextLevel(character),
             UnlockedSigilSlots: character.UnlockedSigilSlots,
+            SigilLoadout: ToCharacterSigilLoadoutDto(character.SigilLoadout, sigilInventory),
             Inventory: new CharacterInventoryDto(
                 MaterialStacks: materialStacks,
                 EquipmentInstances: equipmentInstances),
@@ -122,6 +125,48 @@ public sealed class ItemsV1Controller : ControllerBase
                 WeaponInstanceId: character.Equipment.WeaponInstanceId),
             BestiaryKillsBySpecies: ToSortedSpeciesCount(character.BestiaryKillsBySpecies),
             PrimalCoreBySpecies: ToSortedSpeciesCount(character.PrimalCoreBySpecies));
+    }
+
+    private static CharacterSigilLoadoutDto ToCharacterSigilLoadoutDto(
+        CharacterSigilLoadout loadout,
+        IReadOnlyDictionary<string, SigilInstance> sigilInventory)
+    {
+        return new CharacterSigilLoadoutDto(
+            Slot1: ResolveEquippedSigilDto(loadout.Slot1SigilInstanceId, sigilInventory),
+            Slot2: ResolveEquippedSigilDto(loadout.Slot2SigilInstanceId, sigilInventory),
+            Slot3: ResolveEquippedSigilDto(loadout.Slot3SigilInstanceId, sigilInventory),
+            Slot4: ResolveEquippedSigilDto(loadout.Slot4SigilInstanceId, sigilInventory),
+            Slot5: ResolveEquippedSigilDto(loadout.Slot5SigilInstanceId, sigilInventory));
+    }
+
+    private static SigilInstanceDto? ResolveEquippedSigilDto(
+        string? sigilInstanceId,
+        IReadOnlyDictionary<string, SigilInstance> sigilInventory)
+    {
+        if (string.IsNullOrWhiteSpace(sigilInstanceId))
+        {
+            return null;
+        }
+
+        return sigilInventory.TryGetValue(sigilInstanceId, out var sigil)
+            ? ToSigilInstanceDto(sigil)
+            : null;
+    }
+
+    private static SigilInstanceDto ToSigilInstanceDto(SigilInstance sigil)
+    {
+        var safeLevel = Math.Max(1, sigil.SigilLevel);
+        var safeSlotIndex = Math.Clamp(sigil.SlotIndex, 1, ArenaConfig.SigilConfig.SlotTierNames.Length);
+        return new SigilInstanceDto(
+            InstanceId: sigil.InstanceId,
+            SpeciesId: sigil.SpeciesId,
+            SpeciesDisplayName: ArenaConfig.DisplayNames.TryGetValue(sigil.SpeciesId, out var speciesDisplayName)
+                ? speciesDisplayName
+                : sigil.SpeciesId,
+            SigilLevel: safeLevel,
+            SlotIndex: safeSlotIndex,
+            TierName: ArenaConfig.SigilConfig.SlotTierNames[safeSlotIndex - 1],
+            HpBonus: safeLevel * ArenaConfig.SigilConfig.HpBonusPerSigilLevel);
     }
 
     private static int ResolveMasteryXpForCurrentLevel(CharacterState character)
