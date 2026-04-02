@@ -1,5 +1,6 @@
 import { Component, Input, OnInit, computed, effect, signal } from "@angular/core";
 import {
+  type AscendantTierProgress,
   type BestiaryCraftSlot,
   type BestiarySpecies,
   type CharacterState
@@ -62,14 +63,11 @@ const LOOT_SLOT_ORDER: Readonly<Record<string, number>> = {
   unknown: 1
 };
 
-const RANK_THRESHOLDS: ReadonlyArray<number> = [0, 10, 30, 60, 100];
-const MAX_RANK = RANK_THRESHOLDS.length; // 5
-
-function computeRank(killsTotal: number): number {
+function computeRank(killsTotal: number, thresholds: ReadonlyArray<number>): number {
   const kills = Math.max(0, killsTotal);
   let rank = 1;
-  for (let i = RANK_THRESHOLDS.length - 1; i >= 0; i--) {
-    if (kills >= RANK_THRESHOLDS[i]) {
+  for (let i = thresholds.length - 1; i >= 0; i--) {
+    if (kills >= thresholds[i]) {
       rank = i + 1;
       break;
     }
@@ -93,7 +91,11 @@ export class BestiaryPageComponent implements OnInit {
   private readonly speciesPageSignal = signal(0);
   private readonly scopedCharacterSignal = computed(() => this.resolveScopedCharacter(this.contextCharacterIdSignal()));
   private readonly speciesRowsSignal = computed(() =>
-    this.buildRows(this.accountStore.catalogs().speciesCatalog, this.scopedCharacterSignal())
+    this.buildRows(
+      this.accountStore.catalogs().speciesCatalog,
+      this.scopedCharacterSignal(),
+      this.accountStore.catalogs().bestiaryRankThresholds
+    )
   );
   private readonly filteredSpeciesRowsSignal = computed(() => {
     const query = this.searchQuerySignal().trim().toLowerCase();
@@ -269,6 +271,10 @@ export class BestiaryPageComponent implements OnInit {
     }
 
     return `${selected.killsToNextMilestone} kills to milestone ${selected.nextKillMilestone}`;
+  }
+
+  get ascendantProgressRows(): ReadonlyArray<AscendantTierProgress> {
+    return this.scopedCharacterSignal()?.ascendantProgress?.filter((t) => t.speciesRequired > 0) ?? [];
   }
 
   get selectedSpeciesLootCount(): number {
@@ -550,11 +556,15 @@ export class BestiaryPageComponent implements OnInit {
     return sorted[0] ?? null;
   }
 
-  private buildRows(speciesCatalog: ReadonlyArray<BestiarySpecies>, character: CharacterState | null): BestiaryRow[] {
+  private buildRows(
+    speciesCatalog: ReadonlyArray<BestiarySpecies>,
+    character: CharacterState | null,
+    thresholds: ReadonlyArray<number>
+  ): BestiaryRow[] {
     const killsBySpecies = character?.bestiaryKillsBySpecies ?? {};
     const primalCoreBySpecies = character?.primalCoreBySpecies ?? {};
     const knownRows = speciesCatalog.map((species) =>
-      this.buildSpeciesRow(species.speciesId, species.displayName, killsBySpecies, primalCoreBySpecies)
+      this.buildSpeciesRow(species.speciesId, species.displayName, killsBySpecies, primalCoreBySpecies, thresholds)
     );
     const knownIds = new Set(speciesCatalog.map((species) => species.speciesId));
     const extraIds = Array.from(
@@ -563,7 +573,7 @@ export class BestiaryPageComponent implements OnInit {
       .filter((speciesId) => !knownIds.has(speciesId))
       .sort((left, right) => left.localeCompare(right));
     const extraRows = extraIds.map((speciesId) =>
-      this.buildSpeciesRow(speciesId, this.toSpeciesLabel(speciesId), killsBySpecies, primalCoreBySpecies)
+      this.buildSpeciesRow(speciesId, this.toSpeciesLabel(speciesId), killsBySpecies, primalCoreBySpecies, thresholds)
     );
 
     return [...knownRows, ...extraRows];
@@ -573,13 +583,15 @@ export class BestiaryPageComponent implements OnInit {
     speciesId: string,
     displayName: string,
     killsBySpecies: Record<string, number>,
-    primalCoreBySpecies: Record<string, number>
+    primalCoreBySpecies: Record<string, number>,
+    thresholds: ReadonlyArray<number>
   ): BestiaryRow {
+    const maxRank = thresholds.length;
     const killsTotal = Math.max(0, killsBySpecies[speciesId] ?? 0);
-    const rank = computeRank(killsTotal);
-    const isMaxRank = rank >= MAX_RANK;
-    const nextKillMilestone = isMaxRank ? RANK_THRESHOLDS[MAX_RANK - 1] : RANK_THRESHOLDS[rank];
-    const currentRankStart = RANK_THRESHOLDS[rank - 1];
+    const rank = computeRank(killsTotal, thresholds);
+    const isMaxRank = rank >= maxRank;
+    const nextKillMilestone = isMaxRank ? thresholds[maxRank - 1] : thresholds[rank];
+    const currentRankStart = thresholds[rank - 1];
     const bandSize = isMaxRank ? 1 : (nextKillMilestone - currentRankStart);
     const progressInBand = isMaxRank ? 1 : Math.max(0, killsTotal - currentRankStart);
     const progressPercent = Math.min(100, Math.max(0, (progressInBand / bandSize) * 100));
@@ -590,7 +602,7 @@ export class BestiaryPageComponent implements OnInit {
       visual: resolveSpeciesVisual({ speciesId, displayName }),
       killsTotal,
       primalCoreBalance: Math.max(0, primalCoreBySpecies[speciesId] ?? 0),
-      nextKillMilestone,
+      nextKillMilestone: isMaxRank ? (thresholds[thresholds.length - 1] ?? 100) : nextKillMilestone,
       killsToNextMilestone: isMaxRank ? 0 : Math.max(0, nextKillMilestone - killsTotal),
       progressPercent,
       rank,

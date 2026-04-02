@@ -28,6 +28,14 @@ public sealed record DailyContractsDto(
     DateOnly AssignedDate,
     IReadOnlyList<ContractDto> Contracts);
 
+public sealed record AscendantTierProgressDto(
+    int TierIndex,
+    string TierName,
+    bool IsUnlocked,
+    int SpeciesAtMaxRank,
+    int SpeciesRequired,
+    IReadOnlyList<string> MissingSpecies);
+
 public sealed record CharacterStateDto(
     string CharacterId,
     string Name,
@@ -40,7 +48,8 @@ public sealed record CharacterStateDto(
     CharacterInventoryDto Inventory,
     CharacterEquipmentDto Equipment,
     IReadOnlyDictionary<string, int> BestiaryKillsBySpecies,
-    IReadOnlyDictionary<string, int> PrimalCoreBySpecies);
+    IReadOnlyDictionary<string, int> PrimalCoreBySpecies,
+    IReadOnlyList<AscendantTierProgressDto> AscendantProgress);
 
 public sealed record SigilInstanceDto(
     string InstanceId,

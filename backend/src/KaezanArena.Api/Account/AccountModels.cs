@@ -85,6 +85,13 @@ public sealed record CharacterState(
         Slot3SigilInstanceId: null,
         Slot4SigilInstanceId: null,
         Slot5SigilInstanceId: null);
+
+    /// <summary>
+    /// Keyed by tier index (0-based). Value = true when Ascendant is unlocked for that tier.
+    /// Default: empty (no Ascendant slots unlocked).
+    /// </summary>
+    public IReadOnlyDictionary<int, bool> AscendantSigilSlotsUnlocked { get; init; } =
+        new Dictionary<int, bool>();
 }
 
 public sealed record SigilInstance(

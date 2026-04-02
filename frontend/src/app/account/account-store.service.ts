@@ -27,6 +27,7 @@ export type AccountCatalogs = Readonly<{
   itemById: Readonly<Record<string, ItemDefinition>>;
   equipmentById: Readonly<Record<string, EquipmentDefinition>>;
   speciesById: Readonly<Record<string, BestiarySpecies>>;
+  bestiaryRankThresholds: ReadonlyArray<number>;
 }>;
 
 const EMPTY_CATALOGS: AccountCatalogs = {
@@ -37,7 +38,8 @@ const EMPTY_CATALOGS: AccountCatalogs = {
   characterById: {},
   itemById: {},
   equipmentById: {},
-  speciesById: {}
+  speciesById: {},
+  bestiaryRankThresholds: [0, 10, 30, 60, 100]
 };
 
 @Injectable({ providedIn: "root" })
@@ -290,7 +292,8 @@ export class AccountStore {
           stateResponse.characterCatalog ?? [],
           stateResponse.itemCatalog,
           stateResponse.equipmentCatalog,
-          bestiaryOverview?.speciesCatalog ?? this.catalogsSignal().speciesCatalog
+          bestiaryOverview?.speciesCatalog ?? this.catalogsSignal().speciesCatalog,
+          stateResponse.bestiaryRankThresholds ?? this.catalogsSignal().bestiaryRankThresholds
         )
       );
       this.syncSessionFromAccount(normalizedState);
@@ -377,7 +380,8 @@ export class AccountStore {
     characterCatalog: ReadonlyArray<CharacterCatalogEntry>,
     itemCatalog: ReadonlyArray<ItemDefinition>,
     equipmentCatalog: ReadonlyArray<EquipmentDefinition>,
-    speciesCatalog: ReadonlyArray<BestiarySpecies>
+    speciesCatalog: ReadonlyArray<BestiarySpecies>,
+    bestiaryRankThresholds: ReadonlyArray<number> = [0, 10, 30, 60, 100]
   ): AccountCatalogs {
     const characterById: Record<string, CharacterCatalogEntry> = {};
     for (const character of characterCatalog) {
@@ -407,7 +411,8 @@ export class AccountStore {
       characterById,
       itemById,
       equipmentById,
-      speciesById
+      speciesById,
+      bestiaryRankThresholds
     };
   }
 

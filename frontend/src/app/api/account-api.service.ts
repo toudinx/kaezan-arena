@@ -36,6 +36,15 @@ export interface CharacterSigilLoadout {
   slot5?: SigilInstance | null;
 }
 
+export interface AscendantTierProgress {
+  tierIndex: number;
+  tierName: string;
+  isUnlocked: boolean;
+  speciesAtMaxRank: number;
+  speciesRequired: number;
+  missingSpecies: string[];
+}
+
 export interface CharacterState {
   characterId: string;
   name: string;
@@ -49,6 +58,7 @@ export interface CharacterState {
   equipment: CharacterEquipment;
   bestiaryKillsBySpecies: Record<string, number>;
   primalCoreBySpecies: Record<string, number>;
+  ascendantProgress?: AscendantTierProgress[];
 }
 
 export interface ContractDto {
@@ -137,6 +147,7 @@ export interface AccountStateResponse {
   characterCatalog: CharacterCatalogEntry[];
   itemCatalog: ItemDefinition[];
   equipmentCatalog: EquipmentDefinition[];
+  bestiaryRankThresholds: number[];
 }
 
 export interface BestiarySpecies {

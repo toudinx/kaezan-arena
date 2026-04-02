@@ -1,7 +1,7 @@
 import { Component, OnDestroy, OnInit } from "@angular/core";
 import { RouterLink, ActivatedRoute, Router } from "@angular/router";
 import { Subscription, combineLatest } from "rxjs";
-import { type AccountState, type CharacterState, type SigilInstance } from "../../api/account-api.service";
+import { type AccountState, type AscendantTierProgress, type CharacterState, type SigilInstance } from "../../api/account-api.service";
 import { AccountStore } from "../../account/account-store.service";
 import { mapInventoryToBackpackSlots, type BackpackSlot } from "../../shared/backpack/backpack-inventory.helpers";
 import { BestiaryPageComponent } from "../bestiary/bestiary-page.component";
@@ -83,6 +83,8 @@ type SigilSlotViewModel = Readonly<{
   equipped: SigilInstance | null;
   isUnlocked: boolean;
   lockLabel: string | null;
+  ascendantUnlocked: boolean;
+  ascendantHint: string | null;
 }>;
 
 type SigilInventoryRowViewModel = Readonly<{
@@ -380,18 +382,33 @@ export class CharactersPageComponent implements OnInit, OnDestroy {
       return [];
     }
 
+    const ascendantByTierIndex = new Map<number, AscendantTierProgress>(
+      (selectedCharacterState.ascendantProgress ?? [])
+        .filter((t) => t.speciesRequired > 0)
+        .map((t) => [t.tierIndex, t])
+    );
+
     return SIGIL_SLOT_LEVEL_RANGES.map((range, zeroBasedIndex) => {
       const slotIndex = zeroBasedIndex + 1;
       const equipped = this.resolveEquippedSigilForSlot(selectedCharacterState, slotIndex);
       const isUnlocked = slotIndex <= Math.max(1, selectedCharacterState.unlockedSigilSlots ?? 1);
       const lockLabel = isUnlocked ? null : `Locked - Mastery ${this.resolveMasteryRequirementForSlot(slotIndex)} required`;
+      const ascendantTier = ascendantByTierIndex.get(zeroBasedIndex);
+      const ascendantUnlocked = ascendantTier?.isUnlocked ?? false;
+      const ascendantHint = ascendantTier
+        ? ascendantUnlocked
+          ? "Ascendant Available"
+          : `Ascendant: ${ascendantTier.speciesAtMaxRank}/${ascendantTier.speciesRequired} species at Rank 5`
+        : null;
       return {
         slotIndex,
         tierName: SIGIL_SLOT_TIER_NAMES[zeroBasedIndex] ?? `Tier ${slotIndex}`,
         levelRangeLabel: `${range.min}-${range.max}`,
         equipped,
         isUnlocked,
-        lockLabel
+        lockLabel,
+        ascendantUnlocked,
+        ascendantHint
       };
     });
   }

@@ -4,7 +4,8 @@ public sealed record AccountStateResponseDto(
     AccountStateDto Account,
     IReadOnlyList<CharacterCatalogDefinitionDto> CharacterCatalog,
     IReadOnlyList<ItemDefinitionDto> ItemCatalog,
-    IReadOnlyList<EquipmentDefinitionDto> EquipmentCatalog);
+    IReadOnlyList<EquipmentDefinitionDto> EquipmentCatalog,
+    IReadOnlyList<int> BestiaryRankThresholds);
 
 public sealed record SetActiveCharacterRequestDto(
     string AccountId,

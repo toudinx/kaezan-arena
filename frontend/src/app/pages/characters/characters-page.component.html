@@ -296,6 +296,12 @@
                         <strong class="sigil-slot__name sigil-slot__name--muted">Empty</strong>
                         <span class="sigil-slot__meta">No sigil equipped.</span>
                       }
+                      @if (sigilSlot.ascendantHint) {
+                        <span
+                          class="sigil-slot__ascendant"
+                          [class.sigil-slot__ascendant--unlocked]="sigilSlot.ascendantUnlocked"
+                        >{{ sigilSlot.ascendantHint }}</span>
+                      }
                     </article>
                   }
                 </div>

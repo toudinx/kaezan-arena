@@ -375,5 +375,37 @@
         }
       </aside>
     </div>
+
+    @if (ascendantProgressRows.length > 0) {
+      <section class="ascendant-progress">
+        <h3 class="ascendant-progress__title">Ascendant Unlock Progress</h3>
+        @for (tier of ascendantProgressRows; track tier.tierIndex) {
+          <article
+            class="ascendant-tier"
+            [class.ascendant-tier--unlocked]="tier.isUnlocked"
+          >
+            <div class="ascendant-tier__head">
+              <span class="ascendant-tier__name">{{ tier.tierName }} Ascendant</span>
+              @if (tier.isUnlocked) {
+                <span class="ascendant-tier__badge">UNLOCKED</span>
+              } @else {
+                <span class="ascendant-tier__count">{{ tier.speciesAtMaxRank }} / {{ tier.speciesRequired }} species at Rank 5</span>
+              }
+            </div>
+            @if (!tier.isUnlocked) {
+              <div class="ascendant-tier__track">
+                <div
+                  class="ascendant-tier__fill"
+                  [style.width.%]="(tier.speciesAtMaxRank / tier.speciesRequired) * 100"
+                ></div>
+              </div>
+              @if (tier.missingSpecies.length > 0) {
+                <p class="ascendant-tier__missing">Missing: {{ tier.missingSpecies.join(", ") }}</p>
+              }
+            }
+          </article>
+        }
+      </section>
+    }
   }
 </section>

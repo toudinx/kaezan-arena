@@ -79,7 +79,7 @@ Bestiary is now part of the Kaelis experience (Kaelis tabs: Overview / Loadout /
 
 The Home page is a full-page dark hub (`#080d14`) with a three-column layout at wide viewports (stacks single-column at `<900px`, center column first):
 
-- **LEFT — Active character card:** Portrait placeholder (color-coded), name, kit badge, XP progress bar, Fixed Kit pills, Ultimate Slot (gauge-based auto fire), Gear summary (Weapon / Armor / Relic), "View Characters" link.
+- **LEFT — Active character card:** Portrait placeholder (color-coded), name, kit badge, XP progress bar, Fixed Kit pills, Ultimate Slot (gauge-based auto fire), Gear summary (Weapon only), "View Characters" link.
 - **CENTER — Enter Arena CTA + Last Run:** Dominant "Start Run" link button (teal), last run outcome (Victory/Defeat color-coded), duration, Kills / Elites / Damage / Chests stat tiles, card pills chosen.
 - **RIGHT — Progression snapshot:** Echo Fragments balance (large number, gold), Bestiary section with closest-to-milestone callout and top-3 species progress bars with kills-to-next.
 
@@ -139,6 +139,15 @@ Bestiary delta calculation: `runStartBestiaryKills` is captured from the account
   - Slot prerequisites apply: slot N requires slot N-1 already equipped
   - Mob kills roll Sigil drops independently at 8% per kill (species-based), currently generating Hollow-tier levels (1-20)
   - Dropped Sigils go directly to account inventory during runs; equip/unequip remains in Characters page only
+- **Ascendant Unlock System:** Each Sigil slot tier has an Ascendant unlock condition based on Bestiary mastery
+  - Unlock condition: Rank 5 (100 kills) in ALL species of that tier — evaluated per character after every drop award
+  - Hollow tier (Slot 1) requires Rank 5 in: Melee Brute, Ranged Archer, Melee Demon, Ranged Dragon
+  - Future tiers (Brave–Ascendant) will add more species as they are implemented
+  - Tier-to-species mapping is data-driven: `ArenaConfig.BestiaryConfig.TierSpecies` is the single source of truth
+  - Ascendant unlock state is tracked in `CharacterState.AscendantSigilSlotsUnlocked` (per character, per tier index)
+  - Progress is exposed via `AscendantTierProgressDto` in every `CharacterStateDto` response
+  - Bestiary page shows per-tier Ascendant progress below the species list
+  - Characters page Loadout tab shows Ascendant unlock state inline in each Sigil slot card
 - Each character has a **fixed 3-slot weapon kit** + **1 Ultimate slot**
   - Kina kit: Exori Min + Exori + Exori Mas (fixed, unchanged)
   - Ranged prototype kit: Sigil Bolt + Shotgun + Void Ricochet (fixed)

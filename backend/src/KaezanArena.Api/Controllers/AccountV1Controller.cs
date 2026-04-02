@@ -39,7 +39,8 @@ public sealed class AccountV1Controller : ControllerBase
             EquipmentCatalog: AccountCatalog.EquipmentDefinitions
                 .OrderBy(definition => definition.ItemId, StringComparer.Ordinal)
                 .Select(ToEquipmentDefinitionDto)
-                .ToList()));
+                .ToList(),
+            BestiaryRankThresholds: ArenaConfig.BestiaryConfig.RankKillThresholds.ToList()));
     }
 
     [HttpGet("bestiary")]
@@ -452,7 +453,8 @@ public sealed class AccountV1Controller : ControllerBase
             Equipment: new CharacterEquipmentDto(
                 WeaponInstanceId: character.Equipment.WeaponInstanceId),
             BestiaryKillsBySpecies: ToSortedSpeciesCount(character.BestiaryKillsBySpecies),
-            PrimalCoreBySpecies: ToSortedSpeciesCount(character.PrimalCoreBySpecies));
+            PrimalCoreBySpecies: ToSortedSpeciesCount(character.PrimalCoreBySpecies),
+            AscendantProgress: BuildAscendantProgress(character));
     }
 
     private static CharacterSigilLoadoutDto ToCharacterSigilLoadoutDto(
@@ -613,6 +615,53 @@ public sealed class AccountV1Controller : ControllerBase
         }
 
         return Math.Clamp(unlocked, 1, ArenaConfig.ZoneConfig.ZoneCount);
+    }
+
+    private static IReadOnlyList<AscendantTierProgressDto> BuildAscendantProgress(CharacterState character)
+    {
+        var maxRankThreshold = ArenaConfig.BestiaryConfig.RankKillThresholds[ArenaConfig.BestiaryConfig.MaxRank - 1];
+        var result = new List<AscendantTierProgressDto>();
+
+        for (var tierIndex = 0; tierIndex < ArenaConfig.BestiaryConfig.TierSpecies.Length; tierIndex++)
+        {
+            var tierSpecies = ArenaConfig.BestiaryConfig.TierSpecies[tierIndex];
+            if (tierSpecies.Length == 0)
+            {
+                continue;
+            }
+
+            var isUnlocked = character.AscendantSigilSlotsUnlocked.TryGetValue(tierIndex, out var unlocked) && unlocked;
+            var speciesAtMaxRank = 0;
+            var missingSpecies = new List<string>();
+
+            foreach (var speciesId in tierSpecies)
+            {
+                var kills = character.BestiaryKillsBySpecies.TryGetValue(speciesId, out var k) ? k : 0;
+                if (kills >= maxRankThreshold)
+                {
+                    speciesAtMaxRank++;
+                }
+                else
+                {
+                    var displayName = ArenaConfig.DisplayNames.TryGetValue(speciesId, out var name) ? name : speciesId;
+                    missingSpecies.Add(displayName);
+                }
+            }
+
+            var tierName = ArenaConfig.SigilConfig.SlotTierNames.Length > tierIndex
+                ? ArenaConfig.SigilConfig.SlotTierNames[tierIndex]
+                : $"Tier {tierIndex + 1}";
+
+            result.Add(new AscendantTierProgressDto(
+                TierIndex: tierIndex,
+                TierName: tierName,
+                IsUnlocked: isUnlocked,
+                SpeciesAtMaxRank: speciesAtMaxRank,
+                SpeciesRequired: tierSpecies.Length,
+                MissingSpecies: missingSpecies));
+        }
+
+        return result;
     }
 
     private static IReadOnlyDictionary<string, int> ToSortedSpeciesCount(IReadOnlyDictionary<string, int> source)

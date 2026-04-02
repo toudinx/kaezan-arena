@@ -229,6 +229,29 @@ public static class ArenaConfig
         public static int XpRequiredForLevel(int level) => (Math.Max(1, level) * 200) + 100;
     }
 
+    public static class BestiaryConfig
+    {
+        /// <summary>Single source of truth for kill thresholds per rank. Index = rank-1 (0-based). Length = MaxRank.</summary>
+        public static readonly int[] RankKillThresholds = [0, 10, 30, 60, 100];
+        public const int MaxRank = 5;
+
+        /// <summary>
+        /// Tier index (0-based) → species IDs required for Ascendant unlock.
+        /// Empty arrays mark future tiers not yet implemented.
+        /// </summary>
+        public static readonly string[][] TierSpecies =
+        [
+            [SpeciesIds.MeleeBrute, SpeciesIds.RangedArcher, SpeciesIds.MeleeDemon, SpeciesIds.RangedDragon], // Hollow — Ascendant 96
+            [], // Brave — future
+            [], // Awakened — future
+            [], // Exalted — future
+            [], // Ascendant tier 5 — future
+        ];
+
+        /// <summary>Tier index (0-based) → Sigil slot index (1-based) that gets the Ascendant upgrade.</summary>
+        public static readonly int[] TierToSigilSlot = [1, 2, 3, 4, 5];
+    }
+
     public static class ContractConfig
     {
         public const int DailyContractCount = 3;

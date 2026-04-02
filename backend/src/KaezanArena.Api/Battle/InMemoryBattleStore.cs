@@ -11,8 +11,6 @@ public sealed partial class InMemoryBattleStore : IBattleStore
     private const string DefaultAccountId = "dev_account";
     // Deterministic simulation delta per battle step.
     private static int StepDeltaMs = ArenaConfig.DefaultStepDeltaMs;
-    private static readonly int[] BestiaryRankKillThresholds = [0, 10, 30, 60, 100];
-
     private static readonly MobArchetype[] SpawnArchetypeCycle =
     [
         MobArchetype.MeleeBrute,
@@ -677,9 +675,9 @@ public sealed partial class InMemoryBattleStore : IBattleStore
     {
         var clampedKills = Math.Max(0, killsTotal);
         var rank = 1;
-        for (var index = BestiaryRankKillThresholds.Length - 1; index >= 0; index -= 1)
+        for (var index = ArenaConfig.BestiaryConfig.RankKillThresholds.Length - 1; index >= 0; index -= 1)
         {
-            if (clampedKills < BestiaryRankKillThresholds[index])
+            if (clampedKills < ArenaConfig.BestiaryConfig.RankKillThresholds[index])
             {
                 continue;
             }

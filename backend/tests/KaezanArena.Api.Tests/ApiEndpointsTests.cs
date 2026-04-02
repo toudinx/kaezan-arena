@@ -32,7 +32,7 @@ public sealed class ApiEndpointsTests : IClassFixture<ApiTestWebApplicationFacto
     private const int RunXpPerNormalMobKill = 10;
     private const int RunLevelXpBase = 60;
     private const int RunLevelXpIncrementPerLevel = 40;
-    private static readonly int[] BestiaryRankKillThresholds = [0, 10, 30, 60, 100];
+    private static int[] BestiaryRankKillThresholds => ArenaConfig.BestiaryConfig.RankKillThresholds;
     private readonly HttpClient _client;
     private readonly ApiTestWebApplicationFactory _factory;
 

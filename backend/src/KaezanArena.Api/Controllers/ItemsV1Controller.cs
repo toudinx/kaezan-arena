@@ -124,7 +124,31 @@ public sealed class ItemsV1Controller : ControllerBase
             Equipment: new CharacterEquipmentDto(
                 WeaponInstanceId: character.Equipment.WeaponInstanceId),
             BestiaryKillsBySpecies: ToSortedSpeciesCount(character.BestiaryKillsBySpecies),
-            PrimalCoreBySpecies: ToSortedSpeciesCount(character.PrimalCoreBySpecies));
+            PrimalCoreBySpecies: ToSortedSpeciesCount(character.PrimalCoreBySpecies),
+            AscendantProgress: BuildAscendantProgress(character));
+    }
+
+    private static IReadOnlyList<AscendantTierProgressDto> BuildAscendantProgress(CharacterState character)
+    {
+        var maxRankThreshold = ArenaConfig.BestiaryConfig.RankKillThresholds[ArenaConfig.BestiaryConfig.MaxRank - 1];
+        var result = new List<AscendantTierProgressDto>();
+        for (var tierIndex = 0; tierIndex < ArenaConfig.BestiaryConfig.TierSpecies.Length; tierIndex++)
+        {
+            var tierSpecies = ArenaConfig.BestiaryConfig.TierSpecies[tierIndex];
+            if (tierSpecies.Length == 0) continue;
+            var isUnlocked = character.AscendantSigilSlotsUnlocked.TryGetValue(tierIndex, out var unlocked) && unlocked;
+            var speciesAtMaxRank = 0;
+            var missingSpecies = new List<string>();
+            foreach (var speciesId in tierSpecies)
+            {
+                var kills = character.BestiaryKillsBySpecies.TryGetValue(speciesId, out var k) ? k : 0;
+                if (kills >= maxRankThreshold) speciesAtMaxRank++;
+                else missingSpecies.Add(ArenaConfig.DisplayNames.TryGetValue(speciesId, out var name) ? name : speciesId);
+            }
+            var tierName = ArenaConfig.SigilConfig.SlotTierNames.Length > tierIndex ? ArenaConfig.SigilConfig.SlotTierNames[tierIndex] : $"Tier {tierIndex + 1}";
+            result.Add(new AscendantTierProgressDto(TierIndex: tierIndex, TierName: tierName, IsUnlocked: isUnlocked, SpeciesAtMaxRank: speciesAtMaxRank, SpeciesRequired: tierSpecies.Length, MissingSpecies: missingSpecies));
+        }
+        return result;
     }
 
     private static CharacterSigilLoadoutDto ToCharacterSigilLoadoutDto(

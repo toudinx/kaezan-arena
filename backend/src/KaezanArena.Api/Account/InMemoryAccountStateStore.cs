@@ -546,6 +546,8 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
                     PrimalCoreBySpecies = new Dictionary<string, int>(primalCoreBySpecies, StringComparer.Ordinal)
                 };
 
+                updatedCharacter = EvaluateAscendantUnlocks(updatedCharacter);
+
                 account.State = UpdateAccountAfterDropAward(account.State, updatedCharacter, echoFragmentsBalance);
                 account.State = account.State with
                 {
@@ -1447,6 +1449,46 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
             Characters = characters,
             Version = account.Version + versionIncrement
         };
+    }
+
+    private static CharacterState EvaluateAscendantUnlocks(CharacterState character)
+    {
+        var ascendantUnlocked = new Dictionary<int, bool>(character.AscendantSigilSlotsUnlocked);
+        var changed = false;
+        var maxRankThreshold = ArenaConfig.BestiaryConfig.RankKillThresholds[ArenaConfig.BestiaryConfig.MaxRank - 1];
+
+        for (var tierIndex = 0; tierIndex < ArenaConfig.BestiaryConfig.TierSpecies.Length; tierIndex++)
+        {
+            var tierSpecies = ArenaConfig.BestiaryConfig.TierSpecies[tierIndex];
+            if (tierSpecies.Length == 0)
+            {
+                continue;
+            }
+
+            if (ascendantUnlocked.TryGetValue(tierIndex, out var alreadyUnlocked) && alreadyUnlocked)
+            {
+                continue;
+            }
+
+            var allAtMaxRank = tierSpecies.All(speciesId =>
+                character.BestiaryKillsBySpecies.TryGetValue(speciesId, out var kills) &&
+                kills >= maxRankThreshold);
+
+            if (!allAtMaxRank)
+            {
+                continue;
+            }
+
+            ascendantUnlocked[tierIndex] = true;
+            changed = true;
+        }
+
+        if (!changed)
+        {
+            return character;
+        }
+
+        return character with { AscendantSigilSlotsUnlocked = ascendantUnlocked };
     }
 
     private static AccountState UpdateAccountAfterDropAward(AccountState account, CharacterState updatedCharacter, long echoFragmentsBalance)
