@@ -59,6 +59,10 @@ reports/
 # Local tool/cache folders
 .dotnet-tools/
 .artifacts/
+.codex-build/
+.claude/
+**/.codex-build/
+**/.claude/
 
 # Kaezan Arena local account persistence
 backend/src/KaezanArena.Api/.data/
