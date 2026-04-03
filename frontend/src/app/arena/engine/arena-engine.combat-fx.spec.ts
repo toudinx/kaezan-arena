@@ -40,7 +40,7 @@ describe("ArenaEngine combat fx mapping", () => {
 
     const applied = engine.applyActorStates(scene, actors);
     const playerSprite = applied.sprites.find((entry) => entry.actorId === "character:ranged_prototype");
-    expect(playerSprite?.semanticId).toBe("sprite.player.ranged_prototype.idle");
+    expect(playerSprite?.semanticId).toBe("sprite.player.sylwen.1.idle");
   });
 
   it("maps attack_fx events into deterministic render instances", () => {

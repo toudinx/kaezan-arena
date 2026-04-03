@@ -8,11 +8,11 @@
 
 .home-character {
   position: absolute;
-  left: 16vw;
+  left: 50%;
   bottom: 0;
-  width: min(48vh, 42vw);
-  height: 58vh;
-  transform: translate3d(var(--offset-x, 0px), var(--offset-y, 0px), 0)
+  width: min(78vh, 62vw);
+  height: 74vh;
+  transform: translate3d(calc(-50% + var(--offset-x, 0px)), var(--offset-y, 0px), 0)
     scale(var(--scale, 1));
   transform-origin: bottom center;
 }
@@ -37,17 +37,15 @@
 
 @media (max-width: 1200px) {
   .home-character {
-    left: 8vw;
-    width: min(44vh, 45vw);
-    height: 52vh;
+    width: min(70vh, 66vw);
+    height: 68vh;
   }
 }
 
 @media (max-width: 768px) {
   .home-character {
-    left: 2vw;
-    width: 46vw;
-    height: 40vh;
-    opacity: 0.6;
+    width: 84vw;
+    height: 52vh;
+    opacity: 0.85;
   }
 }

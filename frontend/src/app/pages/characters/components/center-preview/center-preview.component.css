@@ -2,24 +2,13 @@
   position: relative;
   border-radius: 20px;
   border: 1px solid var(--border, rgba(255,255,255,0.08));
-  background:
-    radial-gradient(circle at 50% 55%, rgba(138, 124, 255, 0.16), transparent 70%),
-    linear-gradient(180deg, rgba(8, 8, 16, 0.65), rgba(4, 4, 10, 0.9));
+  background: transparent;
   display: flex;
   align-items: center;
   justify-content: center;
   height: 100%;
   min-height: 0;
   overflow: hidden;
-}
-
-.center-preview::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(circle at 50% 40%, transparent 45%, rgba(0, 0, 0, 0.65) 100%);
-  pointer-events: none;
-  z-index: 0;
 }
 
 .preview-frame {
@@ -30,17 +19,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
-}
-
-.preview-glow {
-  position: absolute;
-  width: 65%;
-  height: 85%;
-  border-radius: 999px;
-  background: radial-gradient(circle at 50% 30%, rgba(138, 124, 255, 0.4), transparent 70%);
-  filter: blur(12px);
-  opacity: 0.6;
+  padding: 14px;
 }
 
 .preview-image {

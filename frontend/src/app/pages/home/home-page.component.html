@@ -1,12 +1,12 @@
 <div class="home-shell" data-testid="home-page" [style.background]="currentBackground.shellBackground">
   <app-home-background
-    [imageUrl]="currentBackground.imageUrl"
-    [gradientOverlay]="currentBackground.overlay"
+    [imageUrl]="homeBackgroundImageUrl"
+    [gradientOverlay]="homeBackgroundOverlay"
   ></app-home-background>
 
   <div class="home-stage">
     <app-home-character-stage
-      [imageUrl]="characterImageUrl"
+      [imageUrl]="stageCharacterImageUrl"
     ></app-home-character-stage>
 
     <app-home-top-left-hud

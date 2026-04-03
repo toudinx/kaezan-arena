@@ -1,74 +1,90 @@
-export type CharacterPortraitTone = "amber" | "teal" | "violet" | "emerald" | "slate";
+import {
+  resolveCharacterDisplayName as resolveCharacterDisplayNameFromCatalog,
+  resolveCharacterVisualSpec,
+  type CharacterPortraitContext,
+  type CharacterPortraitTone
+} from "./character-visuals.catalog";
+
+export type { CharacterPortraitContext, CharacterPortraitTone };
 
 export type CharacterPortraitVisual = Readonly<{
   tone: CharacterPortraitTone;
   imageUrl: string | null;
+  homepageImageUrl: string | null;
+  prerunImageUrl: string | null;
+  kaelisImageUrl: string | null;
+  rosterImageUrl: string | null;
   runImageUrl: string | null;
   hitImageUrl: string | null;
   sigil: string;
   monogram: string;
+  skinId: string | null;
 }>;
 
-type CharacterPortraitSpec = Readonly<{
-  tone: CharacterPortraitTone;
-  imageUrl: string | null;
-  runImageUrl: string | null;
-  hitImageUrl: string | null;
-  sigil: string;
-}>;
-
-const CHARACTER_PORTRAIT_BY_ID: Readonly<Record<string, CharacterPortraitSpec>> = {
-  "character:kina": {
-    tone: "amber",
-    imageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/knight_f_idle_anim_f0.png",
-    runImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/knight_f_run_anim_f1.png",
-    hitImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/knight_f_hit_anim_f0.png",
-    sigil: "K"
-  },
-  "character:ranged_prototype": {
-    tone: "teal",
-    imageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/elf_m_idle_anim_f0.png",
-    runImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/elf_m_run_anim_f1.png",
-    hitImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/elf_m_hit_anim_f0.png",
-    sigil: "R"
-  },
-  "kaelis_01": {
-    tone: "violet",
-    imageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/wizzard_f_idle_anim_f0.png",
-    runImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/wizzard_f_run_anim_f1.png",
-    hitImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/wizzard_f_hit_anim_f0.png",
-    sigil: "D"
-  },
-  "kaelis_02": {
-    tone: "emerald",
-    imageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/wizzard_m_idle_anim_f0.png",
-    runImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/wizzard_m_run_anim_f1.png",
-    hitImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/wizzard_m_hit_anim_f0.png",
-    sigil: "E"
-  }
-} as const;
-
-const DEFAULT_PORTRAIT: CharacterPortraitSpec = {
+const DEFAULT_PORTRAIT: Readonly<CharacterPortraitVisual> = {
   tone: "slate",
   imageUrl: null,
+  homepageImageUrl: null,
+  prerunImageUrl: null,
+  kaelisImageUrl: null,
+  rosterImageUrl: null,
   runImageUrl: null,
   hitImageUrl: null,
-  sigil: "?"
+  sigil: "?",
+  monogram: "?",
+  skinId: null
 };
 
 export function resolveCharacterPortraitVisual(input: Readonly<{
   characterId?: string | null;
   displayName?: string | null;
+  context?: CharacterPortraitContext;
+  skinId?: string | number | null;
 }>): CharacterPortraitVisual {
-  const mapped = (input.characterId && CHARACTER_PORTRAIT_BY_ID[input.characterId]) || DEFAULT_PORTRAIT;
+  const context = input.context ?? "kaelis";
+  const mapped = resolveCharacterVisualSpec({
+    characterId: input.characterId,
+    skinId: input.skinId
+  });
+
+  if (!mapped) {
+    return {
+      ...DEFAULT_PORTRAIT,
+      monogram: buildMonogram(input.displayName)
+    };
+  }
+
+  const homepageImageUrl = mapped.portraits.homepage;
+  const prerunImageUrl = mapped.portraits.prerun;
+  const kaelisImageUrl = mapped.portraits.kaelis;
+  const rosterImageUrl = mapped.portraits.roster;
+  const imageUrlByContext: Readonly<Record<CharacterPortraitContext, string | null>> = {
+    homepage: homepageImageUrl,
+    prerun: prerunImageUrl,
+    kaelis: kaelisImageUrl,
+    roster: rosterImageUrl
+  };
+
   return {
     tone: mapped.tone,
-    imageUrl: mapped.imageUrl,
+    imageUrl: imageUrlByContext[context] ?? kaelisImageUrl,
+    homepageImageUrl,
+    prerunImageUrl,
+    kaelisImageUrl,
+    rosterImageUrl,
     runImageUrl: mapped.runImageUrl,
     hitImageUrl: mapped.hitImageUrl,
     sigil: mapped.sigil,
-    monogram: buildMonogram(input.displayName)
+    monogram: buildMonogram(input.displayName),
+    skinId: mapped.resolvedSkinId
   };
+}
+
+export function resolveCharacterDisplayName(input: Readonly<{
+  characterId?: string | null;
+  preferredName?: string | null;
+}>): string {
+  return resolveCharacterDisplayNameFromCatalog(input);
 }
 
 function buildMonogram(displayName: string | null | undefined): string {

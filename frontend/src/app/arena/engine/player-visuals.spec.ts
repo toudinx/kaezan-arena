@@ -6,9 +6,10 @@ describe("player-visuals", () => {
     expect(resolvePlayerSpriteSemanticId("character:kina", "run")).toBe("sprite.player.kina.run");
     expect(resolvePlayerSpriteSemanticId("character:kina", "hit")).toBe("sprite.player.kina.hit");
 
-    expect(resolvePlayerSpriteSemanticId("character:ranged_prototype", "idle")).toBe("sprite.player.ranged_prototype.idle");
-    expect(resolvePlayerSpriteSemanticId("character:ranged_prototype", "run")).toBe("sprite.player.ranged_prototype.run");
-    expect(resolvePlayerSpriteSemanticId("character:ranged_prototype", "hit")).toBe("sprite.player.ranged_prototype.hit");
+    expect(resolvePlayerSpriteSemanticId("character:ranged_prototype", "idle")).toBe("sprite.player.sylwen.1.idle");
+    expect(resolvePlayerSpriteSemanticId("character:ranged_prototype", "run")).toBe("sprite.player.sylwen.1.run");
+    expect(resolvePlayerSpriteSemanticId("character:ranged_prototype", "hit")).toBe("sprite.player.sylwen.1.hit");
+    expect(resolvePlayerSpriteSemanticId("character:sylwen", "run")).toBe("sprite.player.sylwen.1.run");
   });
 
   it("maps legacy character ids to dedicated fallback-compatible skins", () => {
@@ -25,10 +26,9 @@ describe("player-visuals", () => {
     const ids = getPlayerSpriteAssetIdsForPreload();
     expect(ids).toContain("sprite.player.idle");
     expect(ids).toContain("sprite.player.kina.idle");
-    expect(ids).toContain("sprite.player.ranged_prototype.run");
+    expect(ids).toContain("sprite.player.sylwen.1.run");
     expect(ids).toContain("sprite.player.kaelis_dawn.hit");
     expect(ids).toContain("sprite.player.kaelis_ember.hit");
     expect(new Set(ids).size).toBe(ids.length);
   });
 });
-

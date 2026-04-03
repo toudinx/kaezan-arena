@@ -2,6 +2,7 @@ import { Component, OnInit, signal } from "@angular/core";
 import { Router } from "@angular/router";
 import { AccountStore } from "../../account/account-store.service";
 import {
+  resolveCharacterDisplayName,
   resolveCharacterPortraitVisual
 } from "../../shared/characters/character-visuals.helpers";
 import { resolveItemVisual } from "../../shared/items/item-visuals.helpers";
@@ -76,11 +77,15 @@ export class CharactersPageComponent implements OnInit {
       const catalog = this.accountStore.catalogs().characterById[c.characterId];
       const portrait = resolveCharacterPortraitVisual({
         characterId: c.characterId,
-        displayName: catalog?.displayName ?? c.name
+        displayName: catalog?.displayName ?? c.name,
+        context: "roster"
       });
       return {
         id: c.characterId,
-        name: catalog?.displayName ?? c.name,
+        name: resolveCharacterDisplayName({
+          characterId: c.characterId,
+          preferredName: catalog?.displayName ?? c.name
+        }),
         imageUrl: portrait.imageUrl,
         portrait: { imageUrl: portrait.imageUrl, monogram: portrait.monogram, tone: portrait.tone }
       };
@@ -124,7 +129,10 @@ export class CharactersPageComponent implements OnInit {
     const char = this.activeCharacter;
     if (!char) return '';
     const catalog = this.accountStore.catalogs().characterById[char.characterId];
-    return catalog?.displayName ?? char.name ?? '';
+    return resolveCharacterDisplayName({
+      characterId: char.characterId,
+      preferredName: catalog?.displayName ?? char.name ?? ''
+    });
   }
 
   get activeCharacterSubtitle(): string {
@@ -138,9 +146,10 @@ export class CharactersPageComponent implements OnInit {
     if (!char) return null;
     const portrait = resolveCharacterPortraitVisual({
       characterId: char.characterId,
-      displayName: this.activeCharacterName
+      displayName: this.activeCharacterName,
+      context: "kaelis"
     });
-    return portrait.runImageUrl ?? portrait.imageUrl ?? null;
+    return portrait.imageUrl ?? null;
   }
 
   get activeWeaponImageUrl(): string | null {

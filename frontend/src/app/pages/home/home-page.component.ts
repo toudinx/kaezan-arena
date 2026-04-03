@@ -17,6 +17,7 @@ import {
   type DailyContractRowViewModel
 } from "../../shared/contracts/daily-contracts-modal.component";
 import {
+  resolveCharacterDisplayName,
   resolveCharacterPortraitVisual
 } from "../../shared/characters/character-visuals.helpers";
 
@@ -87,7 +88,11 @@ export class HomePageComponent implements OnInit {
     const character = this.accountStore.activeCharacter();
     if (!character) return "Commander";
     const catalog = this.accountStore.catalogs().characterById[character.characterId];
-    return catalog?.displayName ?? character.name ?? "Commander";
+    const preferredName = catalog?.displayName ?? character.name ?? "Commander";
+    return resolveCharacterDisplayName({
+      characterId: character.characterId,
+      preferredName
+    }) || "Commander";
   }
 
   get hudAccountLabel(): string {
@@ -110,9 +115,46 @@ export class HomePageComponent implements OnInit {
     if (!character) return null;
     const portrait = resolveCharacterPortraitVisual({
       characterId: character.characterId,
-      displayName: this.commanderName
+      displayName: this.commanderName,
+      context: "homepage"
     });
     return portrait.imageUrl ?? null;
+  }
+
+  get homeBackgroundImageUrl(): string | null {
+    return this.shouldUseCharacterHomepageAsBackground
+      ? this.characterImageUrl
+      : this.currentBackground.imageUrl;
+  }
+
+  get homeBackgroundOverlay(): string | null {
+    return this.shouldUseCharacterHomepageAsBackground ? null : this.currentBackground.overlay;
+  }
+
+  get stageCharacterImageUrl(): string | null {
+    // When homepage art exists, render it as full-screen background instead of center-stage sprite.
+    if (this.shouldUseCharacterHomepageAsBackground) {
+      return null;
+    }
+
+    const character = this.accountStore.activeCharacter();
+    if (!character) return null;
+    const portrait = resolveCharacterPortraitVisual({
+      characterId: character.characterId,
+      displayName: this.commanderName,
+      context: "kaelis"
+    });
+    return portrait.imageUrl ?? null;
+  }
+
+  private get shouldUseCharacterHomepageAsBackground(): boolean {
+    const url = this.characterImageUrl;
+    if (!url) {
+      return false;
+    }
+
+    // Treat high-resolution painted homepage assets as full-screen backgrounds.
+    return /\.jpe?g($|\?)/i.test(url);
   }
 
   get currentBackground(): {

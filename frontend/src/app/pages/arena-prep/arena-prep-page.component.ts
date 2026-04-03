@@ -4,6 +4,7 @@ import { Router } from "@angular/router";
 import type { CharacterState } from "../../api/account-api.service";
 import { AccountStore } from "../../account/account-store.service";
 import {
+  resolveCharacterDisplayName,
   resolveCharacterPortraitVisual,
   type CharacterPortraitTone
 } from "../../shared/characters/character-visuals.helpers";
@@ -128,7 +129,8 @@ export class ArenaPrepPageComponent implements OnInit {
 
     return resolveCharacterPortraitVisual({
       characterId: character.characterId,
-      displayName: this.activeCharacterName
+      displayName: this.activeCharacterName,
+      context: "prerun"
     }).tone;
   }
 
@@ -137,7 +139,8 @@ export class ArenaPrepPageComponent implements OnInit {
     if (!character) return null;
     const portrait = resolveCharacterPortraitVisual({
       characterId: character.characterId,
-      displayName: this.activeCharacterName
+      displayName: this.activeCharacterName,
+      context: "prerun"
     });
     return portrait.imageUrl ?? null;
   }
@@ -292,7 +295,11 @@ export class ArenaPrepPageComponent implements OnInit {
   }
 
   private resolveCharacterDisplayName(character: CharacterState): string {
-    return this.accountStore.catalogs().characterById[character.characterId]?.displayName ?? character.name;
+    const preferredName = this.accountStore.catalogs().characterById[character.characterId]?.displayName ?? character.name;
+    return resolveCharacterDisplayName({
+      characterId: character.characterId,
+      preferredName
+    });
   }
 
   private syncSelectedCharacterWithStore(): void {

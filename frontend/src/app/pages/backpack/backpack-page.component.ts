@@ -9,7 +9,10 @@ import {
   BackpackWindowComponent
 } from "../../shared/backpack/backpack-window.component";
 import { type BackpackSlot, mapInventoryToBackpackSlots } from "../../shared/backpack/backpack-inventory.helpers";
-import { resolveCharacterPortraitVisual } from "../../shared/characters/character-visuals.helpers";
+import {
+  resolveCharacterDisplayName,
+  resolveCharacterPortraitVisual
+} from "../../shared/characters/character-visuals.helpers";
 
 @Component({
   selector: "app-backpack-page",
@@ -53,7 +56,9 @@ export class BackpackPageComponent implements OnInit {
     }
 
     return Object.values(state.characters).sort((left, right) => {
-      const byName = left.name.localeCompare(right.name, undefined, { sensitivity: "base" });
+      const leftName = resolveCharacterDisplayName({ characterId: left.characterId, preferredName: left.name });
+      const rightName = resolveCharacterDisplayName({ characterId: right.characterId, preferredName: right.name });
+      const byName = leftName.localeCompare(rightName, undefined, { sensitivity: "base" });
       return byName !== 0 ? byName : left.characterId.localeCompare(right.characterId);
     });
   }
@@ -100,11 +105,15 @@ export class BackpackPageComponent implements OnInit {
 
       const portrait = resolveCharacterPortraitVisual({
         characterId: character.characterId,
-        displayName: character.name
+        displayName: character.name,
+        context: "kaelis"
       });
       result[equippedWeaponId] = {
         characterId: character.characterId,
-        characterName: character.name,
+        characterName: resolveCharacterDisplayName({
+          characterId: character.characterId,
+          preferredName: character.name
+        }),
         imageUrl: portrait.imageUrl ?? portrait.runImageUrl ?? null,
         monogram: portrait.monogram,
         tone: portrait.tone
@@ -117,12 +126,18 @@ export class BackpackPageComponent implements OnInit {
   get assignTargets(): ReadonlyArray<BackpackAssignTarget> {
     return this.allCharacters.map((character) => ({
       characterId: character.characterId,
-      characterName: character.name
+      characterName: resolveCharacterDisplayName({
+        characterId: character.characterId,
+        preferredName: character.name
+      })
     }));
   }
 
   get activeCharacterName(): string {
-    return this.activeCharacter?.name ?? "No active Kaelis";
+    return resolveCharacterDisplayName({
+      characterId: this.activeCharacter?.characterId,
+      preferredName: this.activeCharacter?.name ?? "No active Kaelis"
+    });
   }
 
   get activeCharacterMasteryLevel(): number {
