@@ -1,19 +1,12 @@
 <section class="shell">
-  <header class="shell__topbar">
-    <div class="shell__brand">Kaezan Arena</div>
-    <div class="shell__actions">
-      <nav class="shell__nav">
-        <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">Home</a>
-        <a routerLink="/characters" routerLinkActive="active">Kaelis</a>
-        <a routerLink="/arena" routerLinkActive="active">Arena</a>
-      </nav>
-      <button type="button" class="shell__backpack-button" (click)="toggleBackpack()">Backpack</button>
-    </div>
-  </header>
+  @if (showTopbar) {
+    <header class="shell__topbar">
+      <a class="shell__brand" routerLink="/">Kaezan Arena</a>
+      <p class="shell__hint">Navigation actions are available on Home Hub.</p>
+    </header>
+  }
 
   <main class="shell__content">
     <router-outlet></router-outlet>
   </main>
-
-  <app-backpack-drawer [isOpen]="isBackpackOpen" (closed)="closeBackpack()"></app-backpack-drawer>
 </section>

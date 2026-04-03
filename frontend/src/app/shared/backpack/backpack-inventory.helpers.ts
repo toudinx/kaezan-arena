@@ -6,7 +6,7 @@ import type {
 } from "../../api/account-api.service";
 import { resolveItemVisual, type ItemIconTone } from "../items/item-visuals.helpers";
 
-export type BackpackFilter = "all" | "weapons";
+export type BackpackFilter = "all" | BackpackRarityClass;
 export type BackpackRarityClass = "common" | "rare" | "epic" | "legendary" | "ascendant";
 
 type BackpackEquipmentSlot = "weapon" | "unknown";
@@ -55,7 +55,7 @@ type NamedEquipmentInstance = Readonly<{
 
 const SLOT_LABELS: Readonly<Record<BackpackEquipmentSlot, string>> = {
   weapon: "Weapon",
-  unknown: "Equipment"
+  unknown: "Unclassified"
 };
 
 const SLOT_SORT_ORDER: Readonly<Record<BackpackEquipmentSlot, number>> = {
@@ -93,6 +93,7 @@ export function mapInventoryToBackpackSlots(
         equipmentCatalogByItemId
       )
     )
+    .filter((entry) => entry.isWeapon)
     .sort(compareNamedEquipments)
     .map((entry) => createEquipmentSlot(entry));
 }
@@ -102,7 +103,7 @@ export function filterBackpackSlots(slots: ReadonlyArray<BackpackSlot>, filter: 
     return [...slots];
   }
 
-  return slots.filter((slot) => slot.slot === "weapon");
+  return slots.filter((slot) => slot.rarityClass === filter);
 }
 
 function toNamedEquipmentInstance(
@@ -278,7 +279,7 @@ function resolveTypeLabel(
     return `${classLabel}${elementLabel}`;
   }
 
-  return "Unknown Type";
+  return "Unclassified";
 }
 
 function buildDetailStatLines(modifiers: Readonly<Record<string, string>>): ReadonlyArray<string> {

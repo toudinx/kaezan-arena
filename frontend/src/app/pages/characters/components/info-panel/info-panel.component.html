@@ -1,0 +1,112 @@
+<aside class="info-panel">
+  @if (activeTab === 'details') {
+    <div>
+      <h2>{{ characterName || 'Kaelis' }}</h2>
+      @if (characterSubtitle) {
+        <div class="sub-title">{{ characterSubtitle }}</div>
+      }
+    </div>
+
+    <div class="xp-block">
+      <div class="xp-meta">
+        <span>Mastery {{ masteryLevel }}</span>
+        <span>{{ masteryXp }} / {{ masteryXpRequired }} XP</span>
+      </div>
+      <progress class="xp-track" [value]="masteryXp" [max]="masteryXpRequired"></progress>
+    </div>
+
+    <h3>Attributes</h3>
+    <div class="stat-list">
+      @for (stat of baseStats; track stat.label) {
+        <div class="stat-row">
+          <span class="stat-label">{{ stat.label }}</span>
+          <span class="stat-value">{{ stat.value }}</span>
+        </div>
+      }
+    </div>
+
+    <h3>Loadout</h3>
+    <div class="loadout-row">
+      <div class="loadout-header">Weapon: {{ equippedWeaponName || 'None' }}</div>
+      <div class="loadout-stats">
+        @for (stat of weaponStats; track stat.label) {
+          <span>{{ stat.value }}</span>
+        }
+      </div>
+    </div>
+    <div class="loadout-row">
+      <div class="loadout-header">Sigils</div>
+      <div class="loadout-stats accent">
+        {{ primarySigilBonus?.detail || 'No active set bonus.' }}
+      </div>
+    </div>
+  }
+
+  @if (activeTab === 'weapon') {
+    <div>
+      <div class="sub-title">Equipped Weapon</div>
+      <h2 class="tone-warn">{{ weapon?.name || 'None equipped' }}</h2>
+      @if (weapon?.description) {
+        <div class="muted">{{ weapon?.description }}</div>
+      }
+    </div>
+
+    @if (weaponStats.length) {
+      <h3>Stats</h3>
+      <div class="stat-list">
+        @for (stat of weaponStats; track stat.label) {
+          <div class="stat-row">
+            <span class="stat-label">{{ stat.label }}</span>
+            <span class="stat-value">{{ stat.value }}</span>
+          </div>
+        }
+      </div>
+    }
+
+    @if (weapon?.passive) {
+      <h3>Passive</h3>
+      <div class="muted">{{ weapon?.passive }}</div>
+    }
+
+    <div class="panel-actions">
+      <button type="button" class="change-btn" (click)="changeWeapon.emit()">
+        Change Weapon
+      </button>
+    </div>
+  }
+
+  @if (activeTab === 'sigils') {
+    <div>
+      <div class="sub-title">Sigil Matrix</div>
+      <h2>Loadout Summary</h2>
+    </div>
+
+    <h3>Sigil Stats Gained</h3>
+    @if (sigilStats.length) {
+      <div class="stat-list">
+        @for (stat of sigilStats; track $index) {
+          <div class="stat-row">
+            <span class="stat-label">{{ stat.label }}</span>
+            <span class="stat-value">{{ stat.value }}</span>
+          </div>
+        }
+      </div>
+    } @else {
+      <div class="muted">Equip sigils to see stats.</div>
+    }
+
+    <h3>Set Bonuses</h3>
+    @if (sigilSetBonuses.length) {
+      <div class="bonus-list">
+        @for (bonus of sigilSetBonuses; track bonus.id) {
+          <div class="bonus-row">
+            <span class="stat-label">{{ bonus.label }}</span>
+            <span class="stat-sub">{{ bonus.detail }}</span>
+          </div>
+        }
+      </div>
+    } @else {
+      <div class="muted">No active set bonuses.</div>
+    }
+  }
+</aside>

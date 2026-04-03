@@ -1,0 +1,139 @@
+:host {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  transform: translateY(-45%);
+  z-index: 4;
+  display: block;
+}
+
+.home-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  padding-right: 60px;
+}
+
+.nav-item {
+  width: 420px;
+  height: 96px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-right: 6px solid rgba(255, 255, 255, 0.5);
+  background: linear-gradient(90deg, rgba(18, 18, 34, 0.82), rgba(34, 34, 54, 0.92));
+  display: flex;
+  align-items: center;
+  padding: 0 36px;
+  cursor: pointer;
+  text-decoration: none;
+  color: inherit;
+}
+
+.nav-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 20px;
+}
+
+.nav-text h3 {
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  color: #ffffff;
+  margin: 0 0 4px;
+}
+
+.nav-text span {
+  font-size: 12px;
+  letter-spacing: 0.28em;
+  color: rgba(255, 255, 255, 0.55);
+  font-weight: 600;
+}
+
+.nav-arrow {
+  font-size: 22px;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.nav-item--arena {
+  border-right-color: #ff6a78;
+}
+
+.nav-item--arena .nav-text h3 {
+  color: #ff7d8c;
+}
+
+.nav-item--backpack {
+  border-right-color: #7bb2ff;
+}
+
+.nav-item--kaelis {
+  border-right-color: #a29bfe;
+}
+
+.nav-item--recruit {
+  width: 460px;
+  height: 122px;
+  border-right-width: 10px;
+  border-right-color: #f6d08b;
+  background: linear-gradient(90deg, rgba(33, 33, 48, 0.88), rgba(64, 46, 18, 0.94));
+}
+
+.nav-item--recruit .nav-text h3 {
+  color: #f6d08b;
+  font-size: 34px;
+}
+
+.nav-item--recruit .nav-arrow {
+  color: #f6d08b;
+  font-size: 26px;
+}
+
+.nav-item--disabled {
+  cursor: default;
+  opacity: 0.65;
+}
+
+@media (max-width: 1400px) {
+  .home-nav {
+    padding-right: 40px;
+  }
+
+  .nav-item {
+    width: 360px;
+    height: 82px;
+  }
+
+  .nav-item--recruit {
+    width: 400px;
+    height: 104px;
+  }
+}
+
+@media (max-width: 768px) {
+  :host {
+    top: auto;
+    bottom: 100px;
+    right: 50%;
+    transform: translateX(50%);
+  }
+
+  .home-nav {
+    padding-right: 0;
+    gap: 10px;
+  }
+
+  .nav-item,
+  .nav-item--recruit {
+    width: 90vw;
+    height: 64px;
+    border-right-width: 4px;
+  }
+
+  .nav-item--recruit {
+    height: 80px;
+  }
+}

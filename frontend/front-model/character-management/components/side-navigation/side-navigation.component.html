@@ -1,0 +1,12 @@
+<nav class="side-nav">
+  @for (tab of tabs; track tab.id) {
+    <button
+      type="button"
+      class="nav-item"
+      [class.active]="tab.id === activeTab"
+      (click)="setTab(tab.id)"
+    >
+      {{ tab.label }}
+    </button>
+  }
+</nav>

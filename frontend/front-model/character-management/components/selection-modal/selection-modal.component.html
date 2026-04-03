@@ -1,0 +1,145 @@
+@if (open) {
+  <div class="selection-overlay">
+    <div class="selection-card" role="dialog" aria-modal="true">
+      <div class="selection-header">
+        <div>
+          <div class="kicker">{{ mode === 'weapon' ? 'Weapons' : 'Sigils' }}</div>
+          <h2>{{ title }}</h2>
+        </div>
+        <button type="button" class="close-btn" (click)="close()" aria-label="Close">
+          X
+        </button>
+      </div>
+
+      @if (isSigilMode) {
+        <div class="selection-filters">
+          <label>
+            <span>Set</span>
+            <select class="filter-select" [(ngModel)]="setFilter">
+              @for (option of availableSets; track option.id) {
+                <option [value]="option.id">{{ option.label }}</option>
+              }
+            </select>
+          </label>
+          <label>
+            <span>Main Stat</span>
+            <select class="filter-select" [(ngModel)]="statFilter">
+              @for (option of availableStats; track option.id) {
+                <option [value]="option.id">{{ option.label }}</option>
+              }
+            </select>
+          </label>
+        </div>
+      }
+
+      <div class="selection-body">
+        <div class="selection-list">
+          @if (isSigilMode) {
+            <button
+              type="button"
+              class="list-item"
+              [class.selected]="activeId === null"
+              (click)="selectItem(null)"
+            >
+              <div class="item-icon empty">+</div>
+              <div class="item-meta">
+                <div class="item-name">Clear Slot</div>
+                <div class="item-sub">Remove equipped sigil.</div>
+              </div>
+            </button>
+          }
+
+          @for (item of filteredItems; track item.id) {
+            <button
+              type="button"
+              class="list-item"
+              [class.selected]="activeId === item.id"
+              (click)="selectItem(item.id)"
+            >
+              <div class="item-icon">
+                <img [src]="$any(item).imageUrl" [alt]="item.name" />
+              </div>
+              <div class="item-meta">
+                <div class="item-name">{{ item.name }}</div>
+                @if (mode === 'weapon') {
+                  <div class="item-sub">
+                    {{ weaponFlatLabel($any(item)) }} - {{ weaponStatLabel($any(item)) }}
+                  </div>
+                } @else {
+                  <div class="item-sub">
+                    {{ setLabel($any(item).setKey) }} -
+                    {{ statFilterLabel($any(item).mainStat.type) }}
+                    {{ sigilStatLabel($any(item).mainStat.type, $any(item).mainStat.value) }}
+                  </div>
+                }
+              </div>
+            </button>
+          }
+        </div>
+
+        <div class="selection-details">
+          @if (activeItem) {
+            @if (mode === 'weapon') {
+              <div class="detail-preview">
+                <img [src]="$any(activeItem).imageUrl" [alt]="activeItem.name" />
+              </div>
+              <h2>{{ activeItem.name }}</h2>
+              <div class="muted">{{ activeItem.description }}</div>
+
+              <h3>Stats</h3>
+              <div class="stat-row">
+                <span class="stat-label">Base</span>
+                <span class="stat-value">{{ weaponFlatLabel($any(activeItem)) }}</span>
+              </div>
+              <div class="stat-row">
+                <span class="stat-label">Secondary</span>
+                <span class="stat-value">{{ weaponStatLabel($any(activeItem)) }}</span>
+              </div>
+
+              <h3>Passive</h3>
+              <div class="muted">{{ $any(activeItem).passive }}</div>
+            } @else {
+              <div class="detail-preview sigil-preview">
+                <img [src]="$any(activeItem).imageUrl" [alt]="activeItem.name" />
+              </div>
+              <h2>{{ activeItem.name }}</h2>
+              <div class="set-chip">{{ setLabel($any(activeItem).setKey) }} set</div>
+              <div class="muted">{{ activeItem.description }}</div>
+
+              <h3>Main Attribute</h3>
+              <div class="stat-row">
+                <span class="stat-label">{{ statFilterLabel($any(activeItem).mainStat.type) }}</span>
+                <span class="stat-value">
+                  {{ sigilStatLabel($any(activeItem).mainStat.type, $any(activeItem).mainStat.value) }}
+                </span>
+              </div>
+
+              <h3>Sub Attributes</h3>
+              <div class="stat-list">
+                @for (stat of $any(activeItem).subStats; track stat.type) {
+                  <div class="stat-row">
+                    <span class="stat-label">{{ statFilterLabel(stat.type) }}</span>
+                    <span class="stat-value">{{ sigilStatLabel(stat.type, stat.value) }}</span>
+                  </div>
+                }
+              </div>
+            }
+          } @else {
+            <div class="empty-state">Select an item to preview.</div>
+          }
+        </div>
+      </div>
+
+      <div class="selection-actions">
+        <app-button label="Cancel" variant="ghost" (click)="close()"></app-button>
+        <app-button
+          [label]="confirmLabel"
+          variant="primary"
+          [disabled]="!isSigilMode && !activeId"
+          (click)="confirm()"
+        ></app-button>
+      </div>
+    </div>
+  </div>
+}
+

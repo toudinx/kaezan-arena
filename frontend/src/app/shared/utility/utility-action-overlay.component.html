@@ -1,0 +1,27 @@
+@if (isOpen) {
+  <div class="utility-overlay__backdrop" (click)="onBackdropClick()">
+    <section
+      class="utility-overlay"
+      role="dialog"
+      aria-modal="true"
+      [attr.aria-label]="title"
+      (click)="onPanelClick($event)"
+    >
+      <header class="utility-overlay__header">
+        <div>
+          <p class="utility-overlay__eyebrow">{{ eyebrow }}</p>
+          <h2>{{ title }}</h2>
+        </div>
+        <button type="button" class="utility-overlay__close" (click)="requestClose()">Close</button>
+      </header>
+
+      @if (description) {
+        <p class="utility-overlay__description">{{ description }}</p>
+      }
+
+      @if (hint) {
+        <p class="utility-overlay__hint">{{ hint }}</p>
+      }
+    </section>
+  </div>
+}

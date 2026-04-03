@@ -100,10 +100,28 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
         lock (account.Sync)
         {
             EnsureDailyContractsRefreshed(account);
-            var character = GetCharacterOrThrow(account.State, characterId);
-            if (!character.Inventory.EquipmentInstances.TryGetValue(equipmentInstanceId, out var equipmentInstance))
+            var targetCharacter = GetCharacterOrThrow(account.State, characterId);
+            var sourceCharacterId = characterId;
+            var sourceCharacter = targetCharacter;
+            OwnedEquipmentInstance? equipmentInstance = null;
+
+            foreach (var (candidateCharacterId, candidateCharacter) in account.State.Characters)
             {
-                throw new InvalidOperationException($"Character '{characterId}' does not own equipment instance '{equipmentInstanceId}'.");
+                if (!candidateCharacter.Inventory.EquipmentInstances.TryGetValue(equipmentInstanceId, out var foundInstance))
+                {
+                    continue;
+                }
+
+                sourceCharacterId = candidateCharacterId;
+                sourceCharacter = candidateCharacter;
+                equipmentInstance = foundInstance;
+                break;
+            }
+
+            if (equipmentInstance is null)
+            {
+                throw new InvalidOperationException(
+                    $"Equipment instance '{equipmentInstanceId}' was not found in account '{accountId}'.");
             }
 
             if (equipmentInstance.IsLocked)
@@ -127,12 +145,54 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
                     $"Equipment instance '{equipmentInstanceId}' cannot be equipped in '{EquipmentSlotMapper.ToCatalogSlot(slot)}'.");
             }
 
-            var updatedCharacter = character with
+            var updatedCharacters = new Dictionary<string, CharacterState>(account.State.Characters, StringComparer.Ordinal);
+            if (!string.Equals(sourceCharacterId, characterId, StringComparison.Ordinal))
             {
-                Equipment = character.Equipment.SetInstanceId(slot, equipmentInstanceId)
-            };
+                var updatedSourceEquipmentInstances =
+                    new Dictionary<string, OwnedEquipmentInstance>(sourceCharacter.Inventory.EquipmentInstances, StringComparer.Ordinal);
+                updatedSourceEquipmentInstances.Remove(equipmentInstanceId);
 
-            account.State = UpdateCharacter(account.State, updatedCharacter, versionIncrement: 1);
+                var updatedSourceEquipment = sourceCharacter.Equipment;
+                if (string.Equals(updatedSourceEquipment.GetInstanceId(slot), equipmentInstanceId, StringComparison.Ordinal))
+                {
+                    updatedSourceEquipment = updatedSourceEquipment.SetInstanceId(slot, null);
+                }
+
+                var updatedSourceCharacter = sourceCharacter with
+                {
+                    Inventory = sourceCharacter.Inventory with
+                    {
+                        EquipmentInstances = updatedSourceEquipmentInstances
+                    },
+                    Equipment = updatedSourceEquipment
+                };
+                updatedCharacters[sourceCharacterId] = updatedSourceCharacter;
+
+                var updatedTargetEquipmentInstances =
+                    new Dictionary<string, OwnedEquipmentInstance>(targetCharacter.Inventory.EquipmentInstances, StringComparer.Ordinal)
+                    {
+                        [equipmentInstanceId] = equipmentInstance
+                    };
+                targetCharacter = targetCharacter with
+                {
+                    Inventory = targetCharacter.Inventory with
+                    {
+                        EquipmentInstances = updatedTargetEquipmentInstances
+                    }
+                };
+            }
+
+            var updatedCharacter = targetCharacter with
+            {
+                Equipment = targetCharacter.Equipment.SetInstanceId(slot, equipmentInstanceId)
+            };
+            updatedCharacters[characterId] = updatedCharacter;
+
+            account.State = account.State with
+            {
+                Characters = updatedCharacters,
+                Version = account.State.Version + 1
+            };
             PersistAccount(account);
             return CloneCharacterState(updatedCharacter);
         }

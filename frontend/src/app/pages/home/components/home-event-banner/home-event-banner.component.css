@@ -1,0 +1,78 @@
+:host {
+  position: absolute;
+  left: 60px;
+  bottom: 60px;
+  z-index: 4;
+  display: block;
+}
+
+.event-banner {
+  width: 360px;
+  height: 114px;
+  border-radius: 16px;
+  border: 1px solid rgba(45, 227, 200, 0.3);
+  border-left: 6px solid #2de3c8;
+  background: linear-gradient(135deg, rgba(10, 30, 28, 0.92), rgba(14, 40, 36, 0.95));
+  padding: 18px 26px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.banner-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.32em;
+  color: #2de3c8;
+}
+
+.banner-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #2de3c8;
+}
+
+.banner-title {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #ffffff;
+}
+
+.banner-timer {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 768px) {
+  :host {
+    left: 20px;
+    bottom: 20px;
+  }
+
+  .event-banner {
+    width: 190px;
+    height: 64px;
+    padding: 10px 12px;
+  }
+
+  .banner-title {
+    font-size: 13px;
+  }
+
+  .banner-label {
+    font-size: 9px;
+    letter-spacing: 0.24em;
+  }
+}

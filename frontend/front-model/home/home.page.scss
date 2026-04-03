@@ -1,0 +1,214 @@
+:host {
+  position: fixed;
+  inset: 0;
+  display: block;
+  z-index: 20;
+}
+
+.home-shell {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #050511;
+  color: var(--text-primary, #f5f5fa);
+}
+
+.home-stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  z-index: 3;
+}
+
+.home-customize-trigger {
+  position: absolute;
+  bottom: 60px;
+  right: 60px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 28px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.8);
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  cursor: pointer;
+  backdrop-filter: blur(10px);
+  transition:
+    border-color 200ms ease,
+    background 200ms ease,
+    color 200ms ease;
+  z-index: 4;
+}
+
+.home-customize-trigger:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.customize-icon {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.customize-icon svg {
+  width: 22px;
+  height: 22px;
+  fill: currentColor;
+}
+
+@media (max-width: 768px) {
+  .home-customize-trigger {
+    bottom: 20px;
+    right: 20px;
+    padding: 10px 14px;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+  }
+}
+
+.expedition-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(5, 5, 17, 0.75);
+  backdrop-filter: blur(6px);
+}
+
+.expedition-modal__card {
+  width: min(760px, 92vw);
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(11, 11, 22, 0.96);
+  padding: 24px;
+  box-shadow:
+    0 20px 60px rgba(0, 0, 0, 0.6),
+    0 0 40px rgba(90, 120, 255, 0.18);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.expedition-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.expedition-modal__header h2 {
+  font-size: 24px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.expedition-modal__close {
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.75);
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition:
+    border-color 200ms ease,
+    color 200ms ease,
+    background 200ms ease;
+}
+
+.expedition-modal__close:hover {
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.45);
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.expedition-modal__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.mode-card {
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: linear-gradient(135deg, rgba(18, 18, 34, 0.9), rgba(26, 26, 44, 0.85));
+  padding: 18px;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 16px;
+  cursor: pointer;
+  transition:
+    transform 220ms ease,
+    border-color 220ms ease,
+    box-shadow 220ms ease;
+}
+
+.mode-card h3 {
+  margin: 0 0 6px;
+  font-size: 18px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.mode-card p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.mode-card__cta {
+  align-self: flex-start;
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.85);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.mode-card--mvp {
+  border-left: 4px solid rgba(255, 106, 120, 0.9);
+  box-shadow: 0 0 18px rgba(255, 90, 120, 0.2);
+}
+
+.mode-card--mvp h3 {
+  color: #ff7d8c;
+}
+
+.mode-card--ascension {
+  border-left: 4px solid rgba(123, 178, 255, 0.9);
+  box-shadow: 0 0 18px rgba(123, 178, 255, 0.2);
+}
+
+.mode-card--ascension h3 {
+  color: #8fc0ff;
+}
+
+.mode-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 0 24px rgba(255, 255, 255, 0.12);
+}
+
+@media (max-width: 900px) {
+  .expedition-modal__grid {
+    grid-template-columns: 1fr;
+  }
+}

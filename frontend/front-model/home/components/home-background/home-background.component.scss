@@ -1,0 +1,113 @@
+:host {
+  position: absolute;
+  inset: 0;
+  display: block;
+  overflow: hidden;
+  pointer-events: none;
+  --parallax-x: 0px;
+  --parallax-y: 0px;
+}
+
+.home-background__image {
+  position: absolute;
+  inset: -6%;
+  background-size: cover;
+  background-position: center;
+  transform: translate3d(var(--parallax-x), var(--parallax-y), 0) scale(1.05);
+  transition: transform 120ms ease;
+  filter: saturate(1.05);
+}
+
+.home-background__overlay {
+  position: absolute;
+  inset: 0;
+  mix-blend-mode: screen;
+  opacity: 0.9;
+  pointer-events: none;
+}
+
+.home-background__particles {
+  position: absolute;
+  inset: -12%;
+  opacity: 0.6;
+  animation: drift 45s linear infinite;
+  transform: translate3d(
+      calc(var(--parallax-x) * 0.35),
+      calc(var(--parallax-y) * 0.35),
+      0
+    )
+    scale(1.02);
+}
+
+.home-background__particles--alt {
+  opacity: 0.45;
+  animation-duration: 30s;
+  animation-direction: reverse;
+  transform: translate3d(
+      calc(var(--parallax-x) * 0.55),
+      calc(var(--parallax-y) * 0.55),
+      0
+    )
+    scale(1.04);
+}
+
+.home-background__particles.nebula {
+  background-image:
+    radial-gradient(
+      rgba(140, 156, 255, 0.35) 1.5px,
+      transparent 2px
+    ),
+    radial-gradient(
+      rgba(255, 92, 168, 0.35) 1px,
+      transparent 1.6px
+    );
+  background-size: 420px 420px, 260px 260px;
+}
+
+.home-background__particles.stars {
+  background-image:
+    radial-gradient(
+      rgba(255, 255, 255, 0.8) 1.2px,
+      transparent 1.8px
+    ),
+    radial-gradient(
+      rgba(160, 196, 255, 0.7) 1px,
+      transparent 1.6px
+    );
+  background-size: 520px 520px, 320px 320px;
+}
+
+.home-background__particles.void {
+  background-image:
+    radial-gradient(
+      rgba(120, 120, 140, 0.35) 1px,
+      transparent 1.8px
+    );
+  background-size: 380px 380px;
+}
+
+.home-background__vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    120% 80% at 50% 20%,
+    transparent 0%,
+    rgba(5, 5, 12, 0.65) 70%
+  );
+  pointer-events: none;
+}
+
+@keyframes drift {
+  0% {
+    background-position: 0 0, 0 0;
+  }
+  100% {
+    background-position: 120px -520px, -80px -380px;
+  }
+}
+
+@media (max-width: 768px) {
+  .home-background__image {
+    inset: -10%;
+  }
+}

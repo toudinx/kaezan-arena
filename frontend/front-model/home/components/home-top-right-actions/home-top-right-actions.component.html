@@ -1,0 +1,27 @@
+<div class="home-actions">
+  @for (action of actions; track action.id) {
+    @if (action.route) {
+      <a
+        class="action-btn"
+        [ngClass]="{ 'action-btn--gold': action.tone === 'gold' }"
+        [routerLink]="action.route"
+        [attr.aria-label]="action.label"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path [attr.d]="action.iconPath"></path>
+        </svg>
+      </a>
+    } @else {
+      <button
+        type="button"
+        class="action-btn action-btn--disabled"
+        [ngClass]="{ 'action-btn--gold': action.tone === 'gold' }"
+        [attr.aria-label]="action.label"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path [attr.d]="action.iconPath"></path>
+        </svg>
+      </button>
+    }
+  }
+</div>

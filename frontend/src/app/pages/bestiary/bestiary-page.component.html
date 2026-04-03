@@ -192,7 +192,7 @@
           <div class="bestiary-right__group">
             <section class="detail-card">
               <div class="detail-card__header">
-                <p class="detail-card__label">Craft Equipment</p>
+                <p class="detail-card__label">Craft Weapon</p>
                 <span class="detail-card__meta">Rank {{ selectedSpecies.rank }} | {{ selectedSpecies.killsTotal }} kills</span>
               </div>
 
@@ -273,7 +273,7 @@
                   }
                 </div>
               } @else {
-                <p class="detail-empty">No species-linked equipment yet.</p>
+                <p class="detail-empty">No species-linked weapons yet.</p>
               }
             </section>
 
@@ -378,7 +378,10 @@
 
     @if (ascendantProgressRows.length > 0) {
       <section class="ascendant-progress">
-        <h3 class="ascendant-progress__title">Ascendant Unlock Progress</h3>
+        <div class="ascendant-progress__header">
+          <h3 class="ascendant-progress__title">Ascendant Unlock Progress</h3>
+          <p class="ascendant-progress__subtitle">Rank 5 coverage required per species tier.</p>
+        </div>
         @for (tier of ascendantProgressRows; track tier.tierIndex) {
           <article
             class="ascendant-tier"
@@ -389,10 +392,11 @@
               @if (tier.isUnlocked) {
                 <span class="ascendant-tier__badge">UNLOCKED</span>
               } @else {
-                <span class="ascendant-tier__count">{{ tier.speciesAtMaxRank }} / {{ tier.speciesRequired }} species at Rank 5</span>
+                <span class="ascendant-tier__count">{{ tier.speciesAtMaxRank }} / {{ tier.speciesRequired }}</span>
               }
             </div>
             @if (!tier.isUnlocked) {
+              <p class="ascendant-tier__goal">{{ tier.speciesRequired }} species at Rank 5 required</p>
               <div class="ascendant-tier__track">
                 <div
                   class="ascendant-tier__fill"
@@ -400,7 +404,14 @@
                 ></div>
               </div>
               @if (tier.missingSpecies.length > 0) {
-                <p class="ascendant-tier__missing">Missing: {{ tier.missingSpecies.join(", ") }}</p>
+                <div class="ascendant-tier__missing">
+                  <span class="ascendant-tier__missing-label">Missing</span>
+                  <ul class="ascendant-tier__missing-list">
+                    @for (species of tier.missingSpecies; track species) {
+                      <li class="ascendant-tier__missing-chip">{{ species }}</li>
+                    }
+                  </ul>
+                </div>
               }
             }
           </article>

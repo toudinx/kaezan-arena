@@ -1,0 +1,32 @@
+<div class="roster-strip">
+  <div class="roster-shell">
+    <button type="button" class="roster-nav left" (click)="scrollLeft()" aria-label="Scroll roster left">
+      <span aria-hidden="true">&lt;</span>
+    </button>
+
+    <div #viewport class="roster-viewport">
+      @for (entry of entries; track entry.id) {
+        <button
+          type="button"
+          class="roster-item"
+          [class.active]="entry.id === selectedId"
+          (click)="select(entry.id)"
+        >
+          <div class="thumb">
+            @if (entry.imageUrl || entry.portrait?.imageUrl) {
+              <img
+                [src]="entry.imageUrl || entry.portrait?.imageUrl"
+                [alt]="entry.name"
+              />
+            }
+            <span class="thumb-initial">{{ initialFor(entry.name) }}</span>
+          </div>
+        </button>
+      }
+    </div>
+
+    <button type="button" class="roster-nav right" (click)="scrollRight()" aria-label="Scroll roster right">
+      <span aria-hidden="true">&gt;</span>
+    </button>
+  </div>
+</div>

@@ -942,16 +942,6 @@
   --loot-icon-core: #60a5fa;
 }
 
-.loot-item__icon[data-tone="armor"] {
-  --loot-icon-edge: rgba(20, 184, 166, 0.58);
-  --loot-icon-core: #2dd4bf;
-}
-
-.loot-item__icon[data-tone="relic"] {
-  --loot-icon-edge: rgba(168, 85, 247, 0.58);
-  --loot-icon-core: #c084fc;
-}
-
 .loot-item__icon-image {
   position: relative;
   z-index: 2;
@@ -1161,6 +1151,142 @@
   border-left-color: #dc2626;
 }
 
+.ascendant-progress {
+  margin-top: 0.2rem;
+  border: 1px solid #1f3348;
+  border-radius: 0.52rem;
+  background: linear-gradient(180deg, rgba(10, 18, 29, 0.96), rgba(8, 14, 23, 0.96));
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.08);
+  padding: 0.62rem 0.68rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.44rem;
+}
+
+.ascendant-progress__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.56rem;
+  flex-wrap: wrap;
+}
+
+.ascendant-progress__title {
+  margin: 0;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #b6d4ec;
+  font-weight: 700;
+}
+
+.ascendant-progress__subtitle {
+  margin: 0;
+  font-size: 0.58rem;
+  color: #7ea2bf;
+}
+
+.ascendant-tier {
+  border: 1px solid #2a445f;
+  border-radius: 0.4rem;
+  background: #0b1727;
+  padding: 0.42rem 0.48rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+}
+
+.ascendant-tier--unlocked {
+  border-color: rgba(45, 212, 191, 0.5);
+  background: rgba(13, 148, 136, 0.16);
+}
+
+.ascendant-tier__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.ascendant-tier__name {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #e5effa;
+}
+
+.ascendant-tier__count,
+.ascendant-tier__badge {
+  flex-shrink: 0;
+  border-radius: 999px;
+  border: 1px solid #375472;
+  background: #13263b;
+  color: #b6d4ec;
+  font-size: 0.52rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 0.06rem 0.34rem;
+}
+
+.ascendant-tier__badge {
+  border-color: rgba(45, 212, 191, 0.5);
+  background: rgba(13, 148, 136, 0.22);
+  color: #99f6e4;
+}
+
+.ascendant-tier__goal {
+  margin: 0;
+  font-size: 0.58rem;
+  color: #8eb0cc;
+}
+
+.ascendant-tier__track {
+  height: 6px;
+  border-radius: 999px;
+  background: #182a3d;
+  overflow: hidden;
+}
+
+.ascendant-tier__fill {
+  height: 100%;
+  background: linear-gradient(90deg, #7c3aed, #2dd4bf);
+}
+
+.ascendant-tier__missing {
+  display: flex;
+  flex-direction: column;
+  gap: 0.18rem;
+}
+
+.ascendant-tier__missing-label {
+  font-size: 0.52rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #7ea2bf;
+  font-weight: 700;
+}
+
+.ascendant-tier__missing-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.18rem;
+}
+
+.ascendant-tier__missing-chip {
+  border-radius: 999px;
+  border: 1px solid rgba(59, 130, 246, 0.42);
+  background: rgba(30, 64, 175, 0.2);
+  color: #bfdbfe;
+  font-size: 0.52rem;
+  font-weight: 600;
+  line-height: 1.25;
+  padding: 0.05rem 0.34rem;
+}
+
 @media (max-width: 1260px) {
   .bestiary-layout {
     grid-template-columns: minmax(206px, 228px) minmax(0, 1fr) minmax(276px, 304px);
@@ -1232,6 +1358,11 @@
   }
 
   .species-stage__track-top {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .ascendant-progress__header {
     flex-direction: column;
     align-items: flex-start;
   }

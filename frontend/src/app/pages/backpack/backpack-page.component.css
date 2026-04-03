@@ -1,0 +1,200 @@
+:host {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.backpack-page {
+  width: min(1240px, calc(100vw - 28px));
+  height: 100%;
+  min-height: 0;
+  margin: 0 auto;
+  padding: 10px 0 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: clip;
+  color: var(--text-primary, #f5f5fa);
+}
+
+.backpack-page__topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  min-height: 44px;
+  padding: 8px 2px 10px;
+  border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+}
+
+.header-title {
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  font-size: 0.76rem;
+  color: var(--text-secondary, #a4a4b5);
+}
+
+.header-title strong {
+  color: var(--text-primary, #f5f5fa);
+}
+
+.backpack-page__topbar-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.backpack-page__topbar-meta span {
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-secondary, #a4a4b5);
+  font-size: 0.64rem;
+  letter-spacing: 0.04em;
+  padding: 0.2rem 0.55rem;
+}
+
+.backpack-page__status {
+  margin: 0;
+  border: 1px solid #284258;
+  border-radius: 10px;
+  background: rgba(8, 12, 24, 0.92);
+  color: #a8bfd8;
+  padding: 0.58rem 0.72rem;
+  font-size: 0.72rem;
+}
+
+.backpack-page__status--error {
+  border-color: rgba(239, 68, 68, 0.52);
+  color: #fecaca;
+  background: rgba(127, 29, 29, 0.24);
+}
+
+.backpack-page__empty {
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--panel, #111120) 88%, #080914);
+  padding: 0.82rem 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.backpack-page__empty p {
+  margin: 0;
+  color: var(--text-secondary, #a4a4b5);
+  font-size: 0.76rem;
+}
+
+.backpack-page__empty a {
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-primary, #f5f5fa);
+  text-decoration: none;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 0.4rem 0.62rem;
+}
+
+.backpack-page__frame {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--panel, #111120) 88%, #080914);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.backpack-page__frame-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: flex-start;
+  padding: 0.76rem 0.82rem;
+  border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+}
+
+.backpack-page__eyebrow {
+  margin: 0;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  font-size: 0.58rem;
+  color: var(--text-secondary, #a4a4b5);
+}
+
+.backpack-page h1 {
+  margin: 0.2rem 0 0;
+  font-size: clamp(1rem, 1.9vw, 1.34rem);
+  line-height: 1.1;
+  color: var(--text-primary, #f5f5fa);
+}
+
+.backpack-page__subtitle {
+  margin: 0.2rem 0 0;
+  color: #8fa9c2;
+  font-size: 0.68rem;
+}
+
+.backpack-page__chips {
+  display: flex;
+  gap: 0.34rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.backpack-page__chip {
+  border: 1px solid #2f4560;
+  border-radius: 999px;
+  background: rgba(5, 18, 35, 0.8);
+  color: #a6bfd7;
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 0.14rem 0.5rem;
+}
+
+.backpack-page__window-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 0.66rem;
+  overflow: hidden;
+}
+
+.backpack-page__window {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+@media (max-width: 1024px) {
+  .backpack-page {
+    width: calc(100vw - 18px);
+    padding: 8px 0 10px;
+  }
+}
+
+@media (max-width: 760px) {
+  .backpack-page__topbar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .backpack-page__frame-head {
+    flex-direction: column;
+  }
+
+  .backpack-page__chips {
+    justify-content: flex-start;
+  }
+}

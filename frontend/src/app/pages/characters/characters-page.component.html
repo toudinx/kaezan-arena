@@ -1,386 +1,65 @@
-<section class="characters-shell">
-  <header class="characters-shell__header">
-    <div>
-      <h1>Kaelis Hub</h1>
-      <p class="detail-note">Echo {{ echoFragmentsBalance }} | Kaeros {{ kaerosBalance }}</p>
-    </div>
+<div class="character-management">
+  <header class="top-bar">
+    <div class="header-title">KAELIS // <strong>DETAILS</strong></div>
   </header>
 
-  @if (actionMessage) {
-    <p class="characters-shell__message">{{ actionMessage }}</p>
-  }
-  @if (actionError) {
-    <p class="characters-shell__message characters-shell__message--error">{{ actionError }}</p>
-  }
+  <app-kaelis-roster-strip
+    [entries]="rosterEntries"
+    [selectedId]="selectedCharacterId() ?? undefined"
+    (selectEntry)="selectEntry($event)"
+    (previous)="previousEntry()"
+    (next)="nextEntry()"
+  ></app-kaelis-roster-strip>
 
-  @if (isLoading) {
-    <p class="characters-shell__state">Loading Kaelis...</p>
-  } @else if (loadError) {
-    <p class="characters-shell__state characters-shell__state--error">{{ loadError }}</p>
-  } @else if (characterRows.length === 0) {
-    <p class="characters-shell__state">No Kaelis found for this account.</p>
-  } @else {
-    <section class="kaelis-strip-wrap" aria-label="Kaelis roster">
-      <div class="kaelis-strip">
-        @for (row of characterRows; track row.characterId) {
-          <button
-            type="button"
-            class="kaelis-strip__item"
-            [class.kaelis-strip__item--selected]="selectedCharacterId === row.characterId"
-            [class.kaelis-strip__item--active]="row.isActive"
-            [attr.title]="row.name"
-            [attr.aria-label]="row.name + (row.isActive ? ' (Active)' : '') + (row.isProvisional ? ' (WIP)' : '')"
-            [attr.aria-pressed]="selectedCharacterId === row.characterId"
-            (click)="selectCharacter(row.characterId)"
-          >
-            <div
-              class="kaelis-strip__portrait kae-char-portrait"
-              [class.kae-char-portrait--selected]="selectedCharacterId === row.characterId"
-              [class.kae-char-portrait--active]="row.isActive"
-              [attr.data-tone]="row.portrait.tone"
-              aria-hidden="true"
-            >
-              @if (row.portrait.imageUrl && !isPortraitImageFailed(row.portrait.imageUrl)) {
-                <img
-                  class="kae-char-portrait__img"
-                  [src]="row.portrait.imageUrl"
-                  [alt]="''"
-                  (error)="onPortraitImageError(row.portrait.imageUrl)"
-                />
-              } @else {
-                <span class="kae-char-portrait__fallback">{{ row.portrait.monogram }}</span>
-              }
-              <span class="kae-char-portrait__sigil">{{ row.portrait.sigil }}</span>
-            </div>
+  <div class="stage-grid">
+    <app-kaelis-side-navigation
+      [activeTab]="activeTab()"
+      (tabChange)="setActiveTab($event)"
+    ></app-kaelis-side-navigation>
 
-            @if (row.isActive) {
-              <span class="kaelis-strip__marker kaelis-strip__marker--active" aria-hidden="true"></span>
-            }
-            @if (row.isProvisional) {
-              <span class="kaelis-strip__marker kaelis-strip__marker--wip" aria-hidden="true"></span>
-            }
-          </button>
-        }
+    @if (activeTab() === 'bestiary') {
+      <div class="bestiary-area">
+        <app-bestiary-page
+          [embedded]="true"
+          [contextCharacterId]="selectedCharacterId()"
+        ></app-bestiary-page>
       </div>
-    </section>
+    } @else {
+      <app-kaelis-center-preview
+        [activeTab]="activeTab()"
+        [characterImageUrl]="activeCharacterImageUrl"
+        [weaponImageUrl]="activeWeaponImageUrl"
+        [characterName]="activeCharacterName"
+        [sigilSlots]="sigilSlots"
+        [selectedSigilIndex]="selectedSigilIndex()"
+        (slotClick)="openSigilModal($event)"
+      ></app-kaelis-center-preview>
 
-    <div
-      class="characters-hub"
-      [class.characters-hub--bestiary]="isBestiaryTab"
-      [class.characters-hub--switching]="isHubTransitioning"
-      [class.characters-hub--switching-section]="isSectionSwitching"
-      [class.characters-hub--switching-character]="isCharacterSwitching"
-      [attr.data-active-tab]="activeTab"
-    >
-      <aside class="characters-hub__sections">
-        <p class="characters-hub__section-label">Sections</p>
-        <nav class="section-nav" aria-label="Kaelis sections">
-          @for (section of sectionNavItems; track section.id) {
-            <a
-              class="section-nav__item"
-              [class.section-nav__item--active]="activeTab === section.id"
-              [routerLink]="selectedCharacterRouteCommands"
-              [queryParams]="{ tab: section.id }"
-              [attr.aria-current]="activeTab === section.id ? 'page' : null"
-              (click)="onSectionNavSelect(section.id)"
-            >
-              <span class="section-nav__title">{{ section.label }}</span>
-              <span class="section-nav__summary">{{ section.summary }}</span>
-            </a>
-          }
-        </nav>
+      <app-kaelis-info-panel
+        [activeTab]="activeTab()"
+        [characterName]="activeCharacterName"
+        [characterSubtitle]="activeCharacterSubtitle"
+        [masteryLevel]="masteryLevel"
+        [masteryXp]="masteryXp"
+        [masteryXpRequired]="masteryXpRequired"
+        [baseStats]="baseStats"
+        [weapon]="weaponInfo"
+        [weaponStats]="weaponStats"
+        [equippedWeaponName]="equippedWeaponName"
+        [sigilStats]="sigilStats"
+        [sigilSetBonuses]="sigilSetBonuses"
+        (changeWeapon)="openWeaponModal()"
+      ></app-kaelis-info-panel>
+    }
+  </div>
 
-        @if (selectedCharacter) {
-          <section class="section-actions">
-            @if (selectedCharacter.isActive) {
-              <span class="section-actions__active">Active Kaelis</span>
-              <a class="section-actions__cta section-actions__cta--primary" routerLink="/arena">Enter Arena</a>
-            } @else {
-              <button
-                type="button"
-                class="section-actions__cta section-actions__cta--set-active"
-                [disabled]="!!setActiveInFlightCharacterId"
-                (click)="setActiveCharacter(selectedCharacter.characterId)"
-              >
-                {{ isSetActiveInFlight(selectedCharacter.characterId) ? "Setting..." : "Set Active Kaelis" }}
-              </button>
-              <a class="section-actions__cta section-actions__cta--secondary" routerLink="/arena">Enter Arena (Current Active)</a>
-            }
-          </section>
-        }
-      </aside>
-
-      @if (isBestiaryTab) {
-        <section class="characters-hub__bestiary-stage">
-          <app-bestiary-page [embedded]="true" [contextCharacterId]="selectedCharacterId"></app-bestiary-page>
-        </section>
-      } @else {
-        <section class="characters-hub__stage">
-          @if (selectedCharacter) {
-            <article class="stage-panel" [attr.data-tone]="selectedCharacter.portrait.tone">
-              <header class="stage-panel__head">
-                <div>
-                  <p class="stage-panel__label">{{ stageLabel }}</p>
-                  <h2>{{ selectedCharacter.name }}</h2>
-                  @if (activeTab !== "overview") {
-                    <p class="stage-panel__description">{{ stageDescription }}</p>
-                  }
-                </div>
-                <div class="stage-panel__tags">
-                  <span class="stage-panel__tag stage-panel__tag--{{ selectedCharacter.kitBadge }}">{{ selectedCharacter.roleTag }}</span>
-                  @if (selectedCharacter.isProvisional) {
-                    <span class="stage-panel__tag stage-panel__tag--wip">WIP</span>
-                  }
-                  @if (selectedCharacter.isActive) {
-                    <span class="stage-panel__tag stage-panel__tag--active">Active</span>
-                  }
-                </div>
-              </header>
-
-              <div class="stage-panel__body">
-                <div class="stage-panel__hero" [class.stage-panel__hero--overview]="activeTab === 'overview'">
-                  <div
-                    class="stage-panel__portrait kae-char-portrait kae-char-portrait--active"
-                    [class.stage-panel__portrait--overview]="activeTab === 'overview'"
-                    [attr.data-tone]="selectedCharacter.portrait.tone"
-                    aria-hidden="true"
-                  >
-                    @if (selectedCharacter.portrait.imageUrl && !isPortraitImageFailed(selectedCharacter.portrait.imageUrl)) {
-                      <img
-                        class="kae-char-portrait__img"
-                        [src]="selectedCharacter.portrait.imageUrl"
-                        [alt]="''"
-                        (error)="onPortraitImageError(selectedCharacter.portrait.imageUrl)"
-                      />
-                    } @else {
-                      <span class="kae-char-portrait__fallback">{{ selectedCharacter.portrait.monogram }}</span>
-                    }
-                    <span class="kae-char-portrait__sigil">{{ selectedCharacter.portrait.sigil }}</span>
-                  </div>
-
-                  @if (activeTab === "loadout") {
-                    <p class="stage-panel__blurb stage-panel__blurb--loadout">
-                      Build focus is managed in the right panel: one Weapon lane and five Sigil slots.
-                    </p>
-                  }
-                </div>
-              </div>
-            </article>
-          } @else {
-            <p class="characters-shell__state">Select a Kaelis from the portrait strip.</p>
-          }
-        </section>
-
-        <aside class="characters-hub__details">
-          @if (selectedCharacter) {
-            @if (activeTab === "overview") {
-              @if (selectedCharacter.playstyle) {
-                <section class="detail-block detail-block--identity">
-                  <h3>Combat Identity</h3>
-                  <p class="detail-note">{{ selectedCharacter.playstyle }}</p>
-                </section>
-              }
-
-              <section class="detail-block detail-block--stats">
-                <h3>Character Stats</h3>
-                <div class="stats-grid">
-                  <article class="stats-cell">
-                    <span>Mastery Level</span>
-                    <strong>{{ selectedCharacter.masteryLevel }}</strong>
-                  </article>
-                  <article class="stats-cell">
-                    <span>Total Mastery XP</span>
-                    <strong>{{ selectedCharacter.masteryXp }}</strong>
-                  </article>
-                  <article class="stats-cell">
-                    <span>Status</span>
-                    <strong>{{ selectedCharacter.isActive ? "Active" : "Standby" }}</strong>
-                  </article>
-                  <article class="stats-cell">
-                    <span>Sigil Slots</span>
-                    <strong>{{ selectedCharacter.unlockedSigilSlots }} / 5</strong>
-                  </article>
-                </div>
-                <div class="stats-xp">
-                  <div class="stats-xp__head">
-                    <span>Mastery {{ selectedCharacter.masteryLevel }}</span>
-                    <span>{{ selectedCharacter.masteryXpForCurrentLevel }} / {{ selectedCharacter.masteryXpRequiredForNextLevel }} XP</span>
-                  </div>
-                  <div class="stats-xp__track">
-                    <div class="stats-xp__fill" [style.width.%]="selectedCharacter.masteryProgressPercent"></div>
-                  </div>
-                </div>
-              </section>
-
-              <section class="detail-block detail-block--progress">
-                <h3>Progress Snapshot</h3>
-                <div class="stats-grid stats-grid--progress">
-                  <article class="stats-cell">
-                    <span>Tracked Species</span>
-                    <strong>{{ selectedCharacter.bestiaryTrackedSpeciesCount }}</strong>
-                  </article>
-                  <article class="stats-cell">
-                    <span>Bestiary Kills</span>
-                    <strong>{{ selectedCharacter.bestiaryKillsTotal }}</strong>
-                  </article>
-                  <article class="stats-cell">
-                    <span>Primal Core</span>
-                    <strong>{{ selectedCharacter.primalCoreTotal }}</strong>
-                  </article>
-                </div>
-                <p class="detail-note">Bestiary progression is tied to this Kaelis. Open Bestiary for species details and operations.</p>
-              </section>
-            }
-
-            @if (activeTab === "loadout") {
-              <section class="detail-block detail-block--weapon">
-                <h3>Weapon</h3>
-                @if (selectedLoadoutWeapon; as weapon) {
-                  <article
-                    class="weapon-focus quick-tip"
-                    [class.weapon-focus--equipped]="weapon.stateLabel === 'Equipped'"
-                    [class.weapon-focus--empty]="weapon.stateLabel === 'Empty'"
-                    [class.weapon-focus--missing]="weapon.stateLabel === 'Missing'"
-                    [attr.data-tooltip]="weapon.tooltip"
-                  >
-                    <span class="weapon-focus__visual" [attr.data-tone]="weapon.iconTone" aria-hidden="true">{{ weapon.iconGlyph }}</span>
-                    <div class="weapon-focus__body">
-                      <div class="weapon-focus__top">
-                        <span class="weapon-focus__state">{{ weapon.stateLabel }}</span>
-                        <span class="weapon-focus__rarity weapon-focus__rarity--{{ weapon.rarityClass }}">{{ weapon.rarityLabel }}</span>
-                      </div>
-                      <strong class="weapon-focus__name">{{ weapon.displayName }}</strong>
-                      <span class="weapon-focus__type">{{ weapon.typeLabel }}</span>
-                      @if (selectedLoadoutWeaponDetailLines.length > 0) {
-                        <ul class="weapon-focus__stats">
-                          @for (line of selectedLoadoutWeaponDetailLines; track line) {
-                            <li>{{ line }}</li>
-                          }
-                        </ul>
-                      }
-                    </div>
-                  </article>
-                } @else {
-                  <p class="detail-empty">No weapon lane data available.</p>
-                }
-              </section>
-
-              <section class="detail-block detail-block--sigils">
-                <h3>Sigils</h3>
-                <p class="detail-note">Sigils are account-wide and equipped per Kaelis. Slot order is mandatory.</p>
-                <div class="sigil-grid">
-                  @for (sigilSlot of selectedLoadoutSigils; track sigilSlot.slotIndex) {
-                    <article
-                      class="sigil-slot quick-tip"
-                      [class.sigil-slot--equipped]="!!sigilSlot.equipped"
-                      [class.sigil-slot--reserved]="!sigilSlot.isUnlocked"
-                    >
-                      <div class="sigil-slot__head">
-                        <span class="sigil-slot__label">Slot {{ sigilSlot.slotIndex }} - {{ sigilSlot.tierName }}</span>
-                        <span class="sigil-slot__state">{{ sigilSlot.levelRangeLabel }}</span>
-                      </div>
-                      @if (!sigilSlot.isUnlocked) {
-                        <strong class="sigil-slot__name sigil-slot__name--muted">{{ sigilSlot.lockLabel }}</strong>
-                      } @else if (sigilSlot.equipped) {
-                        <strong class="sigil-slot__name">{{ sigilSlot.equipped.speciesDisplayName }} Sigil Lv {{ sigilSlot.equipped.sigilLevel }}</strong>
-                        <span class="sigil-slot__meta">+{{ sigilSlot.equipped.hpBonus }} HP</span>
-                        <button
-                          type="button"
-                          class="section-actions__cta section-actions__cta--secondary"
-                          [disabled]="isSigilActionInFlight('unequip:' + sigilSlot.slotIndex)"
-                          (click)="unequipSigil(sigilSlot.slotIndex, $event)"
-                        >
-                          {{ isSigilActionInFlight('unequip:' + sigilSlot.slotIndex) ? "Unequipping..." : "Unequip" }}
-                        </button>
-                      } @else {
-                        <strong class="sigil-slot__name sigil-slot__name--muted">Empty</strong>
-                        <span class="sigil-slot__meta">No sigil equipped.</span>
-                      }
-                      @if (sigilSlot.ascendantHint) {
-                        <span
-                          class="sigil-slot__ascendant"
-                          [class.sigil-slot__ascendant--unlocked]="sigilSlot.ascendantUnlocked"
-                        >{{ sigilSlot.ascendantHint }}</span>
-                      }
-                    </article>
-                  }
-                </div>
-
-                <h3>Account Sigil Inventory</h3>
-                @if (selectedCharacterSigilInventoryRows.length === 0) {
-                  <p class="detail-empty">No sigils in account inventory.</p>
-                } @else {
-                  <div class="sigil-grid">
-                    @for (sigilRow of selectedCharacterSigilInventoryRows; track sigilRow.sigil.instanceId) {
-                      <article class="sigil-slot" [class.sigil-slot--equipped]="sigilRow.isEquippedInSelectedSlot">
-                        <div class="sigil-slot__head">
-                          <span class="sigil-slot__label">{{ sigilRow.sigil.tierName }} - Slot {{ sigilRow.sigil.slotIndex }}</span>
-                          <span class="sigil-slot__state">Lv {{ sigilRow.sigil.sigilLevel }}</span>
-                        </div>
-                        <strong class="sigil-slot__name">{{ sigilRow.sigil.speciesDisplayName }}</strong>
-                        <span class="sigil-slot__meta">+{{ sigilRow.sigil.hpBonus }} HP</span>
-                        <button
-                          type="button"
-                          class="section-actions__cta section-actions__cta--secondary"
-                          [disabled]="!sigilRow.canEquip || isSigilActionInFlight('equip:' + sigilRow.sigil.instanceId)"
-                          (click)="equipSigil(sigilRow.sigil.instanceId, $event)"
-                        >
-                          @if (isSigilActionInFlight('equip:' + sigilRow.sigil.instanceId)) {
-                            Equipping...
-                          } @else if (sigilRow.canEquip) {
-                            Equip
-                          } @else {
-                            {{ sigilRow.disabledReason }}
-                          }
-                        </button>
-                      </article>
-                    }
-                  </div>
-                }
-              </section>
-            }
-
-            @if (activeTab === "skills") {
-              <section class="detail-block detail-block--skills">
-                <h3>Passive / Fixed Kit / Ultimate Slot</h3>
-                <article class="passive-card quick-tip" [attr.data-tooltip]="selectedKaelisPassive.tooltip" [class.passive-card--placeholder]="selectedKaelisPassive.isPlaceholder">
-                  <div class="passive-card__head">
-                    <strong>{{ selectedKaelisPassive.label }}</strong>
-                  </div>
-                  <p>{{ selectedKaelisPassive.summary }}</p>
-                </article>
-
-                <div class="kit-grid">
-                  @for (weapon of selectedCharacter.fixedWeapons; track weapon.label) {
-                    <article
-                      class="kit-skill"
-                      [attr.data-skill-family]="weapon.family"
-                      [attr.data-skill-tier]="weapon.tier"
-                      [attr.data-tooltip]="weapon.description"
-                      [class.quick-tip]="!!weapon.description"
-                    >
-                      <span class="kit-skill__icon">{{ weapon.iconGlyph }}</span>
-                      <span class="kit-skill__name">{{ weapon.label }}</span>
-                    </article>
-                  }
-                  @if (selectedCharacter.fixedWeapons.length === 0) {
-                    <p class="detail-empty">No fixed kit data available.</p>
-                  }
-                </div>
-
-                <article class="free-slot quick-tip" [attr.data-tooltip]="ultimateSlotTooltip">
-                  <span class="free-slot__icon" aria-hidden="true">&#x2B21;</span>
-                  <div>
-                    <p class="free-slot__title">Ultimate Slot</p>
-                    <p class="free-slot__hint">Fires automatically when the gauge is full.</p>
-                  </div>
-                </article>
-                <p class="detail-note">Fixed kit labels are normalized for readability and keep tooltip details one hover away.</p>
-              </section>
-            }
-          }
-        </aside>
-      }
-    </div>
-  }
-</section>
+  <app-kaelis-selection-modal
+    [open]="modalOpen()"
+    [mode]="modalMode()"
+    [items]="availableWeaponItems"
+    [selectedId]="modalSelectedId()"
+    [slotIndex]="selectedSigilIndex()"
+    (closed)="closeModal()"
+    (confirmed)="confirmSelection($event)"
+  ></app-kaelis-selection-modal>
+</div>

@@ -558,116 +558,6 @@
     </aside>
   </div>
 
-  @if (!isInRun) {
-    <section class="pre-run-lobby" aria-label="Arena lobby">
-      @if (isPreRunLoading) {
-        <p class="pre-run-lobby__state">Loading account...</p>
-      } @else if (isPreRunEmptyState) {
-        <p class="pre-run-lobby__state">No characters found (dev seed missing).</p>
-        <button type="button" (click)="reloadAccountState()" [disabled]="accountStateRequestInFlight">Reload</button>
-      } @else {
-        <div class="pre-run-lobby__layout">
-
-          <!-- LEFT: character identity -->
-          <aside class="pre-run-lobby__left">
-            <div class="pre-run-lobby__portrait" aria-hidden="true">
-              <span class="pre-run-lobby__portrait-initial">{{ selectedPreRunCharacter?.name?.slice(0, 1) ?? '?' }}</span>
-            </div>
-
-            <div class="pre-run-lobby__identity">
-              <div class="pre-run-lobby__nav">
-                <button type="button" class="pre-run-lobby__nav-btn" (click)="selectPrevPreRunCharacter()" aria-label="Previous character">&lt;</button>
-                <h2 class="pre-run-lobby__name">{{ selectedPreRunCharacter?.name ?? '—' }}</h2>
-                <button type="button" class="pre-run-lobby__nav-btn" (click)="selectNextPreRunCharacter()" aria-label="Next character">&gt;</button>
-              </div>
-
-              @if (selectedCharacterSubtitle) {
-                <p class="pre-run-lobby__subtitle">{{ selectedCharacterSubtitle }}</p>
-              }
-
-              <p class="pre-run-lobby__level">
-                Mastery {{ selectedPreRunCharacter?.masteryLevel ?? 0 }}
-                <span class="pre-run-lobby__level-sep">·</span>
-                {{ selectedPreRunCharacter?.masteryXp ?? 0 }} XP
-              </p>
-
-              <div class="pre-run-lobby__kit">
-                <span class="pre-run-lobby__kit-label">Fixed Kit</span>
-                <div class="pre-run-lobby__kit-pills">
-                  @for (weapon of selectedCharacterKitWeapons; track weapon.label) {
-                    <span
-                      class="pre-run-lobby__pill"
-                      [attr.data-skill-family]="weapon.family"
-                      [attr.data-skill-tier]="weapon.tier"
-                    >
-                      <span class="pre-run-lobby__pill-icon">{{ weapon.iconGlyph }}</span>
-                      <span class="pre-run-lobby__pill-label">{{ weapon.label }}</span>
-                    </span>
-                  }
-                  @if (selectedCharacterKitWeapons.length === 0) {
-                    <span class="pre-run-lobby__pill pre-run-lobby__pill--unknown">Unknown</span>
-                  }
-                </div>
-              </div>
-
-              <div class="pre-run-lobby__ultimate-slot">
-                <span class="pre-run-lobby__kit-label">Ultimate Slot</span>
-                <span class="pre-run-lobby__pill pre-run-lobby__pill--locked">Gauge-based (Auto Fire)</span>
-              </div>
-
-              <div class="pre-run-lobby__gear">
-                <p><span>Weapon</span><strong>{{ selectedCharacterWeaponLabel }}</strong></p>
-              </div>
-            </div>
-          </aside>
-
-          <!-- RIGHT: run config + CTA -->
-          <aside class="pre-run-lobby__right">
-            <p class="pre-run-lobby__enter-label">ENTER ARENA</p>
-
-            <div class="pre-run-lobby__economy">
-              <span>Echo Fragments</span>
-              <strong>{{ preRunEchoFragmentsBalance }}</strong>
-            </div>
-
-            @if (preRunBestiaryTeaser) {
-              <div class="pre-run-lobby__teaser">
-                <p class="pre-run-lobby__teaser-label">Closest milestone</p>
-                <p class="pre-run-lobby__teaser-species">{{ preRunBestiaryTeaser.speciesName }}</p>
-                <p class="pre-run-lobby__teaser-progress">{{ preRunBestiaryTeaser.killsToNext }} kills to next · {{ preRunBestiaryTeaser.killsTotal }} total</p>
-                <span class="pre-run-lobby__teaser-bar">
-                  <span [style.width.%]="preRunBestiaryTeaser.progressPercent"></span>
-                </span>
-              </div>
-            } @else {
-              <div class="pre-run-lobby__teaser pre-run-lobby__teaser--empty">
-                <p class="pre-run-lobby__teaser-label">Closest milestone</p>
-                <p class="pre-run-lobby__teaser-empty">Defeat mobs to start tracking.</p>
-              </div>
-            }
-
-            <button
-              type="button"
-              class="pre-run-lobby__start"
-              (click)="startRunAbsorbed()"
-              [disabled]="bootPhase !== 'ready_to_start' || accountStateRequestInFlight || accountRequestInFlight || battleRequestInFlight || !selectedCharacterId"
-            >
-              Start Run
-              <span class="pre-run-lobby__start-hint">[Space] or [Enter]</span>
-            </button>
-
-            @if (accountLoadErrorMessage) {
-              <p class="pre-run-lobby__error">{{ accountLoadErrorMessage }}</p>
-            }
-
-            <a class="pre-run-lobby__back" routerLink="/home">&#8592; Back</a>
-          </aside>
-
-        </div>
-      }
-    </section>
-  }
-
   @if (isAwaitingCardChoice && !isRunEnded) {
     <div
       class="reward-modal__backdrop"
@@ -825,8 +715,8 @@
           <button type="button" class="run-complete__btn run-complete__btn--primary" (click)="onDeathModalRestartRun()" [disabled]="battleRequestInFlight">
             RUN AGAIN
           </button>
-          <button type="button" class="run-complete__btn run-complete__btn--secondary" (click)="onDeathModalReturnToPreRun()" [disabled]="battleRequestInFlight">
-            EXIT TO HOME
+          <button type="button" class="run-complete__btn run-complete__btn--secondary" (click)="onDeathModalExitToPrep()" [disabled]="battleRequestInFlight">
+            EXIT TO PREP
           </button>
         </div>
 
@@ -868,7 +758,7 @@
         <div class="pause-modal__actions">
           <button type="button" (click)="onPauseModalResume()" [disabled]="battleRequestInFlight">Resume</button>
           <button type="button" (click)="onPauseModalRestartRun()" [disabled]="battleRequestInFlight">Restart</button>
-          <button type="button" (click)="onPauseModalExit()" [disabled]="battleRequestInFlight">Exit</button>
+          <button type="button" (click)="onPauseModalExitToPrep()" [disabled]="battleRequestInFlight">Exit to Prep</button>
         </div>
       </section>
     </div>

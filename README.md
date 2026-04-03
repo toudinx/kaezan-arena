@@ -5,7 +5,7 @@ Long-term repository for Kaezan Arena with backend, frontend, docs, and tooling.
 ## Structure
 
 - `backend/` ASP.NET Core + Clean Architecture project layout
-- `frontend/` Angular workspace with Home and Arena pages
+- `frontend/` Angular workspace with Home Hub, Arena Prep, Kaelis, Backpack, Recruit, and live Arena pages
 - `docs/` architecture and asset/license documentation
 - `tools/` helper scripts for asset and project workflows
 
@@ -54,7 +54,7 @@ npm run api:generate
 npm run start
 ```
 
-Frontend includes routing (`/`, `/arena`), Tailwind setup, and Arena module boundaries (`assets`, `engine`, `render`, `ui`).
+Frontend includes routing (`/`, `/arena-prep`, `/kaelis`, `/backpack`, `/recruit`, `/arena`), Tailwind setup, and Arena module boundaries (`assets`, `engine`, `render`, `ui`).
 If you change `frontend/proxy.conf.json`, restart the frontend dev server (`npm run start`) so proxy updates take effect.
 The frontend dev proxy forwards `/api/*` to `https://localhost:7174` (self-signed cert allowed via `secure: false` in dev proxy config).
 
@@ -72,20 +72,35 @@ Current `docker-compose.yml` is a development skeleton with backend (`5080`) and
 
 ## Navigation
 
-The app uses a single navbar provided by `AppShellComponent` (Home / Kaelis / Arena + Backpack). The root `App` component (`app.html`) contains only the `<router-outlet>` — no secondary nav. The Arena page renders outside the shell (no nav intentional — full-screen game view).
+The app uses a single top shell provided by `AppShellComponent` and keeps primary out-of-arena navigation in the Home Hub action rail (Arena / Kaelis / Backpack / Recruit). The root `App` component (`app.html`) contains only the `<router-outlet>` - no secondary nav. The live arena gameplay route (`/arena`) renders outside the shell (full-screen game view).
 Bestiary is now part of the Kaelis experience (Kaelis tabs: Overview / Loadout / Bestiary), not a top-level sibling page.
+Backpack uses a dedicated full page at `/backpack` for inventory management.
 
 ## Home Page Hub
 
-The Home page is a full-page dark hub (`#080d14`) with a three-column layout at wide viewports (stacks single-column at `<900px`, center column first):
+The Home page is a dark game hub with:
 
-- **LEFT — Active character card:** Portrait placeholder (color-coded), name, kit badge, XP progress bar, Fixed Kit pills, Ultimate Slot (gauge-based auto fire), Gear summary (Weapon only), "View Characters" link.
-- **CENTER — Enter Arena CTA + Last Run:** Dominant "Start Run" link button (teal), last run outcome (Victory/Defeat color-coded), duration, Kills / Elites / Damage / Chests stat tiles, card pills chosen.
-- **RIGHT — Progression snapshot:** Echo Fragments balance (large number, gold), Bestiary section with closest-to-milestone callout and top-3 species progress bars with kills-to-next.
+- **Center showcase:** Active Kaelis summary.
+- **Right action rail:** Large navigation cards for Arena / Kaelis / Backpack / Recruit.
+- **Top-right utilities:** Mail / Daily / Settings / Event shortcuts.
+- **Bottom compact status:** Hub-to-prep guidance plus account progress.
+
+Daily opens the Daily Contracts modal. Mail, Settings, and Event open lightweight utility overlays from Home (not standalone routes).
+
+Arena run setup no longer lives on `/`; it lives on `/arena-prep`.
+
+## Arena Preparation Route
+
+`/arena-prep` is the dedicated pre-run screen and contains:
+
+- Zone selection.
+- Start Run CTA (routes into live gameplay at `/arena` with selected `zoneIndex`).
+- Last run summary.
+- Compact active Kaelis summary.
 
 ## Kaelis Bestiary Tab
 
-Bestiary now lives as a Kaelis tab (`/characters/:id?tab=bestiary`) and always uses the currently selected Kaelis context from the Kaelis parent screen.
+Bestiary now lives as a Kaelis tab (`/kaelis/:id?tab=bestiary`) and always uses the currently selected Kaelis context from the Kaelis parent screen.
 
 - **Header context:** Bestiary heading + current Kaelis identity + Echo Fragments balance.
 - **Stats row:** Tracked species / Unlocked / Total kills — numbers large, labels small, in dark tiles.
@@ -103,7 +118,7 @@ The Kaelis page is a dark-themed parent experience with a persistent left select
 - **Overview/Loadout tabs:** Keep portrait/identity and Kaelis detail blocks (stats, loadout, actions).
 - **Bestiary tab:** Renders the bestiary system as a Kaelis-scoped subview instead of a separate top-level page.
 
-The Arena Preparation lobby (pre-run screen) was also redesigned as a full-width two-column overlay with character arrow navigation, kit pills, portrait placeholder, bestiary milestone teaser, Echo Fragments balance, and an absorbed "Start Run" CTA.
+Arena preparation now lives on `/arena-prep` with focused zone selection, Start Run, compact Kaelis context, and last-run summary.
 
 ## Run Results Screen
 
@@ -113,7 +128,7 @@ After each run ends (`isRunEnded`), a full-screen dark overlay replaces the aren
 - **Section B — Key stats grid:** Responsive 4-column grid of stat tiles covering Kills, Elites, Damage Dealt, Damage Taken, Min HP, XP Gained, Echo Fragments (net, color-coded), Primal Core. Chests and Equipment tiles are shown conditionally when non-zero.
 - **Section C — Build summary:** Section header "Build · N cards" with all chosen card names as pills. Hidden when no cards were selected.
 - **Section D — Bestiary Progress:** Top 3 species by kills gained this run, each row showing kills delta and a "NEW RANK N" amber pill when a milestone was crossed. Hidden if no kills were registered.
-- **Actions:** "RUN AGAIN" (teal primary) and "EXIT TO HOME" (muted secondary).
+- **Actions:** "RUN AGAIN" (teal primary) and "EXIT TO PREP" (muted secondary).
 - **[DEV] disclosure:** Collapsed `<details>` element containing Export Replay, Import Replay, Play Imported Replay, Copy Last/All Run JSON, Export Runs. Collapsed by default; native HTML toggle — no Angular state needed.
 - Subtle footer: "Run result logged and stored."
 
@@ -201,3 +216,6 @@ node tools/assets/propose-asset-pack.mjs
 ```
 
 Details (manual spritesheet config + merge flow): `docs/ASSET_MAPPER.md`.
+
+
+

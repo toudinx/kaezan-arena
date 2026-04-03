@@ -1,0 +1,118 @@
+<div class="home-shell" data-testid="home-page">
+  <app-home-background
+    [background]="homeScene.currentBackground()"
+  ></app-home-background>
+
+  <div class="home-stage">
+    <app-home-character-stage
+      [kaelis]="homeScene.currentKaelis()"
+    ></app-home-character-stage>
+
+    <app-home-top-left-hud
+      title="Kaezan: Awakening"
+      commanderName="Commander"
+      [level]="52"
+      [xpProgress]="0.65"
+    ></app-home-top-left-hud>
+
+    <app-home-top-right-actions
+      [actions]="actionItems"
+    ></app-home-top-right-actions>
+
+    <app-home-main-navigation
+      [items]="mainNavItems"
+      (itemSelected)="handleMainNavSelection($event)"
+    ></app-home-main-navigation>
+
+    <app-home-raid-banner
+      label="Event Active"
+      title="Boss Raid: Kraken"
+      timer="Ends in 12h 45m"
+    ></app-home-raid-banner>
+
+    <button
+      type="button"
+      class="home-customize-trigger"
+      (click)="openCustomize()"
+    >
+      <span class="customize-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24">
+          <path
+            d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"
+          />
+        </svg>
+      </span>
+      Customize Home
+    </button>
+  </div>
+
+  <app-home-customize-panel
+    [open]="customizeOpen()"
+    [backgrounds]="backgrounds"
+    [kaelisOptions]="kaelisOptions"
+    [selectedBackgroundId]="homeScene.currentBackgroundId()"
+    [selectedKaelisId]="homeScene.currentKaelisId()"
+    (closed)="closeCustomize()"
+    (backgroundSelected)="selectBackground($event)"
+    (kaelisSelected)="selectKaelis($event)"
+  ></app-home-customize-panel>
+
+  @if (expeditionModeOpen()) {
+    <div
+      class="expedition-modal"
+      role="button"
+      tabindex="0"
+      (click)="closeExpeditionMode()"
+      (keydown.enter)="closeExpeditionMode()"
+      (keydown.space)="$event.preventDefault(); closeExpeditionMode()"
+    >
+      <div
+        class="expedition-modal__card"
+        role="dialog"
+        aria-modal="true"
+        (click)="$event.stopPropagation()"
+        tabindex="0"
+        (keydown.enter)="$event.stopPropagation()"
+        (keydown.space)="$event.preventDefault(); $event.stopPropagation()"
+      >
+        <div class="expedition-modal__header">
+          <h2>Select Mode</h2>
+          <button
+            type="button"
+            class="expedition-modal__close"
+            aria-label="Close"
+            (click)="closeExpeditionMode()"
+          >
+            X
+          </button>
+        </div>
+
+        <div class="expedition-modal__grid">
+          <button
+            type="button"
+            class="mode-card mode-card--mvp"
+            (click)="startMvpRun()"
+          >
+            <div class="mode-card__text">
+              <h3>MVP RUN</h3>
+              <p>Classic run (current MVP).</p>
+            </div>
+            <span class="mode-card__cta">Start</span>
+          </button>
+
+          <button
+            type="button"
+            class="mode-card mode-card--ascension"
+            (click)="startAscensionRun()"
+          >
+            <div class="mode-card__text">
+              <h3>Echoes of Ascension</h3>
+              <p>New run: Echoes, Resonance (3+3), Devil's Bargain, Shop.</p>
+            </div>
+            <span class="mode-card__cta">Start</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+</div>

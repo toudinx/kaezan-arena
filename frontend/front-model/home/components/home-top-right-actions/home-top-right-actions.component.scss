@@ -1,0 +1,99 @@
+:host {
+  position: absolute;
+  top: 48px;
+  right: 60px;
+  z-index: 4;
+  display: block;
+  animation: hud-fade 620ms ease both;
+}
+
+.home-actions {
+  display: flex;
+  gap: 16px;
+}
+
+.action-btn {
+  width: 68px;
+  height: 68px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(15, 15, 30, 0.7);
+  display: grid;
+  place-items: center;
+  transition:
+    transform 200ms ease,
+    border-color 200ms ease,
+    background 200ms ease;
+  cursor: pointer;
+}
+
+.action-btn svg {
+  width: 32px;
+  height: 32px;
+  fill: rgba(220, 220, 230, 0.85);
+  transition: transform 200ms ease, fill 200ms ease;
+}
+
+.action-btn:hover {
+  transform: translateY(-4px);
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+.action-btn:hover svg {
+  fill: #ffffff;
+  transform: scale(1.08);
+}
+
+.action-btn--gold {
+  border-color: rgba(246, 208, 139, 0.4);
+  box-shadow: 0 0 24px rgba(246, 208, 139, 0.15);
+}
+
+.action-btn--gold svg {
+  fill: #f6d08b;
+}
+
+.action-btn--disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.action-btn--disabled:hover {
+  transform: none;
+  background: rgba(15, 15, 30, 0.7);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+@keyframes hud-fade {
+  0% {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 768px) {
+  :host {
+    top: 20px;
+    right: 20px;
+  }
+
+  .home-actions {
+    gap: 8px;
+  }
+
+  .action-btn {
+    width: 44px;
+    height: 44px;
+    border-radius: 14px;
+  }
+
+  .action-btn svg {
+    width: 20px;
+    height: 20px;
+  }
+}

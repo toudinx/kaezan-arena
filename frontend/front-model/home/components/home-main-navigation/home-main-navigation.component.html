@@ -1,0 +1,39 @@
+<nav class="home-nav" aria-label="Home navigation">
+  @for (item of items; track item.id) {
+    @if (item.route && !item.disabled) {
+      <a
+        class="nav-item"
+        [ngClass]="'nav-item--' + item.tone"
+        [routerLink]="item.route"
+        [style.--stagger]="$index"
+      >
+        <div class="nav-content">
+          <div class="nav-text">
+            <h3>{{ item.title | uppercase }}</h3>
+            <span>{{ item.subtitle | uppercase }}</span>
+          </div>
+          <span class="nav-arrow">&gt;</span>
+        </div>
+      </a>
+    } @else {
+      <button
+        type="button"
+        class="nav-item"
+        [ngClass]="'nav-item--' + item.tone"
+        [class.nav-item--disabled]="item.disabled"
+        [attr.aria-disabled]="item.disabled ? 'true' : null"
+        [disabled]="item.disabled"
+        [style.--stagger]="$index"
+        (click)="selectItem(item)"
+      >
+        <div class="nav-content">
+          <div class="nav-text">
+            <h3>{{ item.title | uppercase }}</h3>
+            <span>{{ item.subtitle | uppercase }}</span>
+          </div>
+          <span class="nav-arrow">&gt;</span>
+        </div>
+      </button>
+    }
+  }
+</nav>

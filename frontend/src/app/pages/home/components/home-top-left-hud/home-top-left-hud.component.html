@@ -1,0 +1,18 @@
+<div class="home-left">
+  @if (hasTitle) {
+    <div class="home-logo">{{ title }}</div>
+  }
+  <div class="home-status">
+    <div class="home-level-block">
+      <span class="home-level-label">LV</span>
+      <span class="home-level">{{ level }}</span>
+    </div>
+    <div class="home-divider" aria-hidden="true"></div>
+    <div class="home-details">
+      <span class="home-name">{{ commanderName }}</span>
+      <div class="home-xp">
+        <div class="home-xp__fill" [style.width]="xpPercent"></div>
+      </div>
+    </div>
+  </div>
+</div>

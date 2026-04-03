@@ -5,19 +5,17 @@
         <button
           type="button"
           class="backpack__tab"
+          [class.backpack__tab--all]="filter === 'all'"
+          [class.backpack__tab--common]="filter === 'common'"
+          [class.backpack__tab--rare]="filter === 'rare'"
+          [class.backpack__tab--epic]="filter === 'epic'"
+          [class.backpack__tab--legendary]="filter === 'legendary'"
+          [class.backpack__tab--ascendant]="filter === 'ascendant'"
           [class.backpack__tab--active]="isFilterActive(filter)"
           [disabled]="!!equipMode"
           (click)="setFilter(filter)"
         >
-          {{
-            filter === "all"
-              ? "All"
-              : filter === "weapons"
-                ? "Weapons"
-                : filter === "armor"
-                  ? "Armor"
-                  : "Relics"
-          }}
+          {{ filter === "all" ? "All" : filter }}
         </button>
       }
     </nav>
@@ -28,91 +26,21 @@
     <p class="backpack__mode-hint">{{ equipModeHint }}</p>
   }
 
-  <section class="backpack__panel backpack__panel--equipped">
-    <div class="backpack__section-head">
-      <h3>Equipped Loadout</h3>
-      <span>{{ equippedCount }}/3</span>
-    </div>
-    <div class="backpack__equipped-grid">
-      @for (entry of equippedSlots; track entry.slot) {
-        <button
-          type="button"
-          class="backpack__equipped-card"
-          [class.backpack__equipped-card--filled]="!!entry.item"
-          [class.backpack__equipped-card--empty]="!entry.item"
-          [class.backpack__equipped-card--selected]="!!entry.item && selectedSlotId === (entry.item ? entry.item.slotId : null)"
-          (click)="selectEquippedSlot(entry)"
-          [disabled]="!entry.item"
-        >
-          <div class="backpack__equipped-top">
-            <span class="backpack__equipped-slot">{{ entry.slotLabel }}</span>
-            <span class="backpack__state-pill backpack__state-pill--equipped">Equipped</span>
-          </div>
-          @if (entry.item) {
-            <div class="backpack__equipped-main">
-              <span class="backpack__item-icon backpack__item-icon--sm" [attr.data-tone]="entry.item.iconTone">
-                @if (shouldRenderItemIconImage(entry.item)) {
-                  <img
-                    class="backpack__item-icon-image"
-                    [src]="entry.item.iconImageUrl!"
-                    [alt]="''"
-                    (error)="onItemIconError(entry.item.slotId)"
-                  />
-                }
-                <span
-                  class="backpack__item-icon-glyph"
-                  [class.backpack__item-icon-glyph--center]="!shouldRenderItemIconImage(entry.item)"
-                >
-                  {{ entry.item.iconGlyph }}
-                </span>
-              </span>
-              <div class="backpack__equipped-copy">
-                <strong class="backpack__equipped-name">{{ entry.item.displayName }}</strong>
-                <span
-                  class="backpack__rarity-pill"
-                  [class.backpack__rarity-pill--common]="entry.item.rarityClass === 'common'"
-                  [class.backpack__rarity-pill--rare]="entry.item.rarityClass === 'rare'"
-                  [class.backpack__rarity-pill--epic]="entry.item.rarityClass === 'epic'"
-                  [class.backpack__rarity-pill--legendary]="entry.item.rarityClass === 'legendary'"
-                  [class.backpack__rarity-pill--ascendant]="entry.item.rarityClass === 'ascendant'"
-                >
-                  {{ entry.item.rarityLabel }}
-                </span>
-                @if (entry.item.impactBadges.length > 0) {
-                  <div class="backpack__item-impacts">
-                    @for (badge of entry.item.impactBadges; track badge) {
-                      <span class="backpack__impact-chip">{{ badge }}</span>
-                    }
-                  </div>
-                } @else {
-                  <span class="backpack__equipped-summary">{{ entry.item.shortStatSummary }}</span>
-                }
-              </div>
-            </div>
-          } @else {
-            <span class="backpack__item-icon backpack__item-icon--sm" [attr.data-tone]="getSlotFallbackTone(entry.slot)">
-              <span class="backpack__item-icon-glyph backpack__item-icon-glyph--center">
-                {{ getSlotFallbackGlyph(entry.slot) }}
-              </span>
-            </span>
-            <span class="backpack__equipped-empty">No item equipped</span>
-          }
-        </button>
-      }
-    </div>
-  </section>
-
   <div class="backpack__content">
     <section class="backpack__panel backpack__panel--inventory">
       <div class="backpack__section-head">
-        <h3>Stored Inventory</h3>
+        <h3>Account Weapons</h3>
       </div>
 
-      <div class="backpack__inventory-list" (contextmenu)="onGridContextMenu($event)">
+      <div
+        class="backpack__inventory-list"
+        [class.backpack__inventory-list--fill]="shouldFillPagedInventory"
+        (contextmenu)="onGridContextMenu($event)"
+      >
         @if (visibleStoredSlots.length === 0) {
-          <p class="backpack__empty">No stored items in this filter.</p>
+          <p class="backpack__empty">No weapons in this filter.</p>
         } @else {
-          @for (slot of visibleStoredSlots; track trackSlotById($index, slot)) {
+          @for (slot of pagedVisibleStoredSlots; track trackSlotById($index, slot)) {
             <button
               type="button"
               class="backpack__item-card"
@@ -148,7 +76,13 @@
                   <div class="backpack__item-top">
                     <span class="backpack__item-slot">{{ slot.slotLabel }}</span>
                     <div class="backpack__item-top-badges">
-                      <span class="backpack__state-pill backpack__state-pill--stored">Stored</span>
+                      <span
+                        class="backpack__state-pill"
+                        [class.backpack__state-pill--equipped]="slot.isEquipped"
+                        [class.backpack__state-pill--stored]="!slot.isEquipped"
+                      >
+                        {{ slot.isEquipped ? "Equipped" : "Stored" }}
+                      </span>
                       @if (selectedSlotId === slot.slotId) {
                         <span class="backpack__state-pill backpack__state-pill--selected">Selected</span>
                       }
@@ -165,13 +99,28 @@
                     </div>
                   </div>
                   <strong class="backpack__item-name">{{ slot.displayName }}</strong>
-                  <span class="backpack__item-type">{{ slot.typeLabel }}</span>
+                  <div class="backpack__item-meta-line">
+                    <span class="backpack__item-type">{{ slot.typeLabel }}</span>
+                    @if (slot.isEquipped && getCharacterBadge(slot); as badge) {
+                      <span class="backpack__equipped-by">
+                        <span class="backpack__char-avatar" [attr.data-tone]="badge.tone">
+                          @if (shouldRenderCharacterImage(slot)) {
+                            <img
+                              class="backpack__char-avatar-image"
+                              [src]="badge.imageUrl!"
+                              [alt]="''"
+                              (error)="onCharacterImageError(badge.characterId)"
+                            />
+                          } @else {
+                            <span class="backpack__char-avatar-fallback">{{ badge.monogram }}</span>
+                          }
+                        </span>
+                        by {{ badge.characterName }}
+                      </span>
+                    }
+                  </div>
                   @if (slot.impactBadges.length > 0) {
-                    <div class="backpack__item-impacts">
-                      @for (badge of slot.impactBadges; track badge) {
-                        <span class="backpack__impact-chip">{{ badge }}</span>
-                      }
-                    </div>
+                    <span class="backpack__item-summary">{{ slot.impactBadges[0] }}</span>
                   } @else {
                     <span class="backpack__item-summary">{{ slot.shortStatSummary }}</span>
                   }
@@ -184,82 +133,58 @@
           }
         }
       </div>
+
+      @if (visibleStoredSlots.length > pageSize) {
+        <div class="backpack__pagination">
+          <button type="button" [disabled]="isFirstPage" (click)="goToPreviousPage()">Previous</button>
+          <span>Page {{ pageLabel }}</span>
+          <button type="button" [disabled]="isLastPage" (click)="goToNextPage()">Next</button>
+        </div>
+      }
     </section>
 
     <section class="backpack__panel backpack__panel--detail">
       <div class="backpack__section-head">
-        <h3>Item Detail</h3>
+        <h3>Weapon Detail</h3>
       </div>
 
       @if (selectedSlot) {
         <article class="backpack__detail-card">
-          <div class="backpack__detail-hero">
-            <span class="backpack__item-icon backpack__item-icon--lg" [attr.data-tone]="selectedSlot.iconTone">
-              @if (shouldRenderItemIconImage(selectedSlot)) {
-                <img
-                  class="backpack__item-icon-image"
-                  [src]="selectedSlot.iconImageUrl!"
-                  [alt]="''"
-                  (error)="onItemIconError(selectedSlot.slotId)"
-                />
-              }
-              <span
-                class="backpack__item-icon-glyph"
-                [class.backpack__item-icon-glyph--center]="!shouldRenderItemIconImage(selectedSlot)"
-              >
-                {{ selectedSlot.iconGlyph }}
-              </span>
+          <div class="backpack__detail-head">
+            <strong class="backpack__detail-name">{{ selectedSlot.displayName }}</strong>
+            <span
+              class="backpack__rarity-pill"
+              [class.backpack__rarity-pill--common]="selectedSlotRarityClass === 'common'"
+              [class.backpack__rarity-pill--rare]="selectedSlotRarityClass === 'rare'"
+              [class.backpack__rarity-pill--epic]="selectedSlotRarityClass === 'epic'"
+              [class.backpack__rarity-pill--legendary]="selectedSlotRarityClass === 'legendary'"
+              [class.backpack__rarity-pill--ascendant]="selectedSlotRarityClass === 'ascendant'"
+            >
+              {{ selectedSlot.rarityLabel }}
             </span>
-            <div class="backpack__detail-copy">
-              <div class="backpack__detail-top">
-                <div class="backpack__detail-meta">
-                  <span class="backpack__detail-slot">{{ selectedSlotTypeLabel }}</span>
-                  <span
-                    class="backpack__state-pill"
-                    [class.backpack__state-pill--equipped]="selectedSlot.isEquipped"
-                    [class.backpack__state-pill--stored]="!selectedSlot.isEquipped"
-                  >
-                    {{ selectedSlotStateLabel }}
-                  </span>
-                </div>
-                <span
-                  class="backpack__rarity-pill"
-                  [class.backpack__rarity-pill--common]="selectedSlotRarityClass === 'common'"
-                  [class.backpack__rarity-pill--rare]="selectedSlotRarityClass === 'rare'"
-                  [class.backpack__rarity-pill--epic]="selectedSlotRarityClass === 'epic'"
-                  [class.backpack__rarity-pill--legendary]="selectedSlotRarityClass === 'legendary'"
-                  [class.backpack__rarity-pill--ascendant]="selectedSlotRarityClass === 'ascendant'"
-                >
-                  {{ selectedSlot.rarityLabel }}
-                </span>
-              </div>
-
-              <strong class="backpack__detail-name">{{ selectedSlot.displayName }}</strong>
-              <p class="backpack__detail-type">{{ selectedSlot.typeLabel }}</p>
-            </div>
           </div>
 
-          @if (selectedSlotComparisonLine) {
-            <p class="backpack__detail-compare">{{ selectedSlotComparisonLine }}</p>
-          }
+          <div
+            class="backpack__detail-visual"
+            [attr.data-rarity]="selectedSlotRarityClass"
+          >
+            @if (shouldRenderItemIconImage(selectedSlot)) {
+              <img
+                class="backpack__detail-visual-image"
+                [src]="selectedSlot.iconImageUrl!"
+                [alt]="selectedSlot.displayName"
+                (error)="onItemIconError(selectedSlot.slotId)"
+              />
+            } @else {
+              <span class="backpack__detail-visual-fallback">{{ selectedSlot.iconGlyph }}</span>
+            }
+          </div>
 
-          @if (selectedSlot.impactBadges.length > 0) {
-            <div class="backpack__item-impacts">
-              @for (badge of selectedSlot.impactBadges; track badge) {
-                <span class="backpack__impact-chip">{{ badge }}</span>
-              }
-            </div>
-          }
-
-          @if (selectedSlot.detailStatLines.length > 0) {
-            <ul class="backpack__detail-stats">
-              @for (line of selectedSlot.detailStatLines; track line) {
-                <li>{{ line }}</li>
-              }
-            </ul>
-          } @else {
-            <p class="backpack__detail-empty">No additional stats available.</p>
-          }
+          <div class="backpack__detail-copy">
+            @for (line of selectedSlotDescriptionLines; track line) {
+              <p class="backpack__detail-description">{{ line }}</p>
+            }
+          </div>
 
           @if (canSalvage(selectedSlot)) {
             <p class="backpack__detail-salvage">
@@ -267,35 +192,30 @@
             </p>
           }
 
-          @if (canEquip(selectedSlot) || canSalvage(selectedSlot)) {
+          @if (canSalvage(selectedSlot)) {
             <div class="backpack__detail-actions">
-              @if (canEquip(selectedSlot)) {
-                <button type="button" [disabled]="equipInFlight" (click)="onEquipSelectedSlot()">Equip</button>
-              }
-              @if (canSalvage(selectedSlot)) {
-                <button type="button" [disabled]="salvageInFlight" (click)="onSalvageSelectedSlot()">Salvage</button>
-              }
+              <button type="button" [disabled]="salvageInFlight" (click)="onSalvageSelectedSlot()">Salvage</button>
             </div>
           }
         </article>
       } @else {
-        <p class="backpack__detail-empty">Select an item to preview details.</p>
+        <p class="backpack__detail-empty">Select a weapon to preview details.</p>
       }
     </section>
   </div>
 
   @if (contextMenu && selectedSlot) {
     <div class="backpack__context-menu" [style.left.px]="contextMenu.x" [style.top.px]="contextMenu.y" (click)="$event.stopPropagation()">
-      <button type="button" [disabled]="!canEquip(selectedSlot)" (click)="onContextMenuAction('equip')">Equip</button>
-      <button type="button" (click)="onContextMenuAction('inspect')">Inspect</button>
-    </div>
-  }
-
-  @if (inspectSlot) {
-    <div class="backpack__inspect" (click)="$event.stopPropagation()">
-      <p class="backpack__inspect-title">{{ inspectSlot.displayName }}</p>
-      <p>{{ inspectSlot.inspectLabel }}</p>
-      <button type="button" (click)="closeInspect()">Close</button>
+      <p class="backpack__context-title">Assign To Kaelis</p>
+      @for (target of assignTargets; track target.characterId) {
+        <button
+          type="button"
+          [disabled]="isAssignToCharacterDisabled(target.characterId, selectedSlot)"
+          (click)="onAssignToCharacter(target.characterId)"
+        >
+          {{ target.characterName }}
+        </button>
+      }
     </div>
   }
 </section>

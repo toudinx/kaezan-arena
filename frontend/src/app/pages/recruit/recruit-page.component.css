@@ -1,0 +1,48 @@
+:host {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  background: #0a1018;
+  color: #dbe5f1;
+}
+
+.feature-placeholder {
+  margin: auto;
+  max-width: 620px;
+  border: 1px solid #233047;
+  border-radius: 0.65rem;
+  background: #0f1725;
+  padding: 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.feature-placeholder h1 {
+  margin: 0;
+}
+
+.feature-placeholder p {
+  margin: 0;
+  color: #9fb0c7;
+}
+
+.feature-placeholder__actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.feature-placeholder__actions a {
+  border: 1px solid #334155;
+  border-radius: 0.45rem;
+  background: #111827;
+  color: #e2e8f0;
+  text-decoration: none;
+  font: inherit;
+  padding: 0.4rem 0.7rem;
+}
+
+.feature-placeholder__actions a:hover {
+  border-color: #3b82f6;
+}

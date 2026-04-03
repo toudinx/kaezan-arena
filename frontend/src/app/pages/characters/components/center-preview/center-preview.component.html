@@ -1,0 +1,58 @@
+<div class="center-preview">
+  @if (activeTab === 'sigils') {
+    <app-kaelis-sigil-pentagon
+      [slots]="sigilSlots"
+      [selectedIndex]="selectedSigilIndex"
+      (slotClick)="slotClick.emit($event)"
+    ></app-kaelis-sigil-pentagon>
+  } @else {
+    <div class="preview-frame">
+      <div class="preview-glow"></div>
+      @if (previewImageUrl) {
+        <img
+          class="preview-image"
+          [class.preview-image--weapon]="activeTab === 'weapon'"
+          [class.full-height]="activeTab === 'details'"
+          [src]="previewImageUrl"
+          [alt]="characterName"
+        />
+      } @else {
+        <div class="preview-placeholder">{{ characterName.slice(0, 1) || '?' }}</div>
+      }
+    </div>
+  }
+
+  @if (activeTab === 'details') {
+    <div class="skin-nav">
+      <button
+        type="button"
+        class="nav-btn"
+        [disabled]="!canPrevSkin"
+        (click)="prevSkin.emit()"
+        aria-label="Previous skin"
+      >
+        &lt;
+      </button>
+      <button
+        type="button"
+        class="nav-btn"
+        [disabled]="!canNextSkin"
+        (click)="nextSkin.emit()"
+        aria-label="Next skin"
+      >
+        &gt;
+      </button>
+    </div>
+
+    @if (skinName) {
+      <div class="skin-overlay">
+        <div class="skin-meta">
+          <div class="skin-name">{{ skinName }}</div>
+          @if (skinDescription) {
+            <div class="skin-desc">{{ skinDescription }}</div>
+          }
+        </div>
+      </div>
+    }
+  }
+</div>

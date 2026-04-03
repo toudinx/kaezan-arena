@@ -1,0 +1,12 @@
+<div class="home-left">
+  <div class="home-logo">{{ title }}</div>
+  <div class="home-status">
+    <div class="home-level">{{ level }}</div>
+    <div class="home-details">
+      <span class="home-name">{{ commanderName | uppercase }}</span>
+      <div class="home-xp">
+        <div class="home-xp__fill" [style.width]="xpPercent"></div>
+      </div>
+    </div>
+  </div>
+</div>

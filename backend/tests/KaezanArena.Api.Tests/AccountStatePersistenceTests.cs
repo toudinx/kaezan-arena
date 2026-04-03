@@ -103,6 +103,53 @@ public sealed class AccountStatePersistenceTests
         }
     }
 
+    [Fact]
+    public void EquipItem_CanReassignWeaponAcrossCharactersWithinSameAccount()
+    {
+        var storagePath = BuildTempStoragePath();
+        try
+        {
+            const string accountId = "account_cross_character_equip";
+            var persistence = new JsonFileAccountStatePersistence(storagePath);
+            var store = new InMemoryAccountStateStore(persistence);
+
+            var initial = store.GetAccountState(accountId);
+            var sourceCharacter = initial.Characters.Values.First(character =>
+                character.Inventory.EquipmentInstances.Values.Any(instance =>
+                    AccountCatalog.TryGetEquipment(instance.DefinitionId, out var definition)
+                    && string.Equals(definition.Slot, "weapon", StringComparison.OrdinalIgnoreCase)));
+            var targetCharacterId = initial.Characters.Keys.First(characterId =>
+                !string.Equals(characterId, sourceCharacter.CharacterId, StringComparison.Ordinal));
+
+            var sourceWeaponInstanceId = sourceCharacter.Inventory.EquipmentInstances.Values.First(instance =>
+                AccountCatalog.TryGetEquipment(instance.DefinitionId, out var definition)
+                && string.Equals(definition.Slot, "weapon", StringComparison.OrdinalIgnoreCase)).InstanceId;
+            var sourceEquippedWeaponBefore = sourceCharacter.Equipment.WeaponInstanceId;
+
+            var updatedTarget = store.EquipItem(
+                accountId: accountId,
+                characterId: targetCharacterId,
+                slot: EquipmentSlot.Weapon,
+                equipmentInstanceId: sourceWeaponInstanceId);
+            var after = store.GetAccountState(accountId);
+
+            Assert.Equal(sourceWeaponInstanceId, updatedTarget.Equipment.WeaponInstanceId);
+            Assert.True(after.Characters[targetCharacterId].Inventory.EquipmentInstances.ContainsKey(sourceWeaponInstanceId));
+            Assert.False(after.Characters[sourceCharacter.CharacterId].Inventory.EquipmentInstances.ContainsKey(sourceWeaponInstanceId));
+
+            if (string.Equals(sourceEquippedWeaponBefore, sourceWeaponInstanceId, StringComparison.Ordinal))
+            {
+                Assert.NotEqual(
+                    sourceWeaponInstanceId,
+                    after.Characters[sourceCharacter.CharacterId].Equipment.WeaponInstanceId);
+            }
+        }
+        finally
+        {
+            DeleteDirectoryIfExists(storagePath);
+        }
+    }
+
     private static string BuildTempStoragePath()
     {
         return Path.Combine(Path.GetTempPath(), "kaezan-arena-tests", Guid.NewGuid().ToString("N"), "accounts");

@@ -1,273 +1,49 @@
-<section class="home-hub">
+<div class="home-shell" data-testid="home-page" [style.background]="currentBackground.shellBackground">
+  <app-home-background
+    [imageUrl]="currentBackground.imageUrl"
+    [gradientOverlay]="currentBackground.overlay"
+  ></app-home-background>
 
-  @if (isLoading) {
-    <p class="home-hub__state">Loading account session...</p>
-  } @else if (loadError) {
-    <p class="home-hub__state home-hub__state--error">{{ loadError }}</p>
-  } @else {
-    <div class="home-hub__layout">
+  <div class="home-stage">
+    <app-home-character-stage
+      [imageUrl]="characterImageUrl"
+    ></app-home-character-stage>
 
-      <!-- LEFT: Active character card -->
-      <aside class="hub-char">
-        @if (hasActiveCharacter) {
-          <div
-            class="hub-char__portrait kae-char-portrait kae-char-portrait--active"
-            [attr.data-tone]="activeCharacterPortrait.tone"
-            aria-hidden="true"
-          >
-            @if (activeCharacterPortrait.imageUrl && !isActiveCharacterPortraitImageFailed()) {
-              <img
-                class="kae-char-portrait__img"
-                [src]="activeCharacterPortrait.imageUrl"
-                [alt]="''"
-                (error)="onActiveCharacterPortraitImageError()"
-              />
-            } @else {
-              <span class="kae-char-portrait__fallback">{{ activeCharacterPortrait.monogram }}</span>
-            }
-            <span class="kae-char-portrait__sigil">{{ activeCharacterPortrait.sigil }}</span>
-          </div>
+    <app-home-top-left-hud
+      [commanderName]="hudAccountLabel"
+      [level]="accountLevel"
+      [xpProgress]="xpProgress"
+    ></app-home-top-left-hud>
 
-          <div class="hub-char__identity">
-            <strong class="hub-char__name">{{ activeCharacterName }}</strong>
-            <div class="hub-char__identity-badges">
-              <span class="hub-char__active-chip">Active</span>
-              <span class="hub-char__kit-badge hub-char__kit-badge--{{ activeCharacterKitBadge }}">{{ activeCharacterKitTypeLabel }}</span>
-            </div>
-          </div>
+    <app-home-top-right-actions
+      [actions]="actionItems"
+    ></app-home-top-right-actions>
 
-          <div class="hub-char__xp">
-            <div class="hub-char__xp-header">
-              <span>Mastery {{ activeCharacter?.masteryLevel ?? 0 }}</span>
-              <span>{{ activeCharacter?.masteryXpForCurrentLevel ?? 0 }} / {{ activeCharacter?.masteryXpRequiredForNextLevel ?? 0 }} XP</span>
-            </div>
-            <div class="hub-char__xp-track">
-              <div class="hub-char__xp-fill" [style.width.%]="activeCharacterMasteryProgressPercent"></div>
-            </div>
-          </div>
+    <app-home-main-navigation
+      [items]="mainNavItems"
+    ></app-home-main-navigation>
 
-          <div class="hub-char__section">
-            <p class="hub-char__section-title">Fixed Kit</p>
-            <div class="hub-char__pills">
-              @for (weapon of activeCharacterFixedWeapons; track weapon.label) {
-                <span
-                  class="hub-char__pill"
-                  [attr.data-skill-family]="weapon.family"
-                  [attr.data-skill-tier]="weapon.tier"
-                >
-                  <span class="hub-char__pill-icon">{{ weapon.iconGlyph }}</span>
-                  <span class="hub-char__pill-label">{{ weapon.label }}</span>
-                </span>
-              }
-              @if (activeCharacterFixedWeapons.length === 0) {
-                <span class="hub-char__pill hub-char__pill--empty">No kit data</span>
-              }
-            </div>
-          </div>
+    <app-home-event-banner
+      [label]="contractsBannerLabel"
+      title="Daily Contracts"
+      [timer]="dailyContractsResetLabel"
+      (bannerClick)="openDailyContracts()"
+    ></app-home-event-banner>
 
-          <div class="hub-char__section">
-            <p class="hub-char__section-title">Ultimate Slot</p>
-            <div class="hub-char__rune-slot">
-              <span class="hub-char__rune-lock" aria-hidden="true">&#x2B21;</span>
-              <span class="hub-char__rune-label">Auto when charged</span>
-            </div>
-          </div>
+    <button type="button" class="home-background-toggle" (click)="cycleBackground()">
+      Background: {{ currentBackground.label }}
+    </button>
+  </div>
 
-          <div class="hub-char__section">
-            <p class="hub-char__section-title">Gear</p>
-            <div class="hub-char__gear">
-              <div class="hub-char__gear-row">
-                <span class="hub-char__gear-icon hub-char__gear-icon--weapon" aria-hidden="true"></span>
-                <span class="hub-char__gear-label">Weapon</span>
-                <span class="hub-char__gear-value" [class.hub-char__gear-value--empty]="equippedWeaponName === 'None'">
-                  {{ equippedWeaponName === 'None' ? 'Empty' : equippedWeaponName }}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <a class="hub-char__view-link" routerLink="/characters">View Characters</a>
-        } @else {
-          <p class="hub-char__empty">No active character.</p>
-          <a class="hub-char__view-link" routerLink="/characters">Choose Character</a>
-        }
-      </aside>
-
-      <!-- CENTER: Enter Arena CTA + Last Run summary -->
-      <main class="hub-center">
-        <div class="hub-cta">
-          <div class="hub-zone-picker">
-            <p class="hub-zone-picker__label">Select Zone</p>
-            <div class="hub-zone-picker__grid">
-              @for (zone of zoneOptions; track zone.zoneIndex) {
-                <button
-                  type="button"
-                  class="hub-zone-picker__btn"
-                  [class.hub-zone-picker__btn--selected]="zone.isSelected"
-                  [class.hub-zone-picker__btn--locked]="!zone.isUnlocked"
-                  [disabled]="!zone.isUnlocked"
-                  (click)="onSelectZone(zone.zoneIndex)"
-                >
-                  <span class="hub-zone-picker__btn-title">Zone {{ zone.zoneIndex }}</span>
-                  @if (!zone.isUnlocked) {
-                    <span class="hub-zone-picker__btn-lock">Account Lv.{{ zone.unlockLevel }} required</span>
-                  }
-                </button>
-              }
-            </div>
-          </div>
-          <a class="hub-cta__btn" routerLink="/arena" [queryParams]="startRunQueryParams">Start Run</a>
-          @if (hasActiveCharacter) {
-            <p class="hub-cta__hint">
-              <span class="hub-cta__hint-char">{{ activeCharacterName }}</span>
-              <span class="hub-cta__hint-sep" aria-hidden="true"> · </span>
-              <span>{{ activeCharacterKitTypeLabel }}</span>
-              <span class="hub-cta__hint-sep" aria-hidden="true"> · </span>
-              <span>Zone {{ selectedZoneIndex }}</span>
-            </p>
-          }
-        </div>
-
-        @if (hasLastRunSummary) {
-          <div class="hub-lastrun">
-            <p class="hub-lastrun__heading">Last Run</p>
-            <div class="hub-lastrun__outcome">
-              <span class="hub-lastrun__reason hub-lastrun__reason--{{ lastRunEndReasonClass }}">
-                {{ lastRunEndReasonLabel }}
-              </span>
-              <span class="hub-lastrun__duration">{{ lastRunDurationLabel }}</span>
-            </div>
-            <div class="hub-lastrun__stats">
-              <div class="hub-lastrun__stat">
-                <span class="hub-lastrun__stat-value">{{ lastRunSummary?.killsTotal ?? 0 }}</span>
-                <span class="hub-lastrun__stat-label">Kills</span>
-              </div>
-              <div class="hub-lastrun__stat">
-                <span class="hub-lastrun__stat-value">{{ lastRunSummary?.eliteKills ?? 0 }}</span>
-                <span class="hub-lastrun__stat-label">Elites</span>
-              </div>
-              <div class="hub-lastrun__stat">
-                <span class="hub-lastrun__stat-value">{{ lastRunSummary?.chestsOpened ?? 0 }}</span>
-                <span class="hub-lastrun__stat-label">Chests</span>
-              </div>
-              <div class="hub-lastrun__stat">
-                <span class="hub-lastrun__stat-value">{{ lastRunSummary?.damageDealtTotal ?? 0 }}</span>
-                <span class="hub-lastrun__stat-label">Damage</span>
-              </div>
-              <div class="hub-lastrun__stat">
-                <span class="hub-lastrun__stat-value">{{ lastRunXpGained }}</span>
-                <span class="hub-lastrun__stat-label">XP</span>
-              </div>
-              <div class="hub-lastrun__stat">
-                <span class="hub-lastrun__stat-value"
-                      [class.hub-lastrun__stat-value--pos]="lastRunEchoFragmentsDelta > 0"
-                      [class.hub-lastrun__stat-value--neg]="lastRunEchoFragmentsDelta < 0">
-                  {{ lastRunEchoFragmentsDelta >= 0 ? '+' : '' }}{{ lastRunEchoFragmentsDelta }}
-                </span>
-                <span class="hub-lastrun__stat-label">Echo</span>
-              </div>
-            </div>
-            @if (lastRunCardsFormatted.length > 0) {
-              <div class="hub-lastrun__cards">
-                <p class="hub-lastrun__cards-label">Cards Chosen</p>
-                <div class="hub-lastrun__card-pills">
-                  @for (card of lastRunCardsFormatted; track card) {
-                    <span class="hub-lastrun__card-pill">{{ card }}</span>
-                  }
-                </div>
-              </div>
-            }
-          </div>
-        } @else {
-          <div class="hub-lastrun hub-lastrun--empty">
-            <p class="hub-lastrun__heading">Last Run</p>
-            <p class="hub-lastrun__none">Complete your first run to see results here.</p>
-          </div>
-        }
-      </main>
-
-      <!-- RIGHT: Progression snapshot -->
-      <aside class="hub-progress">
-        <div class="hub-account-level">
-          <p class="hub-account-level__label">Account Level {{ accountLevel }}</p>
-          <p class="hub-account-level__xp">{{ accountXpProgressLabel }}</p>
-          <div class="hub-account-level__track">
-            <div class="hub-account-level__fill" [style.width.%]="accountXpProgressPercent"></div>
-          </div>
-          <p class="hub-account-level__zones">Unlocked Zones: {{ unlockedZoneCount }} / 5</p>
-        </div>
-        <div class="hub-echo">
-          <p class="hub-echo__label">Echo Fragments</p>
-          <p class="hub-echo__value">{{ echoFragmentsBalance }}</p>
-          <p class="hub-echo__sublabel">Fragmentos de Eco</p>
-        </div>
-        <div class="hub-echo hub-kaeros">
-          <p class="hub-echo__label">Kaeros ⬡</p>
-          <p class="hub-echo__value">{{ kaerosBalance }}</p>
-          <p class="hub-echo__sublabel">Mastery currency</p>
-        </div>
-
-        <div class="hub-contracts">
-          <p class="hub-contracts__heading">Daily Contracts</p>
-          @if (dailyContracts.length > 0) {
-            <ul class="hub-contracts__list">
-              @for (contract of dailyContracts; track contract.contractId) {
-                <li class="hub-contracts__row" [class.hub-contracts__row--completed]="contract.isCompleted">
-                  <div class="hub-contracts__content">
-                    <span class="hub-contracts__desc">{{ contract.description }}</span>
-                    <span class="hub-contracts__progress">
-                      @if (contract.isCompleted) {
-                        ✓
-                      } @else if (contract.showProgress) {
-                        {{ contract.progressText }}
-                      } @else {
-                        In progress
-                      }
-                    </span>
-                  </div>
-                  <span class="hub-contracts__reward">+{{ contract.kaerosReward }} ⬡</span>
-                </li>
-              }
-            </ul>
-          } @else {
-            <p class="hub-contracts__empty">No contracts available.</p>
-          }
-          <p class="hub-contracts__reset">Resets at midnight UTC</p>
-        </div>
-
-        <div class="hub-bestiary">
-          <p class="hub-bestiary__heading">Bestiary</p>
-
-          @if (bestiaryNextMilestone) {
-            <div class="hub-bestiary__milestone">
-              <span class="hub-bestiary__milestone-label">Closest milestone</span>
-              <span class="hub-bestiary__milestone-species">{{ bestiaryNextMilestone.speciesName }}</span>
-              <span class="hub-bestiary__milestone-kills">{{ bestiaryNextMilestone.killsToNext }} kills to next</span>
-            </div>
-          }
-
-          @if (bestiaryTopRows.length > 0) {
-            <ul class="hub-bestiary__list">
-              @for (row of bestiaryTopRows; track row.speciesName) {
-                <li class="hub-bestiary__row">
-                  <div class="hub-bestiary__row-header">
-                    <span class="hub-bestiary__species">{{ row.speciesName }}</span>
-                    <span class="hub-bestiary__kills">{{ row.killsTotal }}</span>
-                  </div>
-                  <div class="hub-bestiary__track">
-                    <div class="hub-bestiary__fill" [style.width.%]="row.progressPercent"></div>
-                  </div>
-                  <span class="hub-bestiary__next">{{ row.killsToNext }} to next</span>
-                </li>
-              }
-            </ul>
-          } @else {
-            <p class="hub-bestiary__empty">No kills recorded.</p>
-          }
-        </div>
-      </aside>
-
-    </div>
-  }
-
-</section>
+  <app-daily-contracts-modal
+    [isOpen]="dailyContractsOpen"
+    [isRefreshing]="dailyContractsRefreshing"
+    [loadError]="dailyContractsLoadError"
+    [assignedDateLabel]="dailyContractsAssignedDateLabel"
+    [resetLabel]="dailyContractsResetLabel"
+    [accountXpHint]="accountXpHint"
+    [rows]="dailyContractRows"
+    (closeRequested)="closeDailyContracts()"
+    (refreshRequested)="refreshDailyContracts()"
+  ></app-daily-contracts-modal>
+</div>

@@ -1,0 +1,113 @@
+:host {
+  position: absolute;
+  top: 48px;
+  left: 60px;
+  z-index: 4;
+  display: block;
+  animation: hud-fade 600ms ease both;
+}
+
+.home-left {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.home-logo {
+  font-size: clamp(32px, 4.6vw, 68px);
+  font-weight: 800;
+  font-style: italic;
+  text-transform: uppercase;
+  letter-spacing: -0.04em;
+  background: linear-gradient(90deg, #ffffff 20%, #7e8cff 80%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 8px 28px rgba(90, 96, 200, 0.45);
+}
+
+.home-status {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 24px 10px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(12px);
+  width: fit-content;
+}
+
+.home-level {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 22px;
+  color: #ffffff;
+  background: linear-gradient(135deg, #6c7dff, #3d2f7a);
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 0 24px rgba(108, 125, 255, 0.35);
+}
+
+.home-details {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.home-name {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  color: #f2f2ff;
+}
+
+.home-xp {
+  width: clamp(220px, 30vw, 460px);
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  overflow: hidden;
+}
+
+.home-xp__fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #f4c067, #f6d08b);
+  box-shadow: 0 0 12px rgba(246, 208, 139, 0.6);
+}
+
+@keyframes hud-fade {
+  0% {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 768px) {
+  :host {
+    top: 24px;
+    left: 20px;
+  }
+
+  .home-status {
+    padding-right: 16px;
+  }
+
+  .home-level {
+    width: 44px;
+    height: 44px;
+    font-size: 18px;
+  }
+
+  .home-xp {
+    width: 180px;
+  }
+}

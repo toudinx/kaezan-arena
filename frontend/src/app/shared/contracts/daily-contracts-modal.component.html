@@ -1,0 +1,69 @@
+@if (isOpen) {
+  <div class="daily-modal__backdrop" (click)="onBackdropClick()">
+    <section
+      class="daily-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Daily contracts"
+      (click)="onPanelClick($event)"
+    >
+      <header class="daily-modal__header">
+        <div>
+          <p class="daily-modal__eyebrow">Daily Ritual</p>
+          <h2>Daily Contracts</h2>
+          <p class="daily-modal__assigned">Assigned {{ assignedDateLabel }}</p>
+        </div>
+        <div class="daily-modal__header-actions">
+          <button type="button" (click)="requestRefresh()" [disabled]="isRefreshing">Refresh</button>
+          <button type="button" (click)="requestClose()">Close</button>
+        </div>
+      </header>
+
+      @if (isRefreshing) {
+        <p class="daily-modal__state">Refreshing contracts...</p>
+      }
+
+      @if (loadError) {
+        <p class="daily-modal__state daily-modal__state--error">{{ loadError }}</p>
+      }
+
+      @if (!isRefreshing) {
+        <div class="daily-modal__list">
+          @for (row of rows; track row.contractId) {
+            <article class="daily-contract" [attr.data-status]="row.status">
+              <div class="daily-contract__head">
+                <p class="daily-contract__title">{{ row.description }}</p>
+                <span class="daily-contract__badge daily-contract__badge--{{ row.status }}">{{ row.statusLabel }}</span>
+              </div>
+
+              <p class="daily-contract__hint">{{ row.statusHint }}</p>
+
+              <div class="daily-contract__progress-row">
+                <span>{{ row.progressText }}</span>
+              </div>
+              <div class="daily-contract__progress-track">
+                <span class="daily-contract__progress-fill" [style.width.%]="row.progressPercent"></span>
+              </div>
+
+              <div class="daily-contract__reward-row">
+                <span class="daily-contract__reward">+{{ row.kaerosReward }} Kaeros</span>
+                @if (row.accountXpRewardLabel) {
+                  <span class="daily-contract__reward">{{ row.accountXpRewardLabel }}</span>
+                }
+              </div>
+            </article>
+          }
+
+          @if (rows.length === 0) {
+            <p class="daily-modal__state">No daily contracts are currently assigned.</p>
+          }
+        </div>
+      }
+
+      @if (accountXpHint) {
+        <p class="daily-modal__xp-hint">{{ accountXpHint }}</p>
+      }
+      <p class="daily-modal__reset">{{ resetLabel }}</p>
+    </section>
+  </div>
+}

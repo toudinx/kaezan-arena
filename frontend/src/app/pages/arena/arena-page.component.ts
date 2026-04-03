@@ -8,7 +8,7 @@ import {
   OnDestroy,
   ViewChild
 } from "@angular/core";
-import { ActivatedRoute, Router, RouterLink } from "@angular/router";
+import { ActivatedRoute, Router } from "@angular/router";
 import { AssetPreloaderService } from "../../arena/assets/asset-preloader.service";
 import { AssetResolverService } from "../../arena/assets/asset-resolver.service";
 import { ArenaEngine } from "../../arena/engine/arena-engine";
@@ -103,11 +103,6 @@ import {
   type EliteTimelineSummary
 } from "./combat-analyzer.helpers";
 import { computeExpProgressPercent, computeUnifiedVitalsPercent, formatRunTimer } from "./arena-hud.helpers";
-import {
-  resolveSkillPresentation,
-  type SkillVisualFamily,
-  type SkillVisualTier
-} from "../../shared/skills/skill-presentation.helpers";
 
 type ApiActorState = NonNullable<StartBattleResponse["actors"]>[number];
 type ApiSkillState = NonNullable<StartBattleResponse["skills"]>[number];
@@ -192,21 +187,6 @@ type EventFeedEntry = Readonly<{
   runTimeMs: number;
   type: NarrativeEventType;
   message: string;
-}>;
-type PreRunCharacterViewModel = Readonly<{
-  id: string;
-  name: string;
-  masteryLevel: number;
-  masteryXp: number;
-  equippedWeaponName: string;
-  isActive: boolean;
-}>;
-type PreRunKitWeaponViewModel = Readonly<{
-  skillId: string | null;
-  label: string;
-  iconGlyph: string;
-  family: SkillVisualFamily;
-  tier: SkillVisualTier;
 }>;
 type ExpConsoleEntry = Readonly<{
   id: string;
@@ -368,7 +348,6 @@ const DEV_LOG_ASSET_IDS: ReadonlyArray<string> = [
   selector: "app-arena-page",
   standalone: true,
   imports: [
-    RouterLink,
     BackpackWindowComponent,
     EquipmentPaperdollWindowComponent,
     HelperAssistWindowComponent
@@ -686,7 +665,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   }
 
   get runHudIdentityLabel(): string {
-    const selected = this.selectedCharacter ?? this.selectedPreRunCharacter;
+    const selected = this.selectedCharacter;
     const name = selected?.name ?? "Unknown Adventurer";
     return `${name} (Run Lv. ${this.runLevel})`;
   }
@@ -857,53 +836,6 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
 
   get hudPassiveSlots(): ReadonlyArray<ArenaCardOffer> {
     return this.selectedCards.slice(0, 4);
-  }
-
-  get preRunCharacters(): ReadonlyArray<PreRunCharacterViewModel> {
-    const state = this.accountState;
-    if (!state) {
-      return [];
-    }
-
-    const characters = Object.values(state.characters).map((character) => ({
-      id: character.characterId,
-      name: character.name,
-      masteryLevel: character.masteryLevel,
-      masteryXp: character.masteryXp,
-      equippedWeaponName: this.resolveEquippedWeaponName(character),
-      isActive: character.characterId === state.activeCharacterId
-    }));
-
-    characters.sort((left, right) => {
-      if (left.isActive && !right.isActive) {
-        return -1;
-      }
-
-      if (!left.isActive && right.isActive) {
-        return 1;
-      }
-
-      const byName = left.name.localeCompare(right.name, undefined, { sensitivity: "base" });
-      return byName !== 0 ? byName : left.id.localeCompare(right.id);
-    });
-
-    return characters;
-  }
-
-  get selectedPreRunCharacter(): PreRunCharacterViewModel | null {
-    if (!this.selectedCharacterId) {
-      return this.preRunCharacters[0] ?? null;
-    }
-
-    return this.preRunCharacters.find((character) => character.id === this.selectedCharacterId) ?? null;
-  }
-
-  get isPreRunLoading(): boolean {
-    return this.accountStateRequestInFlight && !this.accountLoaded;
-  }
-
-  get isPreRunEmptyState(): boolean {
-    return this.accountLoaded && !this.accountStateRequestInFlight && this.preRunCharacters.length === 0;
   }
 
   get canReplayLastRun(): boolean {
@@ -1187,6 +1119,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       this.fxPreviewUrl = this.resolver.getFx("hitSmall").url;
       this.bootPhase = "ready_to_start";
       this.renderEnabled = false;
+      await this.startRun();
     } catch (error) {
       this.bootPhase = "error";
       this.renderEnabled = false;
@@ -1788,10 +1721,10 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     await this.restartBattle();
   }
 
-  onPauseModalExit(): void {
+  onPauseModalExitToPrep(): void {
     this.isPauseModalOpen = false;
     this.autoStepWasEnabledBeforePause = false;
-    this.returnToPreRun();
+    this.exitToArenaPrep();
   }
 
   async onDeathModalRestartRun(): Promise<void> {
@@ -1803,8 +1736,8 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     await this.restartBattle();
   }
 
-  onDeathModalReturnToPreRun(): void {
-    this.returnToPreRun();
+  onDeathModalExitToPrep(): void {
+    this.exitToArenaPrep();
   }
 
   private async beginNewRun(options: BeginRunOptions): Promise<void> {
@@ -2194,7 +2127,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   }
 
   exitBattle(): void {
-    this.returnToPreRun();
+    this.exitToArenaPrep();
   }
 
   get characterOptions(): CharacterState[] {
@@ -2273,157 +2206,6 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
 
   get selectedCharacterWeaponRarity(): string | null {
     return this.resolveSelectedEquipmentRarity("weapon");
-  }
-
-  get selectedCharacterSummaryLabel(): string {
-    const character = this.selectedPreRunCharacter;
-    if (!character) {
-      return "Unknown Adventurer (M 0)";
-    }
-
-    return `${character.name} (M ${character.masteryLevel})`;
-  }
-
-  get isSelectedCharacterActive(): boolean {
-    const state = this.accountState;
-    if (!state || !this.selectedCharacterId) {
-      return false;
-    }
-
-    return state.activeCharacterId === this.selectedCharacterId;
-  }
-
-  get selectedCharacterCatalogEntry() {
-    const id = this.selectedPreRunCharacter?.id;
-    if (!id) {
-      return null;
-    }
-    return this.accountStore.catalogs().characterById[id] ?? null;
-  }
-
-  get selectedCharacterSubtitle(): string {
-    return this.selectedCharacterCatalogEntry?.subtitle ?? "";
-  }
-
-  get selectedCharacterKitWeaponNames(): ReadonlyArray<string> {
-    return this.selectedCharacterKitWeapons.map((weapon) => weapon.label);
-  }
-
-  get selectedCharacterKitWeapons(): ReadonlyArray<PreRunKitWeaponViewModel> {
-    const catalogEntry = this.selectedCharacterCatalogEntry;
-    const fixedWeaponIds = catalogEntry?.fixedWeaponIds ?? [];
-    const fixedWeaponNames = catalogEntry?.fixedWeaponNames ?? [];
-    const size = Math.max(fixedWeaponIds.length, fixedWeaponNames.length);
-    const rows: PreRunKitWeaponViewModel[] = [];
-
-    for (let index = 0; index < size; index += 1) {
-      const skillId = fixedWeaponIds[index] ?? null;
-      const displayName = fixedWeaponNames[index] ?? null;
-      const presentation = resolveSkillPresentation({
-        skillId,
-        displayName,
-        fallbackLabel: displayName ?? skillId ?? `Skill ${index + 1}`
-      });
-      rows.push({
-        skillId: presentation.canonicalId ?? skillId,
-        label: presentation.label,
-        iconGlyph: presentation.iconGlyph,
-        family: presentation.family,
-        tier: presentation.tier
-      });
-    }
-
-    return rows;
-  }
-
-  get preRunEchoFragmentsBalance(): number {
-    return Math.max(0, this.accountState?.echoFragmentsBalance ?? 0);
-  }
-
-  get preRunBestiaryTeaser(): Readonly<{ speciesName: string; killsTotal: number; killsToNext: number; progressPercent: number }> | null {
-    const character = this.selectedPreRunCharacter;
-    if (!character) {
-      return null;
-    }
-    const charState = this.accountState?.characters[character.id];
-    if (!charState) {
-      return null;
-    }
-    const killsBySpecies = charState.bestiaryKillsBySpecies;
-    const speciesIds = Object.keys(killsBySpecies);
-    if (speciesIds.length === 0) {
-      return null;
-    }
-    const STEP = 25;
-    let best: { speciesName: string; killsTotal: number; killsToNext: number; progressPercent: number } | null = null;
-    for (const speciesId of speciesIds) {
-      const killsTotal = Math.max(0, killsBySpecies[speciesId] ?? 0);
-      const tier = Math.floor(killsTotal / STEP);
-      const nextMilestone = Math.max(STEP, (tier + 1) * STEP);
-      const killsToNext = nextMilestone - killsTotal;
-      const previousMilestone = Math.max(0, nextMilestone - STEP);
-      const progressPercent = Math.max(0, Math.min(100, ((killsTotal - previousMilestone) / STEP) * 100));
-      if (!best || killsToNext < best.killsToNext) {
-        best = { speciesName: this.formatSpeciesLabel(speciesId), killsTotal, killsToNext, progressPercent };
-      }
-    }
-    return best;
-  }
-
-  selectPrevPreRunCharacter(): void {
-    const chars = this.preRunCharacters;
-    if (chars.length === 0) {
-      return;
-    }
-    const currentIndex = chars.findIndex((c) => c.id === this.selectedCharacterId);
-    const prevIndex = currentIndex <= 0 ? chars.length - 1 : currentIndex - 1;
-    this.selectedCharacterId = chars[prevIndex].id;
-  }
-
-  selectNextPreRunCharacter(): void {
-    const chars = this.preRunCharacters;
-    if (chars.length === 0) {
-      return;
-    }
-    const currentIndex = chars.findIndex((c) => c.id === this.selectedCharacterId);
-    const nextIndex = currentIndex < 0 || currentIndex >= chars.length - 1 ? 0 : currentIndex + 1;
-    this.selectedCharacterId = chars[nextIndex].id;
-  }
-
-  async startRunAbsorbed(): Promise<void> {
-    if (!this.isSelectedCharacterActive && this.selectedCharacterId) {
-      await this.applySelectedCharacter();
-    }
-    await this.startRun();
-  }
-
-  onSelectedCharacterChange(event: Event): void {
-    const element = event.target as HTMLSelectElement | null;
-    if (!element) {
-      return;
-    }
-
-    this.selectedCharacterId = element.value;
-  }
-
-  async applySelectedCharacter(): Promise<void> {
-    if (!this.accountState || !this.selectedCharacterId) {
-      return;
-    }
-
-    this.accountRequestInFlight = true;
-    try {
-      const updated = await this.accountStore.setActiveCharacter(this.selectedCharacterId);
-      this.applyAccountState(updated);
-    } catch (error) {
-      this.battleLog = `setActiveCharacter failed: ${String(error)}`;
-    } finally {
-      this.accountRequestInFlight = false;
-    }
-  }
-
-  async reloadAccountState(): Promise<void> {
-    await this.loadAccountState(true);
   }
 
   async equipItemFromInventory(equipmentInstanceId: string, slot: "weapon"): Promise<boolean> {
@@ -5872,7 +5654,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     }
   }
 
-  private returnToPreRun(): void {
+  private exitToArenaPrep(): void {
     this.stopAutoStepLoop();
     this.clearAssistConfigDebounce();
     this.clearShieldBreakPulse();
@@ -5953,6 +5735,9 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.expLogSequence = 0;
     this.isInRun = false;
     this.syncUiMetaState();
+    void this.router.navigate(["/arena-prep"], {
+      queryParams: { zoneIndex: this.selectedZoneIndex }
+    });
   }
 
   private triggerShieldBreakPulse(): void {

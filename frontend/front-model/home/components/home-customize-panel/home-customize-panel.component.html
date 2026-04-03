@@ -1,0 +1,95 @@
+@if (open) {
+  <div class="customize-root" role="dialog" aria-modal="true">
+    <button type="button" class="customize-scrim" (click)="closed.emit()" aria-label="Close"></button>
+    <div class="customize-panel">
+      <div class="panel-header">
+        <div>
+          <p class="panel-kicker">Home Scene</p>
+          <h2>Customize Home</h2>
+          <p class="panel-subtitle">
+            Change the background and featured Kaelis visuals.
+          </p>
+        </div>
+        <button type="button" class="panel-close" (click)="closed.emit()">
+          Close
+        </button>
+      </div>
+
+      <div class="panel-tabs">
+        <button
+          type="button"
+          class="panel-tab"
+          [class.active]="activeTab() === 'backgrounds'"
+          (click)="setTab('backgrounds')"
+        >
+          Backgrounds
+        </button>
+        <button
+          type="button"
+          class="panel-tab"
+          [class.active]="activeTab() === 'kaelis'"
+          (click)="setTab('kaelis')"
+        >
+          Kaelis
+        </button>
+      </div>
+
+      @if (activeTab() === 'backgrounds') {
+        <div class="panel-grid">
+          @for (bg of backgrounds; track bg.id) {
+            <button
+              type="button"
+              class="panel-card"
+              [class.selected]="bg.id === selectedBackgroundId"
+              (click)="selectBackground(bg.id)"
+            >
+              <div
+                class="panel-thumb"
+                [style.backgroundImage]="backgroundPreview(bg)"
+              >
+                @if (bg.gradientOverlay) {
+                  <span
+                    class="panel-thumb__overlay"
+                    [style.background]="bg.gradientOverlay"
+                  ></span>
+                }
+              </div>
+              <div class="panel-meta">
+                <span class="panel-name">{{ bg.name }}</span>
+                @if (bg.tags?.length) {
+                  <span class="panel-tags">{{
+                    bg.tags.slice(0, 2).join(' / ')
+                  }}</span>
+                }
+              </div>
+            </button>
+          }
+        </div>
+      } @else {
+        <div class="panel-grid">
+          @for (kaelis of kaelisOptions; track kaelis.id) {
+            <button
+              type="button"
+              class="panel-card"
+              [class.selected]="kaelis.id === selectedKaelisId"
+              (click)="selectKaelis(kaelis.id)"
+            >
+              <div
+                class="panel-thumb panel-thumb--character"
+                [style.backgroundImage]="kaelisPreview(kaelis)"
+              ></div>
+              <div class="panel-meta">
+                <span class="panel-name">{{ kaelis.name }}</span>
+                @if (kaelis.tags?.length) {
+                  <span class="panel-tags">{{
+                    kaelis.tags.slice(0, 2).join(' / ')
+                  }}</span>
+                }
+              </div>
+            </button>
+          }
+        </div>
+      }
+    </div>
+  </div>
+}

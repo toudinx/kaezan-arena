@@ -1,0 +1,15 @@
+<div class="sigil-pentagon">
+  @for (pos of slotPositions; track pos.index) {
+    <button
+      type="button"
+      class="sigil-slot"
+      [class.filled]="slotAt(pos.index)"
+      [class.selected]="selectedIndex === pos.index"
+      [style.left]="pos.left"
+      [style.top]="pos.top"
+      (click)="selectSlot(pos.index)"
+    >
+      <span class="slot-icon">{{ pos.index + 1 }}</span>
+    </button>
+  }
+</div>

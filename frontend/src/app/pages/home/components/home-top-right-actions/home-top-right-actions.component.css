@@ -1,0 +1,78 @@
+:host {
+  position: absolute;
+  top: 48px;
+  right: 60px;
+  z-index: 4;
+  display: block;
+}
+
+.home-actions {
+  display: flex;
+  gap: 16px;
+}
+
+.action-btn {
+  width: 68px;
+  height: 68px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(15, 15, 30, 0.7);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  text-decoration: none;
+  color: inherit;
+}
+
+.action-btn svg {
+  width: 32px;
+  height: 32px;
+  fill: rgba(220, 220, 230, 0.85);
+}
+
+.action-btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+.action-btn:hover svg {
+  fill: #ffffff;
+}
+
+.action-btn--gold {
+  border-color: rgba(246, 208, 139, 0.4);
+}
+
+.action-btn--gold svg {
+  fill: #f6d08b;
+}
+
+.action-btn--disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.action-btn--disabled:hover {
+  background: rgba(15, 15, 30, 0.7);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+@media (max-width: 768px) {
+  :host {
+    top: 20px;
+    right: 20px;
+  }
+
+  .home-actions { gap: 8px; }
+
+  .action-btn {
+    width: 44px;
+    height: 44px;
+    border-radius: 14px;
+  }
+
+  .action-btn svg {
+    width: 20px;
+    height: 20px;
+  }
+}

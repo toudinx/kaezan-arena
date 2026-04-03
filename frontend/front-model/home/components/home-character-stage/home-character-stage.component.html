@@ -1,0 +1,14 @@
+<div
+  class="home-character"
+  [style.--offset-x.px]="kaelis?.offsetX || 0"
+  [style.--offset-y.px]="kaelis?.offsetY || 0"
+  [style.--scale]="kaelis?.scale ?? 1"
+  [attr.data-pose]="kaelis?.pose || 'idle'"
+  aria-hidden="true"
+>
+  <div
+    class="home-character__art"
+    [class.is-idle]="kaelis?.subtleIdleAnimation"
+    [style.backgroundImage]="characterImage"
+  ></div>
+</div>

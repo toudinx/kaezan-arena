@@ -1,0 +1,13 @@
+<div
+  class="home-character"
+  [style.--offset-x.px]="offsetX"
+  [style.--offset-y.px]="offsetY"
+  [style.--scale]="scale"
+  aria-hidden="true"
+>
+  @if (imageUrl) {
+    <div class="home-character__art">
+      <img class="home-character__sprite" [src]="imageUrl" [alt]="characterName || 'Kaelis'" />
+    </div>
+  }
+</div>

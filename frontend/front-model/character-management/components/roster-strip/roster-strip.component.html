@@ -1,0 +1,30 @@
+<div class="roster-strip">
+  <div class="roster-shell">
+    <button type="button" class="roster-nav left" (click)="scrollLeft()" aria-label="Scroll roster left">
+      <span aria-hidden="true">&lt;</span>
+    </button>
+
+    <div #viewport class="roster-viewport">
+      @for (kaelis of kaelis; track trackById) {
+        <button
+          type="button"
+          class="roster-item"
+          [class.active]="kaelis.id === selectedId"
+          (click)="select(kaelis.id)"
+        >
+          <div class="thumb">
+            <img
+              [src]="kaelis.imageUrl || kaelis.portrait"
+              [alt]="kaelis.name"
+            />
+            <span class="thumb-initial">{{ initialFor(kaelis.name) }}</span>
+          </div>
+        </button>
+      }
+    </div>
+
+    <button type="button" class="roster-nav right" (click)="scrollRight()" aria-label="Scroll roster right">
+      <span aria-hidden="true">&gt;</span>
+    </button>
+  </div>
+</div>

@@ -1,0 +1,58 @@
+<section class="backpack-page">
+  <header class="backpack-page__topbar">
+    <div class="header-title">Arena // <strong>Backpack</strong></div>
+
+    @if (allCharacters.length > 0) {
+      <div class="backpack-page__topbar-meta">
+        <span>Account Lv {{ accountLevel }}</span>
+        <span>Echo Fragments {{ echoFragmentsBalance }}</span>
+      </div>
+    }
+  </header>
+
+  @if (actionFeedbackMessage) {
+    <p class="backpack-page__status" [class.backpack-page__status--error]="actionFeedbackIsError">{{ actionFeedbackMessage }}</p>
+  }
+
+  @if (isLoading) {
+    <p class="backpack-page__status">Loading inventory...</p>
+  } @else if (errorMessage) {
+    <p class="backpack-page__status backpack-page__status--error">{{ errorMessage }}</p>
+  } @else if (allCharacters.length === 0) {
+    <div class="backpack-page__empty">
+      <p>No Kaelis found for this account.</p>
+      <a routerLink="/kaelis">Open Kaelis Hub</a>
+    </div>
+  } @else {
+    <section class="backpack-page__frame">
+      <header class="backpack-page__frame-head">
+        <div>
+          <p class="backpack-page__eyebrow">Loadout // Storage</p>
+          <h1>Account Armory</h1>
+          <p class="backpack-page__subtitle">All weapons in your account inventory and who is currently using each one.</p>
+        </div>
+
+        <div class="backpack-page__chips">
+          <span class="backpack-page__chip">Kaelis {{ allCharacters.length }}</span>
+          <span class="backpack-page__chip">Equipped {{ equippedItemsCount }}</span>
+          <span class="backpack-page__chip">Stored {{ storedItemsCount }}</span>
+        </div>
+      </header>
+
+      <section class="backpack-page__window-wrap">
+        <app-backpack-window
+          class="backpack-page__window"
+          [slots]="accountBackpackSlots"
+          [characterBadgeByInstanceId]="equippedBadgeByInstanceId"
+          [assignTargets]="assignTargets"
+          [itemCatalogById]="itemCatalogById"
+          [equipmentCatalogByItemId]="equipmentCatalogByItemId"
+          [equipInFlight]="equipInFlight"
+          [salvageInFlight]="salvageInFlight"
+          (assignRequested)="onAssignRequested($event)"
+          (salvageRequested)="onSalvageRequested($event)"
+        ></app-backpack-window>
+      </section>
+    </section>
+  }
+</section>

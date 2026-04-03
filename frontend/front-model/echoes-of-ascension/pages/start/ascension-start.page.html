@@ -1,0 +1,170 @@
+<section class="ascension-start">
+  <header class="ascension-start__header">
+    <div class="header-title">Ascension // <strong>Pre-Run</strong></div>
+  </header>
+
+  <div class="ascension-start__grid">
+    <section class="character-stage">
+      <button
+        type="button"
+        class="nav-btn nav-left"
+        (click)="cycleKaelis('prev')"
+        aria-label="Previous Kaelis"
+      >
+        &lt;
+      </button>
+
+      <img
+        class="character-img"
+        [src]="kaelisStageImage"
+        [alt]="activeKaelis.name || 'Kaelis'"
+      />
+
+      <button
+        type="button"
+        class="nav-btn nav-right"
+        (click)="cycleKaelis('next')"
+        aria-label="Next Kaelis"
+      >
+        &gt;
+      </button>
+
+      <div class="char-info-overlay">
+        <div class="char-level-badge">LV. {{ kaelisLevel }}</div>
+        <div class="char-name">{{ activeKaelis.name || 'Kaelis' }}</div>
+        <div class="char-title">{{ kaelisTitleLine }}</div>
+        <div class="char-origin">Origin Path: {{ originPathId }}</div>
+      </div>
+    </section>
+
+    <aside class="prep-panel">
+      <div class="card">
+        <div class="card-header">
+          <span>Run Status</span>
+          <span class="card-header__meta">Origin: {{ originPathId }}</span>
+        </div>
+
+        <div class="stats-grid">
+          @for (stat of statRows; track stat.label) {
+            <div class="stat-row">
+              <span class="stat-label">{{ stat.label }}</span>
+              <span class="stat-value" [class.stat-value--crit]="stat.accent">
+                {{ stat.value }}
+              </span>
+            </div>
+          }
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span>Select Run Path</span>
+        </div>
+        <div class="path-options">
+          @for (path of availableRunPaths; track path.id; let idx = $index) {
+            <button
+              type="button"
+              class="path-card"
+              [class.active]="selectedRunPathId === path.id"
+              (click)="selectRunPath(path.id)"
+              [attr.aria-pressed]="selectedRunPathId === path.id"
+            >
+              <div class="path-badge">{{ pathBadge(idx) }}</div>
+              <div class="path-content">
+                <div class="path-title">{{ path.name }}</div>
+                <div class="path-desc">{{ path.description }}</div>
+              </div>
+            </button>
+          }
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span>Select Potion</span>
+          <span class="card-header__meta">Choose 1</span>
+        </div>
+        <div class="potion-options">
+          @for (potion of potions; track potion.id; let idx = $index) {
+            <button
+              type="button"
+              class="potion-card"
+              [class.active]="selectedPotionId === potion.id"
+              (click)="selectPotion(potion.id)"
+              [attr.aria-pressed]="selectedPotionId === potion.id"
+            >
+              <div class="potion-badge">{{ potionBadge(idx) }}</div>
+              <div class="potion-content">
+                <div class="potion-title">{{ potion.name }}</div>
+                <div class="potion-desc">{{ potion.description }}</div>
+                <div class="potion-effect">{{ potion.effectText }}</div>
+              </div>
+            </button>
+          }
+        </div>
+      </div>
+
+      <div class="action-footer">
+        <div class="secondary-actions-row">
+          <button type="button" class="btn btn-secondary" (click)="goBack()">
+            Back
+          </button>
+          <button
+            type="button"
+            class="btn btn-secondary btn-details"
+            (click)="goToLoadout()"
+          >
+            Details
+          </button>
+        </div>
+        <button
+          type="button"
+          class="btn btn-primary"
+          [disabled]="!canConfirm"
+          (click)="confirm()"
+        >
+          Confirm &amp; Initiate
+          <span class="btn-hotkey">Space</span>
+        </button>
+      </div>
+
+      @if (isDev) {
+        <details class="dev-panel">
+          <summary>Developer Controls</summary>
+          <div class="dev-panel__body">
+            <label class="dev-field">
+              <span>Seed</span>
+              <input
+                type="number"
+                [value]="devSeed"
+                (input)="devSeed = $any($event.target).value"
+                placeholder="12345"
+              />
+            </label>
+            @if (devSeeds.length) {
+              <div class="dev-seed-list">
+                @for (seed of devSeeds; track seed.seed) {
+                  <button
+                    type="button"
+                    class="dev-seed-btn"
+                    (click)="devSeed = seed.seed.toString()"
+                  >
+                    {{ seed.seed }} — {{ seed.note }}
+                  </button>
+                }
+              </div>
+            }
+            <button
+              type="button"
+              class="btn btn-ghost"
+              [disabled]="!canConfirm || !hasValidDevSeed"
+              (click)="startWithSeed()"
+            >
+              Start with Seed
+            </button>
+          </div>
+        </details>
+      }
+    </aside>
+  </div>
+</section>

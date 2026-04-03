@@ -1,0 +1,60 @@
+<div class="character-management">
+  <header class="top-bar">
+    <div class="header-title">KAELIS // <strong>DETAILS</strong></div>
+  </header>
+
+  <app-roster-strip
+    [kaelis]="roster()"
+    [selectedId]="state.selectedKaelisId()"
+    (selectKaelis)="selectKaelis($event)"
+    (previousKaelis)="state.selectPreviousKaelis()"
+    (nextKaelis)="state.selectNextKaelis()"
+  ></app-roster-strip>
+
+  <div class="stage-grid">
+    <app-side-navigation
+      [activeTab]="state.activeTab()"
+      (tabChange)="setActiveTab($event)"
+    ></app-side-navigation>
+
+    <app-center-preview
+      [activeTab]="state.activeTab()"
+      [kaelis]="currentKaelis()"
+      [slots]="sigilIds()"
+      [selectedIndex]="state.selectedSigilSlotIndex()"
+      [previewSkin]="previewSkin()"
+      [equippedSkin]="equippedSkin()"
+      [weaponImageUrl]="equippedWeapon()?.imageUrl"
+      [canPrevSkin]="canPrevSkin()"
+      [canNextSkin]="canNextSkin()"
+      [isSkinOwned]="isPreviewSkinOwned()"
+      [isSkinEquipped]="isPreviewSkinEquipped()"
+      (slotClick)="openSigilModal($event)"
+      (prevSkin)="previewPreviousSkin()"
+      (nextSkin)="previewNextSkin()"
+      (equipSkin)="equipPreviewSkin()"
+    ></app-center-preview>
+
+    <app-info-panel
+      [activeTab]="state.activeTab()"
+      [kaelis]="currentKaelis()"
+      [baseStats]="baseStats()"
+      [weapon]="equippedWeapon()"
+      [weaponStats]="weaponStats()"
+      [sigilStats]="sigilStats()"
+      [sigilSetBonuses]="sigilSetBonuses()"
+      [primarySigilBonus]="primarySigilBonus()"
+      (changeWeapon)="openWeaponModal()"
+    ></app-info-panel>
+  </div>
+
+  <app-selection-modal
+    [open]="modalOpen()"
+    [mode]="modalMode()"
+    [items]="modalMode() === 'weapon' ? availableWeapons() : availableSigils()"
+    [selectedId]="modalSelectedId()"
+    [slotIndex]="state.selectedSigilSlotIndex()"
+    (closed)="closeModal()"
+    (confirmed)="confirmSelection($event)"
+  ></app-selection-modal>
+</div>

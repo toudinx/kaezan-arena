@@ -3,6 +3,22 @@
 @tailwind utilities;
 
 :root {
+  /* ─── Design system ─────────────────────────────── */
+  --bg: #050511;
+  --panel: #111120;
+  --primary: #8a7cff;
+  --secondary: #e28fe8;
+  --text-primary: #f5f5fa;
+  --text-secondary: #a4a4b5;
+  --hp: #ff5a78;
+  --energy: #2de3c8;
+  --crit: #ffd344;
+  --border: rgba(255, 255, 255, 0.08);
+  --glass: rgba(255, 255, 255, 0.04);
+  --radius: 12px;
+  --radius-lg: 16px;
+
+  /* ─── Motion ────────────────────────────────────── */
   --motion-fast: 120ms;
   --motion-base: 180ms;
   --motion-emphasis: 260ms;
@@ -25,9 +41,24 @@ body {
   padding: 0;
   height: 100%;
   font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-  background: linear-gradient(180deg, #eef2ff 0%, #f8fafc 45%, #ecfeff 100%);
-  color: #0f172a;
+  background: var(--bg);
+  color: var(--text-primary);
   overflow: hidden;
+}
+
+/* ─── Utility classes ──────────────────────────────── */
+
+.glass {
+  background: var(--glass);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.card-surface {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
 }
 
 app-root {
@@ -146,6 +177,20 @@ app-root {
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08),
     0 12px 24px rgba(2, 6, 23, 0.36),
     0 0 24px color-mix(in srgb, var(--portrait-core) 32%, transparent);
+}
+
+/* Imported front-model UI in layout-only mode:
+   keep positioning/layout, remove costly effects and motion. */
+app-home-page *,
+app-characters-page *,
+app-arena-prep-page *,
+app-backpack-page *,
+app-recruit-page * {
+  animation: none !important;
+  transition: none !important;
+  filter: none !important;
+  backdrop-filter: none !important;
+  box-shadow: none !important;
 }
 
 @media (prefers-reduced-motion: reduce) {

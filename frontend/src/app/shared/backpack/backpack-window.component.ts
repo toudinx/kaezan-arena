@@ -1,6 +1,6 @@
 import { CommonModule } from "@angular/common";
 import { Component, ElementRef, EventEmitter, HostListener, Input, OnChanges, OnDestroy, Output, SimpleChanges } from "@angular/core";
-import type { CharacterState, EquipmentDefinition, EquipmentSlot, ItemDefinition } from "../../api/account-api.service";
+import type { CharacterState, EquipmentDefinition, ItemDefinition } from "../../api/account-api.service";
 import {
   type BackpackFilter,
   type BackpackSlot,
@@ -8,28 +8,31 @@ import {
   mapInventoryToBackpackSlots
 } from "./backpack-inventory.helpers";
 
-type BackpackContextMenuAction = "equip" | "inspect";
-
 type BackpackContextMenuState = Readonly<{
   slotId: string;
   x: number;
   y: number;
 }>;
 
-export type BackpackEquipRequest = Readonly<{
+export type BackpackAssignRequest = Readonly<{
+  characterId: string;
   instanceId: string;
-  slot: EquipmentSlot;
 }>;
 
 export type BackpackEquipMode = "weapon" | null;
 
-type EquippedBackpackSlotViewModel = Readonly<{
-  slot: "weapon";
-  slotLabel: string;
-  item: BackpackSlot | null;
+export type BackpackCharacterBadge = Readonly<{
+  characterId: string;
+  characterName: string;
+  imageUrl: string | null;
+  monogram: string;
+  tone: string;
 }>;
 
-const EQUIPPED_SLOT_ORDER: readonly ("weapon")[] = ["weapon"];
+export type BackpackAssignTarget = Readonly<{
+  characterId: string;
+  characterName: string;
+}>;
 
 @Component({
   selector: "app-backpack-window",
@@ -40,8 +43,11 @@ const EQUIPPED_SLOT_ORDER: readonly ("weapon")[] = ["weapon"];
 })
 export class BackpackWindowComponent implements OnChanges, OnDestroy {
   @Input() character: CharacterState | null = null;
+  @Input() slots: ReadonlyArray<BackpackSlot> | null = null;
   @Input() itemCatalogById: Readonly<Record<string, ItemDefinition>> = {};
   @Input() equipmentCatalogByItemId: Readonly<Record<string, EquipmentDefinition>> = {};
+  @Input() characterBadgeByInstanceId: Readonly<Record<string, BackpackCharacterBadge>> = {};
+  @Input() assignTargets: ReadonlyArray<BackpackAssignTarget> = [];
   @Input() equipInFlight = false;
   @Input() salvageInFlight = false;
   @Input() highlightItemId: string | null = null;
@@ -49,16 +55,18 @@ export class BackpackWindowComponent implements OnChanges, OnDestroy {
   @Input() forcedFilter: BackpackFilter | null = null;
   @Input() equipMode: BackpackEquipMode = null;
 
-  @Output() readonly equipRequested = new EventEmitter<BackpackEquipRequest>();
+  @Output() readonly assignRequested = new EventEmitter<BackpackAssignRequest>();
   @Output() readonly salvageRequested = new EventEmitter<string>();
 
-  readonly filters: ReadonlyArray<BackpackFilter> = ["all", "weapons"];
+  readonly filters: ReadonlyArray<BackpackFilter> = ["all", "ascendant", "legendary", "epic", "rare", "common"];
+  readonly pageSize = 5;
   selectedFilter: BackpackFilter = "all";
+  currentPage = 0;
   selectedSlotId: string | null = null;
-  inspectSlotId: string | null = null;
   contextMenu: BackpackContextMenuState | null = null;
   pulsingSlotIds = new Set<string>();
   private readonly iconImageFailures = new Set<string>();
+  private readonly characterImageFailures = new Set<string>();
   private pulseTimeoutBySlotId: Record<string, ReturnType<typeof setTimeout> | undefined> = {};
 
   constructor(private readonly hostRef: ElementRef<HTMLElement>) {}
@@ -66,6 +74,10 @@ export class BackpackWindowComponent implements OnChanges, OnDestroy {
   ngOnChanges(changes: SimpleChanges): void {
     if (changes["highlightRequestId"]) {
       this.applyHighlightRequest();
+    }
+
+    if (changes["slots"] || changes["forcedFilter"] || changes["equipMode"]) {
+      this.currentPage = this.clampPage(this.currentPage);
     }
   }
 
@@ -81,6 +93,10 @@ export class BackpackWindowComponent implements OnChanges, OnDestroy {
   }
 
   get allSlots(): BackpackSlot[] {
+    if (this.slots) {
+      return [...this.slots];
+    }
+
     return mapInventoryToBackpackSlots(this.character, this.itemCatalogById, this.equipmentCatalogByItemId);
   }
 
@@ -97,19 +113,33 @@ export class BackpackWindowComponent implements OnChanges, OnDestroy {
   }
 
   get visibleStoredSlots(): BackpackSlot[] {
-    return this.visibleSlots.filter((slot) => !slot.isEquipped);
+    return this.visibleSlots;
   }
 
-  get equippedSlots(): ReadonlyArray<EquippedBackpackSlotViewModel> {
-    return EQUIPPED_SLOT_ORDER.map((slot) => {
-      const item = this.allSlots.find((entry) => entry.isEquipped && entry.slot === slot) ?? null;
-      const slotLabel = "Weapon";
-      return { slot, slotLabel, item };
-    });
+  get pagedVisibleStoredSlots(): BackpackSlot[] {
+    const start = this.currentPage * this.pageSize;
+    return this.visibleStoredSlots.slice(start, start + this.pageSize);
   }
 
-  get equippedCount(): number {
-    return this.equippedSlots.filter((entry) => !!entry.item).length;
+  get shouldFillPagedInventory(): boolean {
+    return this.pagedVisibleStoredSlots.length === this.pageSize;
+  }
+
+  get pageCount(): number {
+    const total = this.visibleStoredSlots.length;
+    return total > 0 ? Math.ceil(total / this.pageSize) : 1;
+  }
+
+  get pageLabel(): string {
+    return `${this.currentPage + 1} / ${this.pageCount}`;
+  }
+
+  get isFirstPage(): boolean {
+    return this.currentPage <= 0;
+  }
+
+  get isLastPage(): boolean {
+    return this.currentPage >= this.pageCount - 1;
   }
 
   get selectedSlotRarityClass(): string {
@@ -124,40 +154,26 @@ export class BackpackWindowComponent implements OnChanges, OnDestroy {
     return this.allSlots.find((slot) => slot.slotId === this.selectedSlotId) ?? null;
   }
 
-  get inspectSlot(): BackpackSlot | null {
-    if (!this.inspectSlotId) {
-      return null;
-    }
-
-    return this.allSlots.find((slot) => slot.slotId === this.inspectSlotId) ?? null;
-  }
-
   setFilter(filter: BackpackFilter): void {
     if (this.equipMode) {
       return;
     }
 
     this.selectedFilter = filter;
+    this.currentPage = 0;
     this.closeContextMenu();
+  }
+
+  goToPreviousPage(): void {
+    this.currentPage = Math.max(0, this.currentPage - 1);
+  }
+
+  goToNextPage(): void {
+    this.currentPage = Math.min(this.pageCount - 1, this.currentPage + 1);
   }
 
   selectSlot(slotId: string): void {
-    const slot = this.allSlots.find((entry) => entry.slotId === slotId) ?? null;
-    if (this.equipMode && this.tryEmitEquip(slot)) {
-      return;
-    }
-
     this.selectedSlotId = slotId;
-  }
-
-  selectEquippedSlot(slot: EquippedBackpackSlotViewModel): void {
-    if (!slot.item) {
-      return;
-    }
-
-    this.selectedSlotId = slot.item.slotId;
-    this.inspectSlotId = null;
-    this.closeContextMenu();
   }
 
   onGridContextMenu(event: MouseEvent): void {
@@ -168,7 +184,6 @@ export class BackpackWindowComponent implements OnChanges, OnDestroy {
     event.preventDefault();
     event.stopPropagation();
     this.selectedSlotId = slot.slotId;
-    this.inspectSlotId = null;
 
     const hostBounds = this.hostRef.nativeElement.getBoundingClientRect();
     const desiredX = Math.round(event.clientX - hostBounds.left + 6);
@@ -182,29 +197,8 @@ export class BackpackWindowComponent implements OnChanges, OnDestroy {
     };
   }
 
-  onContextMenuAction(action: BackpackContextMenuAction): void {
-    const slot = this.selectedSlot;
-    if (!slot) {
-      this.closeContextMenu();
-      return;
-    }
-
-    if (action === "equip") {
-      this.tryEmitEquip(slot);
-      this.closeContextMenu();
-      return;
-    }
-
-    this.inspectSlotId = slot.slotId;
-    this.closeContextMenu();
-  }
-
   closeContextMenu(): void {
     this.contextMenu = null;
-  }
-
-  closeInspect(): void {
-    this.inspectSlotId = null;
   }
 
   isFilterActive(filter: BackpackFilter): boolean {
@@ -229,12 +223,51 @@ export class BackpackWindowComponent implements OnChanges, OnDestroy {
 
   get slotCountLabel(): string {
     const count = this.visibleStoredSlots.length;
-    return count === 1 ? "1 stored item" : `${count} stored items`;
+    return count === 1 ? "1 weapon" : `${count} weapons`;
+  }
+
+  get selectedSlotDescriptionLines(): ReadonlyArray<string> {
+    const slot = this.selectedSlot;
+    if (!slot) {
+      return [];
+    }
+
+    const uniqueCoreLines: string[] = [];
+    const seen = new Set<string>();
+    const candidates = [slot.shortStatSummary, ...slot.detailStatLines];
+    for (const candidate of candidates) {
+      const value = (candidate ?? "").trim();
+      if (!value) {
+        continue;
+      }
+
+      const key = value.toLowerCase();
+      if (seen.has(key)) {
+        continue;
+      }
+
+      seen.add(key);
+      uniqueCoreLines.push(value);
+      if (uniqueCoreLines.length >= 2) {
+        break;
+      }
+    }
+
+    while (uniqueCoreLines.length < 2) {
+      uniqueCoreLines.push(uniqueCoreLines.length === 0 ? "Balanced weapon profile." : `Class: ${slot.typeLabel}`);
+    }
+
+    const equippedBadge = this.getCharacterBadge(slot);
+    const thirdLine = equippedBadge
+      ? `Equipped by ${equippedBadge.characterName}.`
+      : "Stored in account backpack.";
+
+    return [uniqueCoreLines[0], uniqueCoreLines[1], thirdLine];
   }
 
   get selectedSlotTypeLabel(): string {
     if (!this.selectedSlot) {
-      return "Equipment";
+      return "Item";
     }
 
     return this.selectedSlot.slotLabel;
@@ -242,35 +275,6 @@ export class BackpackWindowComponent implements OnChanges, OnDestroy {
 
   get selectedSlotStateLabel(): string {
     return this.selectedSlot?.isEquipped ? "Equipped" : "Stored";
-  }
-
-  get selectedSlotComparisonLine(): string | null {
-    const selectedSlot = this.selectedSlot;
-    if (!selectedSlot) {
-      return null;
-    }
-
-    if (selectedSlot.slot !== "weapon") {
-      return null;
-    }
-
-    const currentlyEquipped = this.allSlots.find((slot) =>
-      slot.isEquipped && slot.slot === selectedSlot.slot
-    ) ?? null;
-
-    if (selectedSlot.isEquipped) {
-      return `Currently equipped in ${selectedSlot.slotLabel}.`;
-    }
-
-    if (currentlyEquipped) {
-      return `Replaces equipped: ${currentlyEquipped.displayName}.`;
-    }
-
-    return `No ${selectedSlot.slotLabel.toLowerCase()} equipped right now.`;
-  }
-
-  canEquip(slot: BackpackSlot | null): boolean {
-    return !!slot && !!this.resolveEquipSlot(slot) && !slot.isEquipped && !this.equipInFlight;
   }
 
   canSalvage(slot: BackpackSlot | null): boolean {
@@ -304,8 +308,55 @@ export class BackpackWindowComponent implements OnChanges, OnDestroy {
     this.salvageRequested.emit(slot.instanceId);
   }
 
-  onEquipSelectedSlot(): void {
-    this.tryEmitEquip(this.selectedSlot);
+  onAssignToCharacter(characterId: string): void {
+    const slot = this.selectedSlot;
+    if (!slot || this.isAssignToCharacterDisabled(characterId, slot)) {
+      return;
+    }
+
+    this.assignRequested.emit({
+      characterId,
+      instanceId: slot.instanceId
+    });
+    this.closeContextMenu();
+  }
+
+  isAssignToCharacterDisabled(characterId: string, slot: BackpackSlot | null): boolean {
+    if (!slot || this.equipInFlight) {
+      return true;
+    }
+
+    const currentBadge = this.getCharacterBadge(slot);
+    if (!currentBadge) {
+      return false;
+    }
+
+    return currentBadge.characterId === characterId;
+  }
+
+  getCharacterBadge(slot: BackpackSlot | null | undefined): BackpackCharacterBadge | null {
+    if (!slot?.isEquipped) {
+      return null;
+    }
+
+    return this.characterBadgeByInstanceId[slot.instanceId] ?? null;
+  }
+
+  shouldRenderCharacterImage(slot: BackpackSlot | null | undefined): boolean {
+    const badge = this.getCharacterBadge(slot);
+    if (!badge?.imageUrl) {
+      return false;
+    }
+
+    return !this.characterImageFailures.has(badge.characterId);
+  }
+
+  onCharacterImageError(characterId: string | null | undefined): void {
+    if (!characterId) {
+      return;
+    }
+
+    this.characterImageFailures.add(characterId);
   }
 
   isSlotPulsing(slotId: string): boolean {
@@ -363,13 +414,12 @@ export class BackpackWindowComponent implements OnChanges, OnDestroy {
       return;
     }
 
-    if (!this.contextMenu && !this.inspectSlotId) {
+    if (!this.contextMenu) {
       return;
     }
 
     event.preventDefault();
     this.closeContextMenu();
-    this.closeInspect();
   }
 
   private applyHighlightRequest(): void {
@@ -383,7 +433,6 @@ export class BackpackWindowComponent implements OnChanges, OnDestroy {
     }
 
     this.selectedSlotId = slots[0].slotId;
-    this.inspectSlotId = null;
     this.closeContextMenu();
 
     const nextPulsing = new Set(this.pulsingSlotIds);
@@ -427,32 +476,12 @@ export class BackpackWindowComponent implements OnChanges, OnDestroy {
     return null;
   }
 
-  private tryEmitEquip(slot: BackpackSlot | null): boolean {
-    const equipSlot = this.resolveEquipSlot(slot);
-    if (!slot || !equipSlot || slot.isEquipped || this.equipInFlight) {
-      return false;
-    }
-
-    this.equipRequested.emit({
-      instanceId: slot.instanceId,
-      slot: equipSlot
-    });
-    return true;
-  }
-
-  private resolveEquipSlot(slot: BackpackSlot | null): EquipmentSlot | null {
-    if (!slot) {
-      return null;
-    }
-
-    if (slot.slot === "weapon") {
-      return slot.slot;
-    }
-
-    return null;
-  }
-
   private resolveFilterForEquipMode(equipMode: Exclude<BackpackEquipMode, null>): BackpackFilter {
-    return "weapons";
+    return "all";
+  }
+
+  private clampPage(value: number): number {
+    const maxPage = Math.max(0, this.pageCount - 1);
+    return Math.min(Math.max(0, value), maxPage);
   }
 }

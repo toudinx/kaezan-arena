@@ -1,481 +1,291 @@
-import { Component, OnInit } from "@angular/core";
-import { RouterLink } from "@angular/router";
-import type { CharacterState } from "../../api/account-api.service";
+import { ChangeDetectionStrategy, Component, OnInit } from "@angular/core";
 import { AccountStore } from "../../account/account-store.service";
+import { HomeBackgroundComponent } from "./components/home-background/home-background.component";
+import { HomeCharacterStageComponent } from "./components/home-character-stage/home-character-stage.component";
+import { HomeTopLeftHudComponent } from "./components/home-top-left-hud/home-top-left-hud.component";
 import {
-  resolveCharacterPortraitVisual,
-  type CharacterPortraitVisual
+  HomeTopRightActionsComponent,
+  type HomeActionItem
+} from "./components/home-top-right-actions/home-top-right-actions.component";
+import {
+  HomeMainNavigationComponent,
+  type HomeNavItem
+} from "./components/home-main-navigation/home-main-navigation.component";
+import { HomeEventBannerComponent } from "./components/home-event-banner/home-event-banner.component";
+import {
+  DailyContractsModalComponent,
+  type DailyContractRowViewModel
+} from "../../shared/contracts/daily-contracts-modal.component";
+import {
+  resolveCharacterPortraitVisual
 } from "../../shared/characters/character-visuals.helpers";
-import type { RunResultV1 } from "../../shared/run-results/run-result-logger";
-import {
-  resolveKitBadgeForSkills,
-  resolveSkillPresentation,
-  type SkillVisualFamily,
-  type SkillVisualTier
-} from "../../shared/skills/skill-presentation.helpers";
-
-const RUN_RESULT_STORAGE_KEY = "kaezan_run_results_v1";
-const ZONE_SELECTION_STORAGE_KEY = "kaezan_zone_selection_v1";
-const RANK_THRESHOLDS: ReadonlyArray<number> = [0, 10, 30, 60, 100];
-const MAX_RANK = RANK_THRESHOLDS.length;
-const ZONE_UNLOCK_LEVELS: ReadonlyArray<number> = [1, 21, 41, 61, 81];
-const MAX_ZONE_INDEX = 5;
-
-function computeRank(killsTotal: number): number {
-  const kills = Math.max(0, killsTotal);
-  let rank = 1;
-  for (let i = RANK_THRESHOLDS.length - 1; i >= 0; i--) {
-    if (kills >= RANK_THRESHOLDS[i]) {
-      rank = i + 1;
-      break;
-    }
-  }
-  return rank;
-}
-
-type HomeFixedWeaponViewModel = Readonly<{
-  skillId: string | null;
-  label: string;
-  iconGlyph: string;
-  family: SkillVisualFamily;
-  tier: SkillVisualTier;
-}>;
-
-type HomeZoneOption = Readonly<{
-  zoneIndex: number;
-  unlockLevel: number;
-  isUnlocked: boolean;
-  isSelected: boolean;
-}>;
-
-type HomeDailyContractViewModel = Readonly<{
-  contractId: string;
-  description: string;
-  isCompleted: boolean;
-  showProgress: boolean;
-  progressText: string;
-  kaerosReward: number;
-}>;
-
-function formatMs(ms: number): string {
-  const totalSec = Math.floor(ms / 1000);
-  const minutes = Math.floor(totalSec / 60);
-  const seconds = totalSec % 60;
-  if (minutes > 0) return `${minutes}m ${seconds}s`;
-  return `${seconds}s`;
-}
-
-function formatTokenId(id: string): string {
-  return id
-    .split("_")
-    .map(token => token.length > 0 ? token[0].toUpperCase() + token.slice(1) : token)
-    .join(" ");
-}
 
 @Component({
   selector: "app-home-page",
   standalone: true,
-  imports: [RouterLink],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [
+    HomeBackgroundComponent,
+    HomeCharacterStageComponent,
+    HomeTopLeftHudComponent,
+    HomeTopRightActionsComponent,
+    HomeMainNavigationComponent,
+    HomeEventBannerComponent,
+    DailyContractsModalComponent
+  ],
   templateUrl: "./home-page.component.html",
   styleUrl: "./home-page.component.css"
 })
 export class HomePageComponent implements OnInit {
-  lastRunSummary: RunResultV1 | null = null;
-  selectedZoneIndex = 1;
-  private readonly portraitImageFailures = new Set<string>();
-
   constructor(private readonly accountStore: AccountStore) {}
+  private readonly resetAtLabel = "Resets at 00:00 UTC";
+
+  dailyContractsOpen = false;
+  dailyContractsRefreshing = false;
+  dailyContractsError: string | null = null;
+  selectedBackgroundIndex = 0;
+
+  readonly homeBackgrounds: ReadonlyArray<{
+    readonly id: string;
+    readonly label: string;
+    readonly shellBackground: string;
+    readonly overlay: string;
+    readonly imageUrl: string | null;
+  }> = [
+    {
+      id: "void",
+      label: "Void",
+      shellBackground: "linear-gradient(180deg, #090914 0%, #050511 100%)",
+      overlay: "linear-gradient(180deg, rgba(14, 14, 32, 0.28) 0%, rgba(5, 5, 17, 0.62) 100%)",
+      imageUrl: null
+    },
+    {
+      id: "crimson",
+      label: "Crimson",
+      shellBackground: "linear-gradient(180deg, #14090d 0%, #050511 100%)",
+      overlay: "linear-gradient(180deg, rgba(66, 18, 26, 0.28) 0%, rgba(10, 5, 17, 0.66) 100%)",
+      imageUrl: null
+    },
+    {
+      id: "azure",
+      label: "Azure",
+      shellBackground: "linear-gradient(180deg, #08101f 0%, #050511 100%)",
+      overlay: "linear-gradient(180deg, rgba(16, 44, 82, 0.28) 0%, rgba(5, 5, 17, 0.66) 100%)",
+      imageUrl: null
+    }
+  ];
 
   async ngOnInit(): Promise<void> {
-    this.selectedZoneIndex = this.readPersistedZoneSelection();
     try {
       await this.accountStore.load();
     } catch {
       // Render uses store error state.
     }
-
-    this.syncSelectedZoneWithUnlockState();
-    this.lastRunSummary = this.readLastRunSummary();
   }
 
-  get isLoading(): boolean {
-    return this.accountStore.isLoading();
+  get commanderName(): string {
+    const character = this.accountStore.activeCharacter();
+    if (!character) return "Commander";
+    const catalog = this.accountStore.catalogs().characterById[character.characterId];
+    return catalog?.displayName ?? character.name ?? "Commander";
   }
 
-  get loadError(): string | null {
-    return this.accountStore.error();
-  }
-
-  get activeCharacter(): CharacterState | null {
-    return this.accountStore.activeCharacter();
-  }
-
-  get hasActiveCharacter(): boolean {
-    return !!this.activeCharacter;
-  }
-
-  get activeCharacterName(): string {
-    const char = this.activeCharacter;
-    if (!char) return "No active character";
-    const catalogEntry = this.accountStore.catalogs().characterById[char.characterId];
-    return catalogEntry?.displayName ?? char.name;
-  }
-
-  get activeCharacterPortrait(): CharacterPortraitVisual {
-    return resolveCharacterPortraitVisual({
-      characterId: this.activeCharacter?.characterId ?? null,
-      displayName: this.activeCharacterName
-    });
-  }
-
-  get activeCharacterFixedWeaponNames(): ReadonlyArray<string> {
-    return this.activeCharacterFixedWeapons.map((weapon) => weapon.label);
-  }
-
-  get activeCharacterFixedWeapons(): ReadonlyArray<HomeFixedWeaponViewModel> {
-    const charId = this.activeCharacter?.characterId ?? "";
-    const catalogEntry = this.accountStore.catalogs().characterById[charId];
-    const fixedWeaponIds = catalogEntry?.fixedWeaponIds ?? [];
-    const fixedWeaponNames = catalogEntry?.fixedWeaponNames ?? [];
-    const size = Math.max(fixedWeaponIds.length, fixedWeaponNames.length);
-    const rows: HomeFixedWeaponViewModel[] = [];
-
-    for (let index = 0; index < size; index += 1) {
-      const skillId = fixedWeaponIds[index] ?? null;
-      const displayName = fixedWeaponNames[index] ?? null;
-      const presentation = resolveSkillPresentation({
-        skillId,
-        displayName,
-        fallbackLabel: displayName ?? skillId ?? `Skill ${index + 1}`
-      });
-      rows.push({
-        skillId: presentation.canonicalId ?? skillId,
-        label: presentation.label,
-        iconGlyph: presentation.iconGlyph,
-        family: presentation.family,
-        tier: presentation.tier
-      });
-    }
-
-    return rows;
-  }
-
-  get activeCharacterKitTypeLabel(): string {
-    return this.toKitLabel(this.activeCharacterKitBadge);
-  }
-
-  get activeCharacterKitBadge(): "melee" | "ranged" | "unknown" {
-    return resolveKitBadgeForSkills(
-      this.activeCharacterFixedWeapons.map((weapon) => ({
-        skillId: weapon.skillId,
-        displayName: weapon.label
-      }))
-    );
-  }
-
-  get activeCharacterMasteryProgressPercent(): number {
-    const char = this.activeCharacter;
-    if (!char) return 0;
-    const required = Math.max(0, char.masteryXpRequiredForNextLevel ?? 0);
-    const current = Math.max(0, char.masteryXpForCurrentLevel ?? 0);
-    if (required <= 0) {
-      return 100;
-    }
-
-    return Math.min(100, Math.max(0, (current / required) * 100));
-  }
-
-  get echoFragmentsBalance(): number {
-    return Math.max(0, this.accountStore.state()?.echoFragmentsBalance ?? 0);
-  }
-
-  get kaerosBalance(): number {
-    return Math.max(0, this.accountStore.state()?.kaerosBalance ?? 0);
-  }
-
-  get dailyContracts(): ReadonlyArray<HomeDailyContractViewModel> {
-    const contracts = this.accountStore.state()?.dailyContracts?.contracts ?? [];
-    return contracts.slice(0, 3).map((contract) => {
-      const targetValue = Math.max(1, Math.floor(contract.targetValue ?? 1));
-      const currentProgress = Math.max(0, Math.floor(contract.currentProgress ?? 0));
-      const showProgress = this.isAccumulatingContractType(contract.type ?? "");
-      return {
-        contractId: contract.contractId,
-        description: contract.description,
-        isCompleted: !!contract.isCompleted,
-        showProgress,
-        progressText: `${Math.min(targetValue, currentProgress)} / ${targetValue}`,
-        kaerosReward: Math.max(0, Math.floor(contract.kaerosReward ?? 0))
-      };
-    });
+  get hudAccountLabel(): string {
+    return "Account";
   }
 
   get accountLevel(): number {
     return Math.max(1, Math.floor(this.accountStore.state()?.accountLevel ?? 1));
   }
 
-  get accountXpProgressPercent(): number {
+  get xpProgress(): number {
     const required = Math.max(0, Math.floor(this.accountStore.state()?.accountXpRequiredForNextLevel ?? 0));
     const current = Math.max(0, Math.floor(this.accountStore.state()?.accountXpForCurrentLevel ?? 0));
+    if (required <= 0) return 1;
+    return Math.min(1, Math.max(0, current / required));
+  }
+
+  get characterImageUrl(): string | null {
+    const character = this.accountStore.activeCharacter();
+    if (!character) return null;
+    const portrait = resolveCharacterPortraitVisual({
+      characterId: character.characterId,
+      displayName: this.commanderName
+    });
+    return portrait.imageUrl ?? null;
+  }
+
+  get currentBackground(): {
+    readonly id: string;
+    readonly label: string;
+    readonly shellBackground: string;
+    readonly overlay: string;
+    readonly imageUrl: string | null;
+  } {
+    return this.homeBackgrounds[this.selectedBackgroundIndex] ?? this.homeBackgrounds[0];
+  }
+
+  get contractsBannerLabel(): string {
+    return `Contracts Active (${this.pendingContractsCount})`;
+  }
+
+  get pendingContractsCount(): number {
+    const contracts = this.accountStore.state()?.dailyContracts?.contracts ?? [];
+    return contracts.filter(c => !c.isCompleted).length;
+  }
+
+  get dailyContractsAssignedDateLabel(): string {
+    const assignedDate = this.accountStore.state()?.dailyContracts?.assignedDate;
+    if (!assignedDate) {
+      return "today";
+    }
+
+    const parsed = new Date(assignedDate);
+    if (Number.isNaN(parsed.getTime())) {
+      return assignedDate;
+    }
+
+    return parsed.toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "2-digit"
+    });
+  }
+
+  get dailyContractsResetLabel(): string {
+    return this.resetAtLabel;
+  }
+
+  get dailyContractsLoadError(): string | null {
+    return this.dailyContractsError ?? this.accountStore.error();
+  }
+
+  get accountXpHint(): string {
+    const state = this.accountStore.state();
+    if (!state) {
+      return "";
+    }
+
+    const current = Math.max(0, Math.floor(state.accountXpForCurrentLevel ?? 0));
+    const required = Math.max(0, Math.floor(state.accountXpRequiredForNextLevel ?? 0));
     if (required <= 0) {
-      return 100;
+      return "";
     }
 
-    return Math.min(100, Math.max(0, (current / required) * 100));
+    return `Account XP ${current}/${required}`;
   }
 
-  get accountXpProgressLabel(): string {
-    const current = Math.max(0, Math.floor(this.accountStore.state()?.accountXpForCurrentLevel ?? 0));
-    const required = Math.max(0, Math.floor(this.accountStore.state()?.accountXpRequiredForNextLevel ?? 0));
-    return `${current} / ${required} XP`;
+  get dailyContractRows(): ReadonlyArray<DailyContractRowViewModel> {
+    const contracts = this.accountStore.state()?.dailyContracts?.contracts ?? [];
+    return contracts.map(contract => {
+      const targetValue = Math.max(1, Math.floor(contract.targetValue ?? 0));
+      const currentProgress = Math.max(0, Math.floor(contract.currentProgress ?? 0));
+      const progressPercent = Math.min(100, Math.round((currentProgress / targetValue) * 100));
+      const claimable = !contract.isCompleted && currentProgress >= targetValue;
+      const status = contract.isCompleted
+        ? "resolved"
+        : claimable
+          ? "claimable"
+          : "in_progress";
+
+      return {
+        contractId: contract.contractId,
+        description: contract.description,
+        progressText: `${currentProgress}/${targetValue}`,
+        progressPercent,
+        kaerosReward: Math.max(0, Math.floor(contract.kaerosReward ?? 0)),
+        accountXpRewardLabel: null,
+        status,
+        statusLabel: status === "resolved" ? "Resolved" : status === "claimable" ? "Claimable" : "In Progress",
+        statusHint:
+          status === "resolved"
+            ? "Contract completed."
+            : status === "claimable"
+              ? "Ready to claim on next sync."
+              : "Complete runs to progress this contract."
+      };
+    });
   }
 
-  get unlockedZoneCount(): number {
-    const raw = Math.floor(this.accountStore.state()?.unlockedZoneCount ?? 1);
-    return Math.max(1, Math.min(MAX_ZONE_INDEX, raw));
-  }
-
-  get zoneOptions(): ReadonlyArray<HomeZoneOption> {
-    const options: HomeZoneOption[] = [];
-    const unlockedZoneCount = this.unlockedZoneCount;
-    const selectedZoneIndex = this.clampZoneIndex(this.selectedZoneIndex);
-    for (let index = 1; index <= MAX_ZONE_INDEX; index += 1) {
-      options.push({
-        zoneIndex: index,
-        unlockLevel: ZONE_UNLOCK_LEVELS[index - 1] ?? 1,
-        isUnlocked: index <= unlockedZoneCount,
-        isSelected: index === selectedZoneIndex
-      });
+  openDailyContracts(): void {
+    this.dailyContractsOpen = true;
+    if (this.dailyContractRows.length === 0 && !this.dailyContractsRefreshing) {
+      void this.refreshDailyContracts();
     }
-
-    return options;
   }
 
-  get startRunQueryParams(): Readonly<{ zoneIndex: number }> {
-    return { zoneIndex: this.clampZoneIndex(this.selectedZoneIndex) };
+  closeDailyContracts(): void {
+    this.dailyContractsOpen = false;
   }
 
-  onSelectZone(zoneIndex: number): void {
-    const safeZoneIndex = this.clampZoneIndex(zoneIndex);
-    if (safeZoneIndex > this.unlockedZoneCount) {
-      return;
-    }
-
-    this.selectedZoneIndex = safeZoneIndex;
-    this.persistZoneSelection(safeZoneIndex);
-  }
-
-  get equippedWeaponName(): string {
-    return this.resolveEquippedName("weapon");
-  }
-
-  get bestiaryTopRows(): ReadonlyArray<Readonly<{
-    speciesName: string;
-    killsTotal: number;
-    killsToNext: number;
-    progressPercent: number;
-  }>> {
-    const char = this.activeCharacter;
-    if (!char) return [];
-
-    const speciesById = this.accountStore.catalogs().speciesById;
-    return Object.entries(char.bestiaryKillsBySpecies ?? {})
-      .map(([speciesId, kills]) => {
-        const killsTotal = Math.max(0, kills ?? 0);
-        const rank = computeRank(killsTotal);
-        const isMaxRank = rank >= MAX_RANK;
-        const nextMilestone = isMaxRank ? RANK_THRESHOLDS[MAX_RANK - 1] : RANK_THRESHOLDS[rank];
-        const currentRankStart = RANK_THRESHOLDS[rank - 1];
-        const bandSize = isMaxRank ? 1 : (nextMilestone - currentRankStart);
-        const progressInBand = isMaxRank ? 1 : Math.max(0, killsTotal - currentRankStart);
-        const progressPercent = Math.min(100, Math.max(0, (progressInBand / bandSize) * 100));
-        const speciesName = speciesById[speciesId]?.displayName ?? formatTokenId(speciesId);
-        return { speciesName, killsTotal, killsToNext: isMaxRank ? 0 : Math.max(0, nextMilestone - killsTotal), progressPercent };
-      })
-      .filter(row => row.killsTotal > 0)
-      .sort((a, b) => b.killsTotal - a.killsTotal)
-      .slice(0, 3);
-  }
-
-  get bestiaryNextMilestone(): Readonly<{ speciesName: string; killsToNext: number }> | null {
-    const char = this.activeCharacter;
-    if (!char) return null;
-
-    const speciesById = this.accountStore.catalogs().speciesById;
-    let best: { speciesName: string; killsToNext: number } | null = null;
-
-    for (const [speciesId, kills] of Object.entries(char.bestiaryKillsBySpecies ?? {})) {
-      const killsTotal = Math.max(0, kills ?? 0);
-      if (killsTotal === 0) continue;
-      const rank = computeRank(killsTotal);
-      const isMaxRank = rank >= MAX_RANK;
-      if (isMaxRank) continue;
-      const nextMilestone = RANK_THRESHOLDS[rank];
-      const killsToNext = Math.max(0, nextMilestone - killsTotal);
-      const speciesName = speciesById[speciesId]?.displayName ?? formatTokenId(speciesId);
-      if (!best || killsToNext < best.killsToNext) {
-        best = { speciesName, killsToNext };
-      }
-    }
-    return best;
-  }
-
-  get hasLastRunSummary(): boolean {
-    return this.lastRunSummary !== null;
-  }
-
-  get lastRunXpGained(): number {
-    return this.lastRunSummary?.xpTotalGained ?? 0;
-  }
-
-  get lastRunEchoFragmentsDelta(): number {
-    return this.lastRunSummary?.echoFragmentsDelta ?? 0;
-  }
-
-  get lastRunDurationLabel(): string {
-    return formatMs(this.lastRunSummary?.durationMs ?? 0);
-  }
-
-  get lastRunEndReasonLabel(): string {
-    const reason = this.lastRunSummary?.endReason ?? "";
-    if (reason.includes("victory")) return "Victory";
-    if (reason.includes("defeat") || reason.includes("death") || reason.includes("killed")) return "Defeat";
-    if (!reason || reason === "unknown") return "Unknown";
-    return formatTokenId(reason.replace(/_/g, " ").trim());
-  }
-
-  get lastRunEndReasonClass(): "victory" | "defeat" | "unknown" {
-    const reason = this.lastRunSummary?.endReason ?? "";
-    if (reason.includes("victory")) return "victory";
-    if (reason.includes("defeat") || reason.includes("death") || reason.includes("killed")) return "defeat";
-    return "unknown";
-  }
-
-  get lastRunCardsFormatted(): ReadonlyArray<string> {
-    return (this.lastRunSummary?.cardsChosen ?? []).map(formatTokenId);
-  }
-
-  isActiveCharacterPortraitImageFailed(): boolean {
-    const activeCharacterId = this.activeCharacter?.characterId ?? "";
-    if (!activeCharacterId) {
-      return false;
-    }
-
-    return this.portraitImageFailures.has(activeCharacterId);
-  }
-
-  onActiveCharacterPortraitImageError(): void {
-    const activeCharacterId = this.activeCharacter?.characterId ?? "";
-    if (!activeCharacterId) {
-      return;
-    }
-
-    this.portraitImageFailures.add(activeCharacterId);
-  }
-
-  private resolveEquippedName(slot: "weapon"): string {
-    const character = this.activeCharacter;
-    if (!character) return "None";
-
-    const instanceId = character.equipment.weaponInstanceId;
-    if (!instanceId) return "None";
-
-    const instance = character.inventory.equipmentInstances[instanceId];
-    if (!instance) return `${instanceId} (missing)`;
-
-    return this.accountStore.catalogs().itemById[instance.definitionId]?.displayName ?? instance.definitionId;
-  }
-
-  private toKitLabel(badge: "melee" | "ranged" | "unknown"): string {
-    if (badge === "melee") {
-      return "Melee Kit";
-    }
-
-    if (badge === "ranged") {
-      return "Ranged Kit";
-    }
-
-    return "Unknown Kit";
-  }
-
-  private readLastRunSummary(): RunResultV1 | null {
-    if (typeof window === "undefined" || typeof window.localStorage === "undefined") {
-      return null;
-    }
-
-    const raw = window.localStorage.getItem(RUN_RESULT_STORAGE_KEY);
-    if (!raw) return null;
-
+  async refreshDailyContracts(): Promise<void> {
+    this.dailyContractsRefreshing = true;
+    this.dailyContractsError = null;
     try {
-      const parsed = JSON.parse(raw);
-      if (!Array.isArray(parsed) || parsed.length === 0) return null;
-
-      const candidate = parsed[parsed.length - 1] as Partial<RunResultV1> | null;
-      if (!candidate || candidate.schemaVersion !== 1 || typeof candidate.battleSeed !== "number") {
-        return null;
-      }
-
-      return candidate as RunResultV1;
-    } catch {
-      return null;
+      await this.accountStore.refresh();
+    } catch (error) {
+      this.dailyContractsError = error instanceof Error ? error.message : String(error);
+    } finally {
+      this.dailyContractsRefreshing = false;
     }
   }
 
-  private syncSelectedZoneWithUnlockState(): void {
-    const clampedSelectedZone = this.clampZoneIndex(this.selectedZoneIndex);
-    const unlockedZoneCount = this.unlockedZoneCount;
-    if (clampedSelectedZone <= unlockedZoneCount) {
-      this.selectedZoneIndex = clampedSelectedZone;
-      return;
-    }
-
-    this.selectedZoneIndex = unlockedZoneCount;
-    this.persistZoneSelection(this.selectedZoneIndex);
+  cycleBackground(): void {
+    this.selectedBackgroundIndex = (this.selectedBackgroundIndex + 1) % this.homeBackgrounds.length;
   }
 
-  private readPersistedZoneSelection(): number {
-    if (typeof window === "undefined" || typeof window.localStorage === "undefined") {
-      return 1;
+  readonly mainNavItems: HomeNavItem[] = [
+    {
+      id: 'arena',
+      title: 'Arena',
+      subtitle: 'Enter the Arena',
+      route: '/arena-prep',
+      tone: 'arena'
+    },
+    {
+      id: 'backpack',
+      title: 'Backpack',
+      subtitle: 'Gear & Items',
+      route: '/backpack',
+      tone: 'backpack'
+    },
+    {
+      id: 'kaelis',
+      title: 'Kaelis',
+      subtitle: 'Squad & Loadout',
+      route: '/kaelis',
+      tone: 'kaelis'
+    },
+    {
+      id: 'recruit',
+      title: 'Recruit',
+      subtitle: 'New Kaelis Available',
+      route: '/recruit',
+      tone: 'recruit'
     }
+  ];
 
-    const raw = window.localStorage.getItem(ZONE_SELECTION_STORAGE_KEY);
-    if (!raw) {
-      return 1;
+  readonly actionItems: HomeActionItem[] = [
+    {
+      id: 'mail',
+      label: 'Mail',
+      iconPath: 'M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z'
+    },
+    {
+      id: 'calendar',
+      label: 'Calendar',
+      iconPath: 'M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19a2 2 0 0 0 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11z'
+    },
+    {
+      id: 'shop',
+      label: 'Shop',
+      iconPath: 'M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96C5 16.1 5.9 17 7 17h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49A1 1 0 0 0 20 5H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.9 2 1.99 2 2-.9 2-2-.9-2-2-2z',
+      tone: 'gold'
+    },
+    {
+      id: 'settings',
+      label: 'Settings',
+      iconPath: 'M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z'
     }
-
-    const parsed = Number.parseInt(raw, 10);
-    if (!Number.isFinite(parsed)) {
-      return 1;
-    }
-
-    return this.clampZoneIndex(parsed);
-  }
-
-  private persistZoneSelection(zoneIndex: number): void {
-    if (typeof window === "undefined" || typeof window.localStorage === "undefined") {
-      return;
-    }
-
-    window.localStorage.setItem(ZONE_SELECTION_STORAGE_KEY, String(this.clampZoneIndex(zoneIndex)));
-  }
-
-  private clampZoneIndex(zoneIndex: number): number {
-    if (!Number.isFinite(zoneIndex)) {
-      return 1;
-    }
-
-    return Math.max(1, Math.min(MAX_ZONE_INDEX, Math.floor(zoneIndex)));
-  }
-
-  private isAccumulatingContractType(type: string): boolean {
-    switch ((type ?? "").trim().toLowerCase()) {
-      case "complete_run":
-      case "kill_count":
-      case "open_chests":
-      case "kill_elites":
-        return true;
-      default:
-        return false;
-    }
-  }
+  ];
 }
