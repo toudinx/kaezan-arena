@@ -36,6 +36,8 @@ export type BackpackSlot = Readonly<{
   detailStatLines: ReadonlyArray<string>;
   isWeapon: boolean;
   isEquipped: boolean;
+  craftedByCharacterId: string | null;
+  craftedByCharacterName: string | null;
   inspectLabel: string;
 }>;
 
@@ -51,6 +53,8 @@ type NamedEquipmentInstance = Readonly<{
   gameplayModifiers: Readonly<Record<string, string>>;
   isWeapon: boolean;
   isEquipped: boolean;
+  craftedByCharacterId: string | null;
+  craftedByCharacterName: string | null;
 }>;
 
 const SLOT_LABELS: Readonly<Record<BackpackEquipmentSlot, string>> = {
@@ -130,7 +134,9 @@ function toNamedEquipmentInstance(
     weaponElement,
     gameplayModifiers: equipmentDefinition?.gameplayModifiers ?? {},
     isWeapon,
-    isEquipped: equippedInstanceIds.has(instance.instanceId)
+    isEquipped: equippedInstanceIds.has(instance.instanceId),
+    craftedByCharacterId: instance.craftedByCharacterId ?? null,
+    craftedByCharacterName: instance.craftedByCharacterName ?? null
   };
 }
 
@@ -177,6 +183,8 @@ function createEquipmentSlot(entry: NamedEquipmentInstance): BackpackSlot {
     detailStatLines,
     isWeapon: entry.isWeapon,
     isEquipped: entry.isEquipped,
+    craftedByCharacterId: entry.craftedByCharacterId,
+    craftedByCharacterName: entry.craftedByCharacterName,
     inspectLabel: `definitionId=${entry.definitionId}; slot=${entry.slot}; rarity=${entry.rarity}; weaponClass=${entry.weaponClass ?? "unknown"}; weaponElement=${entry.weaponElement ?? "none"}`
   };
 }

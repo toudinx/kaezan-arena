@@ -23,7 +23,6 @@ import {
 })
 export class BackpackPageComponent implements OnInit {
   equipInFlight = false;
-  salvageInFlight = false;
   actionFeedbackMessage = "";
   actionFeedbackIsError = false;
 
@@ -197,30 +196,6 @@ export class BackpackPageComponent implements OnInit {
       this.actionFeedbackIsError = true;
     } finally {
       this.equipInFlight = false;
-    }
-  }
-
-  async onSalvageRequested(instanceId: string): Promise<void> {
-    const character = this.activeCharacter;
-    if (!character || this.salvageInFlight) {
-      return;
-    }
-
-    this.salvageInFlight = true;
-    this.actionFeedbackMessage = "";
-    this.actionFeedbackIsError = false;
-
-    try {
-      const result = await this.accountStore.salvageItem(instanceId);
-      await this.accountStore.refresh();
-      this.actionFeedbackMessage = `Item salvaged: +${result.primalCoreAwarded} Primal Core`;
-      this.actionFeedbackIsError = false;
-    } catch (error) {
-      const storeError = this.accountStore.error();
-      this.actionFeedbackMessage = storeError ?? String(error);
-      this.actionFeedbackIsError = true;
-    } finally {
-      this.salvageInFlight = false;
     }
   }
 

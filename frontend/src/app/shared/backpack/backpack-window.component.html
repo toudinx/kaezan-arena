@@ -186,17 +186,6 @@
             }
           </div>
 
-          @if (canSalvage(selectedSlot)) {
-            <p class="backpack__detail-salvage">
-              Salvage return: {{ getSelectedSlotSalvagePrimalCoreReturn() }} Primal Core
-            </p>
-          }
-
-          @if (canSalvage(selectedSlot)) {
-            <div class="backpack__detail-actions">
-              <button type="button" [disabled]="salvageInFlight" (click)="onSalvageSelectedSlot()">Salvage</button>
-            </div>
-          }
         </article>
       } @else {
         <p class="backpack__detail-empty">Select a weapon to preview details.</p>

@@ -49,14 +49,12 @@ export class BackpackWindowComponent implements OnChanges, OnDestroy {
   @Input() characterBadgeByInstanceId: Readonly<Record<string, BackpackCharacterBadge>> = {};
   @Input() assignTargets: ReadonlyArray<BackpackAssignTarget> = [];
   @Input() equipInFlight = false;
-  @Input() salvageInFlight = false;
   @Input() highlightItemId: string | null = null;
   @Input() highlightRequestId = 0;
   @Input() forcedFilter: BackpackFilter | null = null;
   @Input() equipMode: BackpackEquipMode = null;
 
   @Output() readonly assignRequested = new EventEmitter<BackpackAssignRequest>();
-  @Output() readonly salvageRequested = new EventEmitter<string>();
 
   readonly filters: ReadonlyArray<BackpackFilter> = ["all", "ascendant", "legendary", "epic", "rare", "common"];
   readonly pageSize = 5;
@@ -277,37 +275,6 @@ export class BackpackWindowComponent implements OnChanges, OnDestroy {
     return this.selectedSlot?.isEquipped ? "Equipped" : "Stored";
   }
 
-  canSalvage(slot: BackpackSlot | null): boolean {
-    return !!slot &&
-      !!slot.originSpeciesId &&
-      this.resolveSalvagePrimalCoreReturn(slot.rarity) !== null;
-  }
-
-  getSelectedSlotSalvagePrimalCoreReturn(): number | null {
-    return this.resolveSalvagePrimalCoreReturn(this.selectedSlot?.rarity);
-  }
-
-  onSalvageSelectedSlot(): void {
-    const slot = this.selectedSlot;
-    if (!this.canSalvage(slot) || !slot?.instanceId) {
-      return;
-    }
-
-    const returnAmount = this.resolveSalvagePrimalCoreReturn(slot.rarity);
-    if (returnAmount === null) {
-      return;
-    }
-
-    const shouldProceed = typeof window === "undefined"
-      ? true
-      : window.confirm(`Salvage ${slot.displayName}? You will receive ${returnAmount} Primal Core.`);
-    if (!shouldProceed) {
-      return;
-    }
-
-    this.salvageRequested.emit(slot.instanceId);
-  }
-
   onAssignToCharacter(characterId: string): void {
     const slot = this.selectedSlot;
     if (!slot || this.isAssignToCharacterDisabled(characterId, slot)) {
@@ -453,27 +420,6 @@ export class BackpackWindowComponent implements OnChanges, OnDestroy {
     }
 
     this.pulsingSlotIds = nextPulsing;
-  }
-
-  private resolveSalvagePrimalCoreReturn(rarity: string | null | undefined): number | null {
-    const normalizedRarity = (rarity ?? "").trim().toLowerCase();
-    if (normalizedRarity === "common") {
-      return 12;
-    }
-
-    if (normalizedRarity === "rare") {
-      return 28;
-    }
-
-    if (normalizedRarity === "epic") {
-      return 96;
-    }
-
-    if (normalizedRarity === "legendary") {
-      return 250;
-    }
-
-    return null;
   }
 
   private resolveFilterForEquipMode(equipMode: Exclude<BackpackEquipMode, null>): BackpackFilter {

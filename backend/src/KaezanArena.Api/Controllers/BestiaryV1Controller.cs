@@ -48,7 +48,8 @@ public sealed class BestiaryV1Controller : ControllerBase
             var result = _accountStateStore.CraftBestiaryItem(
                 accountId: normalizedAccountId,
                 speciesId: request.SpeciesId.Trim(),
-                slot: slot);
+                slot: slot,
+                characterId: string.IsNullOrWhiteSpace(request.CharacterId) ? null : request.CharacterId.Trim());
 
             return Ok(new BestiaryCraftResponseDto(
                 EchoFragmentsBalance: result.Account.EchoFragmentsBalance,
@@ -237,6 +238,8 @@ public sealed class BestiaryV1Controller : ControllerBase
             IsLocked: instance.IsLocked,
             OriginSpeciesId: instance.OriginSpeciesId,
             Slot: instance.Slot,
-            Rarity: instance.Rarity);
+            Rarity: instance.Rarity,
+            CraftedByCharacterId: instance.CraftedByCharacterId,
+            CraftedByCharacterName: instance.CraftedByCharacterName);
     }
 }

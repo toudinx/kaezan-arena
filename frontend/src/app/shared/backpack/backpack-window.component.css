@@ -745,52 +745,6 @@
   font-size: 0.64rem;
 }
 
-.backpack__detail-salvage {
-  margin: 0.05rem 0 0;
-  font-size: 0.6rem;
-  color: #fbbf24;
-}
-
-.backpack__detail-actions {
-  margin-top: 0.2rem;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.32rem;
-}
-
-.backpack__detail-actions button {
-  border: 1px solid #2d5f78;
-  border-radius: 0.3rem;
-  background: #122438;
-  color: #dbe4f0;
-  font-size: 0.67rem;
-  font-weight: 600;
-  padding: 0.3rem 0.5rem;
-  cursor: pointer;
-  transition: border-color var(--motion-fast) var(--motion-ease-standard),
-    color var(--motion-fast) var(--motion-ease-standard),
-    background-color var(--motion-fast) var(--motion-ease-standard),
-    transform var(--motion-fast) var(--motion-ease-standard),
-    box-shadow var(--motion-fast) var(--motion-ease-standard);
-}
-
-.backpack__detail-actions button:hover:not(:disabled) {
-  border-color: #2dd4bf;
-  color: #ccfbf1;
-  transform: translateY(-1px);
-  box-shadow: 0 8px 16px rgba(2, 6, 23, 0.22);
-}
-
-.backpack__detail-actions button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.backpack__detail-actions button:focus-visible {
-  outline: none;
-  box-shadow: var(--motion-outline-focus);
-}
-
 .backpack__detail-empty {
   margin: 0;
   font-size: 0.66rem;

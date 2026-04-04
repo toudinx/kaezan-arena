@@ -181,35 +181,4 @@ describe("BackpackWindowComponent", () => {
     expect(component.filters.includes("materials" as never)).toBe(false);
   });
 
-  it("salvage action emits salvageRequested after confirmation", () => {
-    const component = createComponent();
-    assignInventoryInputs(component);
-    const emitted: string[] = [];
-    component.salvageRequested.subscribe((instanceId) => emitted.push(instanceId));
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
-
-    const weaponSlot = component.allSlots.find((slot) => slot.kind === "equipment" && slot.instanceId === "wpn-01");
-    expect(weaponSlot).toBeTruthy();
-    component.selectSlot(weaponSlot!.slotId);
-    component.onSalvageSelectedSlot();
-
-    expect(confirmSpy).toHaveBeenCalled();
-    expect(emitted).toEqual(["wpn-01"]);
-  });
-
-  it("salvage action does not emit when confirmation is canceled", () => {
-    const component = createComponent();
-    assignInventoryInputs(component);
-    const emitted: string[] = [];
-    component.salvageRequested.subscribe((instanceId) => emitted.push(instanceId));
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
-
-    const weaponSlot = component.allSlots.find((slot) => slot.kind === "equipment" && slot.instanceId === "wpn-01");
-    expect(weaponSlot).toBeTruthy();
-    component.selectSlot(weaponSlot!.slotId);
-    component.onSalvageSelectedSlot();
-
-    expect(confirmSpy).toHaveBeenCalled();
-    expect(emitted).toEqual([]);
-  });
 });

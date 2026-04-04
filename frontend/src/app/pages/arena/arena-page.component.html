@@ -468,13 +468,11 @@
               [itemCatalogById]="itemCatalogByIdForUi"
               [equipmentCatalogByItemId]="equipmentCatalogByItemIdForUi"
               [equipInFlight]="accountRequestInFlight"
-              [salvageInFlight]="accountRequestInFlight"
               [highlightItemId]="backpackHighlightItemId"
               [highlightRequestId]="backpackHighlightRequestId"
               [forcedFilter]="backpackForcedFilter"
               [equipMode]="backpackEquipMode"
               (equipRequested)="onBackpackEquipRequested($event)"
-              (salvageRequested)="onBackpackSalvageRequested($event)"
             ></app-backpack-window>
           </div>
           }

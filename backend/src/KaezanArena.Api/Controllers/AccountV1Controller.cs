@@ -740,6 +740,8 @@ public sealed class AccountV1Controller : ControllerBase
             IsLocked: instance.IsLocked,
             OriginSpeciesId: instance.OriginSpeciesId,
             Slot: instance.Slot,
-            Rarity: instance.Rarity);
+            Rarity: instance.Rarity,
+            CraftedByCharacterId: instance.CraftedByCharacterId,
+            CraftedByCharacterName: instance.CraftedByCharacterName);
     }
 }

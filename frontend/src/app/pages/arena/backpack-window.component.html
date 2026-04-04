@@ -71,10 +71,7 @@
       @if (selectedSlot.weaponClass) {
         <span>Class: {{ selectedSlot.weaponClass }}</span>
       }
-      @if (canSalvage(selectedSlot)) {
-        <span>Salvage return: {{ getSelectedSlotSalvagePrimalCoreReturn() }} Primal Core</span>
-      }
-      @if (canEquip(selectedSlot) || canSalvage(selectedSlot)) {
+      @if (canEquip(selectedSlot)) {
         <div class="backpack__tooltip-actions">
           @if (canEquip(selectedSlot)) {
             <button
@@ -83,14 +80,6 @@
               (click)="onEquipSelectedSlot()">
               Equip
             </button>
-          }
-          @if (canSalvage(selectedSlot)) {
-          <button
-            type="button"
-            [disabled]="salvageInFlight"
-            (click)="onSalvageSelectedSlot()">
-            Salvage
-          </button>
           }
         </div>
       }

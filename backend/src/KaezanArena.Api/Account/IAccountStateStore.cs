@@ -30,9 +30,7 @@ public interface IAccountStateStore
         string? runId = null,
         int? battleSeed = null);
 
-    BestiaryCraftResult CraftBestiaryItem(string accountId, string speciesId, EquipmentSlot slot);
+    BestiaryCraftResult CraftBestiaryItem(string accountId, string speciesId, EquipmentSlot slot, string? characterId = null);
 
-    ItemRefineResult RefineItem(string accountId, string itemInstanceId);
-
-    ItemSalvageResult SalvageItem(string accountId, string itemInstanceId);
+    ItemRefineResult RefineItem(string accountId, string itemInstanceId, string? characterId = null);
 }

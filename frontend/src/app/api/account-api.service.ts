@@ -7,6 +7,8 @@ export interface OwnedEquipmentInstance {
   originSpeciesId?: string | null;
   slot?: string | null;
   rarity?: string | null;
+  craftedByCharacterId?: string | null;
+  craftedByCharacterName?: string | null;
 }
 
 export interface CharacterInventory {
@@ -181,14 +183,6 @@ export interface ItemRefineResponse {
   refinedItem: OwnedEquipmentInstance;
 }
 
-export interface ItemSalvageResponse {
-  echoFragmentsBalance: number;
-  character: CharacterState;
-  salvagedItemInstanceId: string;
-  speciesId: string;
-  primalCoreAwarded: number;
-}
-
 export interface AwardDropsResponse {
   awarded: DropEvent[];
   character: CharacterState;
@@ -249,30 +243,41 @@ export class AccountApiService {
     );
   }
 
-  async craftBestiaryItem(accountId: string, speciesId: string, slot: BestiaryCraftSlot): Promise<BestiaryCraftResponse> {
+  async craftBestiaryItem(
+    accountId: string,
+    speciesId: string,
+    slot: BestiaryCraftSlot,
+    characterId: string | null = null
+  ): Promise<BestiaryCraftResponse> {
     const encodedAccountId = encodeURIComponent(accountId.trim());
-    return this.postJson<{ speciesId: string; slot: BestiaryCraftSlot }, BestiaryCraftResponse>(
+    const normalizedCharacterId = characterId?.trim() ?? "";
+    const payload: { speciesId: string; slot: BestiaryCraftSlot; characterId?: string } = {
+      speciesId,
+      slot
+    };
+    if (normalizedCharacterId.length > 0) {
+      payload.characterId = normalizedCharacterId;
+    }
+
+    return this.postJson<{ speciesId: string; slot: BestiaryCraftSlot; characterId?: string }, BestiaryCraftResponse>(
       `/api/v1/bestiary/craft?accountId=${encodedAccountId}`,
-      { speciesId, slot },
+      payload,
       "Bestiary craft"
     );
   }
 
-  async refineItem(accountId: string, itemInstanceId: string): Promise<ItemRefineResponse> {
+  async refineItem(accountId: string, itemInstanceId: string, characterId: string | null = null): Promise<ItemRefineResponse> {
     const encodedAccountId = encodeURIComponent(accountId.trim());
-    return this.postJson<{ itemInstanceId: string }, ItemRefineResponse>(
-      `/api/v1/items/refine?accountId=${encodedAccountId}`,
-      { itemInstanceId },
-      "Item refine"
-    );
-  }
+    const normalizedCharacterId = characterId?.trim() ?? "";
+    const payload: { itemInstanceId: string; characterId?: string } = { itemInstanceId };
+    if (normalizedCharacterId.length > 0) {
+      payload.characterId = normalizedCharacterId;
+    }
 
-  async salvageItem(accountId: string, itemInstanceId: string): Promise<ItemSalvageResponse> {
-    const encodedAccountId = encodeURIComponent(accountId.trim());
-    return this.postJson<{ itemInstanceId: string }, ItemSalvageResponse>(
-      `/api/v1/items/salvage?accountId=${encodedAccountId}`,
-      { itemInstanceId },
-      "Item salvage"
+    return this.postJson<{ itemInstanceId: string; characterId?: string }, ItemRefineResponse>(
+      `/api/v1/items/refine?accountId=${encodedAccountId}`,
+      payload,
+      "Item refine"
     );
   }
 

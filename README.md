@@ -106,7 +106,7 @@ Bestiary now lives as a Kaelis tab (`/kaelis/:id?tab=bestiary`) and always uses 
 - **Stats row:** Tracked species / Unlocked / Total kills — numbers large, labels small, in dark tiles.
 - **LEFT — Species list:** Each row shows display name, optional "Rank N" amber pill (rank > 0), kill count, kills-to-next label, and a progress bar (`linear-gradient` teal). Selected species highlighted with teal border.
 - **CENTER — Species hero + loot:** Large species hero, rank/progress block, and discovered loot cards grouped by slot.
-- **RIGHT — Progression actions:** Craft / Refine / Salvage sections scoped to the selected species and current Kaelis.
+- **RIGHT — Progression actions:** Species-scoped crafting progression per Kaelis: `Craft Weapon` (when none exists), then `Refine Weapon` (unified owned-weapon list + refine actions).
 - No raw species IDs visible; catalog display names are shown for all known species.
 
 ## Characters Page

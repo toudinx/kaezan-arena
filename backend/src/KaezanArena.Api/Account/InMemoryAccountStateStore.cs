@@ -14,10 +14,6 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
     private const int RefineRareToEpicEchoFragmentsCost = 500;
     private const int RefineEpicToLegendaryPrimalCoreCost = 300;
     private const int RefineEpicToLegendaryEchoFragmentsCost = 1000;
-    private const int SalvageCommonPrimalCoreReturn = 12;
-    private const int SalvageRarePrimalCoreReturn = 28;
-    private const int SalvageEpicPrimalCoreReturn = 96;
-    private const int SalvageLegendaryPrimalCoreReturn = 250;
     private const int AscendantBaseDropChancePpm = 200;
     private const int AscendantBonusPer100KillsPpm = 100;
     private const int AscendantDropChanceCapPpm = 2000;
@@ -143,6 +139,24 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
             {
                 throw new InvalidOperationException(
                     $"Equipment instance '{equipmentInstanceId}' cannot be equipped in '{EquipmentSlotMapper.ToCatalogSlot(slot)}'.");
+            }
+
+            if (IsBestiaryForgedWeapon(equipmentInstance))
+            {
+                var craftedByCharacterId = equipmentInstance.CraftedByCharacterId?.Trim();
+                if (!string.IsNullOrWhiteSpace(craftedByCharacterId) &&
+                    !string.Equals(craftedByCharacterId, characterId, StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException(
+                        $"Bestiary-forged weapons are bound to their creator. Item '{equipmentInstanceId}' can only be equipped by '{craftedByCharacterId}'.");
+                }
+
+                if (string.IsNullOrWhiteSpace(craftedByCharacterId) &&
+                    !string.Equals(sourceCharacterId, characterId, StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException(
+                        $"Bestiary-forged weapons are bound to their creator and cannot be moved between characters.");
+                }
             }
 
             var updatedCharacters = new Dictionary<string, CharacterState>(account.State.Characters, StringComparer.Ordinal);
@@ -623,7 +637,7 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
         }
     }
 
-    public BestiaryCraftResult CraftBestiaryItem(string accountId, string speciesId, EquipmentSlot slot)
+    public BestiaryCraftResult CraftBestiaryItem(string accountId, string speciesId, EquipmentSlot slot, string? characterId = null)
     {
         var account = GetOrCreateAccount(accountId);
         lock (account.Sync)
@@ -641,9 +655,38 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
                 throw new InvalidOperationException($"Unknown speciesId '{speciesId}'.");
             }
 
-            if (!account.State.Characters.TryGetValue(account.State.ActiveCharacterId, out var character))
+            var targetCharacterId = string.IsNullOrWhiteSpace(characterId)
+                ? account.State.ActiveCharacterId
+                : characterId.Trim();
+            if (!account.State.Characters.TryGetValue(targetCharacterId, out var character))
             {
-                throw new InvalidOperationException($"Character '{account.State.ActiveCharacterId}' was not found.");
+                throw new InvalidOperationException($"Character '{targetCharacterId}' was not found.");
+            }
+
+            var craftedItemDefinitionId = AccountCatalog.ResolveCraftedCommonEquipmentItemId(slot);
+            var slotLabel = EquipmentSlotMapper.ToCatalogSlot(slot);
+            var alreadyCraftedForSpeciesByCharacter =
+                account.State.Characters.Values
+                    .SelectMany(currentCharacter => currentCharacter.Inventory.EquipmentInstances.Values)
+                    .Any(instance =>
+                        string.Equals(instance.CraftedByCharacterId, character.CharacterId, StringComparison.Ordinal) &&
+                        string.Equals(instance.OriginSpeciesId, normalizedSpeciesId, StringComparison.Ordinal) &&
+                        string.Equals(instance.Slot, slotLabel, StringComparison.Ordinal));
+            if (alreadyCraftedForSpeciesByCharacter)
+            {
+                throw new InvalidOperationException(
+                    $"Character '{character.CharacterId}' already crafted a {slotLabel} for species '{normalizedSpeciesId}'.");
+            }
+
+            // Legacy fallback for pre-metadata crafted items.
+            var alreadyOwnsLegacyCraftForSpecies = character.Inventory.EquipmentInstances.Values.Any(instance =>
+                string.Equals(instance.DefinitionId, craftedItemDefinitionId, StringComparison.Ordinal) &&
+                string.Equals(instance.OriginSpeciesId, normalizedSpeciesId, StringComparison.Ordinal) &&
+                string.Equals(instance.Slot, slotLabel, StringComparison.Ordinal));
+            if (alreadyOwnsLegacyCraftForSpecies)
+            {
+                throw new InvalidOperationException(
+                    $"Character '{character.CharacterId}' already crafted a {slotLabel} for species '{normalizedSpeciesId}'.");
             }
 
             var primalCoreBySpecies = new Dictionary<string, int>(character.PrimalCoreBySpecies, StringComparer.Ordinal);
@@ -660,27 +703,22 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
                     $"Not enough Echo Fragments. Required {BestiaryCraftEchoFragmentsCost}, current {account.State.EchoFragmentsBalance}.");
             }
 
-            var craftedItemDefinitionId = AccountCatalog.ResolveCraftedCommonEquipmentItemId(slot);
-            var slotLabel = EquipmentSlotMapper.ToCatalogSlot(slot);
-            var sameCraftedCount = character.Inventory.EquipmentInstances.Values
-                .Count(instance =>
-                    string.Equals(instance.OriginSpeciesId, normalizedSpeciesId, StringComparison.Ordinal) &&
-                    string.Equals(instance.Slot, slotLabel, StringComparison.Ordinal));
-            var craftedSequence = sameCraftedCount + 1;
             var craftedInstanceId = DeterministicSeed.HashId(
                 "craft",
                 account.State.AccountId,
                 character.CharacterId,
                 normalizedSpeciesId,
                 slotLabel,
-                craftedSequence.ToString());
+                "1");
             var craftedItem = new OwnedEquipmentInstance(
                 InstanceId: craftedInstanceId,
                 DefinitionId: craftedItemDefinitionId,
                 IsLocked: false,
                 OriginSpeciesId: normalizedSpeciesId,
                 Slot: slotLabel,
-                Rarity: CraftedRarityCommon);
+                Rarity: CraftedRarityCommon,
+                CraftedByCharacterId: character.CharacterId,
+                CraftedByCharacterName: character.Name);
 
             var equipmentInstances = new Dictionary<string, OwnedEquipmentInstance>(character.Inventory.EquipmentInstances, StringComparer.Ordinal)
             {
@@ -706,7 +744,7 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
         }
     }
 
-    public ItemRefineResult RefineItem(string accountId, string itemInstanceId)
+    public ItemRefineResult RefineItem(string accountId, string itemInstanceId, string? characterId = null)
     {
         var account = GetOrCreateAccount(accountId);
         lock (account.Sync)
@@ -717,9 +755,12 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
                 throw new InvalidOperationException("itemInstanceId is required.");
             }
 
-            if (!account.State.Characters.TryGetValue(account.State.ActiveCharacterId, out var character))
+            var targetCharacterId = string.IsNullOrWhiteSpace(characterId)
+                ? account.State.ActiveCharacterId
+                : characterId.Trim();
+            if (!account.State.Characters.TryGetValue(targetCharacterId, out var character))
             {
-                throw new InvalidOperationException($"Character '{account.State.ActiveCharacterId}' was not found.");
+                throw new InvalidOperationException($"Character '{targetCharacterId}' was not found.");
             }
 
             if (!character.Inventory.EquipmentInstances.TryGetValue(itemInstanceId, out var item))
@@ -727,10 +768,35 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
                 throw new InvalidOperationException($"Character does not own item instance '{itemInstanceId}'.");
             }
 
+            var craftedByCharacterId = item.CraftedByCharacterId?.Trim();
+            if (!string.IsNullOrWhiteSpace(craftedByCharacterId) &&
+                !string.Equals(craftedByCharacterId, character.CharacterId, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    $"Bestiary-forged weapons are bound to their creator. Item '{itemInstanceId}' can only be refined by '{craftedByCharacterId}'.");
+            }
+
             var normalizedSpecies = NormalizeSpeciesOrNull(item.OriginSpeciesId);
             if (normalizedSpecies is null)
             {
                 throw new InvalidOperationException("Item is not linked to a species and cannot be refined.");
+            }
+
+            var requestedItemSlot = ResolveItemSlot(item);
+            var strongestItemInLine = character.Inventory.EquipmentInstances.Values
+                .Where(candidate =>
+                    string.Equals(candidate.DefinitionId, item.DefinitionId, StringComparison.Ordinal) &&
+                    string.Equals(NormalizeSpeciesOrNull(candidate.OriginSpeciesId), normalizedSpecies, StringComparison.Ordinal) &&
+                    string.Equals(ResolveItemSlot(candidate), requestedItemSlot, StringComparison.Ordinal))
+                .OrderByDescending(candidate => ResolveRarityWeight(ResolveItemRarity(candidate)))
+                .ThenByDescending(candidate => string.Equals(candidate.InstanceId, character.Equipment.WeaponInstanceId, StringComparison.Ordinal))
+                .ThenBy(candidate => candidate.InstanceId, StringComparer.Ordinal)
+                .FirstOrDefault();
+            if (strongestItemInLine is not null &&
+                !string.Equals(strongestItemInLine.InstanceId, item.InstanceId, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    $"Only one weapon per species can be refined. Refine '{strongestItemInLine.InstanceId}' first.");
             }
 
             var currentRarity = ResolveItemRarity(item);
@@ -779,73 +845,6 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
                 Account: CloneAccountState(account.State),
                 Character: CloneCharacterState(updatedCharacter),
                 RefinedItem: updatedItem);
-        }
-    }
-
-    public ItemSalvageResult SalvageItem(string accountId, string itemInstanceId)
-    {
-        var account = GetOrCreateAccount(accountId);
-        lock (account.Sync)
-        {
-            EnsureDailyContractsRefreshed(account);
-            if (string.IsNullOrWhiteSpace(itemInstanceId))
-            {
-                throw new InvalidOperationException("itemInstanceId is required.");
-            }
-
-            if (!account.State.Characters.TryGetValue(account.State.ActiveCharacterId, out var character))
-            {
-                throw new InvalidOperationException($"Character '{account.State.ActiveCharacterId}' was not found.");
-            }
-
-            if (!character.Inventory.EquipmentInstances.TryGetValue(itemInstanceId, out var item))
-            {
-                throw new InvalidOperationException($"Character does not own item instance '{itemInstanceId}'.");
-            }
-
-            var normalizedSpecies = NormalizeSpeciesOrNull(item.OriginSpeciesId);
-            if (normalizedSpecies is null)
-            {
-                throw new InvalidOperationException("Item is not linked to a species and cannot be salvaged.");
-            }
-
-            var itemRarity = ResolveItemRarity(item);
-            var primalCoreAward = ResolveSalvagePrimalCoreOrThrow(itemRarity);
-            var primalCoreBySpecies = new Dictionary<string, int>(character.PrimalCoreBySpecies, StringComparer.Ordinal);
-            primalCoreBySpecies[normalizedSpecies] = primalCoreBySpecies.GetValueOrDefault(normalizedSpecies, 0) + primalCoreAward;
-
-            var equipmentInstances = new Dictionary<string, OwnedEquipmentInstance>(character.Inventory.EquipmentInstances, StringComparer.Ordinal);
-            if (!equipmentInstances.Remove(itemInstanceId))
-            {
-                throw new InvalidOperationException($"Character does not own item instance '{itemInstanceId}'.");
-            }
-
-            var updatedEquipment = character.Equipment;
-            foreach (var slot in EquipmentState.OrderedSlots)
-            {
-                if (string.Equals(updatedEquipment.GetInstanceId(slot), itemInstanceId, StringComparison.Ordinal))
-                {
-                    updatedEquipment = updatedEquipment.SetInstanceId(slot, null);
-                }
-            }
-
-            var updatedCharacter = character with
-            {
-                Inventory = new CharacterInventory(
-                    MaterialStacks: new Dictionary<string, long>(character.Inventory.MaterialStacks, StringComparer.Ordinal),
-                    EquipmentInstances: equipmentInstances),
-                Equipment = updatedEquipment,
-                PrimalCoreBySpecies = primalCoreBySpecies
-            };
-
-            account.State = UpdateCharacter(account.State, updatedCharacter, versionIncrement: 1);
-            PersistAccount(account);
-            return new ItemSalvageResult(
-                Account: CloneAccountState(account.State),
-                Character: CloneCharacterState(updatedCharacter),
-                SalvagedItemInstanceId: itemInstanceId,
-                SpeciesId: normalizedSpecies,
-                PrimalCoreAwarded: primalCoreAward);
         }
     }
 
@@ -1117,6 +1116,46 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
         return rarity.Trim().ToLowerInvariant();
     }
 
+    private static int ResolveRarityWeight(string rarity)
+    {
+        return rarity switch
+        {
+            "ascendant" => 5,
+            "legendary" => 4,
+            "epic" => 3,
+            "rare" => 2,
+            "common" => 1,
+            _ => 0
+        };
+    }
+
+    private static string ResolveItemSlot(OwnedEquipmentInstance item)
+    {
+        if (!string.IsNullOrWhiteSpace(item.Slot))
+        {
+            return item.Slot.Trim().ToLowerInvariant();
+        }
+
+        if (AccountCatalog.TryGetEquipment(item.DefinitionId, out var equipmentDefinition) &&
+            !string.IsNullOrWhiteSpace(equipmentDefinition.Slot))
+        {
+            return equipmentDefinition.Slot.Trim().ToLowerInvariant();
+        }
+
+        return string.Empty;
+    }
+
+    private static bool IsBestiaryForgedWeapon(OwnedEquipmentInstance item)
+    {
+        if (NormalizeSpeciesOrNull(item.OriginSpeciesId) is null)
+        {
+            return false;
+        }
+
+        var forgedWeaponDefinitionId = AccountCatalog.ResolveCraftedCommonEquipmentItemId(EquipmentSlot.Weapon);
+        return string.Equals(item.DefinitionId, forgedWeaponDefinitionId, StringComparison.Ordinal);
+    }
+
     private static RefineRule ResolveRefineRuleOrThrow(string currentRarity)
     {
         return currentRarity switch
@@ -1138,18 +1177,6 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
                 EchoFragmentsCost: RefineEpicToLegendaryEchoFragmentsCost),
             "legendary" => throw new InvalidOperationException("Item cannot be refined beyond Legendary."),
             _ => throw new InvalidOperationException($"Unsupported item rarity '{currentRarity}' for refinement.")
-        };
-    }
-
-    private static int ResolveSalvagePrimalCoreOrThrow(string currentRarity)
-    {
-        return currentRarity switch
-        {
-            "common" => SalvageCommonPrimalCoreReturn,
-            "rare" => SalvageRarePrimalCoreReturn,
-            "epic" => SalvageEpicPrimalCoreReturn,
-            "legendary" => SalvageLegendaryPrimalCoreReturn,
-            _ => throw new InvalidOperationException($"Unsupported item rarity '{currentRarity}' for salvage.")
         };
     }
 

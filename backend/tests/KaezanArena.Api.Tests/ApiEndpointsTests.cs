@@ -159,6 +159,89 @@ public sealed class ApiEndpointsTests : IClassFixture<ApiTestWebApplicationFacto
     }
 
     [Fact]
+    public async Task PostBestiaryCraft_FailsWhenSameCharacterCraftsSameSpeciesTwice()
+    {
+        const string accountId = "dev_account_craft_ready_unique_per_character";
+
+        var firstResponse = await _client.PostAsJsonAsync(
+            $"/api/v1/bestiary/craft?accountId={accountId}",
+            new BestiaryCraftRequestDto(
+                SpeciesId: "melee_brute",
+                Slot: "Weapon"));
+        Assert.Equal(HttpStatusCode.OK, firstResponse.StatusCode);
+
+        var secondResponse = await _client.PostAsJsonAsync(
+            $"/api/v1/bestiary/craft?accountId={accountId}",
+            new BestiaryCraftRequestDto(
+                SpeciesId: "melee_brute",
+                Slot: "Weapon"));
+        var secondPayload = await secondResponse.Content.ReadFromJsonAsync<ApiErrorDto>();
+
+        Assert.Equal(HttpStatusCode.BadRequest, secondResponse.StatusCode);
+        Assert.NotNull(secondPayload);
+        Assert.Equal("validation_error", secondPayload.Code);
+        Assert.Contains("already crafted", secondPayload.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task PostBestiaryCraft_SetsCraftedByMetadata()
+    {
+        const string accountId = "dev_account_craft_ready_metadata";
+        var state = await GetAccountStateAsync(accountId);
+        var activeCharacter = state.Account.Characters[state.Account.ActiveCharacterId];
+
+        var response = await _client.PostAsJsonAsync(
+            $"/api/v1/bestiary/craft?accountId={accountId}",
+            new BestiaryCraftRequestDto(
+                SpeciesId: "melee_brute",
+                Slot: "Weapon"));
+        var payload = await response.Content.ReadFromJsonAsync<BestiaryCraftResponseDto>();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(payload);
+        Assert.Equal(activeCharacter.CharacterId, payload.CraftedItem.CraftedByCharacterId);
+        Assert.Equal(activeCharacter.Name, payload.CraftedItem.CraftedByCharacterName);
+
+        Assert.True(payload.Character.Inventory.EquipmentInstances.TryGetValue(payload.CraftedItem.InstanceId, out var owned));
+        Assert.NotNull(owned);
+        Assert.Equal(activeCharacter.CharacterId, owned.CraftedByCharacterId);
+        Assert.Equal(activeCharacter.Name, owned.CraftedByCharacterName);
+    }
+
+    [Fact]
+    public async Task PostBestiaryCraft_UsesRequestedCharacterContext()
+    {
+        const string accountId = "dev_account_craft_ready_context_override";
+        var state = await GetAccountStateAsync(accountId);
+        var defaultActiveCharacterId = state.Account.ActiveCharacterId;
+        var alternateCharacterId = state.Account.Characters.Keys.Single(id =>
+            !string.Equals(id, defaultActiveCharacterId, StringComparison.Ordinal));
+
+        var switchResponse = await _client.PostAsJsonAsync(
+            "/api/v1/account/active-character",
+            new SetActiveCharacterRequestDto(
+                AccountId: accountId,
+                CharacterId: alternateCharacterId));
+        Assert.Equal(HttpStatusCode.OK, switchResponse.StatusCode);
+
+        var craftResponse = await _client.PostAsJsonAsync(
+            $"/api/v1/bestiary/craft?accountId={accountId}",
+            new BestiaryCraftRequestDto(
+                SpeciesId: "melee_brute",
+                Slot: "Weapon",
+                CharacterId: defaultActiveCharacterId));
+        var craftPayload = await craftResponse.Content.ReadFromJsonAsync<BestiaryCraftResponseDto>();
+
+        Assert.Equal(HttpStatusCode.OK, craftResponse.StatusCode);
+        Assert.NotNull(craftPayload);
+        Assert.Equal(defaultActiveCharacterId, craftPayload.Character.CharacterId);
+        Assert.Equal(defaultActiveCharacterId, craftPayload.CraftedItem.CraftedByCharacterId);
+
+        var persisted = await GetAccountStateAsync(accountId);
+        Assert.Equal(alternateCharacterId, persisted.Account.ActiveCharacterId);
+    }
+
+    [Fact]
     public async Task PostBestiaryCraft_FailsWhenInsufficientFunds()
     {
         const string accountId = "dev_account_craft_insufficient";
@@ -241,6 +324,41 @@ public sealed class ApiEndpointsTests : IClassFixture<ApiTestWebApplicationFacto
     }
 
     [Fact]
+    public async Task PostItemRefine_UsesRequestedCharacterContext()
+    {
+        const string accountId = "dev_account_refine_ready_context_override";
+        var state = await GetAccountStateAsync(accountId);
+        var defaultActiveCharacterId = state.Account.ActiveCharacterId;
+        var alternateCharacterId = state.Account.Characters.Keys.Single(id =>
+            !string.Equals(id, defaultActiveCharacterId, StringComparison.Ordinal));
+        var defaultActiveCharacter = state.Account.Characters[defaultActiveCharacterId];
+        var commonItem = defaultActiveCharacter.Inventory.EquipmentInstances.Values
+            .First(item =>
+                string.Equals(item.OriginSpeciesId, "melee_brute", StringComparison.Ordinal) &&
+                string.Equals(item.Rarity, "common", StringComparison.Ordinal));
+
+        var switchResponse = await _client.PostAsJsonAsync(
+            "/api/v1/account/active-character",
+            new SetActiveCharacterRequestDto(
+                AccountId: accountId,
+                CharacterId: alternateCharacterId));
+        Assert.Equal(HttpStatusCode.OK, switchResponse.StatusCode);
+
+        var refineResponse = await _client.PostAsJsonAsync(
+            $"/api/v1/items/refine?accountId={accountId}",
+            new ItemRefineRequestDto(
+                ItemInstanceId: commonItem.InstanceId,
+                CharacterId: defaultActiveCharacterId));
+        var refinePayload = await refineResponse.Content.ReadFromJsonAsync<ItemRefineResponseDto>();
+
+        Assert.Equal(HttpStatusCode.OK, refineResponse.StatusCode);
+        Assert.NotNull(refinePayload);
+        Assert.Equal(defaultActiveCharacterId, refinePayload.Character.CharacterId);
+        Assert.Equal(commonItem.InstanceId, refinePayload.RefinedItem.InstanceId);
+        Assert.Equal("rare", refinePayload.RefinedItem.Rarity);
+    }
+
+    [Fact]
     public async Task PostItemRefine_FailsWhenTryingToRefineBeyondLegendary()
     {
         const string accountId = "dev_account_refine_legendary_cap";
@@ -263,49 +381,13 @@ public sealed class ApiEndpointsTests : IClassFixture<ApiTestWebApplicationFacto
     }
 
     [Fact]
-    public async Task PostItemSalvage_RemovesItemAndReturnsCorrectPrimalCore()
+    public async Task PostItemSalvage_EndpointIsRemoved()
     {
-        const string accountId = "dev_account_refine_ready_salvage";
-        var state = await GetAccountStateAsync(accountId);
-        var activeCharacter = state.Account.Characters[state.Account.ActiveCharacterId];
-        var commonItem = activeCharacter.Inventory.EquipmentInstances.Values
-            .First(item =>
-                string.Equals(item.OriginSpeciesId, "melee_brute", StringComparison.Ordinal) &&
-                string.Equals(item.Rarity, "common", StringComparison.Ordinal));
-        var initialPrimalCore = activeCharacter.PrimalCoreBySpecies.GetValueOrDefault("melee_brute", 0);
-
         var response = await _client.PostAsJsonAsync(
-            $"/api/v1/items/salvage?accountId={accountId}",
-            new ItemSalvageRequestDto(ItemInstanceId: commonItem.InstanceId));
-        var payload = await response.Content.ReadFromJsonAsync<ItemSalvageResponseDto>();
+            "/api/v1/items/salvage?accountId=dev_account",
+            new { itemInstanceId = "any.instance" });
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.NotNull(payload);
-        Assert.Equal(commonItem.InstanceId, payload.SalvagedItemInstanceId);
-        Assert.Equal("melee_brute", payload.SpeciesId);
-        Assert.Equal(12, payload.PrimalCoreAwarded);
-        Assert.False(payload.Character.Inventory.EquipmentInstances.ContainsKey(commonItem.InstanceId));
-        Assert.Equal(initialPrimalCore + 12, payload.Character.PrimalCoreBySpecies.GetValueOrDefault("melee_brute", 0));
-
-        var finalState = await GetAccountStateAsync(accountId);
-        var finalCharacter = finalState.Account.Characters[activeCharacter.CharacterId];
-        Assert.False(finalCharacter.Inventory.EquipmentInstances.ContainsKey(commonItem.InstanceId));
-        Assert.Equal(initialPrimalCore + 12, finalCharacter.PrimalCoreBySpecies.GetValueOrDefault("melee_brute", 0));
-    }
-
-    [Fact]
-    public async Task PostItemSalvage_FailsWhenItemIsNotOwned()
-    {
-        const string accountId = "dev_account_refine_ready_salvage_non_owned";
-        var response = await _client.PostAsJsonAsync(
-            $"/api/v1/items/salvage?accountId={accountId}",
-            new ItemSalvageRequestDto(ItemInstanceId: "missing.item.instance"));
-        var payload = await response.Content.ReadFromJsonAsync<ApiErrorDto>();
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.NotNull(payload);
-        Assert.Equal("validation_error", payload.Code);
-        Assert.Contains("does not own", payload.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     [Fact]
@@ -379,6 +461,39 @@ public sealed class ApiEndpointsTests : IClassFixture<ApiTestWebApplicationFacto
         var persisted = await GetAccountStateAsync(state.Account.AccountId);
         var persistedCharacter = persisted.Account.Characters[state.Account.ActiveCharacterId];
         Assert.Equal(ownedWeaponInstanceId, persistedCharacter.Equipment.WeaponInstanceId);
+    }
+
+    [Fact]
+    public async Task PostEquipItem_FailsWhenBestiaryForgedWeaponIsEquippedByAnotherCharacter()
+    {
+        const string accountId = "dev_account_craft_ready_bound_weapon";
+        var state = await GetAccountStateAsync(accountId);
+        var creatorCharacterId = state.Account.ActiveCharacterId;
+        var otherCharacterId = state.Account.Characters.Keys.Single(id =>
+            !string.Equals(id, creatorCharacterId, StringComparison.Ordinal));
+
+        var craftResponse = await _client.PostAsJsonAsync(
+            $"/api/v1/bestiary/craft?accountId={accountId}",
+            new BestiaryCraftRequestDto(
+                SpeciesId: "melee_brute",
+                Slot: "Weapon",
+                CharacterId: creatorCharacterId));
+        var craftPayload = await craftResponse.Content.ReadFromJsonAsync<BestiaryCraftResponseDto>();
+        Assert.Equal(HttpStatusCode.OK, craftResponse.StatusCode);
+        Assert.NotNull(craftPayload);
+
+        var equipResponse = await _client.PostAsJsonAsync(
+            "/api/v1/account/equip-item",
+            new EquipItemRequestDto(
+                AccountId: accountId,
+                CharacterId: otherCharacterId,
+                Slot: "weapon",
+                EquipmentInstanceId: craftPayload.CraftedItem.InstanceId));
+        var equipPayload = await equipResponse.Content.ReadFromJsonAsync<ApiErrorDto>();
+
+        Assert.Equal(HttpStatusCode.BadRequest, equipResponse.StatusCode);
+        Assert.NotNull(equipPayload);
+        Assert.Contains("bound to their creator", equipPayload.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

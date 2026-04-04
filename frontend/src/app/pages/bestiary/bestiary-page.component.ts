@@ -25,6 +25,7 @@ type BestiaryRow = Readonly<{
 
 type InventoryRow = Readonly<{
   instanceId: string;
+  definitionId: string;
   displayName: string;
   slotKey: string;
   slotLabel: string;
@@ -36,14 +37,17 @@ type InventoryRow = Readonly<{
   iconTone: ItemIconTone;
   originSpeciesLabel: string | null;
   originSpeciesId: string | null;
+  craftedByCharacterId: string | null;
+  craftedByCharacterName: string | null;
   isEquipped: boolean;
   canRefine: boolean;
   canAffordRefine: boolean;
   nextRarityLabel: string | null;
   refinePrimalCoreCost: number | null;
   refineEchoFragmentsCost: number | null;
-  canSalvage: boolean;
-  salvagePrimalCoreReturn: number | null;
+  speciesPrimalCoreBalance: number;
+  refinePrimalCoreDeficit: number;
+  refineEchoFragmentsDeficit: number;
 }>;
 
 type RefineRule = Readonly<{
@@ -51,17 +55,6 @@ type RefineRule = Readonly<{
   primalCoreCost: number;
   echoFragmentsCost: number;
 }>;
-
-type LootGroup = Readonly<{
-  slotKey: string;
-  slotLabel: string;
-  items: ReadonlyArray<InventoryRow>;
-}>;
-
-const LOOT_SLOT_ORDER: Readonly<Record<string, number>> = {
-  weapon: 0,
-  unknown: 1
-};
 
 function computeRank(killsTotal: number, thresholds: ReadonlyArray<number>): number {
   const kills = Math.max(0, killsTotal);
@@ -116,7 +109,6 @@ export class BestiaryPageComponent implements OnInit {
   });
   isCrafting = false;
   refiningItemInstanceId: string | null = null;
-  salvagingItemInstanceId: string | null = null;
   actionFeedback: string | null = null;
   lastUpdatedItemInstanceId: string | null = null;
   private readonly speciesImageFailures = new Set<string>();
@@ -277,10 +269,6 @@ export class BestiaryPageComponent implements OnInit {
     return this.scopedCharacterSignal()?.ascendantProgress?.filter((t) => t.speciesRequired > 0) ?? [];
   }
 
-  get selectedSpeciesLootCount(): number {
-    return this.selectedSpeciesInventoryRows.length;
-  }
-
   shouldRenderSpeciesImage(imageUrl: string | null | undefined): boolean {
     if (!imageUrl) {
       return false;
@@ -334,7 +322,9 @@ export class BestiaryPageComponent implements OnInit {
       return false;
     }
 
-    return selected.primalCoreBalance >= this.primalCoreCost && this.echoFragmentsBalance >= this.echoFragmentsCost;
+    return !this.hasSelectedSpeciesCraftHistory &&
+      selected.primalCoreBalance >= this.primalCoreCost &&
+      this.echoFragmentsBalance >= this.echoFragmentsCost;
   }
 
   get primalCoreDeficit(): number {
@@ -372,10 +362,17 @@ export class BestiaryPageComponent implements OnInit {
           refineRule !== null &&
           speciesPrimalCore >= refineRule.primalCoreCost &&
           this.echoFragmentsBalance >= refineRule.echoFragmentsCost;
-        const salvagePrimalCoreReturn = this.resolveSalvagePrimalCoreReturn(rarityKey);
-        const canSalvage = hasOriginSpecies && salvagePrimalCoreReturn !== null;
+        const refinePrimalCoreDeficit =
+          canRefine && refineRule
+            ? Math.max(0, refineRule.primalCoreCost - speciesPrimalCore)
+            : 0;
+        const refineEchoFragmentsDeficit =
+          canRefine && refineRule
+            ? Math.max(0, refineRule.echoFragmentsCost - this.echoFragmentsBalance)
+            : 0;
         return {
           instanceId: slot.instanceId,
+          definitionId: slot.definitionId,
           displayName: slot.displayName,
           slotKey: slot.slot,
           slotLabel: slot.slotLabel,
@@ -387,14 +384,17 @@ export class BestiaryPageComponent implements OnInit {
           iconTone: slot.iconTone,
           originSpeciesLabel: originSpeciesId ? this.toSpeciesLabel(originSpeciesId) : null,
           originSpeciesId,
+          craftedByCharacterId: slot.craftedByCharacterId,
+          craftedByCharacterName: slot.craftedByCharacterName,
           isEquipped: slot.isEquipped,
           canRefine,
           canAffordRefine,
           nextRarityLabel: refineRule ? this.formatRarityLabel(refineRule.nextRarity) : null,
           refinePrimalCoreCost: refineRule?.primalCoreCost ?? null,
           refineEchoFragmentsCost: refineRule?.echoFragmentsCost ?? null,
-          canSalvage,
-          salvagePrimalCoreReturn
+          speciesPrimalCoreBalance: speciesPrimalCore,
+          refinePrimalCoreDeficit,
+          refineEchoFragmentsDeficit
         };
       })
       .sort((left, right) => {
@@ -419,45 +419,69 @@ export class BestiaryPageComponent implements OnInit {
     return this.inventoryRows.filter((item) => item.originSpeciesId === selected.speciesId);
   }
 
-  get selectedSpeciesLootGroups(): LootGroup[] {
-    const items = this.selectedSpeciesInventoryRows;
-    if (items.length === 0) {
-      return [];
+  get hasSelectedSpeciesCraftHistory(): boolean {
+    const selected = this.selectedSpecies;
+    const state = this.accountStore.state();
+    const character = this.activeCharacter;
+    if (!selected || !state || !character) {
+      return false;
     }
 
-    const groupedBySlot = new Map<string, InventoryRow[]>();
-    for (const item of items) {
-      const groupRows = groupedBySlot.get(item.slotKey) ?? [];
-      groupRows.push(item);
-      groupedBySlot.set(item.slotKey, groupRows);
+    const selectedSpeciesId = selected.speciesId;
+    const selectedCharacterId = character.characterId;
+    for (const accountCharacter of Object.values(state.characters)) {
+      for (const instance of Object.values(accountCharacter.inventory.equipmentInstances)) {
+        const slot = (instance.slot ?? "").trim().toLowerCase();
+        const isWeaponSlot = slot.length === 0 || slot === "weapon";
+        if (!isWeaponSlot) {
+          continue;
+        }
+
+        if (
+          instance.originSpeciesId === selectedSpeciesId &&
+          instance.craftedByCharacterId === selectedCharacterId
+        ) {
+          return true;
+        }
+      }
     }
 
-    return Array.from(groupedBySlot.entries())
+    // Legacy fallback for old instances without crafted-by metadata.
+    return Object.values(character.inventory.equipmentInstances).some((instance) =>
+      instance.definitionId === "wpn.primal_forged_blade" &&
+      instance.originSpeciesId === selectedSpeciesId &&
+      ((instance.slot ?? "").trim().length === 0 || (instance.slot ?? "").trim().toLowerCase() === "weapon")
+    );
+  }
+
+  get selectedSpeciesRefineWeaponRows(): InventoryRow[] {
+    return [...this.selectedSpeciesInventoryRows]
+      .filter((item) => this.canCurrentCharacterUseForgedWeapon(item))
       .sort((left, right) => {
-        const leftWeight = LOOT_SLOT_ORDER[left[0]] ?? LOOT_SLOT_ORDER["unknown"];
-        const rightWeight = LOOT_SLOT_ORDER[right[0]] ?? LOOT_SLOT_ORDER["unknown"];
-        return leftWeight - rightWeight;
-      })
-      .map(([slotKey, rows]) => ({
-        slotKey,
-        slotLabel: rows[0]?.slotLabel ?? this.formatRarityLabel(slotKey),
-        items: [...rows].sort((left, right) => {
-          const byRarity = this.resolveRaritySortWeight(right.rarityKey) - this.resolveRaritySortWeight(left.rarityKey);
-          if (byRarity !== 0) {
-            return byRarity;
-          }
+      const byRarity = this.resolveRaritySortWeight(right.rarityKey) - this.resolveRaritySortWeight(left.rarityKey);
+      if (byRarity !== 0) {
+        return byRarity;
+      }
 
-          return left.displayName.localeCompare(right.displayName, undefined, { sensitivity: "base" });
-        })
-      }));
+      if (left.isEquipped !== right.isEquipped) {
+        return left.isEquipped ? -1 : 1;
+      }
+
+      const byInstanceId = left.instanceId.localeCompare(right.instanceId, undefined, { sensitivity: "base" });
+      if (byInstanceId !== 0) {
+        return byInstanceId;
+      }
+
+      return left.displayName.localeCompare(right.displayName, undefined, { sensitivity: "base" });
+    });
   }
 
-  get selectedSpeciesRefineRows(): InventoryRow[] {
-    return this.selectedSpeciesInventoryRows.filter((item) => item.canRefine);
+  get selectedSpeciesRefineWeapon(): InventoryRow | null {
+    return this.selectedSpeciesRefineWeaponRows[0] ?? null;
   }
 
-  get selectedSpeciesSalvageRows(): InventoryRow[] {
-    return this.selectedSpeciesInventoryRows.filter((item) => item.canSalvage);
+  get selectedSpeciesForeignForgedCount(): number {
+    return this.selectedSpeciesInventoryRows.filter((item) => !this.canCurrentCharacterUseForgedWeapon(item)).length;
   }
 
   async craftWeapon(): Promise<void> {
@@ -473,11 +497,12 @@ export class BestiaryPageComponent implements OnInit {
     this.actionFeedback = null;
     this.isCrafting = true;
     try {
-      const crafted = await this.accountStore.craftBestiaryItem(selected.speciesId, slot);
+      const crafted = await this.accountStore.craftBestiaryItem(selected.speciesId, slot, this.characterId);
       this.lastUpdatedItemInstanceId = crafted.craftedItem.instanceId;
       const craftedLabel = this.accountStore.catalogs().itemById[crafted.craftedItem.definitionId]?.displayName ??
         crafted.craftedItem.definitionId;
-      this.actionFeedback = `Crafted ${craftedLabel} from ${selected.displayName}.`;
+      const forgedBy = crafted.craftedItem.craftedByCharacterName?.trim() || this.characterName || "Unknown Kaelis";
+      this.actionFeedback = `Crafted ${craftedLabel} from ${selected.displayName}. Forged by ${forgedBy}.`;
     } catch (error) {
       this.actionFeedback = this.stringifyError(error);
     } finally {
@@ -493,7 +518,7 @@ export class BestiaryPageComponent implements OnInit {
     this.actionFeedback = null;
     this.refiningItemInstanceId = item.instanceId;
     try {
-      const refined = await this.accountStore.refineItem(item.instanceId);
+      const refined = await this.accountStore.refineItem(item.instanceId, this.characterId);
       this.lastUpdatedItemInstanceId = refined.refinedItem.instanceId;
       this.actionFeedback = `Refined ${item.displayName} to ${this.formatRarityLabel(this.normalizeRarity(refined.refinedItem.rarity) ?? "unknown")}.`;
     } catch (error) {
@@ -503,30 +528,24 @@ export class BestiaryPageComponent implements OnInit {
     }
   }
 
-  async salvageItem(item: InventoryRow): Promise<void> {
-    if (!item.canSalvage || item.salvagePrimalCoreReturn === null) {
-      return;
+  getRefineLoreLabel(item: InventoryRow): string | null {
+    const craftedBy = item.craftedByCharacterName?.trim() ?? "";
+    if (craftedBy.length > 0) {
+      return `Forged by ${craftedBy}`;
     }
 
-    const originSpeciesLabel = item.originSpeciesLabel ?? "Unknown";
-    const confirmed = window.confirm(
-      `Salvage ${item.displayName}?\nYou will receive ${item.salvagePrimalCoreReturn} Primal Core for ${originSpeciesLabel}.`
-    );
-    if (!confirmed) {
-      return;
+    return item.definitionId === "wpn.primal_forged_blade"
+      ? "Forged by an unknown Kaelis"
+      : null;
+  }
+
+  private canCurrentCharacterUseForgedWeapon(item: InventoryRow): boolean {
+    const ownerId = item.craftedByCharacterId?.trim() ?? "";
+    if (ownerId.length === 0) {
+      return true;
     }
 
-    this.actionFeedback = null;
-    this.salvagingItemInstanceId = item.instanceId;
-    try {
-      const salvaged = await this.accountStore.salvageItem(item.instanceId);
-      this.lastUpdatedItemInstanceId = null;
-      this.actionFeedback = `Salvaged ${item.displayName}: +${salvaged.primalCoreAwarded} Primal Core (${this.toSpeciesLabel(salvaged.speciesId)}).`;
-    } catch (error) {
-      this.actionFeedback = this.stringifyError(error);
-    } finally {
-      this.salvagingItemInstanceId = null;
-    }
+    return ownerId === this.characterId;
   }
 
   private async loadBestiary(): Promise<void> {
@@ -618,21 +637,6 @@ export class BestiaryPageComponent implements OnInit {
         return { nextRarity: "epic", primalCoreCost: 120, echoFragmentsCost: 500 };
       case "epic":
         return { nextRarity: "legendary", primalCoreCost: 300, echoFragmentsCost: 1000 };
-      default:
-        return null;
-    }
-  }
-
-  private resolveSalvagePrimalCoreReturn(rarity: string): number | null {
-    switch (rarity) {
-      case "common":
-        return 12;
-      case "rare":
-        return 28;
-      case "epic":
-        return 96;
-      case "legendary":
-        return 250;
       default:
         return null;
     }

@@ -13,8 +13,7 @@ import {
   type EquipmentDefinition,
   type EquipmentSlot,
   type ItemDefinition,
-  type ItemRefineResponse,
-  type ItemSalvageResponse
+  type ItemRefineResponse
 } from "../api/account-api.service";
 import { AccountSessionService } from "./account-session.service";
 
@@ -200,13 +199,23 @@ export class AccountStore {
     }
   }
 
-  async craftBestiaryItem(speciesId: string, slot: BestiaryCraftSlot): Promise<BestiaryCraftResponse> {
+  async craftBestiaryItem(
+    speciesId: string,
+    slot: BestiaryCraftSlot,
+    characterId: string | null = null
+  ): Promise<BestiaryCraftResponse> {
     const accountId = this.session.accountId();
     const normalizedSpeciesId = this.normalizeRequired(speciesId, "Species ID");
+    const normalizedCharacterId = characterId?.trim() ?? "";
     this.errorSignal.set(null);
 
     try {
-      const crafted = await this.accountApi.craftBestiaryItem(accountId, normalizedSpeciesId, slot);
+      const crafted = await this.accountApi.craftBestiaryItem(
+        accountId,
+        normalizedSpeciesId,
+        slot,
+        normalizedCharacterId.length > 0 ? normalizedCharacterId : null
+      );
       this.applyCharacterUpdate(crafted.character, crafted.echoFragmentsBalance);
       return crafted;
     } catch (error) {
@@ -215,30 +224,20 @@ export class AccountStore {
     }
   }
 
-  async refineItem(itemInstanceId: string): Promise<ItemRefineResponse> {
+  async refineItem(itemInstanceId: string, characterId: string | null = null): Promise<ItemRefineResponse> {
     const accountId = this.session.accountId();
     const normalizedItemInstanceId = this.normalizeRequired(itemInstanceId, "Item instance ID");
+    const normalizedCharacterId = characterId?.trim() ?? "";
     this.errorSignal.set(null);
 
     try {
-      const refined = await this.accountApi.refineItem(accountId, normalizedItemInstanceId);
+      const refined = await this.accountApi.refineItem(
+        accountId,
+        normalizedItemInstanceId,
+        normalizedCharacterId.length > 0 ? normalizedCharacterId : null
+      );
       this.applyCharacterUpdate(refined.character, refined.echoFragmentsBalance);
       return refined;
-    } catch (error) {
-      this.errorSignal.set(this.stringifyError(error));
-      throw error;
-    }
-  }
-
-  async salvageItem(itemInstanceId: string): Promise<ItemSalvageResponse> {
-    const accountId = this.session.accountId();
-    const normalizedItemInstanceId = this.normalizeRequired(itemInstanceId, "Item instance ID");
-    this.errorSignal.set(null);
-
-    try {
-      const salvaged = await this.accountApi.salvageItem(accountId, normalizedItemInstanceId);
-      this.applyCharacterUpdate(salvaged.character, salvaged.echoFragmentsBalance);
-      return salvaged;
     } catch (error) {
       this.errorSignal.set(this.stringifyError(error));
       throw error;

@@ -1364,10 +1364,6 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     }
   }
 
-  async onBackpackSalvageRequested(itemInstanceId: string): Promise<void> {
-    await this.salvageItemFromInventory(itemInstanceId);
-  }
-
   onLootConsoleItemClicked(itemId: string): void {
     this.clearBackpackEquipMode();
     this.focusBackpackPanel();
@@ -2222,27 +2218,6 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       return true;
     } catch (error) {
       this.battleLog = `equipItem failed: ${String(error)}`;
-      return false;
-    } finally {
-      this.accountRequestInFlight = false;
-    }
-  }
-
-  async salvageItemFromInventory(itemInstanceId: string): Promise<boolean> {
-    const character = this.selectedCharacter;
-    if (!character) {
-      return false;
-    }
-
-    this.accountRequestInFlight = true;
-    try {
-      const salvaged = await this.accountStore.salvageItem(itemInstanceId);
-      this.mergeCharacterIntoAccountState(salvaged.character, salvaged.echoFragmentsBalance);
-      this.syncAccountStateFromStore();
-      this.battleLog = `salvageItem success: item=${salvaged.salvagedItemInstanceId}; species=${salvaged.speciesId}; primalCoreAwarded=${salvaged.primalCoreAwarded}`;
-      return true;
-    } catch (error) {
-      this.battleLog = `salvageItem failed: ${String(error)}`;
       return false;
     } finally {
       this.accountRequestInFlight = false;

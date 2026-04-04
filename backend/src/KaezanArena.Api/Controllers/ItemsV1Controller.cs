@@ -37,47 +37,13 @@ public sealed class ItemsV1Controller : ControllerBase
         {
             var result = _accountStateStore.RefineItem(
                 accountId: normalizedAccountId,
-                itemInstanceId: request.ItemInstanceId.Trim());
+                itemInstanceId: request.ItemInstanceId.Trim(),
+                characterId: string.IsNullOrWhiteSpace(request.CharacterId) ? null : request.CharacterId.Trim());
 
             return Ok(new ItemRefineResponseDto(
                 EchoFragmentsBalance: result.Account.EchoFragmentsBalance,
                 Character: ToCharacterDto(result.Character, result.Account.SigilInventory),
                 RefinedItem: ToOwnedEquipmentInstanceDto(result.RefinedItem)));
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(BuildValidationError(ex.Message));
-        }
-    }
-
-    [HttpPost("salvage")]
-    public ActionResult<ItemSalvageResponseDto> Salvage(
-        [FromBody] ItemSalvageRequestDto request,
-        [FromQuery] string? accountId)
-    {
-        if (request is null)
-        {
-            return BadRequest(BuildValidationError("request body is required"));
-        }
-
-        if (string.IsNullOrWhiteSpace(request.ItemInstanceId))
-        {
-            return BadRequest(BuildValidationError("itemInstanceId is required"));
-        }
-
-        var normalizedAccountId = string.IsNullOrWhiteSpace(accountId) ? "dev_account" : accountId.Trim();
-        try
-        {
-            var result = _accountStateStore.SalvageItem(
-                accountId: normalizedAccountId,
-                itemInstanceId: request.ItemInstanceId.Trim());
-
-            return Ok(new ItemSalvageResponseDto(
-                EchoFragmentsBalance: result.Account.EchoFragmentsBalance,
-                Character: ToCharacterDto(result.Character, result.Account.SigilInventory),
-                SalvagedItemInstanceId: result.SalvagedItemInstanceId,
-                SpeciesId: result.SpeciesId,
-                PrimalCoreAwarded: result.PrimalCoreAwarded));
         }
         catch (InvalidOperationException ex)
         {
@@ -261,6 +227,8 @@ public sealed class ItemsV1Controller : ControllerBase
             IsLocked: instance.IsLocked,
             OriginSpeciesId: instance.OriginSpeciesId,
             Slot: instance.Slot,
-            Rarity: instance.Rarity);
+            Rarity: instance.Rarity,
+            CraftedByCharacterId: instance.CraftedByCharacterId,
+            CraftedByCharacterName: instance.CraftedByCharacterName);
     }
 }

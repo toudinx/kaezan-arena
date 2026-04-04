@@ -9,7 +9,7 @@
         @if (characterName) {
           <p class="bestiary-shell__subtitle">{{ characterName }}</p>
         } @else {
-          <p class="bestiary-shell__subtitle">Species progression, loot tracking, refine, and salvage.</p>
+          <p class="bestiary-shell__subtitle">Species progression, loot tracking, and refine.</p>
         }
       }
     </div>
@@ -189,186 +189,109 @@
 
       <aside class="bestiary-right">
         @if (selectedSpecies) {
-          <div class="bestiary-right__group">
-            <section class="detail-card">
-              <div class="detail-card__header">
-                <p class="detail-card__label">Craft Weapon</p>
-                <span class="detail-card__meta">Rank {{ selectedSpecies.rank }} | {{ selectedSpecies.killsTotal }} kills</span>
-              </div>
-
-              @if (actionFeedback) {
-                <p class="actions-feedback">{{ actionFeedback }}</p>
-              }
-
-              <div class="crafting-resources">
-                <div class="crafting-resource" [class.crafting-resource--short]="primalCoreDeficit > 0">
-                  <span class="crafting-resource__label">Primal Core</span>
-                  <strong class="crafting-resource__value">{{ selectedSpecies.primalCoreBalance }}</strong>
-                  <span class="crafting-resource__needed" [class.crafting-resource__needed--met]="primalCoreDeficit === 0">/ {{ primalCoreCost }}</span>
-                </div>
-                <div class="crafting-resource" [class.crafting-resource--short]="echoFragmentsDeficit > 0">
-                  <span class="crafting-resource__label">Echo Fragments</span>
-                  <strong class="crafting-resource__value">{{ echoFragmentsBalance }}</strong>
-                  <span class="crafting-resource__needed" [class.crafting-resource__needed--met]="echoFragmentsDeficit === 0">/ {{ echoFragmentsCost }}</span>
-                </div>
-              </div>
-
-              <div class="crafting-buttons">
-                <button type="button" [disabled]="!canCraftSelectedSpecies || isCrafting" (click)="craftWeapon()">
-                  Craft Weapon
-                </button>
-              </div>
-            </section>
-          </div>
-
           <div class="bestiary-right__group bestiary-right__group--scroll">
-            <section class="detail-card detail-card--loot">
-              <div class="detail-card__header">
-                <p class="detail-card__label">Loot Summary</p>
-                <span class="detail-card__meta">{{ selectedSpeciesLootCount }} items</span>
-              </div>
+            @if (!hasSelectedSpeciesCraftHistory) {
+              <section class="detail-card">
+                <div class="detail-card__header">
+                  <p class="detail-card__label">Craft Weapon</p>
+                  <span class="detail-card__meta">Rank {{ selectedSpecies.rank }} | {{ selectedSpecies.killsTotal }} kills</span>
+                </div>
 
-              @if (selectedSpeciesLootGroups.length > 0) {
-                <div class="loot-groups">
-                  @for (group of selectedSpeciesLootGroups; track group.slotKey) {
-                    <section class="loot-group">
-                      <div class="loot-group__head">
-                        <p class="loot-group__title">{{ group.slotLabel }}</p>
-                        <span class="loot-group__count">{{ group.items.length }}</span>
+                @if (actionFeedback) {
+                  <p class="actions-feedback">{{ actionFeedback }}</p>
+                }
+
+                <div class="crafting-resources">
+                  <div class="crafting-resource" [class.crafting-resource--short]="primalCoreDeficit > 0">
+                    <span class="crafting-resource__label">Primal Core</span>
+                    <strong class="crafting-resource__value">{{ selectedSpecies.primalCoreBalance }}</strong>
+                    <span class="crafting-resource__needed" [class.crafting-resource__needed--met]="primalCoreDeficit === 0">/ {{ primalCoreCost }}</span>
+                  </div>
+                  <div class="crafting-resource" [class.crafting-resource--short]="echoFragmentsDeficit > 0">
+                    <span class="crafting-resource__label">Echo Fragments</span>
+                    <strong class="crafting-resource__value">{{ echoFragmentsBalance }}</strong>
+                    <span class="crafting-resource__needed" [class.crafting-resource__needed--met]="echoFragmentsDeficit === 0">/ {{ echoFragmentsCost }}</span>
+                  </div>
+                </div>
+
+                <div class="crafting-buttons">
+                  <button type="button" [disabled]="!canCraftSelectedSpecies || isCrafting" (click)="craftWeapon()">
+                    Craft Weapon
+                  </button>
+                </div>
+              </section>
+            } @else {
+              <section class="detail-card">
+                <div class="detail-card__header">
+                  <p class="detail-card__label">Refine Weapon</p>
+                  <span class="detail-card__meta">Rank {{ selectedSpecies.rank }} | {{ selectedSpecies.killsTotal }} kills</span>
+                </div>
+
+                @if (actionFeedback) {
+                  <p class="actions-feedback">{{ actionFeedback }}</p>
+                }
+
+                @if (selectedSpeciesRefineWeapon; as item) {
+                  <div
+                    class="refine-primary"
+                    [class.refine-primary--highlight]="item.instanceId === lastUpdatedItemInstanceId"
+                    [class.refine-primary--common]="item.rarityKey === 'common'"
+                    [class.refine-primary--rare]="item.rarityKey === 'rare'"
+                    [class.refine-primary--epic]="item.rarityKey === 'epic'"
+                    [class.refine-primary--legendary]="item.rarityKey === 'legendary'"
+                    [class.refine-primary--ascendant]="item.rarityKey === 'ascendant'"
+                  >
+                    <div class="refine-primary__title">
+                      <strong>{{ item.displayName }}</strong>
+                      @if (item.isEquipped) {
+                        <span class="refine-primary__tag">Equipped</span>
+                      }
+                    </div>
+                    <span class="refine-primary__meta">{{ item.slotLabel }} | {{ item.rarityLabel }}</span>
+                    @if (getRefineLoreLabel(item); as loreLabel) {
+                      <span class="refine-primary__lore">{{ loreLabel }}</span>
+                    }
+                  </div>
+
+                  @if (item.canRefine) {
+                    <div class="crafting-resources">
+                      <div class="crafting-resource" [class.crafting-resource--short]="item.refinePrimalCoreDeficit > 0">
+                        <span class="crafting-resource__label">Primal Core</span>
+                        <strong class="crafting-resource__value">{{ item.speciesPrimalCoreBalance }}</strong>
+                        <span class="crafting-resource__needed" [class.crafting-resource__needed--met]="item.refinePrimalCoreDeficit === 0">
+                          / {{ item.refinePrimalCoreCost }}
+                        </span>
                       </div>
-                      <ul class="loot-group__list">
-                        @for (item of group.items; track item.instanceId) {
-                          <li
-                            class="loot-item"
-                            [class.loot-item--common]="item.rarityKey === 'common'"
-                            [class.loot-item--rare]="item.rarityKey === 'rare'"
-                            [class.loot-item--epic]="item.rarityKey === 'epic'"
-                            [class.loot-item--legendary]="item.rarityKey === 'legendary'"
-                            [class.loot-item--ascendant]="item.rarityKey === 'ascendant'"
-                          >
-                            <span class="loot-item__icon" [attr.data-tone]="item.iconTone">
-                              @if (shouldRenderItemIcon(item)) {
-                                <img
-                                  class="loot-item__icon-image"
-                                  [src]="item.iconImageUrl!"
-                                  [alt]="''"
-                                  (error)="onItemIconError(item.instanceId)"
-                                />
-                              }
-                              <span class="loot-item__icon-glyph" [class.loot-item__icon-glyph--center]="!shouldRenderItemIcon(item)">
-                                {{ item.iconGlyph }}
-                              </span>
-                            </span>
-                            <div class="loot-item__copy">
-                              <strong>{{ item.displayName }}</strong>
-                              <span>{{ item.rarityLabel }} | {{ item.typeLabel }}</span>
-                              @if (item.isEquipped) {
-                                <span class="loot-item__equipped">Equipped</span>
-                              }
-                            </div>
-                          </li>
-                        }
-                      </ul>
-                    </section>
+                      <div class="crafting-resource" [class.crafting-resource--short]="item.refineEchoFragmentsDeficit > 0">
+                        <span class="crafting-resource__label">Echo Fragments</span>
+                        <strong class="crafting-resource__value">{{ echoFragmentsBalance }}</strong>
+                        <span class="crafting-resource__needed" [class.crafting-resource__needed--met]="item.refineEchoFragmentsDeficit === 0">
+                          / {{ item.refineEchoFragmentsCost }}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div class="crafting-buttons">
+                      <button
+                        type="button"
+                        [disabled]="!item.canAffordRefine || isCrafting || refiningItemInstanceId === item.instanceId"
+                        (click)="refineItem(item)"
+                      >
+                        {{ refiningItemInstanceId === item.instanceId ? "Refining..." : "Refine Weapon" }}
+                      </button>
+                    </div>
+                  } @else {
+                    <p class="detail-empty">Max refinement reached.</p>
                   }
-                </div>
-              } @else {
-                <p class="detail-empty">No species-linked weapons yet.</p>
-              }
-            </section>
 
-            <section class="detail-card detail-card--ops">
-              <div class="detail-card__header">
-                <p class="detail-card__label">Refine / Salvage</p>
-                <span class="detail-card__meta">{{ selectedSpeciesRefineRows.length + selectedSpeciesSalvageRows.length }} items</span>
-              </div>
-
-              <section class="ops-lane">
-                <div class="ops-lane__head">
-                  <h4 class="ops-lane__title">Refine</h4>
-                  <span class="ops-lane__count">{{ selectedSpeciesRefineRows.length }}</span>
-                </div>
-                @if (selectedSpeciesRefineRows.length > 0) {
-                  <ul class="ops-list">
-                    @for (item of selectedSpeciesRefineRows; track item.instanceId) {
-                      <li
-                        class="ops-item"
-                        [class.ops-item--highlight]="item.instanceId === lastUpdatedItemInstanceId"
-                        [class.ops-item--common]="item.rarityKey === 'common'"
-                        [class.ops-item--rare]="item.rarityKey === 'rare'"
-                        [class.ops-item--epic]="item.rarityKey === 'epic'"
-                        [class.ops-item--legendary]="item.rarityKey === 'legendary'"
-                        [class.ops-item--ascendant]="item.rarityKey === 'ascendant'"
-                      >
-                        <div class="ops-item__copy">
-                          <div class="ops-item__title">
-                            <strong>{{ item.displayName }}</strong>
-                            @if (item.isEquipped) {
-                              <span class="ops-item__tag">Equipped</span>
-                            }
-                          </div>
-                          <span class="ops-item__meta">{{ item.slotLabel }} | {{ item.rarityLabel }} -&gt; {{ item.nextRarityLabel }}</span>
-                          <span class="ops-item__cost">{{ item.refinePrimalCoreCost }} Primal Core + {{ item.refineEchoFragmentsCost }} Echo Fragments</span>
-                        </div>
-                        <button
-                          type="button"
-                          class="ops-item__button"
-                          [disabled]="!item.canAffordRefine || isCrafting || refiningItemInstanceId === item.instanceId || salvagingItemInstanceId === item.instanceId"
-                          (click)="refineItem(item)"
-                        >
-                          {{ refiningItemInstanceId === item.instanceId ? "Refining..." : "Refine" }}
-                        </button>
-                      </li>
-                    }
-                  </ul>
+                  @if (selectedSpeciesForeignForgedCount > 0) {
+                    <p class="detail-empty">{{ selectedSpeciesForeignForgedCount }} weapon(s) were forged by another Kaelis and cannot be used here.</p>
+                  }
                 } @else {
-                  <p class="ops-lane__empty">No refine targets for this species.</p>
+                  <p class="detail-empty">Weapon already forged by this Kaelis. Move it to this inventory to refine.</p>
                 }
               </section>
-
-              <section class="ops-lane">
-                <div class="ops-lane__head">
-                  <h4 class="ops-lane__title">Salvage</h4>
-                  <span class="ops-lane__count">{{ selectedSpeciesSalvageRows.length }}</span>
-                </div>
-                @if (selectedSpeciesSalvageRows.length > 0) {
-                  <ul class="ops-list">
-                    @for (item of selectedSpeciesSalvageRows; track item.instanceId) {
-                      <li
-                        class="ops-item"
-                        [class.ops-item--highlight]="item.instanceId === lastUpdatedItemInstanceId"
-                        [class.ops-item--common]="item.rarityKey === 'common'"
-                        [class.ops-item--rare]="item.rarityKey === 'rare'"
-                        [class.ops-item--epic]="item.rarityKey === 'epic'"
-                        [class.ops-item--legendary]="item.rarityKey === 'legendary'"
-                        [class.ops-item--ascendant]="item.rarityKey === 'ascendant'"
-                      >
-                        <div class="ops-item__copy">
-                          <div class="ops-item__title">
-                            <strong>{{ item.displayName }}</strong>
-                            @if (item.isEquipped) {
-                              <span class="ops-item__tag">Equipped</span>
-                            }
-                          </div>
-                          <span class="ops-item__meta">{{ item.slotLabel }} | {{ item.rarityLabel }}</span>
-                          <span class="ops-item__cost">Returns {{ item.salvagePrimalCoreReturn }} Primal Core</span>
-                        </div>
-                        <button
-                          type="button"
-                          class="ops-item__button ops-item__button--salvage"
-                          [disabled]="isCrafting || refiningItemInstanceId === item.instanceId || salvagingItemInstanceId === item.instanceId"
-                          (click)="salvageItem(item)"
-                        >
-                          {{ salvagingItemInstanceId === item.instanceId ? "Salvaging..." : "Salvage" }}
-                        </button>
-                      </li>
-                    }
-                  </ul>
-                } @else {
-                  <p class="ops-lane__empty">No salvage targets for this species.</p>
-                }
-              </section>
-            </section>
+            }
           </div>
         } @else {
           <p class="bestiary-empty">Select a species from the list.</p>

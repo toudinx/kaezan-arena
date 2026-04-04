@@ -162,7 +162,9 @@ public sealed record OwnedEquipmentInstance(
     bool IsLocked,
     string? OriginSpeciesId = null,
     string? Slot = null,
-    string? Rarity = null);
+    string? Rarity = null,
+    string? CraftedByCharacterId = null,
+    string? CraftedByCharacterName = null);
 
 public sealed record EquipmentState(
     string? WeaponInstanceId)
@@ -264,13 +266,6 @@ public sealed record ItemRefineResult(
     AccountState Account,
     CharacterState Character,
     OwnedEquipmentInstance RefinedItem);
-
-public sealed record ItemSalvageResult(
-    AccountState Account,
-    CharacterState Character,
-    string SalvagedItemInstanceId,
-    string SpeciesId,
-    int PrimalCoreAwarded);
 
 public sealed record SpendHollowEssenceBarrierResult(
     bool Success,

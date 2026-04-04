@@ -77,7 +77,9 @@ public sealed record OwnedEquipmentInstanceDto(
     bool IsLocked,
     string? OriginSpeciesId = null,
     string? Slot = null,
-    string? Rarity = null);
+    string? Rarity = null,
+    string? CraftedByCharacterId = null,
+    string? CraftedByCharacterName = null);
 
 public sealed record CharacterEquipmentDto(
     string? WeaponInstanceId);
