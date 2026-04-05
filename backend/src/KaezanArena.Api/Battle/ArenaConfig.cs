@@ -123,7 +123,14 @@ public static class ArenaConfig
     public const string MobCleaveFxId = "fx.mob.brute.cleave";
     public const string MobPowerShotFxId = "fx.mob.archer.power_shot";
     public const string MobDemonBeamFxId = "fx.mob.demon.beam";
-    public const string MobDragonBreathFxId = "fx.mob.dragon.breath";
+    public const string MobShamanStormPulseFxId = "fx.mob.shaman.storm_pulse";
+    public const string MobSkeletonSoulBurstFxId = "fx.mob.skeleton.soul_burst";
+    public const string MobWogolGroundSlamFxId = "fx.mob.wogol.ground_slam";
+    public const string MobWarriorCleaveFxId = "fx.mob.warrior.cleave";
+    public const string MobZombieSelfHealFxId = "fx.mob.zombie.self_heal";
+    public const string MobImpFireballFxId = "fx.mob.imp.fireball";
+    public const string MobSwampyMudLobFxId = "fx.mob.swampy.mud_lob";
+    public const string MobMuddyOozeShotFxId = "fx.mob.muddy.ooze_shot";
     #endregion
 
     #region Skill Cooldowns
@@ -217,7 +224,7 @@ public static class ArenaConfig
             public const string MeleeBrute = "sigil_def:melee_brute";
             public const string RangedArcher = "sigil_def:ranged_archer";
             public const string MeleeDemon = "sigil_def:melee_demon";
-            public const string RangedDragon = "sigil_def:ranged_dragon";
+            public const string RangedShaman = "sigil_def:ranged_shaman";
         }
 
         // Slot index (1-based) -> level range [min, max]
@@ -241,7 +248,7 @@ public static class ArenaConfig
 
         // Species IDs that can drop Sigils (mirrors ArenaConfig.SpeciesIds)
         public static readonly string[] ValidSpeciesIds =
-            [SpeciesIds.MeleeBrute, SpeciesIds.RangedArcher, SpeciesIds.MeleeDemon, SpeciesIds.RangedDragon];
+            [SpeciesIds.MeleeBrute, SpeciesIds.RangedArcher, SpeciesIds.MeleeDemon, SpeciesIds.RangedShaman];
 
         public static readonly IReadOnlyDictionary<string, string> DefinitionIdBySpeciesId =
             new Dictionary<string, string>(StringComparer.Ordinal)
@@ -249,7 +256,7 @@ public static class ArenaConfig
                 [SpeciesIds.MeleeBrute] = DefinitionIds.MeleeBrute,
                 [SpeciesIds.RangedArcher] = DefinitionIds.RangedArcher,
                 [SpeciesIds.MeleeDemon] = DefinitionIds.MeleeDemon,
-                [SpeciesIds.RangedDragon] = DefinitionIds.RangedDragon
+                [SpeciesIds.RangedShaman] = DefinitionIds.RangedShaman
             };
 
         public static readonly IReadOnlyDictionary<string, string> SpeciesIdByDefinitionId =
@@ -286,7 +293,7 @@ public static class ArenaConfig
                     CritDamageDivisor: 0,
                     LifeLeechDivisor: 0,
                     CooldownReductionDivisor: 0),
-                [DefinitionIds.RangedDragon] = new SigilPassiveStatProfile(
+                [DefinitionIds.RangedShaman] = new SigilPassiveStatProfile(
                     FlatDamageDivisor: 0,
                     PercentDamageDivisor: 8,
                     PercentMaxHpDivisor: 0,
@@ -392,7 +399,7 @@ public static class ArenaConfig
         /// </summary>
         public static readonly string[][] TierSpecies =
         [
-            [SpeciesIds.MeleeBrute, SpeciesIds.RangedArcher, SpeciesIds.MeleeDemon, SpeciesIds.RangedDragon], // Hollow — Ascendant 96
+            [SpeciesIds.MeleeBrute, SpeciesIds.RangedArcher, SpeciesIds.MeleeDemon, SpeciesIds.RangedShaman, SpeciesIds.MeleeSkeleton, SpeciesIds.MeleeWogol, SpeciesIds.MeleeWarrior, SpeciesIds.MeleeZombie, SpeciesIds.MeleeTinyZombie, SpeciesIds.RangedImp, SpeciesIds.RangedSwampy, SpeciesIds.RangedMuddy, SpeciesIds.MeleeSlug], // Hollow — Ascendant 96
             [], // Brave — future
             [], // Awakened — future
             [], // Exalted — future
@@ -424,6 +431,7 @@ public static class ArenaConfig
     public const string PlayerClassRangedPrototype = "ranged_prototype";
     public const string CharacterSubtitleKina = "Melee Kit";
     public const string CharacterSubtitleRangedPrototype = "Ranged Kit [WIP]";
+    public const string CharacterSubtitleLizard = "Melee Kit [WIP]";
     #endregion
 
     #region Run Progression
@@ -606,14 +614,91 @@ public static class ArenaConfig
     public const int MeleeDemonAbilityDamage = 6;
     public const int MeleeDemonAbilityRangeTiles = 4;
     public const int MeleeDemonAbilityCooldownMs = 3000;
-    public const int RangedDragonMaxHp = 100;
-    public const int RangedDragonMoveCooldownMs = 500;
-    public const int RangedDragonAutoAttackRangeTiles = 4;
-    public const int RangedDragonAutoAttackDamage = 1;
-    public const int RangedDragonAutoAttackCooldownMs = 1250;
-    public const int RangedDragonAbilityDamage = 4;
-    public const int RangedDragonAbilityRangeTiles = 3;
-    public const int RangedDragonAbilityCooldownMs = 3600;
+    public const int RangedShamanMaxHp = 100;
+    public const int RangedShamanMoveCooldownMs = 500;
+    public const int RangedShamanAutoAttackRangeTiles = 4;
+    public const int RangedShamanAutoAttackDamage = 1;
+    public const int RangedShamanAutoAttackCooldownMs = 1250;
+    public const int RangedShamanAbilityDamage = 4;
+    public const int RangedShamanAbilityRangeTiles = 2;
+    public const int RangedShamanAbilityCooldownMs = 3600;
+    public const int MeleeSkeletonMaxHp = 55;
+    public const int MeleeSkeletonMoveCooldownMs = 350;
+    public const int MeleeSkeletonAutoAttackRangeTiles = 1;
+    public const int MeleeSkeletonAutoAttackDamage = 1;
+    public const int MeleeSkeletonAutoAttackCooldownMs = 800;
+    public const int MeleeSkeletonAbilityDamage = 3;
+    public const int MeleeSkeletonAbilityRangeTiles = 1;
+    public const int MeleeSkeletonAbilityCooldownMs = 99999;
+    public const int MeleeWogolMaxHp = 85;
+    public const int MeleeWogolMoveCooldownMs = 400;
+    public const int MeleeWogolAutoAttackRangeTiles = 1;
+    public const int MeleeWogolAutoAttackDamage = 3;
+    public const int MeleeWogolAutoAttackCooldownMs = 900;
+    public const int MeleeWogolAbilityDamage = 5;
+    public const int MeleeWogolAbilityRangeTiles = 1;
+    public const int MeleeWogolAbilityCooldownMs = 2800;
+    public const int MeleeWarriorMaxHp = 75;
+    public const int MeleeWarriorMoveCooldownMs = 380;
+    public const int MeleeWarriorAutoAttackRangeTiles = 1;
+    public const int MeleeWarriorAutoAttackDamage = 4;
+    public const int MeleeWarriorAutoAttackCooldownMs = 800;
+    public const int MeleeWarriorAbilityDamage = 6;
+    public const int MeleeWarriorAbilityRangeTiles = 1;
+    public const int MeleeWarriorAbilityCooldownMs = 2500;
+    public const int MeleeZombieMaxHp = 90;
+    public const int MeleeZombieMoveCooldownMs = 550;
+    public const int MeleeZombieAutoAttackRangeTiles = 1;
+    public const int MeleeZombieAutoAttackDamage = 2;
+    public const int MeleeZombieAutoAttackCooldownMs = 1100;
+    public const int MeleeZombieAbilityDamage = 0;
+    public const int MeleeZombieAbilityRangeTiles = 0;
+    public const int MeleeZombieAbilityCooldownMs = 4000;
+    public const int MeleeZombieSelfHealAmount = 12;
+    public const int MeleeTinyZombieMaxHp = 30;
+    public const int MeleeTinyZombieMoveCooldownMs = 320;
+    public const int MeleeTinyZombieAutoAttackRangeTiles = 1;
+    public const int MeleeTinyZombieAutoAttackDamage = 1;
+    public const int MeleeTinyZombieAutoAttackCooldownMs = 700;
+    public const int MeleeTinyZombieAbilityDamage = 0;
+    public const int MeleeTinyZombieAbilityRangeTiles = 0;
+    public const int MeleeTinyZombieAbilityCooldownMs = 99999;
+    public const int RangedImpMaxHp = 55;
+    public const int RangedImpMoveCooldownMs = 380;
+    public const int RangedImpAutoAttackRangeTiles = 4;
+    public const int RangedImpAutoAttackDamage = 2;
+    public const int RangedImpAutoAttackCooldownMs = 800;
+    public const int RangedImpAbilityDamage = 2;
+    public const int RangedImpAbilityRangeTiles = 4;
+    public const int RangedImpAbilityCooldownMs = 2200;
+    public const int RangedSwampyMaxHp = 110;
+    public const int RangedSwampyMoveCooldownMs = 600;
+    public const int RangedSwampyAutoAttackRangeTiles = 3;
+    public const int RangedSwampyAutoAttackDamage = 2;
+    public const int RangedSwampyAutoAttackCooldownMs = 1400;
+    public const int RangedSwampyAbilityDamage = 3;
+    public const int RangedSwampyAbilityRangeTiles = 3;
+    public const int RangedSwampyAbilityCooldownMs = 3500;
+    public const int RangedSwampyMudLobDecalDurationMs = 3000;
+    public const int RangedSwampyMudLobDecalDamagePerTick = 1;
+    public const int RangedMuddyMaxHp = 70;
+    public const int RangedMuddyMoveCooldownMs = 480;
+    public const int RangedMuddyAutoAttackRangeTiles = 2;
+    public const int RangedMuddyAutoAttackDamage = 2;
+    public const int RangedMuddyAutoAttackCooldownMs = 1000;
+    public const int RangedMuddyAbilityDamage = 3;
+    public const int RangedMuddyAbilityRangeTiles = 2;
+    public const int RangedMuddyAbilityCooldownMs = 2800;
+    public const int RangedMuddyPreferredDistanceMin = 1;
+    public const int RangedMuddyPreferredDistanceMax = 2;
+    public const int MeleeSlugMaxHp = 100;
+    public const int MeleeSlugMoveCooldownMs = 700;
+    public const int MeleeSlugAutoAttackRangeTiles = 1;
+    public const int MeleeSlugAutoAttackDamage = 3;
+    public const int MeleeSlugAutoAttackCooldownMs = 1500;
+    public const int MeleeSlugAbilityDamage = 0;
+    public const int MeleeSlugAbilityRangeTiles = 0;
+    public const int MeleeSlugAbilityCooldownMs = 99999;
     #endregion
 
     #region Batch Processing
@@ -662,6 +747,7 @@ public static class ArenaConfig
     {
         public const string Kina = "character:kina";
         public const string RangedPrototype = "character:ranged_prototype";
+        public const string Lizard = "character:lizard";
         /// <summary>Legacy character ID for Kaelis Dawn (persisted before stable ID migration). Maps to the Kina melee kit.</summary>
         public const string KaelisDawn = "kaelis_01";
         /// <summary>Legacy character ID for Kaelis Ember (persisted before stable ID migration). Maps to the Ranged Prototype kit.</summary>
@@ -686,6 +772,12 @@ public static class ArenaConfig
                 WeaponIds.SigilBolt,
                 WeaponIds.ShotgunId,
                 WeaponIds.VoidRicochetId
+            ],
+            [CharacterIds.Lizard] =
+            [
+                WeaponIds.ExoriMin,
+                WeaponIds.Exori,
+                WeaponIds.ExoriMas
             ],
             [CharacterIds.KaelisDawn] =
             [
@@ -715,10 +807,19 @@ public static class ArenaConfig
     /// <summary>Stable mob species ID strings. Values match the protocol species field used in snapshots.</summary>
     public static class SpeciesIds
     {
-        public const string MeleeBrute   = "melee_brute";
-        public const string RangedArcher = "ranged_archer";
-        public const string MeleeDemon   = "melee_demon";
-        public const string RangedDragon = "ranged_dragon";
+        public const string MeleeBrute      = "melee_brute";
+        public const string RangedArcher    = "ranged_archer";
+        public const string MeleeDemon      = "melee_demon";
+        public const string RangedShaman    = "ranged_shaman";
+        public const string MeleeSkeleton   = "melee_skeleton";
+        public const string MeleeWogol      = "melee_wogol";
+        public const string MeleeWarrior    = "melee_warrior";
+        public const string MeleeZombie     = "melee_zombie";
+        public const string MeleeTinyZombie = "melee_tiny_zombie";
+        public const string RangedImp       = "ranged_imp";
+        public const string RangedSwampy    = "ranged_swampy";
+        public const string RangedMuddy     = "ranged_muddy";
+        public const string MeleeSlug       = "melee_slug";
     }
     #endregion
 
@@ -741,12 +842,22 @@ public static class ArenaConfig
             [WeaponIds.Guard]           = "Guard",
             [CharacterIds.Kina]            = "Kina",
             [CharacterIds.RangedPrototype] = "Prototype",
+            [CharacterIds.Lizard]          = "Kaelis Vex",
             [CharacterIds.KaelisDawn]      = "Kaelis Dawn",
             [CharacterIds.KaelisEmber]     = "Kaelis Ember",
-            [SpeciesIds.MeleeBrute]     = "Melee Brute",
-            [SpeciesIds.RangedArcher]   = "Ranged Archer",
-            [SpeciesIds.MeleeDemon]     = "Melee Demon",
-            [SpeciesIds.RangedDragon]   = "Ranged Dragon",
+            [SpeciesIds.MeleeBrute]      = "Melee Brute",
+            [SpeciesIds.RangedArcher]    = "Ranged Archer",
+            [SpeciesIds.MeleeDemon]      = "Melee Demon",
+            [SpeciesIds.RangedShaman]    = "Hollow Shaman",
+            [SpeciesIds.MeleeSkeleton]   = "Hollow Skeleton",
+            [SpeciesIds.MeleeWogol]      = "Hollow Wogol",
+            [SpeciesIds.MeleeWarrior]    = "Hollow Warrior",
+            [SpeciesIds.MeleeZombie]     = "Hollow Zombie",
+            [SpeciesIds.MeleeTinyZombie] = "Hollow Tiny Zombie",
+            [SpeciesIds.RangedImp]       = "Hollow Imp",
+            [SpeciesIds.RangedSwampy]    = "Hollow Swampy",
+            [SpeciesIds.RangedMuddy]     = "Hollow Muddy",
+            [SpeciesIds.MeleeSlug]       = "Hollow Slug",
         };
 
     // Maps simulation skill logic IDs to stable WeaponIds for display name resolution.

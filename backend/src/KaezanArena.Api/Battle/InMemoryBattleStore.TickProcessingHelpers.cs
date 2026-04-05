@@ -118,17 +118,37 @@ public sealed partial class InMemoryBattleStore
         }
     }
 
-    private static void TickDecals(StoredBattle state)
+    private static void TickDecals(StoredBattle state, List<BattleEventDto> events)
     {
         if (state.Decals.Count == 0)
         {
             return;
         }
 
+        var player = GetPlayerActor(state);
+
         for (var index = state.Decals.Count - 1; index >= 0; index -= 1)
         {
             var decal = state.Decals[index];
             decal.RemainingMs = Math.Max(0, decal.RemainingMs - StepDeltaMs);
+
+            if (decal.DecalKind == DecalKind.DamagingHazard &&
+                decal.DamagePerTick > 0 &&
+                player is not null &&
+                player.TileX == decal.TileX &&
+                player.TileY == decal.TileY)
+            {
+                ApplyDamageToPlayer(
+                    state,
+                    events,
+                    player,
+                    decal.DamagePerTick,
+                    ArenaConfig.DefaultMobElement,
+                    attacker: null,
+                    isRangedAutoAttack: false,
+                    allowCriticalHits: false);
+            }
+
             if (decal.RemainingMs == 0)
             {
                 state.Decals.RemoveAt(index);

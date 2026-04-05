@@ -10,6 +10,7 @@ public sealed partial class InMemoryBattleStore
         IReadOnlyList<CommandResultDto> commandResults)
     {
         AssertBattleInvariants(state);
+        var safeZoneIndex = Math.Clamp(state.ZoneIndex, 1, ArenaConfig.ZoneConfig.ZoneCount);
 
         var actors = state.Actors.Values
             .OrderBy(actor => actor.ActorId, StringComparer.Ordinal)
@@ -17,6 +18,7 @@ public sealed partial class InMemoryBattleStore
                 ActorId: actor.ActorId,
                 Kind: actor.Kind,
                 MobType: actor.MobType,
+                MobTierIndex: string.Equals(actor.Kind, "mob", StringComparison.Ordinal) ? safeZoneIndex : null,
                 IsElite: actor.IsElite,
                 IsBuffedByElite: actor.BuffSourceEliteId is not null,
                 BuffSourceEliteId: actor.BuffSourceEliteId,
@@ -67,7 +69,6 @@ public sealed partial class InMemoryBattleStore
         var spawnPacing = ResolveSpawnPacingDirector(state);
         var scaling = ResolveScalingDirectorV2(nowMs, state.RunLevel);
         var aliveMobs = state.Actors.Values.Count(actor => string.Equals(actor.Kind, "mob", StringComparison.Ordinal));
-        var safeZoneIndex = Math.Clamp(state.ZoneIndex, 1, ArenaConfig.ZoneConfig.ZoneCount);
         var zoneHpMult = ArenaConfig.ZoneConfig.ZoneHpMultiplier[safeZoneIndex - 1];
         var zoneDmgMult = ArenaConfig.ZoneConfig.ZoneDmgMultiplier[safeZoneIndex - 1];
         var currentMobHpMult = scaling.NormalHpMult * zoneHpMult;

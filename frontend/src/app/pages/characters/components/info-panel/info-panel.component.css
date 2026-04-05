@@ -127,6 +127,37 @@ h3 {
 
 .loadout-stats.accent { color: #34d399; }
 
+.kit-pills {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.kit-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid rgba(52, 211, 153, 0.4);
+  background: rgba(52, 211, 153, 0.14);
+  color: #a7f3d0;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+}
+
+.rune-slot-locked {
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  color: #cbd5e1;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+}
+
 .bonus-list {
   display: flex;
   flex-direction: column;
@@ -170,6 +201,15 @@ h3 {
 .change-btn:hover {
   background: rgba(138, 124, 255, 0.22);
   box-shadow: 0 0 16px rgba(138, 124, 255, 0.3);
+}
+
+.change-btn:disabled {
+  cursor: default;
+  opacity: 0.55;
+  box-shadow: none;
+  background: rgba(148, 163, 184, 0.12);
+  border-color: rgba(148, 163, 184, 0.45);
+  color: #cbd5e1;
 }
 
 /* Sigil loadout summary */

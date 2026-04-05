@@ -40,6 +40,34 @@
         {{ primarySigilBonus?.detail || 'No active set bonus.' }}
       </div>
     </div>
+    <div class="loadout-row">
+      <div class="loadout-header">Fixed Kit</div>
+      <div class="kit-pills">
+        @for (weaponName of fixedKitNames; track weaponName) {
+          <span class="kit-pill">{{ weaponName }}</span>
+        }
+        @if (!fixedKitNames.length) {
+          <span class="muted">No fixed kit configured.</span>
+        }
+      </div>
+    </div>
+    <div class="loadout-row">
+      <div class="loadout-header">Rune Slot</div>
+      <div class="loadout-stats">
+        <span class="rune-slot-locked">Locked</span>
+      </div>
+    </div>
+
+    <div class="panel-actions">
+      <button
+        type="button"
+        class="change-btn"
+        [disabled]="isActiveCharacter"
+        (click)="setActiveCharacter.emit()"
+      >
+        {{ isActiveCharacter ? 'Active Character' : 'Set Active' }}
+      </button>
+    </div>
   }
 
   @if (activeTab === 'weapon') {

@@ -47,8 +47,11 @@
         [weapon]="weaponInfo"
         [weaponStats]="weaponStats"
         [equippedWeaponName]="equippedWeaponName"
+        [fixedKitNames]="activeCharacterFixedKit"
+        [isActiveCharacter]="isSelectedCharacterActive"
         [sigilSlots]="sigilSlotCards"
         (changeWeapon)="openWeaponModal()"
+        (setActiveCharacter)="setSelectedCharacterAsActive()"
       ></app-kaelis-info-panel>
     }
   </div>

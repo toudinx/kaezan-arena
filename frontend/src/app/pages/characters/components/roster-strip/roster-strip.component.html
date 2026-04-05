@@ -12,7 +12,7 @@
           [class.active]="entry.id === selectedId"
           (click)="select(entry.id)"
         >
-          <div class="thumb">
+          <div class="thumb" [ngClass]="resolveToneClass(entry)">
             @if (entry.imageUrl || entry.portrait?.imageUrl) {
               <img
                 [src]="entry.imageUrl || entry.portrait?.imageUrl"
@@ -20,6 +20,11 @@
               />
             }
             <span class="thumb-initial">{{ initialFor(entry.name) }}</span>
+          </div>
+          <div class="meta">
+            <span class="name">{{ entry.name }}</span>
+            <span class="kit-badge">{{ entry.kitBadge || 'Kit [WIP]' }}</span>
+            <span class="mastery">Mastery {{ entry.masteryLevel || 1 }}</span>
           </div>
         </button>
       }

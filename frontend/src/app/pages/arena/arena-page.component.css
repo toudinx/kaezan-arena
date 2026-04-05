@@ -476,28 +476,6 @@
   background: #2e4260;
 }
 
-/* Backpack panel collapsible header */
-.right-pane__pinned-header--toggle {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  cursor: pointer;
-  user-select: none;
-}
-.right-pane__pinned-header--toggle:hover {
-  background: rgba(255, 255, 255, 0.04);
-}
-
-.pane-toggle-btn {
-  background: none;
-  border: none;
-  color: #6b8caa;
-  font-size: 0.65rem;
-  cursor: pointer;
-  padding: 0;
-  line-height: 1;
-}
-
 /* Empty state inside the status skills panel */
 .right-panel-empty {
   font-size: 0.7rem;
@@ -508,7 +486,6 @@
 
 .pane,
 .center-column,
-.right-pane__pinned,
 .right-pane__status {
   min-width: 0;
   min-height: 0;
@@ -1583,47 +1560,9 @@ canvas {
 }
 
 .pane__body--right-layout {
-  display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
-  gap: 0.35rem;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.right-pane__pinned {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  border: 1px solid #45566f;
-  border-radius: 0.34rem;
-  background: #0a1422;
-}
-
-.right-pane__pinned--equipment {
-  flex: 0 0 auto;
-}
-
-.right-pane__pinned-header {
-  padding: 0.2rem 0.32rem;
-  border-bottom: 1px solid #45566f;
-  color: #cbd5e1;
-  font-size: 0.58rem;
-  letter-spacing: 0.08em;
-  line-height: 1.2;
-  text-transform: uppercase;
-}
-
-.right-pane__pinned-body {
-  overflow: hidden;
-  padding: 0.18rem 0.22rem;
-}
-
-.right-pane__pinned-body--equipment {
-  height: 124px;
-}
-
-.right-pane__pinned-body--backpack {
-  height: clamp(150px, 24vh, 190px);
   overflow: hidden;
 }
 
@@ -2789,14 +2728,6 @@ canvas {
   .pane--right {
     border-left: 0;
     border-top: 1px solid #23324a;
-  }
-
-  .right-pane__pinned-body--equipment {
-    height: 110px;
-  }
-
-  .right-pane__pinned-body--backpack {
-    height: 160px;
   }
 
   .status-details__columns {

@@ -4,6 +4,7 @@ public sealed record ActorStateDto(
     string ActorId,
     string Kind,
     MobArchetype? MobType,
+    int? MobTierIndex,
     bool IsElite,
     bool IsBuffedByElite,
     string? BuffSourceEliteId,

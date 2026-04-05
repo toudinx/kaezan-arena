@@ -127,6 +127,7 @@ public static class DeterminismAudit
                 .Append(NormalizeText(actor.ActorId)).Append(':')
                 .Append(NormalizeText(actor.Kind)).Append(':')
                 .Append(((int?)actor.MobType)?.ToString(CultureInfo.InvariantCulture) ?? string.Empty).Append(':')
+                .Append(actor.MobTierIndex?.ToString(CultureInfo.InvariantCulture) ?? string.Empty).Append(':')
                 .Append(actor.IsElite ? "1" : "0").Append(':')
                 .Append(actor.IsBuffedByElite ? "1" : "0").Append(':')
                 .Append(NormalizeText(actor.BuffSourceEliteId)).Append(':')

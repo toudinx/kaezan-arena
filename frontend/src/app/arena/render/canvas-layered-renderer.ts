@@ -36,6 +36,11 @@ const CRIT_TEXT_PALETTE = {
   fill: "#fde047",
   outline: "rgba(15, 23, 42, 0.95)"
 } as const;
+export type TierAuraConfig = Readonly<Record<number, Readonly<{
+  color: string;
+  blur: number;
+  alpha: number;
+}>>>;
 
 export class CanvasLayeredRenderer {
   private readonly pipeline: RenderLayer[] = ["ground", "groundFx", "actors", "hitFx", "ui"];
@@ -45,7 +50,10 @@ export class CanvasLayeredRenderer {
   private readonly seenPoiIds = new Set<string>();
   private readonly poiPulseExpiresAtMsById = new Map<string, number>();
 
-  constructor(private readonly context: CanvasRenderingContext2D) {}
+  constructor(
+    private readonly context: CanvasRenderingContext2D,
+    private readonly tierAuraConfig: TierAuraConfig = {}
+  ) {}
 
   async render(
     scene: ArenaScene,
@@ -91,6 +99,7 @@ export class CanvasLayeredRenderer {
           }
 
           this.drawResolvedAsset(loaded, destX, destY, spriteSize, spriteSize, actor.animationElapsedMs);
+          this.drawMobTierAura(scene, actorState, destX, destY, spriteSize);
         }
 
         this.drawMobHpBars(scene, viewport);
@@ -639,6 +648,41 @@ export class CanvasLayeredRenderer {
     this.context.fillStyle = "rgba(251, 191, 36, 0.09)";
     this.context.beginPath();
     this.context.arc(centerX, centerY, innerRadius, 0, Math.PI * 2);
+    this.context.fill();
+    this.context.restore();
+  }
+
+  private drawMobTierAura(
+    scene: ArenaScene,
+    actorState: ArenaScene["actorsById"][string] | undefined,
+    spriteX: number,
+    spriteY: number,
+    spriteSize: number
+  ): void {
+    if (actorState?.kind !== "mob") {
+      return;
+    }
+
+    const tierIndex = Math.floor(actorState.tierIndex ?? 1);
+    if (tierIndex <= 1) {
+      return;
+    }
+
+    const aura = this.tierAuraConfig[tierIndex];
+    if (!aura) {
+      return;
+    }
+
+    const centerX = spriteX + spriteSize / 2;
+    const centerY = spriteY + spriteSize / 2;
+    const auraRadius = Math.max(2, scene.tileSize * 0.15);
+    this.context.save();
+    this.context.globalAlpha = Math.max(0, Math.min(1, aura.alpha));
+    this.context.shadowBlur = Math.max(0, aura.blur);
+    this.context.shadowColor = aura.color;
+    this.context.fillStyle = aura.color;
+    this.context.beginPath();
+    this.context.arc(centerX, centerY, auraRadius, 0, Math.PI * 2);
     this.context.fill();
     this.context.restore();
   }

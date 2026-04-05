@@ -443,41 +443,6 @@
       </header>
 
       <div class="pane__body pane__body--right-layout">
-        <section class="right-pane__pinned right-pane__pinned--equipment" #equipmentPanel tabindex="-1">
-          <header class="right-pane__pinned-header">Equipment</header>
-          <div class="right-pane__pinned-body right-pane__pinned-body--equipment">
-            <app-equipment-paperdoll-window
-              [character]="selectedCharacter"
-              [equippedWeaponLabel]="selectedCharacterWeaponLabel"
-              [weaponRarity]="selectedCharacterWeaponRarity"
-              [equipMode]="backpackEquipMode"
-              (weaponSlotActivated)="onEquipmentWeaponSlotActivated()"
-            ></app-equipment-paperdoll-window>
-          </div>
-        </section>
-
-        <section class="right-pane__pinned right-pane__pinned--backpack" #backpackPanel tabindex="-1">
-          <header class="right-pane__pinned-header right-pane__pinned-header--toggle" (click)="toggleBackpackPanel()">
-            <span>Backpack</span>
-            <button type="button" class="pane-toggle-btn" [attr.aria-expanded]="isBackpackPanelOpen">{{ isBackpackPanelOpen ? '▲' : '▼' }}</button>
-          </header>
-          @if (isBackpackPanelOpen) {
-          <div class="right-pane__pinned-body right-pane__pinned-body--backpack">
-            <app-backpack-window
-              [character]="selectedCharacter"
-              [itemCatalogById]="itemCatalogByIdForUi"
-              [equipmentCatalogByItemId]="equipmentCatalogByItemIdForUi"
-              [equipInFlight]="accountRequestInFlight"
-              [highlightItemId]="backpackHighlightItemId"
-              [highlightRequestId]="backpackHighlightRequestId"
-              [forcedFilter]="backpackForcedFilter"
-              [equipMode]="backpackEquipMode"
-              (equipRequested)="onBackpackEquipRequested($event)"
-            ></app-backpack-window>
-          </div>
-          }
-        </section>
-
         <section class="right-pane__status" #statusPanel tabindex="-1">
           <header class="right-pane__status-header">Status</header>
           <div class="right-pane__status-body">

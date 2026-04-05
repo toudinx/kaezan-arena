@@ -34,6 +34,7 @@ export interface ArenaActorState {
   actorId: string;
   kind: string;
   mobType?: MobArchetypeValue;
+  tierIndex?: number;
   isElite?: boolean;
   isBuffedByElite?: boolean;
   buffSourceEliteId?: string | null;
@@ -46,7 +47,7 @@ export interface ArenaActorState {
   maxShield?: number;
 }
 
-export type MobArchetypeValue = 1 | 2 | 3 | 4;
+export type MobArchetypeValue = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13;
 
 export type ArenaActorMap = Record<string, ArenaActorState>;
 

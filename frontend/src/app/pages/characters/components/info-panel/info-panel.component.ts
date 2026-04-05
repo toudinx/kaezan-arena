@@ -43,8 +43,11 @@ export class KaelisInfoPanelComponent {
   @Input() primarySigilBonus?: SetBonusDisplay | null;
   @Input() sigilSlots: SigilSlotCardViewModel[] = [];
   @Input() equippedWeaponName?: string | null;
+  @Input() fixedKitNames: string[] = [];
+  @Input() isActiveCharacter = false;
 
   @Output() changeWeapon = new EventEmitter<void>();
+  @Output() setActiveCharacter = new EventEmitter<void>();
 
   get xpPercent(): number {
     if (this.masteryXpRequired <= 0) return 100;

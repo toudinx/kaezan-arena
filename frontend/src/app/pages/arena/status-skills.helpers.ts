@@ -11,13 +11,6 @@ export type StatusSkillBinding = Readonly<{
   skillId: string;
 }>;
 
-// Fixed 3-slot kit bindings. Slot 4 is reserved for the Ultimate gauge.
-export const STATUS_SKILL_BINDINGS: readonly StatusSkillBinding[] = [
-  { keyLabel: "1", skillId: "exori" },
-  { keyLabel: "2", skillId: "exori_min" },
-  { keyLabel: "3", skillId: "exori_mas" }
-] as const;
-
 export type StatusSkillSlotViewModel = Readonly<{
   keyLabel: string;
   skillId: string;
@@ -50,9 +43,9 @@ export type StatusBuffViewModel = Readonly<{
 export function mapStatusSkillSlots(
   skillStates: ReadonlyArray<ArenaSkillState>,
   globalCooldownRemainingMs: number,
-  _globalCooldownTotalMs: number,
-  bindings: ReadonlyArray<StatusSkillBinding> = STATUS_SKILL_BINDINGS
+  _globalCooldownTotalMs: number
 ): StatusSkillSlotViewModel[] {
+  const bindings = buildStatusSkillBindings(skillStates);
   const byId: Record<string, ArenaSkillState> = {};
   for (const entry of skillStates) {
     byId[entry.skillId] = entry;
@@ -151,10 +144,24 @@ export function mapStatusBuffs(activeBuffs: ReadonlyArray<ArenaBuffState>): Stat
 
 export function resolveSkillIdForHotkeyKey(
   key: string,
-  bindings: ReadonlyArray<StatusSkillBinding> = STATUS_SKILL_BINDINGS
+  skillStates: ReadonlyArray<ArenaSkillState>
 ): string | null {
+  const bindings = buildStatusSkillBindings(skillStates);
   const matched = bindings.find((binding) => binding.keyLabel === key);
   return matched?.skillId ?? null;
+}
+
+function buildStatusSkillBindings(skillStates: ReadonlyArray<ArenaSkillState>): StatusSkillBinding[] {
+  const bindings: StatusSkillBinding[] = [];
+
+  for (let index = 0; index < skillStates.length && index < 3; index += 1) {
+    bindings.push({
+      keyLabel: String(index + 1),
+      skillId: skillStates[index]?.skillId ?? ""
+    });
+  }
+
+  return bindings.filter((binding) => binding.skillId.length > 0);
 }
 
 function buildSkillTooltip(

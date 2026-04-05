@@ -111,7 +111,7 @@ public sealed class ApiEndpointsTests : IClassFixture<ApiTestWebApplicationFacto
         Assert.NotNull(payload);
         Assert.NotNull(payload.SpeciesCatalog);
         Assert.Equal(
-            ["melee_brute", "ranged_archer", "melee_demon", "ranged_dragon"],
+            ["melee_brute", "ranged_archer", "melee_demon", "ranged_shaman"],
             payload.SpeciesCatalog.Select(species => species.SpeciesId).ToArray());
         Assert.All(payload.SpeciesCatalog, species =>
         {
@@ -1164,7 +1164,7 @@ public sealed class ApiEndpointsTests : IClassFixture<ApiTestWebApplicationFacto
         Assert.Contains(MobArchetype.MeleeBrute, mobTypes);
         Assert.Contains(MobArchetype.RangedArcher, mobTypes);
         Assert.Contains(MobArchetype.MeleeDemon, mobTypes);
-        Assert.Contains(MobArchetype.RangedDragon, mobTypes);
+        Assert.Contains(MobArchetype.RangedShaman, mobTypes);
     }
 
     [Fact]
@@ -3387,19 +3387,19 @@ public sealed class ApiEndpointsTests : IClassFixture<ApiTestWebApplicationFacto
     }
 
     [Fact]
-    public async Task PostBattleStep_DragonBreath_AbilityTriggers()
+    public async Task PostBattleStep_ShamanStormPulse_AbilityTriggers()
     {
-        var start = await StartBattleAsync("arena-dragon-breath", "player-dragon-breath", 1337);
-        AssertArenaInvariants(start.Actors, "player-dragon-breath");
+        var start = await StartBattleAsync("arena-shaman-storm-pulse", "player-shaman-storm-pulse", 1337);
+        AssertArenaInvariants(start.Actors, "player-shaman-storm-pulse");
 
         var currentTick = start.Tick;
         for (var stepIndex = 0; stepIndex < 500; stepIndex += 1)
         {
             var step = await StepBattleAsync(start.BattleId, currentTick, []);
-            step = await ChoosePendingCardIfAwaitingAsync(step, "player-dragon-breath");
+            step = await ChoosePendingCardIfAwaitingAsync(step, "player-shaman-storm-pulse");
             currentTick = step.Tick;
-            AssertArenaInvariants(step.Actors, "player-dragon-breath");
-            if (step.Events.OfType<FxSpawnEventDto>().Any(evt => evt.FxId == "fx.mob.dragon.breath"))
+            AssertArenaInvariants(step.Actors, "player-shaman-storm-pulse");
+            if (step.Events.OfType<FxSpawnEventDto>().Any(evt => evt.FxId == "fx.mob.shaman.storm_pulse"))
             {
                 return;
             }
@@ -3409,7 +3409,7 @@ public sealed class ApiEndpointsTests : IClassFixture<ApiTestWebApplicationFacto
             }
         }
 
-        throw new Xunit.Sdk.XunitException("Expected dragon breath ability FX to trigger.");
+        throw new Xunit.Sdk.XunitException("Expected shaman storm pulse ability FX to trigger.");
     }
 
     [Fact]
@@ -4250,7 +4250,7 @@ public sealed class ApiEndpointsTests : IClassFixture<ApiTestWebApplicationFacto
 
                     var attacker = step.Actors.FirstOrDefault(actor => actor.ActorId == evt.AttackerEntityId);
                     return attacker is not null &&
-                           (attacker.MobType == MobArchetype.RangedArcher || attacker.MobType == MobArchetype.RangedDragon);
+                           (attacker.MobType == MobArchetype.RangedArcher || attacker.MobType == MobArchetype.RangedShaman);
                 });
 
                 if (rangedMobAutoAttack is not null)
@@ -5562,7 +5562,7 @@ public sealed class ApiEndpointsTests : IClassFixture<ApiTestWebApplicationFacto
 
     private static bool IsRangedMob(ActorStateDto actor)
     {
-        return actor.MobType is MobArchetype.RangedArcher or MobArchetype.RangedDragon;
+        return actor.MobType is MobArchetype.RangedArcher or MobArchetype.RangedShaman;
     }
 
     private static bool IsMeleeMob(ActorStateDto actor)
@@ -5652,7 +5652,7 @@ public sealed class ApiEndpointsTests : IClassFixture<ApiTestWebApplicationFacto
             MobArchetype.MeleeBrute => "melee_brute",
             MobArchetype.RangedArcher => "ranged_archer",
             MobArchetype.MeleeDemon => "melee_demon",
-            MobArchetype.RangedDragon => "ranged_dragon",
+            MobArchetype.RangedShaman => "ranged_shaman",
             _ => archetype.ToString()
         };
     }

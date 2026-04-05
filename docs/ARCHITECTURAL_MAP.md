@@ -32,7 +32,7 @@ StartBattle() → BuildMobSlots() → spawn up to EarlyMobConcurrentCap (6)
 Every tick: TickMobRespawns() → decrements RespawnRemainingMs (750ms) → when 0: ResolveSpawnPacingDirector() checks cap → TrySpawnMobInSlot()
 TrySpawnMobInSlot(): free tile at Chebyshev dist 2–4 from player → elite roll (25–90%) → scaled HP → MaintainEliteCommanderBuffs() if elite
 Altar interaction: SummonMobsAroundPlayer() → sets RespawnRemainingMs = 0, spawns immediately
-Archetype cycle: MeleeBrute → RangedArcher → MeleeDemon → RangedDragon (deterministic per slot)
+Archetype cycle: MeleeBrute → RangedArcher → MeleeDemon → RangedShaman (deterministic per slot)
 
 Coupling issues: Elite buff management (apply/remove) tightly coupled to spawn and death; pacing director mixes time- and kill-based signals in one function
 

@@ -42,6 +42,8 @@ const PLAYER_DEATH_CUE_DURATION_MS = 1200;
 const REWARD_OPEN_CUE_DURATION_MS = 560;
 const REWARD_CHOICE_CUE_DURATION_MS = 520;
 const REWARD_CHOSEN_CUE_DURATION_MS = 460;
+const MIN_MOB_TIER_INDEX = 1;
+const MAX_MOB_TIER_INDEX = 5;
 
 type AssistCastCalloutProfile = Readonly<{
   cueDurationMs: number;
@@ -117,7 +119,14 @@ export class ArenaEngine {
   }
 
   applyActorStates(scene: ArenaScene, actorStates: ReadonlyArray<ArenaActorState>): ArenaScene {
-    const sortedActors = [...actorStates].sort((left, right) => left.actorId.localeCompare(right.actorId));
+    const sortedActors = [...actorStates]
+      .map((actor) => ({
+        ...actor,
+        tierIndex: actor.kind === "mob"
+          ? this.normalizeMobTierIndex(this.readSnapshotMobTierIndex(actor))
+          : MIN_MOB_TIER_INDEX
+      }))
+      .sort((left, right) => left.actorId.localeCompare(right.actorId));
     const player = sortedActors.find((actor) => actor.kind === "player");
     const previousActorsById = scene.actorsById;
     const previousVisualsById = scene.actorVisualsById;
@@ -1403,5 +1412,26 @@ export class ArenaEngine {
     }
 
     return PHYSICAL_ELEMENT;
+  }
+
+  private normalizeMobTierIndex(value: number | undefined): number {
+    if (typeof value !== "number" || !Number.isFinite(value)) {
+      return MIN_MOB_TIER_INDEX;
+    }
+
+    return Math.max(MIN_MOB_TIER_INDEX, Math.min(MAX_MOB_TIER_INDEX, Math.floor(value)));
+  }
+
+  private readSnapshotMobTierIndex(actor: ArenaActorState): number | undefined {
+    if (typeof actor.tierIndex === "number" && Number.isFinite(actor.tierIndex)) {
+      return actor.tierIndex;
+    }
+
+    const snapshotValue = (actor as ArenaActorState & { mobTierIndex?: number }).mobTierIndex;
+    if (typeof snapshotValue === "number" && Number.isFinite(snapshotValue)) {
+      return snapshotValue;
+    }
+
+    return undefined;
   }
 }

@@ -26,7 +26,7 @@ import {
   DamageNumberInstance
 } from "../../arena/engine/arena-engine.types";
 import { normalizeDecalKind, resolveDecalSemanticId } from "../../arena/engine/decal.helpers";
-import { CanvasLayeredRenderer } from "../../arena/render/canvas-layered-renderer";
+import { CanvasLayeredRenderer, type TierAuraConfig } from "../../arena/render/canvas-layered-renderer";
 import { computeMaxTileSizeForViewport } from "../../arena/render/arena-board-layout.helpers";
 import type { UiWindowPositionChangedEvent } from "../../arena/ui/ui-window.component";
 import {
@@ -36,8 +36,7 @@ import {
   type DropEvent,
   type DropSource,
   type EquipmentDefinition,
-  type ItemDefinition,
-  type OwnedEquipmentInstance
+  type ItemDefinition
 } from "../../api/account-api.service";
 import { AccountStore } from "../../account/account-store.service";
 import {
@@ -67,8 +66,6 @@ import {
   type UiWindowLayout,
   UiLayoutService
 } from "./ui-layout.service";
-import { BackpackWindowComponent } from "./backpack-window.component";
-import type { BackpackEquipMode, BackpackEquipRequest } from "./backpack-window.component";
 import {
   type StatusBuffViewModel,
   type StatusSkillSlotViewModel,
@@ -76,8 +73,6 @@ import {
   mapStatusBuffs,
   mapStatusSkillSlots
 } from "./status-skills.helpers";
-import { EquipmentPaperdollWindowComponent } from "./equipment-paperdoll-window.component";
-import type { BackpackFilter } from "./backpack-inventory.helpers";
 import { DockLayoutService, type DockModuleId, type DockModuleState } from "./dock-layout.service";
 import { HelperAssistWindowComponent, type AssistSkillToggleChangedEvent } from "./helper-assist-window.component";
 import {
@@ -257,6 +252,12 @@ const ECONOMY_LOOT_PREVIEW_MAX_ENTRIES = 8;
 const SHIELD_LOW_THRESHOLD_PERCENT = 30;
 const SHIELD_BREAK_PULSE_DURATION_MS = 260;
 const LEVEL_UP_PULSE_DURATION_MS = 760;
+const TIER_AURA: TierAuraConfig = {
+  2: { color: "#50C850", blur: 8, alpha: 0.35 },
+  3: { color: "#508FFF", blur: 12, alpha: 0.45 },
+  4: { color: "#A050FF", blur: 16, alpha: 0.55 },
+  5: { color: "#FFA01E", blur: 22, alpha: 0.65 }
+};
 const CRAFTED_EQUIPMENT_ITEM_IDS = new Set<string>([
   "wpn.primal_forged_blade",
   "arm.primal_forged_mail",
@@ -329,14 +330,14 @@ const DEV_LOG_ASSET_IDS: ReadonlyArray<string> = [
   "sprite.mob.demon.idle",
   "sprite.mob.demon.run",
   "sprite.mob.demon.hit",
-  "sprite.mob.dragon.idle",
-  "sprite.mob.dragon.run",
-  "sprite.mob.dragon.hit",
+  "sprite.mob.shaman.idle",
+  "sprite.mob.shaman.run",
+  "sprite.mob.shaman.hit",
   "fx.hit.small",
   "fx.mob.brute.cleave",
   "fx.mob.archer.power_shot",
   "fx.mob.demon.beam",
-  "fx.mob.dragon.breath",
+  "fx.mob.shaman.storm_pulse",
   "fx.skill.exori",
   "fx.skill.exori_min",
   "fx.skill.exori_mas",
@@ -347,11 +348,7 @@ const DEV_LOG_ASSET_IDS: ReadonlyArray<string> = [
 @Component({
   selector: "app-arena-page",
   standalone: true,
-  imports: [
-    BackpackWindowComponent,
-    EquipmentPaperdollWindowComponent,
-    HelperAssistWindowComponent
-  ],
+  imports: [HelperAssistWindowComponent],
   templateUrl: "./arena-page.component.html",
   styleUrl: "./arena-page.component.css"
 })
@@ -363,8 +360,6 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   @ViewChild("toolsPanel", { static: false }) private readonly toolsPanelRef?: ElementRef<HTMLElement>;
   @ViewChild("rightInfoPane", { static: false }) private readonly rightInfoPaneRef?: ElementRef<HTMLElement>;
   @ViewChild("statusPanel", { static: false }) private readonly statusPanelRef?: ElementRef<HTMLElement>;
-  @ViewChild("equipmentPanel", { static: false }) private readonly equipmentPanelRef?: ElementRef<HTMLElement>;
-  @ViewChild("backpackPanel", { static: false }) private readonly backpackPanelRef?: ElementRef<HTMLElement>;
 
   fxPreviewUrl = "";
   activeFxCount = 0;
@@ -406,10 +401,6 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   isInRun = false;
   private itemCatalogById: Record<string, ItemDefinition> = {};
   private equipmentCatalogByItemId: Record<string, EquipmentDefinition> = {};
-  backpackHighlightItemId: string | null = null;
-  backpackHighlightRequestId = 0;
-  backpackForcedFilter: BackpackFilter | null = null;
-  backpackEquipMode: BackpackEquipMode = null;
   selectedTopLeftTab: LeftTopTabId = "events";
   selectedToolsTab: ToolsTabId = this.loadToolsTab();
   showCombatDetails = false;
@@ -439,7 +430,6 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   runEchoFragmentsSpend = 0;
   runEchoFragmentsIncome = 0;
   showRunIntelPanel = false;
-  isBackpackPanelOpen = false;
   isHotkeysModalOpen = false;
   isPauseModalOpen = false;
   isDeathModalOpen = false;
@@ -552,8 +542,6 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       entries: [
         "T toggle AUTO ON/OFF",
         "Esc toggle Pause modal",
-        "I focus Backpack",
-        "C focus Equipment (outside run)",
         "H open Helper tool tab",
         "B open Bestiary tool tab",
         "K focus Status panel",
@@ -805,14 +793,6 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       .join(" ");
   }
 
-  get itemCatalogByIdForUi(): Readonly<Record<string, ItemDefinition>> {
-    return this.itemCatalogById;
-  }
-
-  get equipmentCatalogByItemIdForUi(): Readonly<Record<string, EquipmentDefinition>> {
-    return this.equipmentCatalogByItemId;
-  }
-
   get activeBuffsForStatusWindow(): ReadonlyArray<ArenaBuffState> {
     return this.scene?.activeBuffs ?? [];
   }
@@ -828,8 +808,9 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   get bottomBarSkillSlots(): ReadonlyArray<StatusSkillSlotViewModel> {
     const gcd = this.ui.player.globalCooldownRemainingMs;
     const gcdTotal = this.ui.player.globalCooldownTotalMs;
+    const skillStates = this.ui.skills;
     return [
-      ...mapStatusSkillSlots(this.ui.skills, gcd, gcdTotal),
+      ...mapStatusSkillSlots(skillStates, gcd, gcdTotal),
       buildUltimateSlotViewModel(this.ui.ultimateGauge, this.ui.ultimateGaugeMax, this.ui.ultimateReady)
     ];
   }
@@ -1073,7 +1054,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     }
 
     this.canvasContext = context;
-    this.renderer = new CanvasLayeredRenderer(context);
+    this.renderer = new CanvasLayeredRenderer(context, TIER_AURA);
     try {
       await Promise.resolve();
       await this.nextAnimationFrame();
@@ -1103,14 +1084,14 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         this.preloader.preloadAsset("sprite.mob.demon.idle"),
         this.preloader.preloadAsset("sprite.mob.demon.run"),
         this.preloader.preloadAsset("sprite.mob.demon.hit"),
-        this.preloader.preloadAsset("sprite.mob.dragon.idle"),
-        this.preloader.preloadAsset("sprite.mob.dragon.run"),
-        this.preloader.preloadAsset("sprite.mob.dragon.hit"),
+        this.preloader.preloadAsset("sprite.mob.shaman.idle"),
+        this.preloader.preloadAsset("sprite.mob.shaman.run"),
+        this.preloader.preloadAsset("sprite.mob.shaman.hit"),
         this.preloader.preloadAsset("fx.hit.small"),
         this.preloader.preloadAsset("fx.mob.brute.cleave"),
         this.preloader.preloadAsset("fx.mob.archer.power_shot"),
         this.preloader.preloadAsset("fx.mob.demon.beam"),
-        this.preloader.preloadAsset("fx.mob.dragon.breath"),
+        this.preloader.preloadAsset("fx.mob.shaman.storm_pulse"),
         this.preloader.preloadAsset("fx.skill.exori"),
         this.preloader.preloadAsset("fx.skill.exori_min"),
         this.preloader.preloadAsset("fx.skill.exori_mas")
@@ -1226,29 +1207,6 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       return;
     }
 
-    if (normalizedKey === "i") {
-      event.preventDefault();
-      if (event.repeat) {
-        return;
-      }
-
-      this.openBackpackPanel();
-      this.focusBackpackPanel();
-      this.focusRightInfoPane();
-      return;
-    }
-
-    if (normalizedKey === "c") {
-      event.preventDefault();
-      if (event.repeat) {
-        return;
-      }
-
-      this.focusEquipmentPanel();
-      this.focusRightInfoPane();
-      return;
-    }
-
     if (normalizedKey === "h") {
       event.preventDefault();
       if (event.repeat) {
@@ -1313,10 +1271,6 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       return;
     }
 
-    if (id === ARENA_UI_WINDOW_IDS.backpack) {
-      this.clearBackpackEquipMode();
-    }
-
     this.uiLayoutService.close(id);
   }
 
@@ -1352,35 +1306,6 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
 
   onDockModuleHideRequested(id: DockModuleId): void {
     this.dockLayoutService.hide(id);
-    if (id === "backpack") {
-      this.clearBackpackEquipMode();
-    }
-  }
-
-  async onBackpackEquipRequested(request: BackpackEquipRequest): Promise<void> {
-    const equipped = await this.equipItemFromInventory(request.instanceId, request.slot);
-    if (equipped && request.slot === this.backpackEquipMode) {
-      this.clearBackpackEquipMode();
-    }
-  }
-
-  onLootConsoleItemClicked(itemId: string): void {
-    this.clearBackpackEquipMode();
-    this.focusBackpackPanel();
-    this.focusRightInfoPane();
-    this.backpackHighlightItemId = itemId;
-    this.backpackHighlightRequestId += 1;
-  }
-
-  onEquipmentWeaponSlotActivated(): void {
-    this.activateBackpackEquipMode("weapon");
-  }
-
-  private activateBackpackEquipMode(slot: Exclude<BackpackEquipMode, null>): void {
-    this.backpackEquipMode = slot;
-    this.backpackForcedFilter = this.toBackpackFilter(slot);
-    this.focusBackpackPanel();
-    this.focusRightInfoPane();
   }
 
   onCardChoiceSelected(cardId: string): void {
@@ -1402,14 +1327,6 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
 
   toggleRunIntelPanel(): void {
     this.showRunIntelPanel = !this.showRunIntelPanel;
-  }
-
-  openBackpackPanel(): void {
-    this.isBackpackPanelOpen = true;
-  }
-
-  toggleBackpackPanel(): void {
-    this.isBackpackPanelOpen = !this.isBackpackPanelOpen;
   }
 
   onAssistAutoHealEnabledToggle(enabled: boolean): void {
@@ -2175,53 +2092,6 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         kills: Math.max(0, killsBySpecies[species] ?? 0),
         primalCore: Math.max(0, primalCoreBySpecies[species] ?? 0)
       }));
-  }
-
-  get selectedCharacterWeapons(): Array<OwnedEquipmentInstance & { equipped: boolean; itemName: string; weaponClass: string }> {
-    const character = this.selectedCharacter;
-    if (!character) {
-      return [];
-    }
-
-    return Object.values(character.inventory.equipmentInstances)
-      .map((instance) => {
-        const definition = this.equipmentCatalogByItemId[instance.definitionId];
-        return {
-          ...instance,
-          equipped: character.equipment.weaponInstanceId === instance.instanceId,
-          itemName: this.resolveItemDisplayName(instance.definitionId),
-          weaponClass: definition?.weaponClass ?? "weapon"
-        };
-      })
-      .sort((left, right) => left.instanceId.localeCompare(right.instanceId));
-  }
-
-  get selectedCharacterWeaponLabel(): string {
-    return this.resolveSelectedEquipmentLabel("weapon");
-  }
-
-  get selectedCharacterWeaponRarity(): string | null {
-    return this.resolveSelectedEquipmentRarity("weapon");
-  }
-
-  async equipItemFromInventory(equipmentInstanceId: string, slot: "weapon"): Promise<boolean> {
-    const character = this.selectedCharacter;
-    if (!character) {
-      return false;
-    }
-
-    this.accountRequestInFlight = true;
-    try {
-      const updatedCharacter = await this.accountStore.equipItem(character.characterId, slot, equipmentInstanceId);
-      this.mergeCharacterIntoAccountState(updatedCharacter);
-      this.syncAccountStateFromStore();
-      return true;
-    } catch (error) {
-      this.battleLog = `equipItem failed: ${String(error)}`;
-      return false;
-    } finally {
-      this.accountRequestInFlight = false;
-    }
   }
 
   formatLootEntry(dropEvent: DropEvent): string {
@@ -3106,41 +2976,6 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     return this.resolveSelectedEquipmentDefinition("weapon");
   }
 
-  private resolveSelectedEquipmentLabel(slot: "weapon"): string {
-    const character = this.selectedCharacter;
-    if (!character) {
-      return "None";
-    }
-
-    return this.resolveEquippedItemLabel(character, slot);
-  }
-
-  private resolveSelectedEquipmentRarity(slot: "weapon"): string | null {
-    const character = this.selectedCharacter;
-    if (!character) {
-      return null;
-    }
-
-    const instanceId = this.resolveEquippedInstanceId(character, slot);
-    if (!instanceId) {
-      return null;
-    }
-
-    const equippedInstance = character.inventory.equipmentInstances[instanceId];
-    if (!equippedInstance) {
-      return null;
-    }
-
-    const normalizedInstanceRarity = equippedInstance?.rarity?.trim().toLowerCase();
-    if (normalizedInstanceRarity && normalizedInstanceRarity.length > 0) {
-      return normalizedInstanceRarity;
-    }
-
-    const itemRarity = this.itemCatalogById[equippedInstance.definitionId]?.rarity ?? "";
-    const normalizedItemRarity = itemRarity.trim().toLowerCase();
-    return normalizedItemRarity.length > 0 ? normalizedItemRarity : null;
-  }
-
   private resolveSelectedEquipmentDefinition(slot: "weapon"): EquipmentDefinition | null {
     const character = this.selectedCharacter;
     if (!character) {
@@ -3573,6 +3408,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         actorId: typedActor.actorId,
         kind: typedActor.kind,
         mobType: this.readMobArchetypeValue((typedActor as Record<string, unknown>)["mobType"]) ?? undefined,
+        tierIndex: this.readMobTierIndex((typedActor as Record<string, unknown>)["mobTierIndex"]),
         isElite: this.readBoolean((typedActor as Record<string, unknown>)["isElite"]) ?? false,
         isBuffedByElite: this.readBoolean((typedActor as Record<string, unknown>)["isBuffedByElite"]) ?? false,
         buffSourceEliteId: this.readString((typedActor as Record<string, unknown>)["buffSourceEliteId"]) ?? null,
@@ -5989,6 +5825,15 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     return typeof value === "number" && Number.isFinite(value) ? value : null;
   }
 
+  private readMobTierIndex(value: unknown): number {
+    const parsed = this.readNumber(value);
+    if (parsed === null) {
+      return DEFAULT_ZONE_INDEX;
+    }
+
+    return this.clampZoneIndex(parsed);
+  }
+
   private readBoolean(value: unknown): boolean | null {
     return typeof value === "boolean" ? value : null;
   }
@@ -6246,23 +6091,13 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
 
 
   private isArenaWindowId(value: string): value is ArenaUiWindowId {
-    return value === ARENA_UI_WINDOW_IDS.backpack ||
-      value === ARENA_UI_WINDOW_IDS.equipmentCharacter ||
-      value === ARENA_UI_WINDOW_IDS.lootFeed ||
+    return value === ARENA_UI_WINDOW_IDS.lootFeed ||
       value === ARENA_UI_WINDOW_IDS.statusSkills;
   }
 
   private toDockModuleId(id: ArenaUiWindowId): DockModuleId | null {
     if (id === ARENA_UI_WINDOW_IDS.statusSkills) {
       return "status";
-    }
-
-    if (id === ARENA_UI_WINDOW_IDS.backpack) {
-      return "backpack";
-    }
-
-    if (id === ARENA_UI_WINDOW_IDS.equipmentCharacter) {
-      return "equipment";
     }
 
     if (id === ARENA_UI_WINDOW_IDS.lootFeed) {
@@ -6280,23 +6115,11 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
 
     if (module.isVisible) {
       this.dockLayoutService.hide(id);
-      if (id === "backpack") {
-        this.clearBackpackEquipMode();
-      }
       return;
     }
 
     this.dockLayoutService.show(id);
     this.dockLayoutService.expand(id);
-  }
-
-  private clearBackpackEquipMode(): void {
-    this.backpackForcedFilter = null;
-    this.backpackEquipMode = null;
-  }
-
-  private toBackpackFilter(_slot: Exclude<BackpackEquipMode, null>): BackpackFilter {
-    return "weapons";
   }
 
   private focusDamageConsole(): void {
@@ -6321,14 +6144,6 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.focusLeftLogsPane();
     this.highlightLogPanel("exp");
     this.scrollConsoleToBottom(this.topLeftPanelRef, ".events-feed");
-  }
-
-  private focusEquipmentPanel(): void {
-    this.focusPane(this.equipmentPanelRef);
-  }
-
-  private focusBackpackPanel(): void {
-    this.focusPane(this.backpackPanelRef);
   }
 
   private focusToolsPanel(): void {
@@ -6473,7 +6288,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     }
 
     if (mobType === 4) {
-      return "ranged_dragon";
+      return "ranged_shaman";
     }
 
     return null;

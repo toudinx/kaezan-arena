@@ -6,7 +6,7 @@
   border: 1px solid var(--border, rgba(255,255,255,0.08));
   border-radius: 12px;
   background: color-mix(in srgb, var(--panel, #111120) 88%, #080914);
-  min-height: 72px;
+  min-height: 106px;
 }
 
 .roster-shell {
@@ -51,7 +51,12 @@
   border: 2px solid transparent;
   background: rgba(255, 255, 255, 0.03);
   border-radius: 12px;
-  padding: 0;
+  padding: 8px;
+  min-width: 176px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
   cursor: pointer;
   transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
@@ -69,6 +74,26 @@
   border-radius: 10px;
   overflow: hidden;
   background: linear-gradient(150deg, rgba(138, 124, 255, 0.4), transparent);
+}
+
+.thumb.tone-amber {
+  background: linear-gradient(150deg, rgba(245, 158, 11, 0.45), transparent);
+}
+
+.thumb.tone-teal {
+  background: linear-gradient(150deg, rgba(20, 184, 166, 0.5), transparent);
+}
+
+.thumb.tone-violet {
+  background: linear-gradient(150deg, rgba(139, 92, 246, 0.45), transparent);
+}
+
+.thumb.tone-emerald {
+  background: linear-gradient(150deg, rgba(16, 185, 129, 0.45), transparent);
+}
+
+.thumb.tone-slate {
+  background: linear-gradient(150deg, rgba(100, 116, 139, 0.45), transparent);
 }
 
 .thumb img {
@@ -91,7 +116,46 @@
   pointer-events: none;
 }
 
+.meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 2px;
+}
+
+.name {
+  color: #f5f5fa;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kit-badge {
+  align-self: flex-start;
+  border-radius: 999px;
+  border: 1px solid rgba(20, 184, 166, 0.45);
+  color: #99f6e4;
+  background: rgba(20, 184, 166, 0.12);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+}
+
+.mastery {
+  color: #a4a4b5;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  font-weight: 600;
+}
+
 @media (max-width: 600px) {
   .roster-nav { display: none; }
   .roster-viewport { padding: 8px 12px; }
+  .roster-item { min-width: 152px; }
 }

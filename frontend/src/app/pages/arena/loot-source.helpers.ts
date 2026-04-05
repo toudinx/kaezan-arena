@@ -45,7 +45,7 @@ export function mapMobTypeToSpecies(mobType: unknown): string | null {
   }
 
   if (mobType === 4) {
-    return "ranged_dragon";
+    return "ranged_shaman";
   }
 
   return null;

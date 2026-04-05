@@ -1893,6 +1893,7 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
     {
         var kaelisOneId = ArenaConfig.CharacterIds.Kina;
         var kaelisTwoId = ArenaConfig.CharacterIds.RangedPrototype;
+        var lizardId = ArenaConfig.CharacterIds.Lizard;
         var kaelisOne = new CharacterState(
             CharacterId: kaelisOneId,
             Name: ArenaConfig.DisplayNames[kaelisOneId],
@@ -1925,6 +1926,20 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
                 }),
             Equipment: new EquipmentState(
                 WeaponInstanceId: $"{accountId}.{kaelisTwoId}.wpn_01"),
+            BestiaryKillsBySpecies: new Dictionary<string, int>(StringComparer.Ordinal),
+            PrimalCoreBySpecies: new Dictionary<string, int>(StringComparer.Ordinal),
+            UnlockedSigilSlots: ArenaConfig.MasteryConfig.InitialUnlockedSigilSlots);
+
+        var lizard = new CharacterState(
+            CharacterId: lizardId,
+            Name: ArenaConfig.DisplayNames[lizardId],
+            MasteryLevel: 1,
+            MasteryXp: 0,
+            Inventory: new CharacterInventory(
+                MaterialStacks: new Dictionary<string, long>(StringComparer.Ordinal),
+                EquipmentInstances: new Dictionary<string, OwnedEquipmentInstance>(StringComparer.Ordinal)),
+            Equipment: new EquipmentState(
+                WeaponInstanceId: null),
             BestiaryKillsBySpecies: new Dictionary<string, int>(StringComparer.Ordinal),
             PrimalCoreBySpecies: new Dictionary<string, int>(StringComparer.Ordinal),
             UnlockedSigilSlots: ArenaConfig.MasteryConfig.InitialUnlockedSigilSlots);
@@ -2020,7 +2035,8 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
                     BestiaryKillsBySpecies = initialBestiaryBySpecies,
                     PrimalCoreBySpecies = initialPrimalCoreBySpecies
                 },
-                [kaelisTwoId] = kaelisTwo
+                [kaelisTwoId] = kaelisTwo,
+                [lizardId] = lizard
             })
         {
             SigilInventory = BuildSeedSigilInventory()

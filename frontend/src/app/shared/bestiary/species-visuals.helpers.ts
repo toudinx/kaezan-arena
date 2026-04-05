@@ -39,12 +39,12 @@ const SPECIES_PORTRAIT_BY_ID: Readonly<Record<string, SpeciesPortraitSpec>> = {
     hitImageUrl: null,
     sigil: "DM"
   },
-  ranged_dragon: {
+  ranged_shaman: {
     tone: "violet",
-    imageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/lizard_m_idle_anim_f0.png",
-    runImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/lizard_m_run_anim_f1.png",
-    hitImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/lizard_m_hit_anim_f0.png",
-    sigil: "DG"
+    imageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/orc_shaman_idle_anim_f0.png",
+    runImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/orc_shaman_run_anim_f1.png",
+    hitImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/orc_shaman_idle_anim_f0.png",
+    sigil: "SH"
   }
 } as const;
 

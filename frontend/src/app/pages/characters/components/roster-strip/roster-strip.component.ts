@@ -6,6 +6,8 @@ export interface RosterEntry {
   name: string;
   imageUrl?: string | null;
   portrait?: CharacterPortrait | null;
+  kitBadge?: string | null;
+  masteryLevel?: number | null;
 }
 
 export interface CharacterPortrait {
@@ -46,6 +48,11 @@ export class KaelisRosterStripComponent {
 
   initialFor(name: string): string {
     return name?.slice(0, 1).toUpperCase() ?? '?';
+  }
+
+  resolveToneClass(entry: RosterEntry): string {
+    const tone = (entry.portrait?.tone ?? "").trim().toLowerCase();
+    return tone.length > 0 ? `tone-${tone}` : "tone-slate";
   }
 
   private scrollBy(amount: number): void {

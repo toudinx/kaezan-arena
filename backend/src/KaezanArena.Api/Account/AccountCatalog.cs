@@ -9,7 +9,7 @@ public static class AccountCatalog
         new SpeciesDefinition(ArenaConfig.SpeciesIds.MeleeBrute,   ArenaConfig.DisplayNames[ArenaConfig.SpeciesIds.MeleeBrute]),
         new SpeciesDefinition(ArenaConfig.SpeciesIds.RangedArcher, ArenaConfig.DisplayNames[ArenaConfig.SpeciesIds.RangedArcher]),
         new SpeciesDefinition(ArenaConfig.SpeciesIds.MeleeDemon,   ArenaConfig.DisplayNames[ArenaConfig.SpeciesIds.MeleeDemon]),
-        new SpeciesDefinition(ArenaConfig.SpeciesIds.RangedDragon, ArenaConfig.DisplayNames[ArenaConfig.SpeciesIds.RangedDragon]),
+        new SpeciesDefinition(ArenaConfig.SpeciesIds.RangedShaman, ArenaConfig.DisplayNames[ArenaConfig.SpeciesIds.RangedShaman]),
     ];
 
     public static IReadOnlyList<SigilDefinition> SigilDefinitions { get; } =
@@ -27,8 +27,8 @@ public static class AccountCatalog
             SpeciesId: ArenaConfig.SpeciesIds.MeleeDemon,
             SupportedTierIds: ArenaConfig.SigilConfig.SlotTierIds.ToArray()),
         new SigilDefinition(
-            DefinitionId: ArenaConfig.SigilConfig.DefinitionIds.RangedDragon,
-            SpeciesId: ArenaConfig.SpeciesIds.RangedDragon,
+            DefinitionId: ArenaConfig.SigilConfig.DefinitionIds.RangedShaman,
+            SpeciesId: ArenaConfig.SpeciesIds.RangedShaman,
             SupportedTierIds: ArenaConfig.SigilConfig.SlotTierIds.ToArray())
     ];
 
@@ -41,6 +41,10 @@ public static class AccountCatalog
         BuildCharacterDefinition(
             ArenaConfig.CharacterIds.RangedPrototype,
             ArenaConfig.CharacterSubtitleRangedPrototype,
+            isProvisional: true),
+        BuildCharacterDefinition(
+            ArenaConfig.CharacterIds.Lizard,
+            ArenaConfig.CharacterSubtitleLizard,
             isProvisional: true),
         BuildCharacterDefinition(
             ArenaConfig.CharacterIds.KaelisDawn,

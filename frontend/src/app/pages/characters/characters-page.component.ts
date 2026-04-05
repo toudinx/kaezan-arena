@@ -106,7 +106,9 @@ export class CharactersPageComponent implements OnInit {
           preferredName: catalog?.displayName ?? c.name
         }),
         imageUrl: portrait.imageUrl,
-        portrait: { imageUrl: portrait.imageUrl, monogram: portrait.monogram, tone: portrait.tone }
+        portrait: { imageUrl: portrait.imageUrl, monogram: portrait.monogram, tone: portrait.tone },
+        kitBadge: catalog?.subtitle ?? "Kit [WIP]",
+        masteryLevel: Math.max(1, c.masteryLevel ?? 1)
       };
     });
   }
@@ -158,6 +160,24 @@ export class CharactersPageComponent implements OnInit {
     const char = this.activeCharacter;
     if (!char) return '';
     return this.accountStore.catalogs().characterById[char.characterId]?.subtitle ?? '';
+  }
+
+  get activeCharacterFixedKit(): string[] {
+    const char = this.activeCharacter;
+    if (!char) {
+      return [];
+    }
+
+    return this.accountStore.catalogs().characterById[char.characterId]?.fixedWeaponNames ?? [];
+  }
+
+  get isSelectedCharacterActive(): boolean {
+    const selectedCharacterId = this.selectedCharacterId();
+    if (!selectedCharacterId) {
+      return false;
+    }
+
+    return this.accountStore.state()?.activeCharacterId === selectedCharacterId;
   }
 
   get activeCharacterImageUrl(): string | null {
@@ -457,7 +477,7 @@ export class CharactersPageComponent implements OnInit {
 
   selectEntry(id: string): void {
     this.selectedCharacterId.set(id);
-    void this.syncActiveCharacterAndLoadout(id);
+    void this.loadSigilState(id);
   }
 
   previousEntry(): void {
@@ -571,6 +591,19 @@ export class CharactersPageComponent implements OnInit {
     }
   }
 
+  async setSelectedCharacterAsActive(): Promise<void> {
+    const characterId = this.selectedCharacterId();
+    if (!characterId || this.isSelectedCharacterActive) {
+      return;
+    }
+
+    try {
+      await this.accountStore.setActiveCharacter(characterId);
+    } catch {
+      // Keep current panel selection even if active-character sync fails.
+    }
+  }
+
   private normalizeRarity(instanceRarity: string | null | undefined, itemRarity: string | null | undefined): string {
     const normalizedInstance = (instanceRarity ?? "").trim().toLowerCase();
     if (normalizedInstance.length > 0) {
@@ -642,16 +675,6 @@ export class CharactersPageComponent implements OnInit {
     }
 
     return usageByInstanceId;
-  }
-
-  private async syncActiveCharacterAndLoadout(characterId: string): Promise<void> {
-    try {
-      await this.accountStore.setActiveCharacter(characterId);
-    } catch {
-      // Character selection should still update local UI even if backend sync fails.
-    }
-
-    await this.loadSigilState(characterId);
   }
 
   private async loadSigilState(characterId: string): Promise<void> {

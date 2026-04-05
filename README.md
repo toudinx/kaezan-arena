@@ -143,6 +143,12 @@ Bestiary delta calculation: `runStartBestiaryKills` is captured from the account
 - Account progression now includes Account Level + Account XP (Lv. 1-100), earned from runs and kills
 - Zone selection happens before each run (Zone 1-5), with unlock gates at Account Lv. 1/21/41/61/81
 - Zone multipliers scale mob HP and outgoing damage on top of normal run scaling
+- Mob visual tier aura is derived from run zone (same sprite, no texture edits):
+  - Zone 1 / Hollow: no aura
+  - Zone 2 / Brave: subtle green glow
+  - Zone 3 / Awakened: medium blue aura
+  - Zone 4 / Exalted: strong purple aura
+  - Zone 5 / Ascendant: intense orange-gold aura
 - Daily Contracts system assigns 3 deterministic account-specific contracts per UTC day (resets at midnight UTC)
 - Kaeros is primarily earned through Daily Contracts completion (not regular kill/run baseline rewards)
 - Completing Daily Contracts also grants Account XP rewards in addition to Kaeros
@@ -156,7 +162,7 @@ Bestiary delta calculation: `runStartBestiaryKills` is captured from the account
   - Dropped Sigils go directly to account inventory during runs; equip/unequip remains in Characters page only
 - **Ascendant Unlock System:** Each Sigil slot tier has an Ascendant unlock condition based on Bestiary mastery
   - Unlock condition: Rank 5 (100 kills) in ALL species of that tier — evaluated per character after every drop award
-  - Hollow tier (Slot 1) requires Rank 5 in: Melee Brute, Ranged Archer, Melee Demon, Ranged Dragon
+  - Hollow tier (Slot 1) requires Rank 5 in: Melee Brute, Ranged Archer, Melee Demon, Hollow Shaman
   - Future tiers (Brave–Ascendant) will add more species as they are implemented
   - Tier-to-species mapping is data-driven: `ArenaConfig.BestiaryConfig.TierSpecies` is the single source of truth
   - Ascendant unlock state is tracked in `CharacterState.AscendantSigilSlotsUnlocked` (per character, per tier index)

@@ -63,6 +63,44 @@ const CHARACTER_VISUALS_BY_ID: Readonly<Record<string, CharacterVisualSpec>> = {
       }
     }
   },
+  "character:lizard": {
+    displayName: "Kaelis Vex",
+    defaultSkinId: "m",
+    tone: "teal",
+    sigil: "L",
+    skins: {
+      m: {
+        portraits: {
+          homepage: "/assets/packs/arena_v1_0x72_bdragon/sprites/lizard_m_idle_anim_f0.png",
+          prerun: "/assets/packs/arena_v1_0x72_bdragon/sprites/lizard_m_run_anim_f1.png",
+          kaelis: "/assets/packs/arena_v1_0x72_bdragon/sprites/lizard_m_idle_anim_f0.png",
+          roster: "/assets/packs/arena_v1_0x72_bdragon/sprites/lizard_m_idle_anim_f0.png"
+        },
+        gameplay: {
+          idle: "sprite.player.lizard_m.idle",
+          run: "sprite.player.lizard_m.run",
+          hit: "sprite.player.lizard_m.hit"
+        },
+        runImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/lizard_m_run_anim_f1.png",
+        hitImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/lizard_m_hit_anim_f0.png"
+      },
+      f: {
+        portraits: {
+          homepage: "/assets/packs/arena_v1_0x72_bdragon/sprites/lizard_f_idle_anim_f0.png",
+          prerun: "/assets/packs/arena_v1_0x72_bdragon/sprites/lizard_f_run_anim_f1.png",
+          kaelis: "/assets/packs/arena_v1_0x72_bdragon/sprites/lizard_f_idle_anim_f0.png",
+          roster: "/assets/packs/arena_v1_0x72_bdragon/sprites/lizard_f_idle_anim_f0.png"
+        },
+        gameplay: {
+          idle: "sprite.player.lizard_f.idle",
+          run: "sprite.player.lizard_f.run",
+          hit: "sprite.player.lizard_f.hit"
+        },
+        runImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/lizard_f_run_anim_f1.png",
+        hitImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/lizard_f_idle_anim_f0.png"
+      }
+    }
+  },
   "character:sylwen": {
     aliases: ["character:ranged_prototype"],
     displayName: "Sylwen",
@@ -118,18 +156,18 @@ const CHARACTER_VISUALS_BY_ID: Readonly<Record<string, CharacterVisualSpec>> = {
     skins: {
       "1": {
         portraits: {
-          homepage: "/assets/packs/arena_v1_0x72_bdragon/sprites/wizzard_m_idle_anim_f0.png",
-          prerun: "/assets/packs/arena_v1_0x72_bdragon/sprites/wizzard_m_run_anim_f1.png",
-          kaelis: "/assets/packs/arena_v1_0x72_bdragon/sprites/wizzard_m_idle_anim_f0.png",
-          roster: "/assets/packs/arena_v1_0x72_bdragon/sprites/wizzard_m_idle_anim_f0.png"
+          homepage: "/assets/packs/arena_v1_0x72_bdragon/sprites/dwarf_f_idle_anim_f0.png",
+          prerun: "/assets/packs/arena_v1_0x72_bdragon/sprites/dwarf_f_run_anim_f1.png",
+          kaelis: "/assets/packs/arena_v1_0x72_bdragon/sprites/dwarf_f_idle_anim_f0.png",
+          roster: "/assets/packs/arena_v1_0x72_bdragon/sprites/dwarf_f_idle_anim_f0.png"
         },
         gameplay: {
           idle: "sprite.player.kaelis_ember.idle",
           run: "sprite.player.kaelis_ember.run",
           hit: "sprite.player.kaelis_ember.hit"
         },
-        runImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/wizzard_m_run_anim_f1.png",
-        hitImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/wizzard_m_hit_anim_f0.png"
+        runImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/dwarf_f_run_anim_f1.png",
+        hitImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/dwarf_f_hit_anim_f0.png"
       }
     }
   }

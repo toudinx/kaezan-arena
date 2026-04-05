@@ -5,7 +5,7 @@ describe("mob-visuals", () => {
     expect(resolveMobSpriteSemanticId(1, "idle")).toBe("sprite.mob.brute.idle");
     expect(resolveMobSpriteSemanticId(2, "run")).toBe("sprite.mob.archer.run");
     expect(resolveMobSpriteSemanticId(3, "hit")).toBe("sprite.mob.demon.hit");
-    expect(resolveMobSpriteSemanticId(4, "idle")).toBe("sprite.mob.dragon.idle");
+    expect(resolveMobSpriteSemanticId(4, "idle")).toBe("sprite.mob.shaman.idle");
   });
 
   it("falls back to slime sprite set when archetype is missing", () => {

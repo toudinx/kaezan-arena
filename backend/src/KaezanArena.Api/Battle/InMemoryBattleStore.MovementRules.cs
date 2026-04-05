@@ -122,7 +122,11 @@ public sealed partial class InMemoryBattleStore
 
     private static bool IsRangedArchetype(MobArchetype archetype)
     {
-        return archetype is MobArchetype.RangedArcher or MobArchetype.RangedDragon;
+        return archetype is MobArchetype.RangedArcher
+            or MobArchetype.RangedShaman
+            or MobArchetype.RangedImp
+            or MobArchetype.RangedSwampy
+            or MobArchetype.RangedMuddy;
     }
 
     private static bool TryChooseRangedBandMove(
@@ -130,6 +134,36 @@ public sealed partial class InMemoryBattleStore
         StoredActor mob,
         StoredActor player,
         MobSlotState slot,
+        out (int TileX, int TileY)? destination)
+    {
+        return TryChooseRangedBandMoveWithDistances(
+            state, mob, player, slot,
+            preferredMin: ArenaConfig.RangedPreferredDistanceMin,
+            preferredMax: ArenaConfig.RangedPreferredDistanceMax,
+            out destination);
+    }
+
+    private static bool TryChooseAggressiveBandMove(
+        StoredBattle state,
+        StoredActor mob,
+        StoredActor player,
+        MobSlotState slot,
+        out (int TileX, int TileY)? destination)
+    {
+        return TryChooseRangedBandMoveWithDistances(
+            state, mob, player, slot,
+            preferredMin: ArenaConfig.RangedMuddyPreferredDistanceMin,
+            preferredMax: ArenaConfig.RangedMuddyPreferredDistanceMax,
+            out destination);
+    }
+
+    private static bool TryChooseRangedBandMoveWithDistances(
+        StoredBattle state,
+        StoredActor mob,
+        StoredActor player,
+        MobSlotState slot,
+        int preferredMin,
+        int preferredMax,
         out (int TileX, int TileY)? destination)
     {
         if (slot.CommitTicksRemaining > 0)
@@ -140,17 +174,17 @@ public sealed partial class InMemoryBattleStore
         }
 
         var distance = ComputeChebyshevDistance(mob, player.TileX, player.TileY);
-        if (distance >= ArenaConfig.RangedApproachDistance)
+        if (distance >= preferredMax + 1)
         {
             return TryGetFirstWalkableGreedyStepTowardTarget(state, mob, player.TileX, player.TileY, out destination);
         }
 
-        if (distance <= 1)
+        if (distance <= preferredMin - 1)
         {
             return TryGetFirstWalkableGreedyStepAwayFromTarget(state, mob, player.TileX, player.TileY, out destination);
         }
 
-        if (TryGetFirstWalkableBandOrbitStep(state, mob, player, distance, out destination))
+        if (TryGetFirstWalkableBandOrbitStep(state, mob, player, distance, preferredMin, preferredMax, out destination))
         {
             return true;
         }
@@ -164,6 +198,8 @@ public sealed partial class InMemoryBattleStore
         StoredActor mob,
         StoredActor player,
         int currentDistance,
+        int preferredMin,
+        int preferredMax,
         out (int TileX, int TileY)? destination)
     {
         destination = null;
@@ -177,7 +213,7 @@ public sealed partial class InMemoryBattleStore
             }
 
             var nextDistance = ComputeChebyshevDistance(candidate.TileX, candidate.TileY, player.TileX, player.TileY);
-            if (nextDistance < ArenaConfig.RangedPreferredDistanceMin || nextDistance > ArenaConfig.RangedPreferredDistanceMax)
+            if (nextDistance < preferredMin || nextDistance > preferredMax)
             {
                 continue;
             }

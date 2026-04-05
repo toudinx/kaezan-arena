@@ -133,29 +133,77 @@
     "sprite.player.kaelis_ember.idle": {
       "type": "anim",
       "frames": [
-        "sprites/wizzard_m_idle_anim_f0.png",
-        "sprites/wizzard_m_idle_anim_f1.png",
-        "sprites/wizzard_m_idle_anim_f2.png",
-        "sprites/wizzard_m_idle_anim_f3.png"
+        "sprites/dwarf_f_idle_anim_f0.png",
+        "sprites/dwarf_f_idle_anim_f1.png",
+        "sprites/dwarf_f_idle_anim_f2.png",
+        "sprites/dwarf_f_idle_anim_f3.png"
       ],
       "fps": 8
     },
     "sprite.player.kaelis_ember.run": {
       "type": "anim",
       "frames": [
-        "sprites/wizzard_m_run_anim_f0.png",
-        "sprites/wizzard_m_run_anim_f1.png",
-        "sprites/wizzard_m_run_anim_f2.png",
-        "sprites/wizzard_m_run_anim_f3.png"
+        "sprites/dwarf_f_run_anim_f0.png",
+        "sprites/dwarf_f_run_anim_f1.png",
+        "sprites/dwarf_f_run_anim_f2.png",
+        "sprites/dwarf_f_run_anim_f3.png"
       ],
       "fps": 10
     },
     "sprite.player.kaelis_ember.hit": {
       "type": "anim",
       "frames": [
-        "sprites/wizzard_m_hit_anim_f0.png"
+        "sprites/dwarf_f_hit_anim_f0.png"
       ],
       "fps": 12
+    },
+    "sprite.player.lizard_m.idle": {
+      "type": "anim",
+      "frames": [
+        "sprites/lizard_m_idle_anim_f0.png",
+        "sprites/lizard_m_idle_anim_f1.png",
+        "sprites/lizard_m_idle_anim_f2.png",
+        "sprites/lizard_m_idle_anim_f3.png"
+      ],
+      "fps": 8
+    },
+    "sprite.player.lizard_m.run": {
+      "type": "anim",
+      "frames": [
+        "sprites/lizard_m_run_anim_f0.png",
+        "sprites/lizard_m_run_anim_f1.png",
+        "sprites/lizard_m_run_anim_f2.png",
+        "sprites/lizard_m_run_anim_f3.png"
+      ],
+      "fps": 10
+    },
+    "sprite.player.lizard_m.hit": {
+      "type": "image",
+      "path": "sprites/lizard_m_hit_anim_f0.png"
+    },
+    "sprite.player.lizard_f.idle": {
+      "type": "anim",
+      "frames": [
+        "sprites/lizard_f_idle_anim_f0.png",
+        "sprites/lizard_f_idle_anim_f1.png",
+        "sprites/lizard_f_idle_anim_f2.png",
+        "sprites/lizard_f_idle_anim_f3.png"
+      ],
+      "fps": 8
+    },
+    "sprite.player.lizard_f.run": {
+      "type": "anim",
+      "frames": [
+        "sprites/lizard_f_run_anim_f0.png",
+        "sprites/lizard_f_run_anim_f1.png",
+        "sprites/lizard_f_run_anim_f2.png",
+        "sprites/lizard_f_run_anim_f3.png"
+      ],
+      "fps": 10
+    },
+    "sprite.player.lizard_f.hit": {
+      "type": "image",
+      "path": "sprites/lizard_f_idle_anim_f0.png"
     },
     "sprite.mob.slime.idle": {
       "type": "anim",
@@ -265,30 +313,270 @@
       ],
       "fps": 12
     },
-    "sprite.mob.dragon.idle": {
+    "sprite.mob.shaman.idle": {
       "type": "anim",
       "frames": [
-        "sprites/lizard_m_idle_anim_f0.png",
-        "sprites/lizard_m_idle_anim_f1.png",
-        "sprites/lizard_m_idle_anim_f2.png",
-        "sprites/lizard_m_idle_anim_f3.png"
+        "sprites/orc_shaman_idle_anim_f0.png",
+        "sprites/orc_shaman_idle_anim_f1.png",
+        "sprites/orc_shaman_idle_anim_f2.png",
+        "sprites/orc_shaman_idle_anim_f3.png"
       ],
       "fps": 8
     },
-    "sprite.mob.dragon.run": {
+    "sprite.mob.shaman.run": {
       "type": "anim",
       "frames": [
-        "sprites/lizard_m_run_anim_f0.png",
-        "sprites/lizard_m_run_anim_f1.png",
-        "sprites/lizard_m_run_anim_f2.png",
-        "sprites/lizard_m_run_anim_f3.png"
+        "sprites/orc_shaman_run_anim_f0.png",
+        "sprites/orc_shaman_run_anim_f1.png",
+        "sprites/orc_shaman_run_anim_f2.png",
+        "sprites/orc_shaman_run_anim_f3.png"
       ],
       "fps": 10
     },
-    "sprite.mob.dragon.hit": {
+    "sprite.mob.shaman.hit": {
+      "type": "image",
+      "path": "sprites/orc_shaman_idle_anim_f0.png"
+    },
+    "sprite.mob.skeleton.idle": {
       "type": "anim",
       "frames": [
-        "sprites/lizard_m_hit_anim_f0.png"
+        "sprites/skelet_idle_anim_f0.png",
+        "sprites/skelet_idle_anim_f1.png",
+        "sprites/skelet_idle_anim_f2.png",
+        "sprites/skelet_idle_anim_f3.png"
+      ],
+      "fps": 8
+    },
+    "sprite.mob.skeleton.run": {
+      "type": "anim",
+      "frames": [
+        "sprites/skelet_run_anim_f0.png",
+        "sprites/skelet_run_anim_f1.png",
+        "sprites/skelet_run_anim_f2.png",
+        "sprites/skelet_run_anim_f3.png"
+      ],
+      "fps": 10
+    },
+    "sprite.mob.skeleton.hit": {
+      "type": "anim",
+      "frames": [
+        "sprites/skelet_idle_anim_f0.png"
+      ],
+      "fps": 12
+    },
+    "sprite.mob.wogol.idle": {
+      "type": "anim",
+      "frames": [
+        "sprites/wogol_idle_anim_f0.png",
+        "sprites/wogol_idle_anim_f1.png",
+        "sprites/wogol_idle_anim_f2.png",
+        "sprites/wogol_idle_anim_f3.png"
+      ],
+      "fps": 8
+    },
+    "sprite.mob.wogol.run": {
+      "type": "anim",
+      "frames": [
+        "sprites/wogol_run_anim_f0.png",
+        "sprites/wogol_run_anim_f1.png",
+        "sprites/wogol_run_anim_f2.png",
+        "sprites/wogol_run_anim_f3.png"
+      ],
+      "fps": 10
+    },
+    "sprite.mob.wogol.hit": {
+      "type": "anim",
+      "frames": [
+        "sprites/wogol_idle_anim_f0.png"
+      ],
+      "fps": 12
+    },
+    "sprite.mob.warrior.idle": {
+      "type": "anim",
+      "frames": [
+        "sprites/orc_warrior_idle_anim_f0.png",
+        "sprites/orc_warrior_idle_anim_f1.png",
+        "sprites/orc_warrior_idle_anim_f2.png",
+        "sprites/orc_warrior_idle_anim_f3.png"
+      ],
+      "fps": 8
+    },
+    "sprite.mob.warrior.run": {
+      "type": "anim",
+      "frames": [
+        "sprites/orc_warrior_run_anim_f0.png",
+        "sprites/orc_warrior_run_anim_f1.png",
+        "sprites/orc_warrior_run_anim_f2.png",
+        "sprites/orc_warrior_run_anim_f3.png"
+      ],
+      "fps": 10
+    },
+    "sprite.mob.warrior.hit": {
+      "type": "anim",
+      "frames": [
+        "sprites/orc_warrior_idle_anim_f0.png"
+      ],
+      "fps": 12
+    },
+    "sprite.mob.zombie.idle": {
+      "type": "anim",
+      "frames": [
+        "sprites/zombie_anim_f1.png",
+        "sprites/zombie_anim_f2.png",
+        "sprites/zombie_anim_f3.png",
+        "sprites/zombie_anim_f10.png"
+      ],
+      "fps": 8
+    },
+    "sprite.mob.zombie.run": {
+      "type": "anim",
+      "frames": [
+        "sprites/zombie_anim_f1.png",
+        "sprites/zombie_anim_f2.png",
+        "sprites/zombie_anim_f3.png",
+        "sprites/zombie_anim_f10.png"
+      ],
+      "fps": 8
+    },
+    "sprite.mob.zombie.hit": {
+      "type": "anim",
+      "frames": [
+        "sprites/zombie_anim_f1.png"
+      ],
+      "fps": 12
+    },
+    "sprite.mob.tiny_zombie.idle": {
+      "type": "anim",
+      "frames": [
+        "sprites/tiny_zombie_idle_anim_f0.png",
+        "sprites/tiny_zombie_idle_anim_f1.png",
+        "sprites/tiny_zombie_idle_anim_f2.png",
+        "sprites/tiny_zombie_idle_anim_f3.png"
+      ],
+      "fps": 8
+    },
+    "sprite.mob.tiny_zombie.run": {
+      "type": "anim",
+      "frames": [
+        "sprites/tiny_zombie_run_anim_f0.png",
+        "sprites/tiny_zombie_run_anim_f1.png",
+        "sprites/tiny_zombie_run_anim_f2.png",
+        "sprites/tiny_zombie_run_anim_f3.png"
+      ],
+      "fps": 10
+    },
+    "sprite.mob.tiny_zombie.hit": {
+      "type": "anim",
+      "frames": [
+        "sprites/tiny_zombie_idle_anim_f0.png"
+      ],
+      "fps": 12
+    },
+    "sprite.mob.imp.idle": {
+      "type": "anim",
+      "frames": [
+        "sprites/imp_idle_anim_f0.png",
+        "sprites/imp_idle_anim_f1.png",
+        "sprites/imp_idle_anim_f2.png",
+        "sprites/imp_idle_anim_f3.png"
+      ],
+      "fps": 8
+    },
+    "sprite.mob.imp.run": {
+      "type": "anim",
+      "frames": [
+        "sprites/imp_run_anim_f0.png",
+        "sprites/imp_run_anim_f1.png",
+        "sprites/imp_run_anim_f2.png",
+        "sprites/imp_run_anim_f3.png"
+      ],
+      "fps": 10
+    },
+    "sprite.mob.imp.hit": {
+      "type": "anim",
+      "frames": [
+        "sprites/imp_idle_anim_f0.png"
+      ],
+      "fps": 12
+    },
+    "sprite.mob.swampy.idle": {
+      "type": "anim",
+      "frames": [
+        "sprites/swampy_anim_f0.png",
+        "sprites/swampy_anim_f1.png",
+        "sprites/swampy_anim_f2.png",
+        "sprites/swampy_anim_f3.png"
+      ],
+      "fps": 6
+    },
+    "sprite.mob.swampy.run": {
+      "type": "anim",
+      "frames": [
+        "sprites/swampy_anim_f0.png",
+        "sprites/swampy_anim_f1.png",
+        "sprites/swampy_anim_f2.png",
+        "sprites/swampy_anim_f3.png"
+      ],
+      "fps": 6
+    },
+    "sprite.mob.swampy.hit": {
+      "type": "anim",
+      "frames": [
+        "sprites/swampy_anim_f0.png"
+      ],
+      "fps": 12
+    },
+    "sprite.mob.muddy.idle": {
+      "type": "anim",
+      "frames": [
+        "sprites/muddy_anim_f0.png",
+        "sprites/muddy_anim_f1.png",
+        "sprites/muddy_anim_f2.png",
+        "sprites/muddy_anim_f3.png"
+      ],
+      "fps": 6
+    },
+    "sprite.mob.muddy.run": {
+      "type": "anim",
+      "frames": [
+        "sprites/muddy_anim_f0.png",
+        "sprites/muddy_anim_f1.png",
+        "sprites/muddy_anim_f2.png",
+        "sprites/muddy_anim_f3.png"
+      ],
+      "fps": 6
+    },
+    "sprite.mob.muddy.hit": {
+      "type": "anim",
+      "frames": [
+        "sprites/muddy_anim_f0.png"
+      ],
+      "fps": 12
+    },
+    "sprite.mob.slug.idle": {
+      "type": "anim",
+      "frames": [
+        "sprites/tiny_slug_anim_f0.png",
+        "sprites/tiny_slug_anim_f1.png",
+        "sprites/tiny_slug_anim_f2.png",
+        "sprites/tiny_slug_anim_f3.png"
+      ],
+      "fps": 4
+    },
+    "sprite.mob.slug.run": {
+      "type": "anim",
+      "frames": [
+        "sprites/tiny_slug_anim_f0.png",
+        "sprites/tiny_slug_anim_f1.png",
+        "sprites/tiny_slug_anim_f2.png",
+        "sprites/tiny_slug_anim_f3.png"
+      ],
+      "fps": 4
+    },
+    "sprite.mob.slug.hit": {
+      "type": "anim",
+      "frames": [
+        "sprites/tiny_slug_anim_f0.png"
       ],
       "fps": 12
     },
@@ -338,7 +626,7 @@
       "type": "alias",
       "assetId": "fx.exori.base"
     },
-    "fx.mob.dragon.breath": {
+    "fx.mob.shaman.storm_pulse": {
       "type": "alias",
       "assetId": "fx.exori.base"
     },
@@ -403,7 +691,7 @@
       "mobBruteCleave": "fx.mob.brute.cleave",
       "mobArcherPowerShot": "fx.mob.archer.power_shot",
       "mobDemonBeam": "fx.mob.demon.beam",
-      "mobDragonBreath": "fx.mob.dragon.breath"
+      "mobShamanStormPulse": "fx.mob.shaman.storm_pulse"
     },
     "tiles": {
       "defaultFloor": "tile.floor.default",
@@ -425,6 +713,12 @@
       "playerKaelisEmberIdle": "sprite.player.kaelis_ember.idle",
       "playerKaelisEmberRun": "sprite.player.kaelis_ember.run",
       "playerKaelisEmberHit": "sprite.player.kaelis_ember.hit",
+      "playerLizardMIdle": "sprite.player.lizard_m.idle",
+      "playerLizardMRun": "sprite.player.lizard_m.run",
+      "playerLizardMHit": "sprite.player.lizard_m.hit",
+      "playerLizardFIdle": "sprite.player.lizard_f.idle",
+      "playerLizardFRun": "sprite.player.lizard_f.run",
+      "playerLizardFHit": "sprite.player.lizard_f.hit",
       "mobSlimeIdle": "sprite.mob.slime.idle",
       "mobSlimeRun": "sprite.mob.slime.run",
       "mobSlimeHit": "sprite.mob.slime.hit",
@@ -437,9 +731,9 @@
       "mobDemonIdle": "sprite.mob.demon.idle",
       "mobDemonRun": "sprite.mob.demon.run",
       "mobDemonHit": "sprite.mob.demon.hit",
-      "mobDragonIdle": "sprite.mob.dragon.idle",
-      "mobDragonRun": "sprite.mob.dragon.run",
-      "mobDragonHit": "sprite.mob.dragon.hit",
+      "mobShamanIdle": "sprite.mob.shaman.idle",
+      "mobShamanRun": "sprite.mob.shaman.run",
+      "mobShamanHit": "sprite.mob.shaman.hit",
       "heroPlaceholder": "sprite.player.idle",
       "playerSylwen1Idle": "sprite.player.sylwen.1.idle",
       "playerSylwen1Run": "sprite.player.sylwen.1.run",

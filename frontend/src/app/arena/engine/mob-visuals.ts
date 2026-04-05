@@ -29,9 +29,54 @@ const MOB_SPRITE_SETS: Readonly<Record<MobArchetypeValue, SpriteSet>> = {
     hit: "sprite.mob.demon.hit"
   },
   4: {
-    idle: "sprite.mob.dragon.idle",
-    run: "sprite.mob.dragon.run",
-    hit: "sprite.mob.dragon.hit"
+    idle: "sprite.mob.shaman.idle",
+    run: "sprite.mob.shaman.run",
+    hit: "sprite.mob.shaman.hit"
+  },
+  5: {
+    idle: "sprite.mob.skeleton.idle",
+    run: "sprite.mob.skeleton.run",
+    hit: "sprite.mob.skeleton.hit"
+  },
+  6: {
+    idle: "sprite.mob.wogol.idle",
+    run: "sprite.mob.wogol.run",
+    hit: "sprite.mob.wogol.hit"
+  },
+  7: {
+    idle: "sprite.mob.warrior.idle",
+    run: "sprite.mob.warrior.run",
+    hit: "sprite.mob.warrior.hit"
+  },
+  8: {
+    idle: "sprite.mob.zombie.idle",
+    run: "sprite.mob.zombie.run",
+    hit: "sprite.mob.zombie.hit"
+  },
+  9: {
+    idle: "sprite.mob.tiny_zombie.idle",
+    run: "sprite.mob.tiny_zombie.run",
+    hit: "sprite.mob.tiny_zombie.hit"
+  },
+  10: {
+    idle: "sprite.mob.imp.idle",
+    run: "sprite.mob.imp.run",
+    hit: "sprite.mob.imp.hit"
+  },
+  11: {
+    idle: "sprite.mob.swampy.idle",
+    run: "sprite.mob.swampy.run",
+    hit: "sprite.mob.swampy.hit"
+  },
+  12: {
+    idle: "sprite.mob.muddy.idle",
+    run: "sprite.mob.muddy.run",
+    hit: "sprite.mob.muddy.hit"
+  },
+  13: {
+    idle: "sprite.mob.slug.idle",
+    run: "sprite.mob.slug.run",
+    hit: "sprite.mob.slug.hit"
   }
 };
 
@@ -39,11 +84,22 @@ const MOB_ACCENT_COLORS: Readonly<Record<MobArchetypeValue, string>> = {
   1: "#d97706",
   2: "#22d3ee",
   3: "#ef4444",
-  4: "#a855f7"
+  4: "#a855f7",
+  5: "#94a3b8",
+  6: "#84cc16",
+  7: "#f97316",
+  8: "#4ade80",
+  9: "#86efac",
+  10: "#f43f5e",
+  11: "#4d7c0f",
+  12: "#78716c",
+  13: "#a3e635"
 };
 
 export function normalizeMobArchetype(value: number | null | undefined): MobArchetypeValue | undefined {
-  if (value === 1 || value === 2 || value === 3 || value === 4) {
+  if (value === 1 || value === 2 || value === 3 || value === 4 ||
+      value === 5 || value === 6 || value === 7 || value === 8 || value === 9 ||
+      value === 10 || value === 11 || value === 12 || value === 13) {
     return value;
   }
 

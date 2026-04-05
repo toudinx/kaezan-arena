@@ -16,7 +16,16 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         MobArchetype.MeleeBrute,
         MobArchetype.RangedArcher,
         MobArchetype.MeleeDemon,
-        MobArchetype.RangedDragon
+        MobArchetype.RangedShaman,
+        MobArchetype.MeleeSkeleton,
+        MobArchetype.MeleeWogol,
+        MobArchetype.MeleeWarrior,
+        MobArchetype.MeleeZombie,
+        MobArchetype.MeleeTinyZombie,
+        MobArchetype.RangedImp,
+        MobArchetype.RangedSwampy,
+        MobArchetype.RangedMuddy,
+        MobArchetype.MeleeSlug
     ];
     // Offensive priority for the Assist: ExoriMas -> Exori -> ExoriMin.
     // Ultimate auto-cast is handled separately by the Ultimate gauge.
@@ -57,10 +66,19 @@ public sealed partial class InMemoryBattleStore : IBattleStore
     private static readonly IReadOnlyDictionary<MobArchetype, string> SpeciesByArchetype =
         new Dictionary<MobArchetype, string>
         {
-            [MobArchetype.MeleeBrute]   = ArenaConfig.SpeciesIds.MeleeBrute,
-            [MobArchetype.RangedArcher] = ArenaConfig.SpeciesIds.RangedArcher,
-            [MobArchetype.MeleeDemon]   = ArenaConfig.SpeciesIds.MeleeDemon,
-            [MobArchetype.RangedDragon] = ArenaConfig.SpeciesIds.RangedDragon,
+            [MobArchetype.MeleeBrute]        = ArenaConfig.SpeciesIds.MeleeBrute,
+            [MobArchetype.RangedArcher]      = ArenaConfig.SpeciesIds.RangedArcher,
+            [MobArchetype.MeleeDemon]        = ArenaConfig.SpeciesIds.MeleeDemon,
+            [MobArchetype.RangedShaman]      = ArenaConfig.SpeciesIds.RangedShaman,
+            [MobArchetype.MeleeSkeleton]     = ArenaConfig.SpeciesIds.MeleeSkeleton,
+            [MobArchetype.MeleeWogol]        = ArenaConfig.SpeciesIds.MeleeWogol,
+            [MobArchetype.MeleeWarrior]      = ArenaConfig.SpeciesIds.MeleeWarrior,
+            [MobArchetype.MeleeZombie]       = ArenaConfig.SpeciesIds.MeleeZombie,
+            [MobArchetype.MeleeTinyZombie]   = ArenaConfig.SpeciesIds.MeleeTinyZombie,
+            [MobArchetype.RangedImp]         = ArenaConfig.SpeciesIds.RangedImp,
+            [MobArchetype.RangedSwampy]      = ArenaConfig.SpeciesIds.RangedSwampy,
+            [MobArchetype.RangedMuddy]       = ArenaConfig.SpeciesIds.RangedMuddy,
+            [MobArchetype.MeleeSlug]         = ArenaConfig.SpeciesIds.MeleeSlug,
         };
     private static readonly IReadOnlySet<string> IncompatibleCardPairs =
         new HashSet<string>(StringComparer.Ordinal)
@@ -235,24 +253,123 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                 AbilityRangeTiles: ArenaConfig.MeleeDemonAbilityRangeTiles,
                 AbilityCooldownMs: ArenaConfig.MeleeDemonAbilityCooldownMs,
                 AbilityFxId: ArenaConfig.MobDemonBeamFxId),
-            [MobArchetype.RangedDragon] = new(
-                MaxHp: ArenaConfig.RangedDragonMaxHp,
-                MoveCooldownMs: ArenaConfig.RangedDragonMoveCooldownMs,
-                AutoAttackRangeTiles: ArenaConfig.RangedDragonAutoAttackRangeTiles,
-                AutoAttackDamage: ArenaConfig.RangedDragonAutoAttackDamage,
-                AutoAttackCooldownMs: ArenaConfig.RangedDragonAutoAttackCooldownMs,
-                AbilityDamage: ArenaConfig.RangedDragonAbilityDamage,
-                AbilityRangeTiles: ArenaConfig.RangedDragonAbilityRangeTiles,
-                AbilityCooldownMs: ArenaConfig.RangedDragonAbilityCooldownMs,
-                AbilityFxId: ArenaConfig.MobDragonBreathFxId)
+            [MobArchetype.RangedShaman] = new(
+                MaxHp: ArenaConfig.RangedShamanMaxHp,
+                MoveCooldownMs: ArenaConfig.RangedShamanMoveCooldownMs,
+                AutoAttackRangeTiles: ArenaConfig.RangedShamanAutoAttackRangeTiles,
+                AutoAttackDamage: ArenaConfig.RangedShamanAutoAttackDamage,
+                AutoAttackCooldownMs: ArenaConfig.RangedShamanAutoAttackCooldownMs,
+                AbilityDamage: ArenaConfig.RangedShamanAbilityDamage,
+                AbilityRangeTiles: ArenaConfig.RangedShamanAbilityRangeTiles,
+                AbilityCooldownMs: ArenaConfig.RangedShamanAbilityCooldownMs,
+                AbilityFxId: ArenaConfig.MobShamanStormPulseFxId),
+            [MobArchetype.MeleeSkeleton] = new(
+                MaxHp: ArenaConfig.MeleeSkeletonMaxHp,
+                MoveCooldownMs: ArenaConfig.MeleeSkeletonMoveCooldownMs,
+                AutoAttackRangeTiles: ArenaConfig.MeleeSkeletonAutoAttackRangeTiles,
+                AutoAttackDamage: ArenaConfig.MeleeSkeletonAutoAttackDamage,
+                AutoAttackCooldownMs: ArenaConfig.MeleeSkeletonAutoAttackCooldownMs,
+                AbilityDamage: ArenaConfig.MeleeSkeletonAbilityDamage,
+                AbilityRangeTiles: ArenaConfig.MeleeSkeletonAbilityRangeTiles,
+                AbilityCooldownMs: ArenaConfig.MeleeSkeletonAbilityCooldownMs,
+                AbilityFxId: ArenaConfig.MobSkeletonSoulBurstFxId),
+            [MobArchetype.MeleeWogol] = new(
+                MaxHp: ArenaConfig.MeleeWogolMaxHp,
+                MoveCooldownMs: ArenaConfig.MeleeWogolMoveCooldownMs,
+                AutoAttackRangeTiles: ArenaConfig.MeleeWogolAutoAttackRangeTiles,
+                AutoAttackDamage: ArenaConfig.MeleeWogolAutoAttackDamage,
+                AutoAttackCooldownMs: ArenaConfig.MeleeWogolAutoAttackCooldownMs,
+                AbilityDamage: ArenaConfig.MeleeWogolAbilityDamage,
+                AbilityRangeTiles: ArenaConfig.MeleeWogolAbilityRangeTiles,
+                AbilityCooldownMs: ArenaConfig.MeleeWogolAbilityCooldownMs,
+                AbilityFxId: ArenaConfig.MobWogolGroundSlamFxId),
+            [MobArchetype.MeleeWarrior] = new(
+                MaxHp: ArenaConfig.MeleeWarriorMaxHp,
+                MoveCooldownMs: ArenaConfig.MeleeWarriorMoveCooldownMs,
+                AutoAttackRangeTiles: ArenaConfig.MeleeWarriorAutoAttackRangeTiles,
+                AutoAttackDamage: ArenaConfig.MeleeWarriorAutoAttackDamage,
+                AutoAttackCooldownMs: ArenaConfig.MeleeWarriorAutoAttackCooldownMs,
+                AbilityDamage: ArenaConfig.MeleeWarriorAbilityDamage,
+                AbilityRangeTiles: ArenaConfig.MeleeWarriorAbilityRangeTiles,
+                AbilityCooldownMs: ArenaConfig.MeleeWarriorAbilityCooldownMs,
+                AbilityFxId: ArenaConfig.MobWarriorCleaveFxId),
+            [MobArchetype.MeleeZombie] = new(
+                MaxHp: ArenaConfig.MeleeZombieMaxHp,
+                MoveCooldownMs: ArenaConfig.MeleeZombieMoveCooldownMs,
+                AutoAttackRangeTiles: ArenaConfig.MeleeZombieAutoAttackRangeTiles,
+                AutoAttackDamage: ArenaConfig.MeleeZombieAutoAttackDamage,
+                AutoAttackCooldownMs: ArenaConfig.MeleeZombieAutoAttackCooldownMs,
+                AbilityDamage: ArenaConfig.MeleeZombieAbilityDamage,
+                AbilityRangeTiles: ArenaConfig.MeleeZombieAbilityRangeTiles,
+                AbilityCooldownMs: ArenaConfig.MeleeZombieAbilityCooldownMs,
+                AbilityFxId: ArenaConfig.MobZombieSelfHealFxId),
+            [MobArchetype.MeleeTinyZombie] = new(
+                MaxHp: ArenaConfig.MeleeTinyZombieMaxHp,
+                MoveCooldownMs: ArenaConfig.MeleeTinyZombieMoveCooldownMs,
+                AutoAttackRangeTiles: ArenaConfig.MeleeTinyZombieAutoAttackRangeTiles,
+                AutoAttackDamage: ArenaConfig.MeleeTinyZombieAutoAttackDamage,
+                AutoAttackCooldownMs: ArenaConfig.MeleeTinyZombieAutoAttackCooldownMs,
+                AbilityDamage: ArenaConfig.MeleeTinyZombieAbilityDamage,
+                AbilityRangeTiles: ArenaConfig.MeleeTinyZombieAbilityRangeTiles,
+                AbilityCooldownMs: ArenaConfig.MeleeTinyZombieAbilityCooldownMs,
+                AbilityFxId: ""),
+            [MobArchetype.RangedImp] = new(
+                MaxHp: ArenaConfig.RangedImpMaxHp,
+                MoveCooldownMs: ArenaConfig.RangedImpMoveCooldownMs,
+                AutoAttackRangeTiles: ArenaConfig.RangedImpAutoAttackRangeTiles,
+                AutoAttackDamage: ArenaConfig.RangedImpAutoAttackDamage,
+                AutoAttackCooldownMs: ArenaConfig.RangedImpAutoAttackCooldownMs,
+                AbilityDamage: ArenaConfig.RangedImpAbilityDamage,
+                AbilityRangeTiles: ArenaConfig.RangedImpAbilityRangeTiles,
+                AbilityCooldownMs: ArenaConfig.RangedImpAbilityCooldownMs,
+                AbilityFxId: ArenaConfig.MobImpFireballFxId),
+            [MobArchetype.RangedSwampy] = new(
+                MaxHp: ArenaConfig.RangedSwampyMaxHp,
+                MoveCooldownMs: ArenaConfig.RangedSwampyMoveCooldownMs,
+                AutoAttackRangeTiles: ArenaConfig.RangedSwampyAutoAttackRangeTiles,
+                AutoAttackDamage: ArenaConfig.RangedSwampyAutoAttackDamage,
+                AutoAttackCooldownMs: ArenaConfig.RangedSwampyAutoAttackCooldownMs,
+                AbilityDamage: ArenaConfig.RangedSwampyAbilityDamage,
+                AbilityRangeTiles: ArenaConfig.RangedSwampyAbilityRangeTiles,
+                AbilityCooldownMs: ArenaConfig.RangedSwampyAbilityCooldownMs,
+                AbilityFxId: ArenaConfig.MobSwampyMudLobFxId),
+            [MobArchetype.RangedMuddy] = new(
+                MaxHp: ArenaConfig.RangedMuddyMaxHp,
+                MoveCooldownMs: ArenaConfig.RangedMuddyMoveCooldownMs,
+                AutoAttackRangeTiles: ArenaConfig.RangedMuddyAutoAttackRangeTiles,
+                AutoAttackDamage: ArenaConfig.RangedMuddyAutoAttackDamage,
+                AutoAttackCooldownMs: ArenaConfig.RangedMuddyAutoAttackCooldownMs,
+                AbilityDamage: ArenaConfig.RangedMuddyAbilityDamage,
+                AbilityRangeTiles: ArenaConfig.RangedMuddyAbilityRangeTiles,
+                AbilityCooldownMs: ArenaConfig.RangedMuddyAbilityCooldownMs,
+                AbilityFxId: ArenaConfig.MobMuddyOozeShotFxId),
+            [MobArchetype.MeleeSlug] = new(
+                MaxHp: ArenaConfig.MeleeSlugMaxHp,
+                MoveCooldownMs: ArenaConfig.MeleeSlugMoveCooldownMs,
+                AutoAttackRangeTiles: ArenaConfig.MeleeSlugAutoAttackRangeTiles,
+                AutoAttackDamage: ArenaConfig.MeleeSlugAutoAttackDamage,
+                AutoAttackCooldownMs: ArenaConfig.MeleeSlugAutoAttackCooldownMs,
+                AbilityDamage: ArenaConfig.MeleeSlugAbilityDamage,
+                AbilityRangeTiles: ArenaConfig.MeleeSlugAbilityRangeTiles,
+                AbilityCooldownMs: ArenaConfig.MeleeSlugAbilityCooldownMs,
+                AbilityFxId: "")
         };
     private static readonly IReadOnlyDictionary<MobArchetype, IMobBehavior> MobBehaviors =
         new Dictionary<MobArchetype, IMobBehavior>
         {
-            [MobArchetype.MeleeBrute] = new MeleeBruteBehavior(),
-            [MobArchetype.RangedArcher] = new RangedArcherBehavior(),
-            [MobArchetype.MeleeDemon] = new MeleeDemonBehavior(),
-            [MobArchetype.RangedDragon] = new RangedDragonBehavior()
+            [MobArchetype.MeleeBrute]      = new MeleeBruteBehavior(),
+            [MobArchetype.RangedArcher]    = new RangedArcherBehavior(),
+            [MobArchetype.MeleeDemon]      = new MeleeDemonBehavior(),
+            [MobArchetype.RangedShaman]    = new RangedShamanBehavior(),
+            [MobArchetype.MeleeSkeleton]   = new MeleeSkeletonBehavior(),
+            [MobArchetype.MeleeWogol]      = new MeleeWogolBehavior(),
+            [MobArchetype.MeleeWarrior]    = new MeleeWarriorBehavior(),
+            [MobArchetype.MeleeZombie]     = new MeleeZombieBehavior(),
+            [MobArchetype.MeleeTinyZombie] = new MeleeTinyZombieBehavior(),
+            [MobArchetype.RangedImp]       = new RangedImpBehavior(),
+            [MobArchetype.RangedSwampy]    = new RangedSwampyBehavior(),
+            [MobArchetype.RangedMuddy]     = new RangedMuddyBehavior(),
+            [MobArchetype.MeleeSlug]       = new MeleeSlugBehavior()
         };
 
     public InMemoryBattleStore(int? stepDeltaMs = null, IAccountStateStore? accountStateStore = null)
@@ -468,7 +585,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         var preAppliedCommandResults = preAppliedPauseResults;
         TickMobMovement(state);
         TickMobCommitWindows(state);
-        TickDecals(state);
+        TickDecals(state, events);
         commandResults = ApplyCommands(
             state,
             commands,
@@ -2049,22 +2166,21 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         return true;
     }
 
-    private static bool TryCastDragonBreathAbility(
+    private static bool TryCastShamanStormPulseAbility(
         StoredBattle state,
         StoredActor mob,
         StoredActor player,
         MobArchetypeConfig config,
         List<BattleEventDto> events)
     {
-        SetMobFacingTowardTarget(mob, player.TileX, player.TileY);
-        var coneTiles = MobShapePlanner.BuildForwardConeTiles(mob.TileX, mob.TileY, mob.FacingDirection).ToList();
-        var playerInCone = coneTiles.Any(tile => tile.TileX == player.TileX && tile.TileY == player.TileY);
-        if (!playerInCone)
+        var distance = ComputeChebyshevDistance(mob, player.TileX, player.TileY);
+        if (distance > config.AbilityRangeTiles)
         {
             return false;
         }
 
-        EmitFxForTiles(events, coneTiles, config.AbilityFxId, ArenaConfig.DefaultMobElement);
+        var pulseTiles = BuildSquareTiles(mob.TileX, mob.TileY, config.AbilityRangeTiles, includeCenter: true).ToList();
+        EmitFxForTiles(events, pulseTiles, config.AbilityFxId, ArenaConfig.DefaultMobElement);
         ApplyDamageToPlayer(
             state,
             events,
@@ -2073,6 +2189,238 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             ArenaConfig.DefaultMobElement,
             attacker: mob);
         return true;
+    }
+
+    private static void TryCastSkeletonSoulBurst(
+        StoredBattle state,
+        StoredActor mob,
+        StoredActor player,
+        List<BattleEventDto> events)
+    {
+        if (!IsAdjacent(mob, player))
+        {
+            return;
+        }
+
+        var tiles = new[] { (mob.TileX, mob.TileY) };
+        EmitFxForTiles(events, tiles, ArenaConfig.MobSkeletonSoulBurstFxId, ArenaConfig.DefaultMobElement);
+        ApplyDamageToPlayer(
+            state,
+            events,
+            player,
+            ResolveMobOutgoingDamage(state, mob, ArenaConfig.MeleeSkeletonAbilityDamage),
+            ArenaConfig.DefaultMobElement,
+            attacker: mob);
+    }
+
+    private static bool TryCastWogolGroundSlam(
+        StoredBattle state,
+        StoredActor mob,
+        StoredActor player,
+        MobArchetypeConfig config,
+        List<BattleEventDto> events)
+    {
+        if (!IsAdjacent(mob, player))
+        {
+            return false;
+        }
+
+        var aoeSquareTiles = BuildSquareTiles(mob.TileX, mob.TileY, 1, includeCenter: true).ToList();
+        EmitFxForTiles(events, aoeSquareTiles, config.AbilityFxId, ArenaConfig.DefaultMobElement);
+        var playerInAoe = ComputeChebyshevDistance(mob, player.TileX, player.TileY) <= 1;
+        if (playerInAoe)
+        {
+            ApplyDamageToPlayer(
+                state,
+                events,
+                player,
+                ResolveMobOutgoingDamage(state, mob, config.AbilityDamage),
+                ArenaConfig.DefaultMobElement,
+                attacker: mob);
+        }
+
+        return true;
+    }
+
+    private static bool TryCastWarriorCleaveStrike(
+        StoredBattle state,
+        StoredActor mob,
+        StoredActor player,
+        MobArchetypeConfig config,
+        List<BattleEventDto> events)
+    {
+        if (!IsAdjacent(mob, player))
+        {
+            return false;
+        }
+
+        var tiles = new[] { (player.TileX, player.TileY) };
+        EmitAttackFx(
+            state,
+            events,
+            fxKind: CombatFxKind.MeleeSwing,
+            fromActor: mob,
+            toActor: player,
+            elementType: ArenaConfig.DefaultMobElement,
+            durationMs: ArenaConfig.MeleeSwingDurationMs);
+        EmitFxForTiles(events, tiles, config.AbilityFxId, ArenaConfig.DefaultMobElement);
+        ApplyDamageToPlayer(
+            state,
+            events,
+            player,
+            ResolveMobOutgoingDamage(state, mob, config.AbilityDamage),
+            ArenaConfig.DefaultMobElement,
+            attacker: mob);
+        return true;
+    }
+
+    private static bool TryCastZombieSelfHeal(
+        StoredBattle state,
+        StoredActor mob,
+        MobArchetypeConfig config,
+        List<BattleEventDto> events)
+    {
+        var maxHp = ResolveScaledMobMaxHp(state, config, mob.IsElite);
+        if (mob.Hp >= maxHp)
+        {
+            return false;
+        }
+
+        mob.Hp = Math.Min(maxHp, mob.Hp + ArenaConfig.MeleeZombieSelfHealAmount);
+        var tiles = new[] { (mob.TileX, mob.TileY) };
+        EmitFxForTiles(events, tiles, config.AbilityFxId, ArenaConfig.DefaultMobElement);
+        return true;
+    }
+
+    private static bool TryCastImpFireballBarrage(
+        StoredBattle state,
+        StoredActor mob,
+        StoredActor player,
+        MobArchetypeConfig config,
+        List<BattleEventDto> events)
+    {
+        var distance = ComputeChebyshevDistance(mob, player.TileX, player.TileY);
+        if (distance > config.AbilityRangeTiles)
+        {
+            return false;
+        }
+
+        var damagePerProjectile = Math.Max(1, config.AbilityDamage / 3);
+        for (var i = 0; i < 3; i++)
+        {
+            EmitAttackFx(
+                state,
+                events,
+                fxKind: CombatFxKind.RangedProjectile,
+                fromActor: mob,
+                toActor: player,
+                elementType: ArenaConfig.DefaultMobElement,
+                durationMs: ArenaConfig.RangedProjectileDurationMs);
+            EmitFxForTiles(events, new[] { (player.TileX, player.TileY) }, config.AbilityFxId, ArenaConfig.DefaultMobElement);
+            ApplyDamageToPlayer(
+                state,
+                events,
+                player,
+                ResolveMobOutgoingDamage(state, mob, damagePerProjectile),
+                ArenaConfig.DefaultMobElement,
+                attacker: mob);
+        }
+
+        return true;
+    }
+
+    private static bool TryCastSwampyMudLob(
+        StoredBattle state,
+        StoredActor mob,
+        StoredActor player,
+        MobArchetypeConfig config,
+        List<BattleEventDto> events)
+    {
+        var distance = ComputeChebyshevDistance(mob, player.TileX, player.TileY);
+        if (distance > config.AbilityRangeTiles)
+        {
+            return false;
+        }
+
+        EmitAttackFx(
+            state,
+            events,
+            fxKind: CombatFxKind.RangedProjectile,
+            fromActor: mob,
+            toActor: player,
+            elementType: ArenaConfig.DefaultMobElement,
+            durationMs: ArenaConfig.RangedProjectileDurationMs);
+        EmitFxForTiles(events, new[] { (player.TileX, player.TileY) }, config.AbilityFxId, ArenaConfig.DefaultMobElement);
+        ApplyDamageToPlayer(
+            state,
+            events,
+            player,
+            ResolveMobOutgoingDamage(state, mob, config.AbilityDamage),
+            ArenaConfig.DefaultMobElement,
+            attacker: mob);
+
+        AddDamagingHazardDecal(
+            state,
+            player.TileX,
+            player.TileY,
+            ArenaConfig.RangedSwampyMudLobDecalDurationMs,
+            ArenaConfig.RangedSwampyMudLobDecalDamagePerTick);
+
+        return true;
+    }
+
+    private static bool TryCastMuddyOozeShot(
+        StoredBattle state,
+        StoredActor mob,
+        StoredActor player,
+        MobArchetypeConfig config,
+        List<BattleEventDto> events)
+    {
+        var distance = ComputeChebyshevDistance(mob, player.TileX, player.TileY);
+        if (distance > config.AbilityRangeTiles)
+        {
+            return false;
+        }
+
+        EmitAttackFx(
+            state,
+            events,
+            fxKind: CombatFxKind.RangedProjectile,
+            fromActor: mob,
+            toActor: player,
+            elementType: ArenaConfig.DefaultMobElement,
+            durationMs: ArenaConfig.RangedProjectileDurationMs);
+        EmitFxForTiles(events, new[] { (player.TileX, player.TileY) }, config.AbilityFxId, ArenaConfig.DefaultMobElement);
+        ApplyDamageToPlayer(
+            state,
+            events,
+            player,
+            ResolveMobOutgoingDamage(state, mob, config.AbilityDamage),
+            ArenaConfig.DefaultMobElement,
+            attacker: mob);
+        return true;
+    }
+
+    private static void AddDamagingHazardDecal(
+        StoredBattle state,
+        int tileX,
+        int tileY,
+        int durationMs,
+        int damagePerTick)
+    {
+        var entityId = $"hazard_{state.Tick}_{tileX}_{tileY}_{NextTickEventId(state)}";
+        state.Decals.Add(new StoredDecal(
+            entityId: entityId,
+            decalKind: DecalKind.DamagingHazard,
+            entityType: "hazard",
+            mobType: null,
+            tileX: tileX,
+            tileY: tileY,
+            spriteKey: null,
+            remainingMs: durationMs,
+            totalMs: durationMs,
+            createdTick: state.Tick,
+            damagePerTick: damagePerTick));
     }
 
     private static bool ApplyAreaSquareSkill(
@@ -2649,6 +2997,15 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         if (string.Equals(state.LockedTargetEntityId, mob.ActorId, StringComparison.Ordinal))
         {
             state.LockedTargetEntityId = null;
+        }
+
+        if (mob.MobType == MobArchetype.MeleeSkeleton)
+        {
+            var playerForBurst = GetPlayerActor(state);
+            if (playerForBurst is not null)
+            {
+                TryCastSkeletonSoulBurst(state, mob, playerForBurst, events);
+            }
         }
 
         state.Actors.Remove(mob.ActorId);
@@ -3670,7 +4027,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         }
     }
 
-    private sealed class RangedDragonBehavior : IMobBehavior
+    private sealed class RangedShamanBehavior : IMobBehavior
     {
         public bool TryChooseMove(
             StoredBattle state,
@@ -3702,7 +4059,362 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             MobArchetypeConfig config,
             List<BattleEventDto> events)
         {
-            return TryCastDragonBreathAbility(state, mob, player, config, events);
+            return TryCastShamanStormPulseAbility(state, mob, player, config, events);
+        }
+    }
+
+    private sealed class MeleeSkeletonBehavior : IMobBehavior
+    {
+        public bool TryChooseMove(
+            StoredBattle state,
+            StoredActor mob,
+            StoredActor player,
+            MobSlotState slot,
+            MobArchetypeConfig config,
+            out (int TileX, int TileY)? destination)
+        {
+            if (IsAdjacent(mob, player))
+            {
+                destination = null;
+                return false;
+            }
+
+            return TryGetFirstWalkableGreedyStepTowardTarget(state, mob, player.TileX, player.TileY, out destination);
+        }
+
+        public bool CanAutoAttack(
+            StoredBattle state,
+            StoredActor mob,
+            StoredActor player,
+            MobSlotState slot,
+            MobArchetypeConfig config)
+        {
+            return IsAdjacent(mob, player);
+        }
+
+        public bool TryCastAbility(
+            StoredBattle state,
+            StoredActor mob,
+            StoredActor player,
+            MobSlotState slot,
+            MobArchetypeConfig config,
+            List<BattleEventDto> events)
+        {
+            // Soul Burst is death-triggered only; cooldown is 99999ms so it never fires via normal ability loop.
+            return false;
+        }
+    }
+
+    private sealed class MeleeWogolBehavior : IMobBehavior
+    {
+        public bool TryChooseMove(
+            StoredBattle state,
+            StoredActor mob,
+            StoredActor player,
+            MobSlotState slot,
+            MobArchetypeConfig config,
+            out (int TileX, int TileY)? destination)
+        {
+            if (IsAdjacent(mob, player))
+            {
+                destination = null;
+                return false;
+            }
+
+            return TryGetFirstWalkableGreedyStepTowardTarget(state, mob, player.TileX, player.TileY, out destination);
+        }
+
+        public bool CanAutoAttack(
+            StoredBattle state,
+            StoredActor mob,
+            StoredActor player,
+            MobSlotState slot,
+            MobArchetypeConfig config)
+        {
+            return IsAdjacent(mob, player);
+        }
+
+        public bool TryCastAbility(
+            StoredBattle state,
+            StoredActor mob,
+            StoredActor player,
+            MobSlotState slot,
+            MobArchetypeConfig config,
+            List<BattleEventDto> events)
+        {
+            return TryCastWogolGroundSlam(state, mob, player, config, events);
+        }
+    }
+
+    private sealed class MeleeWarriorBehavior : IMobBehavior
+    {
+        public bool TryChooseMove(
+            StoredBattle state,
+            StoredActor mob,
+            StoredActor player,
+            MobSlotState slot,
+            MobArchetypeConfig config,
+            out (int TileX, int TileY)? destination)
+        {
+            if (IsAdjacent(mob, player))
+            {
+                destination = null;
+                return false;
+            }
+
+            return TryGetFirstWalkableGreedyStepTowardTarget(state, mob, player.TileX, player.TileY, out destination);
+        }
+
+        public bool CanAutoAttack(
+            StoredBattle state,
+            StoredActor mob,
+            StoredActor player,
+            MobSlotState slot,
+            MobArchetypeConfig config)
+        {
+            return IsAdjacent(mob, player);
+        }
+
+        public bool TryCastAbility(
+            StoredBattle state,
+            StoredActor mob,
+            StoredActor player,
+            MobSlotState slot,
+            MobArchetypeConfig config,
+            List<BattleEventDto> events)
+        {
+            return TryCastWarriorCleaveStrike(state, mob, player, config, events);
+        }
+    }
+
+    private sealed class MeleeZombieBehavior : IMobBehavior
+    {
+        public bool TryChooseMove(
+            StoredBattle state,
+            StoredActor mob,
+            StoredActor player,
+            MobSlotState slot,
+            MobArchetypeConfig config,
+            out (int TileX, int TileY)? destination)
+        {
+            if (IsAdjacent(mob, player))
+            {
+                destination = null;
+                return false;
+            }
+
+            return TryGetFirstWalkableGreedyStepTowardTarget(state, mob, player.TileX, player.TileY, out destination);
+        }
+
+        public bool CanAutoAttack(
+            StoredBattle state,
+            StoredActor mob,
+            StoredActor player,
+            MobSlotState slot,
+            MobArchetypeConfig config)
+        {
+            return IsAdjacent(mob, player);
+        }
+
+        public bool TryCastAbility(
+            StoredBattle state,
+            StoredActor mob,
+            StoredActor player,
+            MobSlotState slot,
+            MobArchetypeConfig config,
+            List<BattleEventDto> events)
+        {
+            return TryCastZombieSelfHeal(state, mob, config, events);
+        }
+    }
+
+    private sealed class MeleeTinyZombieBehavior : IMobBehavior
+    {
+        public bool TryChooseMove(
+            StoredBattle state,
+            StoredActor mob,
+            StoredActor player,
+            MobSlotState slot,
+            MobArchetypeConfig config,
+            out (int TileX, int TileY)? destination)
+        {
+            if (IsAdjacent(mob, player))
+            {
+                destination = null;
+                return false;
+            }
+
+            return TryGetFirstWalkableGreedyStepTowardTarget(state, mob, player.TileX, player.TileY, out destination);
+        }
+
+        public bool CanAutoAttack(
+            StoredBattle state,
+            StoredActor mob,
+            StoredActor player,
+            MobSlotState slot,
+            MobArchetypeConfig config)
+        {
+            return IsAdjacent(mob, player);
+        }
+
+        public bool TryCastAbility(
+            StoredBattle state,
+            StoredActor mob,
+            StoredActor player,
+            MobSlotState slot,
+            MobArchetypeConfig config,
+            List<BattleEventDto> events)
+        {
+            return false;
+        }
+    }
+
+    private sealed class RangedImpBehavior : IMobBehavior
+    {
+        public bool TryChooseMove(
+            StoredBattle state,
+            StoredActor mob,
+            StoredActor player,
+            MobSlotState slot,
+            MobArchetypeConfig config,
+            out (int TileX, int TileY)? destination)
+        {
+            return TryChooseRangedBandMove(state, mob, player, slot, out destination);
+        }
+
+        public bool CanAutoAttack(
+            StoredBattle state,
+            StoredActor mob,
+            StoredActor player,
+            MobSlotState slot,
+            MobArchetypeConfig config)
+        {
+            var distance = ComputeChebyshevDistance(mob, player.TileX, player.TileY);
+            return distance <= config.AutoAttackRangeTiles;
+        }
+
+        public bool TryCastAbility(
+            StoredBattle state,
+            StoredActor mob,
+            StoredActor player,
+            MobSlotState slot,
+            MobArchetypeConfig config,
+            List<BattleEventDto> events)
+        {
+            return TryCastImpFireballBarrage(state, mob, player, config, events);
+        }
+    }
+
+    private sealed class RangedSwampyBehavior : IMobBehavior
+    {
+        public bool TryChooseMove(
+            StoredBattle state,
+            StoredActor mob,
+            StoredActor player,
+            MobSlotState slot,
+            MobArchetypeConfig config,
+            out (int TileX, int TileY)? destination)
+        {
+            return TryChooseRangedBandMove(state, mob, player, slot, out destination);
+        }
+
+        public bool CanAutoAttack(
+            StoredBattle state,
+            StoredActor mob,
+            StoredActor player,
+            MobSlotState slot,
+            MobArchetypeConfig config)
+        {
+            var distance = ComputeChebyshevDistance(mob, player.TileX, player.TileY);
+            return distance <= config.AutoAttackRangeTiles;
+        }
+
+        public bool TryCastAbility(
+            StoredBattle state,
+            StoredActor mob,
+            StoredActor player,
+            MobSlotState slot,
+            MobArchetypeConfig config,
+            List<BattleEventDto> events)
+        {
+            return TryCastSwampyMudLob(state, mob, player, config, events);
+        }
+    }
+
+    private sealed class RangedMuddyBehavior : IMobBehavior
+    {
+        public bool TryChooseMove(
+            StoredBattle state,
+            StoredActor mob,
+            StoredActor player,
+            MobSlotState slot,
+            MobArchetypeConfig config,
+            out (int TileX, int TileY)? destination)
+        {
+            return TryChooseAggressiveBandMove(state, mob, player, slot, out destination);
+        }
+
+        public bool CanAutoAttack(
+            StoredBattle state,
+            StoredActor mob,
+            StoredActor player,
+            MobSlotState slot,
+            MobArchetypeConfig config)
+        {
+            var distance = ComputeChebyshevDistance(mob, player.TileX, player.TileY);
+            return distance <= config.AutoAttackRangeTiles;
+        }
+
+        public bool TryCastAbility(
+            StoredBattle state,
+            StoredActor mob,
+            StoredActor player,
+            MobSlotState slot,
+            MobArchetypeConfig config,
+            List<BattleEventDto> events)
+        {
+            return TryCastMuddyOozeShot(state, mob, player, config, events);
+        }
+    }
+
+    private sealed class MeleeSlugBehavior : IMobBehavior
+    {
+        public bool TryChooseMove(
+            StoredBattle state,
+            StoredActor mob,
+            StoredActor player,
+            MobSlotState slot,
+            MobArchetypeConfig config,
+            out (int TileX, int TileY)? destination)
+        {
+            if (IsAdjacent(mob, player))
+            {
+                destination = null;
+                return false;
+            }
+
+            return TryGetFirstWalkableGreedyStepTowardTarget(state, mob, player.TileX, player.TileY, out destination);
+        }
+
+        public bool CanAutoAttack(
+            StoredBattle state,
+            StoredActor mob,
+            StoredActor player,
+            MobSlotState slot,
+            MobArchetypeConfig config)
+        {
+            return IsAdjacent(mob, player);
+        }
+
+        public bool TryCastAbility(
+            StoredBattle state,
+            StoredActor mob,
+            StoredActor player,
+            MobSlotState slot,
+            MobArchetypeConfig config,
+            List<BattleEventDto> events)
+        {
+            return false;
         }
     }
 
@@ -4627,7 +5339,8 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             string? spriteKey,
             int remainingMs,
             int totalMs,
-            int createdTick)
+            int createdTick,
+            int damagePerTick = 0)
         {
             EntityId = entityId;
             DecalKind = decalKind;
@@ -4639,6 +5352,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             RemainingMs = remainingMs;
             TotalMs = totalMs;
             CreatedTick = createdTick;
+            DamagePerTick = damagePerTick;
         }
 
         public string EntityId { get; }
@@ -4660,6 +5374,8 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         public int TotalMs { get; }
 
         public int CreatedTick { get; }
+
+        public int DamagePerTick { get; }
     }
 
     private sealed class StoredBuff

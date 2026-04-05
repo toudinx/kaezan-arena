@@ -10,6 +10,9 @@ describe("player-visuals", () => {
     expect(resolvePlayerSpriteSemanticId("character:ranged_prototype", "run")).toBe("sprite.player.sylwen.1.run");
     expect(resolvePlayerSpriteSemanticId("character:ranged_prototype", "hit")).toBe("sprite.player.sylwen.1.hit");
     expect(resolvePlayerSpriteSemanticId("character:sylwen", "run")).toBe("sprite.player.sylwen.1.run");
+    expect(resolvePlayerSpriteSemanticId("character:lizard", "idle")).toBe("sprite.player.lizard_m.idle");
+    expect(resolvePlayerSpriteSemanticId("character:lizard", "run")).toBe("sprite.player.lizard_m.run");
+    expect(resolvePlayerSpriteSemanticId("character:lizard", "hit")).toBe("sprite.player.lizard_m.hit");
   });
 
   it("maps legacy character ids to dedicated fallback-compatible skins", () => {
@@ -27,6 +30,8 @@ describe("player-visuals", () => {
     expect(ids).toContain("sprite.player.idle");
     expect(ids).toContain("sprite.player.kina.idle");
     expect(ids).toContain("sprite.player.sylwen.1.run");
+    expect(ids).toContain("sprite.player.lizard_m.run");
+    expect(ids).toContain("sprite.player.lizard_f.hit");
     expect(ids).toContain("sprite.player.kaelis_dawn.hit");
     expect(ids).toContain("sprite.player.kaelis_ember.hit");
     expect(new Set(ids).size).toBe(ids.length);
