@@ -53,12 +53,16 @@ public sealed record CharacterStateDto(
 
 public sealed record SigilInstanceDto(
     string InstanceId,
+    string DefinitionId,
     string SpeciesId,
     string SpeciesDisplayName,
     int SigilLevel,
     int SlotIndex,
+    string TierId,
     string TierName,
-    int HpBonus);
+    int HpBonus,
+    bool IsLocked,
+    bool RequiresAscendantUnlock);
 
 public sealed record CharacterSigilLoadoutDto(
     SigilInstanceDto? Slot1,

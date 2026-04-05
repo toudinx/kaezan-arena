@@ -308,12 +308,18 @@ public sealed class AccountV1Controller : ControllerBase
             return BadRequest(BuildValidationError("sigilInstanceId is required"));
         }
 
+        if (request.SlotIndex <= 0)
+        {
+            return BadRequest(BuildValidationError("slotIndex is required"));
+        }
+
         var normalizedAccountId = string.IsNullOrWhiteSpace(accountId) ? "dev_account" : accountId.Trim();
         try
         {
             var account = _accountStateStore.EquipSigil(
                 accountId: normalizedAccountId,
                 characterId: request.CharacterId.Trim(),
+                slotIndex: request.SlotIndex,
                 sigilInstanceId: request.SigilInstanceId.Trim());
             return Ok(ToAccountDto(account));
         }
@@ -486,14 +492,19 @@ public sealed class AccountV1Controller : ControllerBase
     private static SigilInstanceDto ToSigilInstanceDto(SigilInstance sigil)
     {
         var safeLevel = Math.Max(1, sigil.SigilLevel);
+        var safeSlotIndex = Math.Clamp(sigil.SlotIndex, 1, ArenaConfig.SigilConfig.SlotTierNames.Length);
         return new SigilInstanceDto(
             InstanceId: sigil.InstanceId,
+            DefinitionId: ResolveSigilDefinitionId(sigil),
             SpeciesId: sigil.SpeciesId,
             SpeciesDisplayName: ResolveSpeciesDisplayName(sigil.SpeciesId),
             SigilLevel: safeLevel,
-            SlotIndex: sigil.SlotIndex,
-            TierName: ResolveSigilTierName(sigil.SlotIndex),
-            HpBonus: safeLevel * ArenaConfig.SigilConfig.HpBonusPerSigilLevel);
+            SlotIndex: safeSlotIndex,
+            TierId: ResolveSigilTierId(safeSlotIndex),
+            TierName: ResolveSigilTierName(safeSlotIndex),
+            HpBonus: safeLevel * ArenaConfig.SigilConfig.HpBonusPerSigilLevel,
+            IsLocked: sigil.IsLocked,
+            RequiresAscendantUnlock: sigil.RequiresAscendantUnlock);
     }
 
     private static string ResolveSpeciesDisplayName(string speciesId)
@@ -505,8 +516,19 @@ public sealed class AccountV1Controller : ControllerBase
 
     private static string ResolveSigilTierName(int slotIndex)
     {
-        var safeIndex = Math.Clamp(slotIndex, 1, ArenaConfig.SigilConfig.SlotTierNames.Length);
-        return ArenaConfig.SigilConfig.SlotTierNames[safeIndex - 1];
+        return ArenaConfig.SigilConfig.ResolveTierNameForSlotIndex(slotIndex);
+    }
+
+    private static string ResolveSigilTierId(int slotIndex)
+    {
+        return ArenaConfig.SigilConfig.ResolveTierIdForSlotIndex(slotIndex);
+    }
+
+    private static string ResolveSigilDefinitionId(SigilInstance sigil)
+    {
+        return string.IsNullOrWhiteSpace(sigil.DefinitionId)
+            ? ArenaConfig.SigilConfig.ResolveDefinitionIdForSpeciesId(sigil.SpeciesId)
+            : sigil.DefinitionId;
     }
 
     private static int ResolveMasteryXpForCurrentLevel(CharacterState character)
@@ -648,9 +670,7 @@ public sealed class AccountV1Controller : ControllerBase
                 }
             }
 
-            var tierName = ArenaConfig.SigilConfig.SlotTierNames.Length > tierIndex
-                ? ArenaConfig.SigilConfig.SlotTierNames[tierIndex]
-                : $"Tier {tierIndex + 1}";
+            var tierName = ArenaConfig.SigilConfig.ResolveTierNameForSlotIndex(tierIndex + 1);
 
             result.Add(new AscendantTierProgressDto(
                 TierIndex: tierIndex,

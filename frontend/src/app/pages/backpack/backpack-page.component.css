@@ -145,6 +145,39 @@
   font-size: 0.68rem;
 }
 
+.backpack-page__inventory-tabs {
+  margin-top: 0.58rem;
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.backpack-page__inventory-tab {
+  border: 1px solid #334155;
+  border-radius: 8px;
+  background: #0e1826;
+  color: #a8c0d8;
+  font-size: 0.64rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 0.32rem 0.7rem;
+  cursor: pointer;
+  transition: border-color 0.2s ease, color 0.2s ease, background-color 0.2s ease;
+}
+
+.backpack-page__inventory-tab:hover {
+  border-color: #4a6585;
+  color: #dbe4f0;
+}
+
+.backpack-page__inventory-tab--active {
+  border-color: #2dd4bf;
+  background: rgba(13, 148, 136, 0.2);
+  color: #9ff4e8;
+  box-shadow: 0 0 0 1px rgba(45, 212, 191, 0.28) inset;
+}
+
 .backpack-page__chips {
   display: flex;
   gap: 0.34rem;
@@ -177,10 +210,344 @@
   min-height: 0;
 }
 
+.backpack-page__sigil-layout {
+  min-height: 0;
+  height: 100%;
+  padding: 0.66rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.82fr);
+  gap: 0.7rem;
+}
+
+.backpack-page__sigil-panel {
+  border: 1px solid #1e2e42;
+  border-radius: 0.5rem;
+  background: #0a1420;
+  padding: 0.55rem 0.62rem;
+  min-height: 0;
+}
+
+.backpack-page__sigil-panel--list {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 0.5rem;
+}
+
+.backpack-page__sigil-panel--detail {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.backpack-page__sigil-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.backpack-page__sigil-tier-tabs {
+  display: flex;
+  gap: 0.32rem;
+  flex-wrap: wrap;
+}
+
+.backpack-page__sigil-tier-tab {
+  border: 1px solid #2f4560;
+  border-radius: 999px;
+  background: rgba(5, 18, 35, 0.82);
+  color: #a6bfd7;
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.2rem 0.5rem;
+  cursor: pointer;
+}
+
+.backpack-page__sigil-tier-tab:hover {
+  border-color: #4a6585;
+  color: #dbe4f0;
+}
+
+.backpack-page__sigil-tier-tab--active {
+  border-color: #2dd4bf;
+  background: rgba(13, 148, 136, 0.2);
+  color: #9ff4e8;
+}
+
+.backpack-page__sigil-count {
+  font-size: 0.62rem;
+  color: #9ab3cc;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.backpack-page__sigil-groups {
+  overflow: auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding-right: 0.08rem;
+}
+
+.backpack-page__sigil-group {
+  border: 1px solid #223349;
+  border-radius: 0.4rem;
+  background: #0f1b2b;
+  padding: 0.45rem 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.38rem;
+}
+
+.backpack-page__sigil-group-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.4rem;
+}
+
+.backpack-page__sigil-group-head h3 {
+  margin: 0;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #b8d2ea;
+}
+
+.backpack-page__sigil-group-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.28rem;
+}
+
+.backpack-page__sigil-group-meta span {
+  border: 1px solid #2e455f;
+  border-radius: 999px;
+  background: rgba(5, 18, 35, 0.8);
+  color: #9fb9d2;
+  font-size: 0.52rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 0.08rem 0.35rem;
+}
+
+.backpack-page__sigil-list {
+  display: grid;
+  gap: 0.32rem;
+}
+
+.backpack-page__sigil-card {
+  border: 1px solid #273a52;
+  border-left: 3px solid #2f4560;
+  border-radius: 0.4rem;
+  background: #0f1c2d;
+  text-align: left;
+  color: #dbe4f0;
+  padding: 0.36rem 0.42rem;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 0.18rem;
+}
+
+.backpack-page__sigil-card:hover {
+  border-color: #3d5c80;
+  background: #13243a;
+}
+
+.backpack-page__sigil-card--selected {
+  border-color: #2dd4bf;
+  box-shadow: 0 0 0 1px rgba(45, 212, 191, 0.26) inset;
+}
+
+.backpack-page__sigil-card--equipped {
+  border-left-color: #2dd4bf;
+}
+
+.backpack-page__sigil-card--locked {
+  border-left-color: #f59e0b;
+}
+
+.backpack-page__sigil-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.45rem;
+}
+
+.backpack-page__sigil-card-head strong {
+  font-size: 0.69rem;
+  color: #f0f7ff;
+  line-height: 1.2;
+}
+
+.backpack-page__sigil-card p {
+  margin: 0;
+  font-size: 0.58rem;
+  color: #8fa9c2;
+}
+
+.backpack-page__sigil-card-note {
+  color: #9dc5e2;
+}
+
+.backpack-page__sigil-card-badges {
+  display: flex;
+  align-items: center;
+  gap: 0.22rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.backpack-page__sigil-pill {
+  border: 1px solid #334155;
+  border-radius: 999px;
+  background: #0e1826;
+  color: #a8c0d8;
+  font-size: 0.5rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  padding: 0.05rem 0.3rem;
+}
+
+.backpack-page__sigil-pill--equipped {
+  border-color: rgba(45, 212, 191, 0.5);
+  background: rgba(13, 148, 136, 0.2);
+  color: #99f6e4;
+}
+
+.backpack-page__sigil-pill--locked {
+  border-color: rgba(245, 158, 11, 0.58);
+  background: rgba(146, 64, 14, 0.26);
+  color: #fde68a;
+}
+
+.backpack-page__sigil-detail-head h3 {
+  margin: 0;
+  font-size: 0.58rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #6b8caa;
+}
+
+.backpack-page__sigil-detail-card {
+  border: 1px solid #223349;
+  border-radius: 0.42rem;
+  background: #0f1b2b;
+  padding: 0.5rem 0.55rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.backpack-page__sigil-detail-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.4rem;
+}
+
+.backpack-page__sigil-detail-title strong {
+  color: #f0f7ff;
+  font-size: 0.8rem;
+  line-height: 1.1;
+}
+
+.backpack-page__sigil-detail-title span {
+  color: #8fa9c2;
+  font-size: 0.58rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.backpack-page__sigil-detail-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.35rem;
+}
+
+.backpack-page__sigil-detail-stats div {
+  border: 1px solid #2a3f58;
+  border-radius: 0.36rem;
+  background: #0c1625;
+  padding: 0.34rem 0.36rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
+}
+
+.backpack-page__sigil-detail-stats span {
+  font-size: 0.52rem;
+  color: #7f9bb7;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.backpack-page__sigil-detail-stats strong {
+  font-size: 0.72rem;
+  color: #f0f7ff;
+}
+
+.backpack-page__sigil-detail-note {
+  margin: 0;
+  color: #8fa9c2;
+  font-size: 0.63rem;
+}
+
+.backpack-page__sigil-detail-lock {
+  margin: 0;
+  border: 1px solid rgba(245, 158, 11, 0.58);
+  border-radius: 0.35rem;
+  background: rgba(146, 64, 14, 0.22);
+  color: #fde68a;
+  padding: 0.3rem 0.4rem;
+  font-size: 0.62rem;
+}
+
+.backpack-page__sigil-cta {
+  align-self: flex-start;
+  border: 1px solid #2f4863;
+  border-radius: 0.34rem;
+  background: #122235;
+  color: #c7dcf0;
+  font-size: 0.58rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 0.28rem 0.44rem;
+  text-decoration: none;
+}
+
+.backpack-page__sigil-empty {
+  margin: 0;
+  border: 1px dashed #2a3f58;
+  border-radius: 0.4rem;
+  background: rgba(10, 20, 32, 0.84);
+  color: #8fa9c2;
+  font-size: 0.66rem;
+  padding: 0.5rem;
+}
+
+.backpack-page__sigil-empty--inline {
+  padding: 0.35rem;
+  font-size: 0.58rem;
+}
+
 @media (max-width: 1024px) {
   .backpack-page {
     width: calc(100vw - 18px);
     padding: 8px 0 10px;
+  }
+
+  .backpack-page__sigil-layout {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -196,5 +563,9 @@
 
   .backpack-page__chips {
     justify-content: flex-start;
+  }
+
+  .backpack-page__sigil-detail-stats {
+    grid-template-columns: 1fr;
   }
 }

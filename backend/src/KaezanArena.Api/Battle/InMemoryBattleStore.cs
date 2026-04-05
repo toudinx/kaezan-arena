@@ -347,6 +347,8 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             ultimateReady: false,
             masteryXpAwardedAtRunEnd: false);
 
+        ApplySigilPassiveModifiersAtBattleStart(state);
+
         var initialMobCap = ResolveSpawnPacingDirector(state).MaxAliveMobs;
         foreach (var slot in state.MobSlots.Values.OrderBy(value => value.SlotIndex))
         {
@@ -699,6 +701,173 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         return ArenaConfig.PlayerClassKina;
     }
 
+    private void ApplySigilPassiveModifiersAtBattleStart(StoredBattle state)
+    {
+        if (_accountStateStore is null)
+        {
+            return;
+        }
+
+        AccountState accountState;
+        try
+        {
+            accountState = _accountStateStore.GetAccountState(DefaultAccountId);
+        }
+        catch
+        {
+            return;
+        }
+
+        if (!accountState.Characters.TryGetValue(state.PlayerActorId, out var character))
+        {
+            return;
+        }
+
+        var aggregatedModifiers = ResolveSigilPassiveModifiersForCharacter(accountState, character);
+        state.PlayerModifiers.FlatDamageBonus += Math.Max(0, aggregatedModifiers.FlatDamageBonus);
+        state.PlayerModifiers.PercentDamageBonus += Math.Max(0, aggregatedModifiers.PercentDamageBonus);
+        state.PlayerModifiers.PercentMaxHpBonus += Math.Max(0, aggregatedModifiers.PercentMaxHpBonus);
+        state.PlayerModifiers.CritChanceBonusPercent = Math.Clamp(
+            state.PlayerModifiers.CritChanceBonusPercent + Math.Max(0, aggregatedModifiers.CritChanceBonusPercent),
+            0,
+            ArenaConfig.SigilConfig.MaxAdditionalCritChancePercent);
+        state.PlayerModifiers.CritDamageBonusPercent = Math.Clamp(
+            state.PlayerModifiers.CritDamageBonusPercent + Math.Max(0, aggregatedModifiers.CritDamageBonusPercent),
+            0,
+            ArenaConfig.SigilConfig.MaxAdditionalCritDamagePercent);
+        state.PlayerModifiers.LifeLeechBonusPercent = Math.Clamp(
+            state.PlayerModifiers.LifeLeechBonusPercent + Math.Max(0, aggregatedModifiers.LifeLeechBonusPercent),
+            0,
+            ArenaConfig.SigilConfig.MaxAdditionalLifeLeechPercent);
+        state.PlayerModifiers.GlobalCooldownReductionPercent = Math.Clamp(
+            state.PlayerModifiers.GlobalCooldownReductionPercent + Math.Max(0, aggregatedModifiers.GlobalCooldownReductionPercent),
+            0,
+            ArenaConfig.MaxGlobalCooldownReductionPercent);
+
+        var player = GetPlayerActor(state);
+        if (player is null)
+        {
+            return;
+        }
+
+        var resolvedMaxHp = ResolvePlayerMaxHp(state);
+        player.MaxHp = resolvedMaxHp;
+        player.Hp = resolvedMaxHp;
+        player.MaxShield = ComputePlayerMaxShield(resolvedMaxHp);
+        player.Shield = Math.Min(player.Shield, player.MaxShield);
+    }
+
+    private static ArenaConfig.SigilConfig.SigilPassiveStatBundle ResolveSigilPassiveModifiersForCharacter(
+        AccountState accountState,
+        CharacterState character)
+    {
+        var flatDamageBonus = 0;
+        var percentDamageBonus = 0;
+        var percentMaxHpBonus = 0;
+        var critChanceBonusPercent = 0;
+        var critDamageBonusPercent = 0;
+        var lifeLeechBonusPercent = 0;
+        var globalCooldownReductionPercent = 0;
+
+        for (var slotIndex = 1; slotIndex <= ArenaConfig.SigilConfig.SlotLevelRanges.Length; slotIndex += 1)
+        {
+            var sigilInstanceId = character.SigilLoadout.GetSlotInstanceId(slotIndex);
+            if (string.IsNullOrWhiteSpace(sigilInstanceId))
+            {
+                continue;
+            }
+
+            if (slotIndex > 1 &&
+                string.IsNullOrWhiteSpace(character.SigilLoadout.GetSlotInstanceId(slotIndex - 1)))
+            {
+                continue;
+            }
+
+            if (!accountState.SigilInventory.TryGetValue(sigilInstanceId, out var sigil))
+            {
+                continue;
+            }
+
+            if (sigil.IsLocked)
+            {
+                continue;
+            }
+
+            if (sigil.SlotIndex != slotIndex)
+            {
+                continue;
+            }
+
+            if (sigil.RequiresAscendantUnlock && !IsAscendantTierUnlocked(character, slotIndex))
+            {
+                continue;
+            }
+
+            int expectedSlotIndex;
+            try
+            {
+                expectedSlotIndex = SigilSlotResolver.ResolveSlotIndexForLevel(sigil.SigilLevel);
+            }
+            catch
+            {
+                continue;
+            }
+
+            if (expectedSlotIndex != slotIndex)
+            {
+                continue;
+            }
+
+            var passiveStatBundle = ArenaConfig.SigilConfig.ResolvePassiveStatBundle(
+                ResolveSigilDefinitionId(sigil),
+                sigil.SigilLevel);
+            flatDamageBonus += Math.Max(0, passiveStatBundle.FlatDamageBonus);
+            percentDamageBonus += Math.Max(0, passiveStatBundle.PercentDamageBonus);
+            percentMaxHpBonus += Math.Max(0, passiveStatBundle.PercentMaxHpBonus);
+            critChanceBonusPercent += Math.Max(0, passiveStatBundle.CritChanceBonusPercent);
+            critDamageBonusPercent += Math.Max(0, passiveStatBundle.CritDamageBonusPercent);
+            lifeLeechBonusPercent += Math.Max(0, passiveStatBundle.LifeLeechBonusPercent);
+            globalCooldownReductionPercent += Math.Max(0, passiveStatBundle.GlobalCooldownReductionPercent);
+        }
+
+        return new ArenaConfig.SigilConfig.SigilPassiveStatBundle(
+            FlatDamageBonus: flatDamageBonus,
+            PercentDamageBonus: percentDamageBonus,
+            PercentMaxHpBonus: percentMaxHpBonus,
+            CritChanceBonusPercent: Math.Clamp(
+                critChanceBonusPercent,
+                0,
+                ArenaConfig.SigilConfig.MaxAdditionalCritChancePercent),
+            CritDamageBonusPercent: Math.Clamp(
+                critDamageBonusPercent,
+                0,
+                ArenaConfig.SigilConfig.MaxAdditionalCritDamagePercent),
+            LifeLeechBonusPercent: Math.Clamp(
+                lifeLeechBonusPercent,
+                0,
+                ArenaConfig.SigilConfig.MaxAdditionalLifeLeechPercent),
+            GlobalCooldownReductionPercent: Math.Clamp(
+                globalCooldownReductionPercent,
+                0,
+                ArenaConfig.MaxGlobalCooldownReductionPercent));
+    }
+
+    private static bool IsAscendantTierUnlocked(CharacterState character, int slotIndex)
+    {
+        var tierIndex = slotIndex - 1;
+        return character.AscendantSigilSlotsUnlocked.TryGetValue(tierIndex, out var unlocked) && unlocked;
+    }
+
+    private static string ResolveSigilDefinitionId(SigilInstance sigil)
+    {
+        if (!string.IsNullOrWhiteSpace(sigil.DefinitionId))
+        {
+            return sigil.DefinitionId;
+        }
+
+        return ArenaConfig.SigilConfig.ResolveDefinitionIdForSpeciesId(sigil.SpeciesId);
+    }
+
     private static IReadOnlyList<string> ResolveFixedWeaponKitForPlayerClass(string playerClassId)
     {
         if (FixedWeaponKitByPlayerClassId.TryGetValue(playerClassId, out var fixedWeaponKit))
@@ -904,6 +1073,36 @@ public sealed partial class InMemoryBattleStore : IBattleStore
     {
         var reductionPercent = ResolveCardGlobalCooldownReductionPercent(state);
         return Math.Max(1, ApplyPercentReduction(ArenaConfig.PlayerGlobalCooldownMs, reductionPercent));
+    }
+
+    private static int ResolvePlayerCriticalHitChancePercent(StoredBattle state)
+    {
+        return Math.Clamp(
+            ArenaConfig.CriticalHitChancePercent + Math.Clamp(
+                state.PlayerModifiers.CritChanceBonusPercent,
+                0,
+                ArenaConfig.SigilConfig.MaxAdditionalCritChancePercent),
+            0,
+            100);
+    }
+
+    private static int ResolvePlayerCriticalDamageBonusPercent(StoredBattle state)
+    {
+        return Math.Clamp(
+            state.PlayerModifiers.CritDamageBonusPercent,
+            0,
+            ArenaConfig.SigilConfig.MaxAdditionalCritDamagePercent);
+    }
+
+    private static int ResolvePlayerLifeLeechPercent(StoredBattle state)
+    {
+        return Math.Clamp(
+            ArenaConfig.PlayerLifeLeechPercent + Math.Clamp(
+                state.PlayerModifiers.LifeLeechBonusPercent,
+                0,
+                ArenaConfig.SigilConfig.MaxAdditionalLifeLeechPercent),
+            0,
+            100);
     }
 
     private static ElementType GetPlayerBaseElement(StoredBattle state)
@@ -1571,7 +1770,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             ArenaConfig.PlayerAutoAttackDamage,
             playerBaseElement,
             attacker: player);
-        pendingLifeLeechHeal += ComputeLifeLeechHeal(hpDamageApplied);
+        pendingLifeLeechHeal += ComputeLifeLeechHeal(state, hpDamageApplied);
         GrantPlayerShield(state, events, ArenaConfig.PlayerShieldGainPerAction);
         state.PlayerAttackCooldownRemainingMs = ResolvePlayerAutoAttackCooldownMs(state);
     }
@@ -1944,7 +2143,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             }
 
             var hpDamageApplied = ApplyDamageToMob(state, events, mob, damage, element, attacker);
-            pendingLifeLeechHeal += ComputeLifeLeechHeal(hpDamageApplied);
+            pendingLifeLeechHeal += ComputeLifeLeechHeal(state, hpDamageApplied);
         }
 
         return targetMobIds.Count > 0;
@@ -2007,7 +2206,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             if (state.Actors.TryGetValue(mobId, out var mob))
             {
                 var hpDamageApplied = ApplyDamageToMob(state, events, mob, damage, element, attacker);
-                pendingLifeLeechHeal += ComputeLifeLeechHeal(hpDamageApplied);
+                pendingLifeLeechHeal += ComputeLifeLeechHeal(state, hpDamageApplied);
             }
         }
 
@@ -2064,14 +2263,14 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         return state.TickEventCounter;
     }
 
-    private static string ResolveHitKind(StoredBattle state, bool allowCriticalHits)
+    private static string ResolveHitKind(StoredBattle state, bool allowCriticalHits, int criticalHitChancePercent)
     {
         if (!allowCriticalHits)
         {
             return BattleHitKinds.Normal;
         }
 
-        return NextIntFromCritRng(state, 100) < ArenaConfig.CriticalHitChancePercent
+        return NextIntFromCritRng(state, 100) < Math.Clamp(criticalHitChancePercent, 0, 100)
             ? BattleHitKinds.Crit
             : BattleHitKinds.Normal;
     }
@@ -2162,7 +2361,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         var hpDamageApplied = Math.Max(0, previousHp - player.Hp);
         var damageAppliedToPlayer = absorbed + hpDamageApplied;
         var isFinalBlow = player.Hp <= 0;
-        var hitKind = ResolveHitKind(state, allowCriticalHits);
+        var hitKind = ResolveHitKind(state, allowCriticalHits, ArenaConfig.CriticalHitChancePercent);
         var isCrit = string.Equals(hitKind, BattleHitKinds.Crit, StringComparison.Ordinal);
         var nowMs = GetElapsedMsForTick(state.Tick);
 
@@ -2333,6 +2532,19 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         }
 
         remainingDamage = RollDamageForAttacker(state, remainingDamage, attacker);
+        var attackerIsPlayer = attacker is not null && string.Equals(attacker.Kind, "player", StringComparison.Ordinal);
+        var hitKind = ResolveHitKind(
+            state,
+            allowCriticalHits,
+            attackerIsPlayer
+                ? ResolvePlayerCriticalHitChancePercent(state)
+                : ArenaConfig.CriticalHitChancePercent);
+        var isCrit = string.Equals(hitKind, BattleHitKinds.Crit, StringComparison.Ordinal);
+        if (isCrit && attackerIsPlayer)
+        {
+            remainingDamage = ApplyPercentIncrease(remainingDamage, ResolvePlayerCriticalDamageBonusPercent(state));
+        }
+
         var absorbed = 0;
         if (mob.Shield > 0 && remainingDamage > 0)
         {
@@ -2345,8 +2557,6 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         mob.Hp = Math.Max(0, mob.Hp - remainingDamage);
         var hpDamageApplied = Math.Max(0, previousHp - mob.Hp);
         var isFinalBlow = mob.Hp <= 0;
-        var hitKind = ResolveHitKind(state, allowCriticalHits);
-        var isCrit = string.Equals(hitKind, BattleHitKinds.Crit, StringComparison.Ordinal);
         var nowMs = GetElapsedMsForTick(state.Tick);
 
         events.Add(new DamageNumberEventDto(
@@ -2791,14 +3001,20 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             createdTick: state.Tick));
     }
 
-    private static int ComputeLifeLeechHeal(int hpDamageApplied)
+    private static int ComputeLifeLeechHeal(StoredBattle state, int hpDamageApplied)
     {
         if (hpDamageApplied <= 0)
         {
             return 0;
         }
 
-        return (int)Math.Floor(hpDamageApplied * (ArenaConfig.PlayerLifeLeechPercent / 100.0d));
+        var lifeLeechPercent = ResolvePlayerLifeLeechPercent(state);
+        if (lifeLeechPercent <= 0)
+        {
+            return 0;
+        }
+
+        return (int)Math.Floor(hpDamageApplied * (lifeLeechPercent / 100.0d));
     }
 
     private static void ApplyPlayerFlatHpOnHit(StoredBattle state, List<BattleEventDto> events)
@@ -3824,10 +4040,16 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             state.PlayerModifiers.PercentAttackSpeedBonus < 0 ||
             state.PlayerModifiers.PercentMaxHpBonus < 0 ||
             state.PlayerModifiers.FlatHpOnHit < 0 ||
+            state.PlayerModifiers.CritChanceBonusPercent < 0 ||
+            state.PlayerModifiers.CritChanceBonusPercent > ArenaConfig.SigilConfig.MaxAdditionalCritChancePercent ||
+            state.PlayerModifiers.CritDamageBonusPercent < 0 ||
+            state.PlayerModifiers.CritDamageBonusPercent > ArenaConfig.SigilConfig.MaxAdditionalCritDamagePercent ||
+            state.PlayerModifiers.LifeLeechBonusPercent < 0 ||
+            state.PlayerModifiers.LifeLeechBonusPercent > ArenaConfig.SigilConfig.MaxAdditionalLifeLeechPercent ||
             state.PlayerModifiers.GlobalCooldownReductionPercent < 0 ||
             state.PlayerModifiers.GlobalCooldownReductionPercent > ArenaConfig.MaxGlobalCooldownReductionPercent)
         {
-            throw new InvalidOperationException("Player card modifiers are invalid.");
+            throw new InvalidOperationException("Player modifiers are invalid.");
         }
 
         var expectedPlayerMaxHp = ResolvePlayerMaxHp(state);
@@ -4213,6 +4435,12 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         public int PercentMaxHpBonus { get; set; }
 
         public int FlatHpOnHit { get; set; }
+
+        public int CritChanceBonusPercent { get; set; }
+
+        public int CritDamageBonusPercent { get; set; }
+
+        public int LifeLeechBonusPercent { get; set; }
 
         public int GlobalCooldownReductionPercent { get; set; }
     }

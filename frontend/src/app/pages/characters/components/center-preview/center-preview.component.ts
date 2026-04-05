@@ -1,7 +1,7 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { KaelisTab } from '../side-navigation/side-navigation.component';
-import { KaelisSigilPentagonComponent } from '../sigil-pentagon/sigil-pentagon.component';
+import { KaelisSigilPentagonComponent, type SigilSlotCardViewModel } from '../sigil-pentagon/sigil-pentagon.component';
 
 @Component({
   selector: 'app-kaelis-center-preview',
@@ -11,18 +11,19 @@ import { KaelisSigilPentagonComponent } from '../sigil-pentagon/sigil-pentagon.c
   styleUrl: './center-preview.component.css'
 })
 export class KaelisCenterPreviewComponent {
-  @Input() activeTab: KaelisTab = 'details';
+  @Input() activeTab: KaelisTab = 'overview';
   @Input() characterImageUrl?: string | null;
   @Input() characterName = '';
   @Input() weaponImageUrl?: string | null;
-  @Input() sigilSlots: (string | null)[] = [];
-  @Input() selectedSigilIndex = 0;
+  @Input() sigilSlots: SigilSlotCardViewModel[] = [];
+  @Input() busySigilSlotIndex: number | null = null;
   @Input() skinName?: string | null;
   @Input() skinDescription?: string | null;
   @Input() canPrevSkin = false;
   @Input() canNextSkin = false;
 
   @Output() slotClick = new EventEmitter<number>();
+  @Output() unequipClick = new EventEmitter<number>();
   @Output() prevSkin = new EventEmitter<void>();
   @Output() nextSkin = new EventEmitter<void>();
 

@@ -18,6 +18,8 @@ public interface IAccountStateStore
 
     SpendHollowEssenceBarrierResult SpendHollowEssenceForMilestoneBarrier(string accountId, string characterId);
 
+    AccountState EquipSigil(string accountId, string characterId, int slotIndex, string sigilInstanceId);
+
     AccountState EquipSigil(string accountId, string characterId, string sigilInstanceId);
 
     AccountState UnequipSigil(string accountId, string characterId, int slotIndex);

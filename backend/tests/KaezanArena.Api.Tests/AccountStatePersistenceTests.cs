@@ -1,4 +1,5 @@
 using KaezanArena.Api.Account;
+using KaezanArena.Api.Battle;
 
 namespace KaezanArena.Api.Tests;
 
@@ -150,6 +151,125 @@ public sealed class AccountStatePersistenceTests
         }
     }
 
+    [Fact]
+    public void LoadLegacySigilInventory_MissingDefinitionId_IsNormalizedOnRead()
+    {
+        const string accountId = "account_legacy_sigil_definition";
+        var seededState = new InMemoryAccountStateStore().GetAccountState(accountId);
+        var sigilEntry = seededState.SigilInventory.Single();
+        var legacySigil = sigilEntry.Value with { DefinitionId = string.Empty };
+
+        var legacyState = seededState with
+        {
+            SigilInventory = new Dictionary<string, SigilInstance>(StringComparer.Ordinal)
+            {
+                [sigilEntry.Key] = legacySigil
+            }
+        };
+
+        var persistence = new StubAccountStatePersistence(
+            new Dictionary<string, PersistedAccountData>(StringComparer.Ordinal)
+            {
+                [accountId] = new PersistedAccountData(
+                    State: legacyState,
+                    AwardedBySourceKeyByCharacter: new Dictionary<string, Dictionary<string, List<DropEvent>>>(StringComparer.Ordinal))
+            });
+
+        var store = new InMemoryAccountStateStore(persistence);
+        var normalized = store.GetAccountState(accountId);
+        var normalizedSigil = normalized.SigilInventory[sigilEntry.Key];
+
+        Assert.Equal(
+            ArenaConfig.SigilConfig.ResolveDefinitionIdForSpeciesId(normalizedSigil.SpeciesId),
+            normalizedSigil.DefinitionId);
+        Assert.False(normalizedSigil.IsLocked);
+    }
+
+    [Fact]
+    public void EquipSigil_FailsWhenSigilIsLocked()
+    {
+        const string accountId = "account_locked_sigil";
+        var seededState = new InMemoryAccountStateStore().GetAccountState(accountId);
+        var sigilEntry = seededState.SigilInventory.Single();
+        var lockedSigil = sigilEntry.Value with
+        {
+            IsLocked = true,
+            DefinitionId = ArenaConfig.SigilConfig.ResolveDefinitionIdForSpeciesId(sigilEntry.Value.SpeciesId)
+        };
+
+        var stateWithLockedSigil = seededState with
+        {
+            SigilInventory = new Dictionary<string, SigilInstance>(StringComparer.Ordinal)
+            {
+                [sigilEntry.Key] = lockedSigil
+            }
+        };
+
+        var persistence = new StubAccountStatePersistence(
+            new Dictionary<string, PersistedAccountData>(StringComparer.Ordinal)
+            {
+                [accountId] = new PersistedAccountData(
+                    State: stateWithLockedSigil,
+                    AwardedBySourceKeyByCharacter: new Dictionary<string, Dictionary<string, List<DropEvent>>>(StringComparer.Ordinal))
+            });
+
+        var store = new InMemoryAccountStateStore(persistence);
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            store.EquipSigil(accountId, seededState.ActiveCharacterId, sigilEntry.Key));
+
+        Assert.Contains("locked", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void EquipSigil_FailsWhenRequestedSlotDoesNotMatchSigilTier()
+    {
+        const string accountId = "account_sigil_slot_mismatch";
+        var store = new InMemoryAccountStateStore();
+        var state = store.GetAccountState(accountId);
+        var sigil = state.SigilInventory.Single().Value;
+        var characterId = state.ActiveCharacterId;
+        var wrongSlotIndex = sigil.SlotIndex == 1 ? 2 : 1;
+
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            store.EquipSigil(accountId, characterId, wrongSlotIndex, sigil.InstanceId));
+
+        Assert.Contains("tier-compatible", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void EquipSigil_FailsWhenAscendantUnlockIsRequiredButMissing()
+    {
+        const string accountId = "account_sigil_requires_ascendant";
+        var seededState = new InMemoryAccountStateStore().GetAccountState(accountId);
+        var sigilEntry = seededState.SigilInventory.Single();
+        var sigilRequiringAscendant = sigilEntry.Value with
+        {
+            RequiresAscendantUnlock = true
+        };
+
+        var stateWithAscendantSigil = seededState with
+        {
+            SigilInventory = new Dictionary<string, SigilInstance>(StringComparer.Ordinal)
+            {
+                [sigilEntry.Key] = sigilRequiringAscendant
+            }
+        };
+
+        var persistence = new StubAccountStatePersistence(
+            new Dictionary<string, PersistedAccountData>(StringComparer.Ordinal)
+            {
+                [accountId] = new PersistedAccountData(
+                    State: stateWithAscendantSigil,
+                    AwardedBySourceKeyByCharacter: new Dictionary<string, Dictionary<string, List<DropEvent>>>(StringComparer.Ordinal))
+            });
+
+        var store = new InMemoryAccountStateStore(persistence);
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            store.EquipSigil(accountId, seededState.ActiveCharacterId, sigilEntry.Value.SlotIndex, sigilEntry.Key));
+
+        Assert.Contains("Ascendant unlock", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static string BuildTempStoragePath()
     {
         return Path.Combine(Path.GetTempPath(), "kaezan-arena-tests", Guid.NewGuid().ToString("N"), "accounts");
@@ -169,6 +289,26 @@ public sealed class AccountStatePersistenceTests
         catch
         {
             // Best effort cleanup for temporary test storage.
+        }
+    }
+
+    private sealed class StubAccountStatePersistence : IAccountStatePersistence
+    {
+        private readonly IReadOnlyDictionary<string, PersistedAccountData> _data;
+
+        public StubAccountStatePersistence(IReadOnlyDictionary<string, PersistedAccountData> data)
+        {
+            _data = data;
+        }
+
+        public IReadOnlyDictionary<string, PersistedAccountData> LoadAll()
+        {
+            return _data;
+        }
+
+        public void Save(PersistedAccountData persistedAccount)
+        {
+            // no-op for unit tests
         }
     }
 }

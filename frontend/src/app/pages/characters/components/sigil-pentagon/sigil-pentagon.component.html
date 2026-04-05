@@ -1,15 +1,18 @@
-<div class="sigil-pentagon">
-  @for (pos of slotPositions; track pos.index) {
+<div class="pentagon-field">
+  @for (slot of slots; track trackBySlotIndex($index, slot)) {
     <button
       type="button"
-      class="sigil-slot"
-      [class.filled]="slotAt(pos.index)"
-      [class.selected]="selectedIndex === pos.index"
-      [style.left]="pos.left"
-      [style.top]="pos.top"
-      (click)="selectSlot(pos.index)"
+      class="sigil-node"
+      [class.sigil-node--equipped]="!!slot.equippedSigil"
+      [class.sigil-node--locked]="!slot.isUnlockedByMastery"
+      [class.sigil-node--unavailable]="slot.isUnlockedByMastery && !slot.canEquipNow"
+      [class.sigil-node--busy]="busySlotIndex === slot.slotIndex"
+      [attr.data-slot]="slot.slotIndex"
+      [disabled]="!slot.canEquipNow || busySlotIndex === slot.slotIndex"
+      (click)="onSlotClick(slot)"
     >
-      <span class="slot-icon">{{ pos.index + 1 }}</span>
+      <span class="node-num">{{ slot.slotIndex }}</span>
+      <span class="node-tier">{{ slot.tierName }}</span>
     </button>
   }
 </div>

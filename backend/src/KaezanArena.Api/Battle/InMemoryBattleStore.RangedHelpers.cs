@@ -246,7 +246,7 @@ public sealed partial class InMemoryBattleStore
             GetPlayerBaseElement(state),
             attacker: player);
 
-        ApplyPlayerLifeLeech(state, events, ComputeLifeLeechHeal(hpDamageApplied));
+        ApplyPlayerLifeLeech(state, events, ComputeLifeLeechHeal(state, hpDamageApplied));
         return hpDamageApplied;
     }
 

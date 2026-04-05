@@ -38,6 +38,7 @@ public sealed record SpendHollowEssenceBarrierRequestDto(
 
 public sealed record EquipSigilRequestDto(
     string CharacterId,
+    int SlotIndex,
     string SigilInstanceId);
 
 public sealed record UnequipSigilRequestDto(

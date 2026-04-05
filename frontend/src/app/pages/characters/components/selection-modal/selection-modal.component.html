@@ -1,6 +1,6 @@
 @if (open) {
   <div class="selection-overlay">
-    <div class="selection-card" role="dialog" aria-modal="true">
+    <div class="selection-card" [class.selection-card--sigil]="isSigilMode" role="dialog" aria-modal="true">
       <div class="selection-header">
         <div>
           <div class="kicker">{{ mode === 'weapon' ? 'Weapons' : 'Sigils' }}</div>
@@ -9,61 +9,135 @@
         <button type="button" class="close-btn" (click)="close()" aria-label="Close">✕</button>
       </div>
 
-      @if (isSigilMode && availableSets.length > 1) {
+      @if (isSigilMode) {
         <div class="selection-filters">
           <label>
-            <span>Set</span>
-            <select class="filter-select" [(ngModel)]="setFilter">
-              @for (option of availableSets; track option.id) {
+            <span>Tier</span>
+            <select class="filter-select" [(ngModel)]="tierFilter" (ngModelChange)="onSigilFiltersChanged()">
+              @for (option of sigilTierOptions; track option.id) {
                 <option [value]="option.id">{{ option.label }}</option>
               }
             </select>
           </label>
+
+          <label>
+            <span>State</span>
+            <select class="filter-select" [(ngModel)]="equippedFilter" (ngModelChange)="onSigilFiltersChanged()">
+              <option value="all">All</option>
+              <option value="unequipped">Not Equipped</option>
+              <option value="equipped">Equipped</option>
+            </select>
+          </label>
+
+          <label>
+            <span>Sort</span>
+            <select class="filter-select" [(ngModel)]="sortBy" (ngModelChange)="onSigilFiltersChanged()">
+              <option value="recommended">Recommended</option>
+              <option value="level_desc">Level High to Low</option>
+              <option value="hp_desc">HP Bonus High to Low</option>
+              <option value="tier_then_level">Tier then Level</option>
+            </select>
+          </label>
+
+          <div class="selection-summary">
+            <span>{{ filteredItems.length }} shown</span>
+            <span>{{ items.length }} owned</span>
+          </div>
         </div>
       }
 
       <div class="selection-body">
         <div class="selection-list">
-          @if (isSigilMode) {
-            <button
-              type="button"
-              class="list-item"
-              [class.selected]="activeId === null"
-              (click)="selectItem(null)"
-            >
-              <div class="item-icon empty">+</div>
-              <div class="item-meta">
-                <div class="item-name">Clear Slot</div>
-                <div class="item-sub">Remove equipped sigil.</div>
-              </div>
-            </button>
-          }
-
-          @for (item of filteredItems; track item.id) {
-            <button
-              type="button"
-              class="list-item"
-              [class.selected]="activeId === item.id"
-              (click)="selectItem(item.id)"
-            >
-              <div class="item-icon">
-                @if (item.imageUrl) {
-                  <img [src]="item.imageUrl" [alt]="item.name" />
-                } @else {
-                  <span class="item-icon-glyph">{{ item.name.slice(0, 1) }}</span>
-                }
-              </div>
-              <div class="item-meta">
-                <div class="item-name">{{ item.name }}</div>
-                <div class="item-sub">
-                  @if (mode === 'weapon') {
-                    {{ item.flatStatLabel }} — {{ item.secondaryStatLabel }}
-                  } @else {
-                    {{ item.setName }} — {{ item.mainStatLabel }} {{ item.mainStatValue }}
-                  }
+          @if (isSigilMode && sigilContext && !sigilContext.isSlotUsable) {
+            <div class="list-empty list-empty--warning">
+              <div class="list-empty-title">Slot Locked</div>
+              <div class="list-empty-sub">{{ sigilContext.lockReason ?? 'This slot is currently unavailable.' }}</div>
+            </div>
+          } @else if (isSigilMode && !hasAnySigils) {
+            <div class="list-empty">
+              <div class="list-empty-title">No Sigils Owned</div>
+              <div class="list-empty-sub">Defeat mobs in runs to drop Sigils into account inventory.</div>
+            </div>
+          } @else {
+            @if (isSigilMode && !hasCompatibleSigils) {
+              <div class="list-empty list-empty--warning">
+                <div class="list-empty-title">No Compatible Sigils</div>
+                <div class="list-empty-sub">
+                  This slot currently has no Sigils matching its required tier.
                 </div>
               </div>
-            </button>
+            }
+
+            @if (isSigilMode) {
+              <button
+                type="button"
+                class="list-item"
+                [class.selected]="activeId === null"
+                (click)="selectItem(null)"
+              >
+                <div class="item-icon empty">-</div>
+                <div class="item-meta">
+                  <div class="item-head">
+                    <div class="item-name">Clear Slot</div>
+                  </div>
+                  <div class="item-sub">
+                    @if (currentEquippedItem) {
+                      Unequip current Sigil from this slot.
+                    } @else {
+                      Slot is already empty.
+                    }
+                  </div>
+                </div>
+              </button>
+            }
+
+            @if (filteredItems.length === 0) {
+              <div class="list-empty">
+                <div class="list-empty-title">No Results</div>
+                <div class="list-empty-sub">Adjust filters to see more Sigils.</div>
+              </div>
+            } @else {
+              @for (item of filteredItems; track item.id) {
+                <button
+                  type="button"
+                  class="list-item"
+                  [class.selected]="activeId === item.id"
+                  [class.unavailable]="isSigilMode && item.isSelectable === false"
+                  (click)="selectItem(item.id)"
+                >
+                  <div class="item-icon">
+                    @if (item.imageUrl) {
+                      <img [src]="item.imageUrl" [alt]="item.name" />
+                    } @else {
+                      <span class="item-icon-glyph">{{ item.name.slice(0, 1) }}</span>
+                    }
+                  </div>
+                  <div class="item-meta">
+                    <div class="item-head">
+                      <div class="item-name">{{ item.name }}</div>
+                      @if (isSigilMode && item.isEquipped) {
+                        <span class="item-badge" [class.item-badge--current]="item.id === sigilContext?.currentEquippedInstanceId">
+                          {{ item.id === sigilContext?.currentEquippedInstanceId ? 'Current' : 'Equipped' }}
+                        </span>
+                      }
+                    </div>
+                    <div class="item-sub">
+                      @if (mode === 'weapon') {
+                        {{ item.flatStatLabel }} - {{ item.secondaryStatLabel }}
+                      } @else {
+                        {{ item.tierName }} - Lv.{{ item.sigilLevel }} - HP +{{ item.hpBonus }}
+                      }
+                    </div>
+                    @if (isSigilMode && item.equippedByLabel && item.id !== sigilContext?.currentEquippedInstanceId) {
+                      <div class="item-note">{{ item.equippedByLabel }}</div>
+                    }
+                    @if (isSigilMode && item.unavailableReason) {
+                      <div class="item-note item-note--warning">{{ item.unavailableReason }}</div>
+                    }
+                  </div>
+                </button>
+              }
+            }
           }
         </div>
 
@@ -104,38 +178,80 @@
               <div class="detail-preview sigil-preview">
                 @if (activeItem.imageUrl) {
                   <img [src]="activeItem.imageUrl" [alt]="activeItem.name" />
+                } @else {
+                  <span class="item-icon-glyph">{{ activeItem.name.slice(0, 1) }}</span>
                 }
               </div>
               <h2>{{ activeItem.name }}</h2>
-              @if (activeItem.setName) {
-                <div class="set-chip">{{ activeItem.setName }} set</div>
+              @if (activeItem.tierName) {
+                <div class="set-chip">{{ activeItem.tierName }}</div>
               }
               @if (activeItem.description) {
                 <div class="muted">{{ activeItem.description }}</div>
               }
+              @if (activeItemIsUnavailable && activeItem.unavailableReason) {
+                <div class="detail-warning">{{ activeItem.unavailableReason }}</div>
+              }
 
-              @if (activeItem.mainStatLabel) {
-                <h3>Main Attribute</h3>
+              <h3>Attributes</h3>
+              <div class="stat-list">
                 <div class="stat-row">
-                  <span class="stat-label">{{ activeItem.mainStatLabel }}</span>
-                  <span class="stat-value">{{ activeItem.mainStatValue }}</span>
+                  <span class="stat-label">Sigil Level</span>
+                  <span class="stat-value">{{ activeItem.sigilLevel }}</span>
                 </div>
-              }
-
-              @if (activeItem.subStats?.length) {
-                <h3>Sub Attributes</h3>
-                <div class="stat-list">
-                  @for (stat of activeItem.subStats; track stat.label) {
-                    <div class="stat-row">
-                      <span class="stat-label">{{ stat.label }}</span>
-                      <span class="stat-value">{{ stat.value }}</span>
-                    </div>
-                  }
+                <div class="stat-row">
+                  <span class="stat-label">HP Bonus</span>
+                  <span class="stat-value">+{{ activeItem.hpBonus }}</span>
                 </div>
-              }
+              </div>
             }
+          } @else if (isSigilClearSelection) {
+            <h2>Clear Slot</h2>
+            <div class="muted">
+              @if (currentEquippedItem) {
+                Unequip {{ currentEquippedItem.name }} from Slot {{ sigilContext?.slotIndex }}.
+              } @else {
+                This slot does not have an equipped Sigil.
+              }
+            </div>
           } @else {
             <div class="empty-state">Select an item to preview.</div>
+          }
+
+          @if (isSigilMode) {
+            <h3>Comparison</h3>
+            <div class="compare-grid">
+              <div class="compare-card">
+                <div class="compare-title">Current</div>
+                <div class="compare-name">{{ currentEquippedItem?.name ?? 'Empty Slot' }}</div>
+              </div>
+              <div class="compare-card">
+                <div class="compare-title">Selected</div>
+                <div class="compare-name">
+                  @if (isSigilClearSelection) {
+                    Empty Slot
+                  } @else {
+                    {{ selectedSigilForComparison?.name ?? 'None' }}
+                  }
+                </div>
+              </div>
+            </div>
+
+            <div class="stat-list">
+              @for (row of comparisonRows; track row.label) {
+                <div class="stat-row compare-row">
+                  <span class="stat-label">{{ row.label }}</span>
+                  <div class="compare-values">
+                    <span class="compare-value">{{ row.currentValue }}</span>
+                    <span class="compare-arrow">-></span>
+                    <span class="compare-value">{{ row.selectedValue }}</span>
+                    <span class="compare-delta" [class.up]="row.deltaDirection === 'up'" [class.down]="row.deltaDirection === 'down'">
+                      {{ row.deltaValue }}
+                    </span>
+                  </div>
+                </div>
+              }
+            </div>
           }
         </div>
       </div>
@@ -145,10 +261,10 @@
         <button
           type="button"
           class="action-btn action-btn--primary"
-          [disabled]="!isSigilMode && !activeId"
+          [disabled]="isConfirmDisabled"
           (click)="confirm()"
         >
-          {{ mode === 'weapon' ? 'Equip Weapon' : 'Equip Sigil' }}
+          {{ confirmLabel }}
         </button>
       </div>
     </div>

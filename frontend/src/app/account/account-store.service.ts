@@ -9,11 +9,14 @@ import {
   type BestiarySpecies,
   type CharacterCatalogEntry,
   type CharacterState,
+  type CharacterSigilLoadoutStateResponse,
   type DropSource,
   type EquipmentDefinition,
   type EquipmentSlot,
   type ItemDefinition,
-  type ItemRefineResponse
+  type ItemRefineResponse,
+  type SigilInventoryResponse,
+  type SigilLoadoutMutationResponse
 } from "../api/account-api.service";
 import { AccountSessionService } from "./account-session.service";
 
@@ -199,6 +202,65 @@ export class AccountStore {
     }
   }
 
+  async getSigilInventory(): Promise<SigilInventoryResponse> {
+    const accountId = this.session.accountId();
+    this.errorSignal.set(null);
+    return this.accountApi.getSigilInventory(accountId);
+  }
+
+  async getCharacterSigilLoadout(characterId: string): Promise<CharacterSigilLoadoutStateResponse> {
+    const accountId = this.session.accountId();
+    const normalizedCharacterId = this.normalizeRequired(characterId, "Character ID");
+    this.errorSignal.set(null);
+    return this.accountApi.getCharacterSigilLoadout(accountId, normalizedCharacterId);
+  }
+
+  async equipSigilToSlot(
+    characterId: string,
+    slotIndex: number,
+    sigilInstanceId: string
+  ): Promise<SigilLoadoutMutationResponse> {
+    const accountId = this.session.accountId();
+    const normalizedCharacterId = this.normalizeRequired(characterId, "Character ID");
+    const normalizedSigilInstanceId = this.normalizeRequired(sigilInstanceId, "Sigil instance ID");
+    const normalizedSlotIndex = Math.max(1, Math.floor(slotIndex));
+    this.errorSignal.set(null);
+
+    try {
+      const mutation = await this.accountApi.equipSigilToSlot(
+        accountId,
+        normalizedCharacterId,
+        normalizedSlotIndex,
+        normalizedSigilInstanceId
+      );
+      this.applySigilMutation(normalizedCharacterId, mutation);
+      return mutation;
+    } catch (error) {
+      this.errorSignal.set(this.stringifyError(error));
+      throw error;
+    }
+  }
+
+  async unequipSigilFromSlot(characterId: string, slotIndex: number): Promise<SigilLoadoutMutationResponse> {
+    const accountId = this.session.accountId();
+    const normalizedCharacterId = this.normalizeRequired(characterId, "Character ID");
+    const normalizedSlotIndex = Math.max(1, Math.floor(slotIndex));
+    this.errorSignal.set(null);
+
+    try {
+      const mutation = await this.accountApi.unequipSigilFromSlot(
+        accountId,
+        normalizedCharacterId,
+        normalizedSlotIndex
+      );
+      this.applySigilMutation(normalizedCharacterId, mutation);
+      return mutation;
+    } catch (error) {
+      this.errorSignal.set(this.stringifyError(error));
+      throw error;
+    }
+  }
+
   async craftBestiaryItem(
     speciesId: string,
     slot: BestiaryCraftSlot,
@@ -332,6 +394,30 @@ export class AccountStore {
       characters: {
         ...current.characters,
         [character.characterId]: character
+      }
+    });
+  }
+
+  private applySigilMutation(characterId: string, mutation: SigilLoadoutMutationResponse): void {
+    const current = this.stateSignal();
+    if (!current) {
+      return;
+    }
+
+    const existingCharacter = current.characters[characterId];
+    if (!existingCharacter) {
+      return;
+    }
+
+    this.stateSignal.set({
+      ...current,
+      sigilInventory: mutation.inventory.sigils,
+      characters: {
+        ...current.characters,
+        [characterId]: {
+          ...existingCharacter,
+          sigilLoadout: mutation.characterLoadout.loadout
+        }
       }
     });
   }

@@ -2,16 +2,17 @@
   @if (activeTab === 'sigils') {
     <app-kaelis-sigil-pentagon
       [slots]="sigilSlots"
-      [selectedIndex]="selectedSigilIndex"
+      [busySlotIndex]="busySigilSlotIndex"
       (slotClick)="slotClick.emit($event)"
+      (unequipClick)="unequipClick.emit($event)"
     ></app-kaelis-sigil-pentagon>
   } @else {
     <div class="preview-frame">
       @if (previewImageUrl) {
         <img
           class="preview-image"
+          [class.full-height]="activeTab === 'overview'"
           [class.preview-image--weapon]="activeTab === 'weapon'"
-          [class.full-height]="activeTab === 'details'"
           [src]="previewImageUrl"
           [alt]="characterName"
         />
@@ -21,7 +22,7 @@
     </div>
   }
 
-  @if (activeTab === 'details') {
+  @if (activeTab === 'overview') {
     <div class="skin-nav">
       <button
         type="button"

@@ -185,6 +185,41 @@ public static class ArenaConfig
 
     public static class SigilConfig
     {
+        public sealed record SigilPassiveStatProfile(
+            int FlatDamageDivisor,
+            int PercentDamageDivisor,
+            int PercentMaxHpDivisor,
+            int CritChanceDivisor,
+            int CritDamageDivisor,
+            int LifeLeechDivisor,
+            int CooldownReductionDivisor);
+
+        public sealed record SigilPassiveStatBundle(
+            int FlatDamageBonus = 0,
+            int PercentDamageBonus = 0,
+            int PercentMaxHpBonus = 0,
+            int CritChanceBonusPercent = 0,
+            int CritDamageBonusPercent = 0,
+            int LifeLeechBonusPercent = 0,
+            int GlobalCooldownReductionPercent = 0);
+
+        public static class TierIds
+        {
+            public const string Hollow = "sigil_tier:hollow";
+            public const string Brave = "sigil_tier:brave";
+            public const string Awakened = "sigil_tier:awakened";
+            public const string Exalted = "sigil_tier:exalted";
+            public const string Ascendant = "sigil_tier:ascendant";
+        }
+
+        public static class DefinitionIds
+        {
+            public const string MeleeBrute = "sigil_def:melee_brute";
+            public const string RangedArcher = "sigil_def:ranged_archer";
+            public const string MeleeDemon = "sigil_def:melee_demon";
+            public const string RangedDragon = "sigil_def:ranged_dragon";
+        }
+
         // Slot index (1-based) -> level range [min, max]
         public static readonly (int Min, int Max)[] SlotLevelRanges =
         [
@@ -198,6 +233,9 @@ public static class ArenaConfig
         public static readonly string[] SlotTierNames =
             ["Hollow", "Brave", "Awakened", "Exalted", "Ascendant"];
 
+        public static readonly string[] SlotTierIds =
+            [TierIds.Hollow, TierIds.Brave, TierIds.Awakened, TierIds.Exalted, TierIds.Ascendant];
+
         // Stat bonus per sigil level (flat HP bonus for now)
         public const int HpBonusPerSigilLevel = 2;
 
@@ -205,10 +243,123 @@ public static class ArenaConfig
         public static readonly string[] ValidSpeciesIds =
             [SpeciesIds.MeleeBrute, SpeciesIds.RangedArcher, SpeciesIds.MeleeDemon, SpeciesIds.RangedDragon];
 
+        public static readonly IReadOnlyDictionary<string, string> DefinitionIdBySpeciesId =
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                [SpeciesIds.MeleeBrute] = DefinitionIds.MeleeBrute,
+                [SpeciesIds.RangedArcher] = DefinitionIds.RangedArcher,
+                [SpeciesIds.MeleeDemon] = DefinitionIds.MeleeDemon,
+                [SpeciesIds.RangedDragon] = DefinitionIds.RangedDragon
+            };
+
+        public static readonly IReadOnlyDictionary<string, string> SpeciesIdByDefinitionId =
+            DefinitionIdBySpeciesId.ToDictionary(entry => entry.Value, entry => entry.Key, StringComparer.Ordinal);
+
+        public const int MaxAdditionalCritChancePercent = 50;
+        public const int MaxAdditionalCritDamagePercent = 300;
+        public const int MaxAdditionalLifeLeechPercent = 50;
+
+        public static readonly IReadOnlyDictionary<string, SigilPassiveStatProfile> PassiveStatProfilesByDefinitionId =
+            new Dictionary<string, SigilPassiveStatProfile>(StringComparer.Ordinal)
+            {
+                [DefinitionIds.MeleeBrute] = new SigilPassiveStatProfile(
+                    FlatDamageDivisor: 0,
+                    PercentDamageDivisor: 0,
+                    PercentMaxHpDivisor: 4,
+                    CritChanceDivisor: 0,
+                    CritDamageDivisor: 0,
+                    LifeLeechDivisor: 10,
+                    CooldownReductionDivisor: 0),
+                [DefinitionIds.RangedArcher] = new SigilPassiveStatProfile(
+                    FlatDamageDivisor: 0,
+                    PercentDamageDivisor: 0,
+                    PercentMaxHpDivisor: 0,
+                    CritChanceDivisor: 8,
+                    CritDamageDivisor: 4,
+                    LifeLeechDivisor: 0,
+                    CooldownReductionDivisor: 0),
+                [DefinitionIds.MeleeDemon] = new SigilPassiveStatProfile(
+                    FlatDamageDivisor: 3,
+                    PercentDamageDivisor: 10,
+                    PercentMaxHpDivisor: 0,
+                    CritChanceDivisor: 0,
+                    CritDamageDivisor: 0,
+                    LifeLeechDivisor: 0,
+                    CooldownReductionDivisor: 0),
+                [DefinitionIds.RangedDragon] = new SigilPassiveStatProfile(
+                    FlatDamageDivisor: 0,
+                    PercentDamageDivisor: 8,
+                    PercentMaxHpDivisor: 0,
+                    CritChanceDivisor: 0,
+                    CritDamageDivisor: 0,
+                    LifeLeechDivisor: 0,
+                    CooldownReductionDivisor: 10)
+            };
+
         // Sigil drops
         public const int SigilDropChancePercent = 8; // per kill of the species
         public const int HollowSigilLevelMin = 1;
         public const int HollowSigilLevelMax = 20;
+
+        public static bool IsValidSlotIndex(int slotIndex)
+        {
+            return slotIndex >= 1 && slotIndex <= SlotLevelRanges.Length;
+        }
+
+        public static bool IsValidSpeciesId(string speciesId)
+        {
+            return ValidSpeciesIds.Contains(speciesId, StringComparer.Ordinal);
+        }
+
+        public static string ResolveTierIdForSlotIndex(int slotIndex)
+        {
+            var safeIndex = Math.Clamp(slotIndex, 1, SlotTierIds.Length);
+            return SlotTierIds[safeIndex - 1];
+        }
+
+        public static string ResolveTierNameForSlotIndex(int slotIndex)
+        {
+            var safeIndex = Math.Clamp(slotIndex, 1, SlotTierNames.Length);
+            return SlotTierNames[safeIndex - 1];
+        }
+
+        public static string ResolveDefinitionIdForSpeciesId(string speciesId)
+        {
+            if (DefinitionIdBySpeciesId.TryGetValue(speciesId, out var definitionId))
+            {
+                return definitionId;
+            }
+
+            return $"sigil_def:{speciesId}";
+        }
+
+        public static SigilPassiveStatBundle ResolvePassiveStatBundle(string definitionId, int sigilLevel)
+        {
+            var safeLevel = Math.Max(1, sigilLevel);
+            if (!PassiveStatProfilesByDefinitionId.TryGetValue(definitionId, out var profile))
+            {
+                return new SigilPassiveStatBundle();
+            }
+
+            return new SigilPassiveStatBundle(
+                FlatDamageBonus: ResolveSigilStatByDivisor(safeLevel, profile.FlatDamageDivisor),
+                PercentDamageBonus: ResolveSigilStatByDivisor(safeLevel, profile.PercentDamageDivisor),
+                PercentMaxHpBonus: ResolveSigilStatByDivisor(safeLevel, profile.PercentMaxHpDivisor),
+                CritChanceBonusPercent: ResolveSigilStatByDivisor(safeLevel, profile.CritChanceDivisor),
+                CritDamageBonusPercent: ResolveSigilStatByDivisor(safeLevel, profile.CritDamageDivisor),
+                LifeLeechBonusPercent: ResolveSigilStatByDivisor(safeLevel, profile.LifeLeechDivisor),
+                GlobalCooldownReductionPercent: ResolveSigilStatByDivisor(safeLevel, profile.CooldownReductionDivisor));
+        }
+
+        private static int ResolveSigilStatByDivisor(int level, int divisor)
+        {
+            if (divisor <= 0)
+            {
+                return 0;
+            }
+
+            return Math.Max(0, level / divisor);
+        }
     }
 
     public static class ZoneConfig

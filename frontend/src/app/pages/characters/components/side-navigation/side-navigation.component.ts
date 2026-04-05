@@ -1,7 +1,7 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
-export type KaelisTab = 'details' | 'weapon' | 'sigils' | 'bestiary';
+export type KaelisTab = 'overview' | 'weapon' | 'sigils' | 'bestiary';
 
 interface NavTab {
   id: KaelisTab;
@@ -16,11 +16,11 @@ interface NavTab {
   styleUrl: './side-navigation.component.css'
 })
 export class KaelisSideNavigationComponent {
-  @Input() activeTab: KaelisTab = 'details';
+  @Input() activeTab: KaelisTab = 'overview';
   @Output() tabChange = new EventEmitter<KaelisTab>();
 
   readonly tabs: NavTab[] = [
-    { id: 'details', label: 'Details' },
+    { id: 'overview', label: 'Overview' },
     { id: 'weapon', label: 'Weapon' },
     { id: 'sigils', label: 'Sigils' },
     { id: 'bestiary', label: 'Bestiary' }

@@ -1,6 +1,6 @@
 <div class="character-management">
   <header class="top-bar">
-    <div class="header-title">KAELIS // <strong>DETAILS</strong></div>
+    <div class="header-title">KAELIS // <strong>{{ activeTabLabel }}</strong></div>
   </header>
 
   <app-kaelis-roster-strip
@@ -30,9 +30,10 @@
         [characterImageUrl]="activeCharacterImageUrl"
         [weaponImageUrl]="activeWeaponImageUrl"
         [characterName]="activeCharacterName"
-        [sigilSlots]="sigilSlots"
-        [selectedSigilIndex]="selectedSigilIndex()"
+        [sigilSlots]="sigilSlotCards"
+        [busySigilSlotIndex]="sigilBusySlotIndex()"
         (slotClick)="openSigilModal($event)"
+        (unequipClick)="unequipSigilFromSlot($event)"
       ></app-kaelis-center-preview>
 
       <app-kaelis-info-panel
@@ -46,19 +47,23 @@
         [weapon]="weaponInfo"
         [weaponStats]="weaponStats"
         [equippedWeaponName]="equippedWeaponName"
-        [sigilStats]="sigilStats"
-        [sigilSetBonuses]="sigilSetBonuses"
+        [sigilSlots]="sigilSlotCards"
         (changeWeapon)="openWeaponModal()"
       ></app-kaelis-info-panel>
     }
   </div>
 
+  @if (activeTab() === 'sigils' && sigilActionError()) {
+    <div class="sigil-error-banner" role="alert">{{ sigilActionError() }}</div>
+  }
+
   <app-kaelis-selection-modal
     [open]="modalOpen()"
     [mode]="modalMode()"
-    [items]="availableWeaponItems"
+    [items]="modalItems"
     [selectedId]="modalSelectedId()"
-    [slotIndex]="selectedSigilIndex()"
+    [slotIndex]="selectedSigilSlotIndex()"
+    [sigilContext]="sigilModalContext"
     (closed)="closeModal()"
     (confirmed)="confirmSelection($event)"
   ></app-kaelis-selection-modal>

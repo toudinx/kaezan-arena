@@ -10,7 +10,7 @@
     }
   </header>
 
-  @if (actionFeedbackMessage) {
+  @if (actionFeedbackMessage && activeInventoryTab === 'weapon') {
     <p class="backpack-page__status" [class.backpack-page__status--error]="actionFeedbackIsError">{{ actionFeedbackMessage }}</p>
   }
 
@@ -27,30 +27,183 @@
     <section class="backpack-page__frame">
       <header class="backpack-page__frame-head">
         <div>
-          <p class="backpack-page__eyebrow">Loadout // Storage</p>
-          <h1>Account Armory</h1>
-          <p class="backpack-page__subtitle">All weapons in your account inventory and who is currently using each one.</p>
+          <p class="backpack-page__eyebrow">{{ frameEyebrow }}</p>
+          <h1>{{ frameTitle }}</h1>
+          <p class="backpack-page__subtitle">{{ frameSubtitle }}</p>
+
+          <nav class="backpack-page__inventory-tabs" aria-label="Inventory category tabs">
+            <button
+              type="button"
+              class="backpack-page__inventory-tab"
+              [class.backpack-page__inventory-tab--active]="isInventoryTabActive('weapon')"
+              (click)="setInventoryTab('weapon')"
+            >
+              Weapons
+            </button>
+            <button
+              type="button"
+              class="backpack-page__inventory-tab"
+              [class.backpack-page__inventory-tab--active]="isInventoryTabActive('sigil')"
+              (click)="setInventoryTab('sigil')"
+            >
+              Sigils
+            </button>
+          </nav>
         </div>
 
         <div class="backpack-page__chips">
           <span class="backpack-page__chip">Kaelis {{ allCharacters.length }}</span>
-          <span class="backpack-page__chip">Equipped {{ equippedItemsCount }}</span>
-          <span class="backpack-page__chip">Stored {{ storedItemsCount }}</span>
+          @if (activeInventoryTab === 'weapon') {
+            <span class="backpack-page__chip">Equipped {{ equippedItemsCount }}</span>
+            <span class="backpack-page__chip">Stored {{ storedItemsCount }}</span>
+          } @else {
+            <span class="backpack-page__chip">Owned {{ sigilOwnedCount }}</span>
+            <span class="backpack-page__chip">Equipped {{ equippedSigilsCount }}</span>
+            <span class="backpack-page__chip">Stored {{ storedSigilsCount }}</span>
+          }
         </div>
       </header>
 
-      <section class="backpack-page__window-wrap">
-        <app-backpack-window
-          class="backpack-page__window"
-          [slots]="accountBackpackSlots"
-          [characterBadgeByInstanceId]="equippedBadgeByInstanceId"
-          [assignTargets]="assignTargets"
-          [itemCatalogById]="itemCatalogById"
-          [equipmentCatalogByItemId]="equipmentCatalogByItemId"
-          [equipInFlight]="equipInFlight"
-          (assignRequested)="onAssignRequested($event)"
-        ></app-backpack-window>
-      </section>
+      @if (activeInventoryTab === 'weapon') {
+        <section class="backpack-page__window-wrap">
+          <app-backpack-window
+            class="backpack-page__window"
+            [slots]="accountBackpackSlots"
+            [characterBadgeByInstanceId]="equippedBadgeByInstanceId"
+            [assignTargets]="assignTargets"
+            [itemCatalogById]="itemCatalogById"
+            [equipmentCatalogByItemId]="equipmentCatalogByItemId"
+            [equipInFlight]="equipInFlight"
+            (assignRequested)="onAssignRequested($event)"
+          ></app-backpack-window>
+        </section>
+      } @else {
+        <section class="backpack-page__sigil-layout">
+          <section class="backpack-page__sigil-panel backpack-page__sigil-panel--list">
+            <header class="backpack-page__sigil-toolbar">
+              <nav class="backpack-page__sigil-tier-tabs" aria-label="Sigil tiers">
+                <button
+                  type="button"
+                  class="backpack-page__sigil-tier-tab"
+                  [class.backpack-page__sigil-tier-tab--active]="isSigilTierFilterActive('all')"
+                  (click)="setSigilTierFilter('all')"
+                >
+                  All
+                </button>
+                @for (tier of sigilTierDefinitions; track tier.key) {
+                  <button
+                    type="button"
+                    class="backpack-page__sigil-tier-tab"
+                    [class.backpack-page__sigil-tier-tab--active]="isSigilTierFilterActive(tier.key)"
+                    (click)="setSigilTierFilter(tier.key)"
+                  >
+                    {{ tier.displayName }} {{ formatSigilLevelRange(tier.minLevel, tier.maxLevel) }}
+                  </button>
+                }
+              </nav>
+              <span class="backpack-page__sigil-count">{{ visibleSigilCount }} sigils</span>
+            </header>
+
+            <div class="backpack-page__sigil-groups">
+              @if (!hasAnySigils) {
+                <p class="backpack-page__sigil-empty">No Sigils in account inventory yet.</p>
+              } @else if (visibleSigilCount === 0) {
+                <p class="backpack-page__sigil-empty">No Sigils found in this tier filter.</p>
+              } @else {
+                @for (bucket of visibleSigilTierBuckets; track trackTierByKey($index, bucket)) {
+                  <article class="backpack-page__sigil-group">
+                    <header class="backpack-page__sigil-group-head">
+                      <h3>{{ bucket.displayName }}</h3>
+                      <div class="backpack-page__sigil-group-meta">
+                        <span>{{ formatSigilLevelRange(bucket.minLevel, bucket.maxLevel) }}</span>
+                        <span>{{ bucket.items.length }}</span>
+                      </div>
+                    </header>
+
+                    @if (bucket.items.length === 0) {
+                      <p class="backpack-page__sigil-empty backpack-page__sigil-empty--inline">No Sigils in this tier.</p>
+                    } @else {
+                      <div class="backpack-page__sigil-list">
+                        @for (sigil of bucket.items; track trackSigilByInstanceId($index, sigil)) {
+                          <button
+                            type="button"
+                            class="backpack-page__sigil-card"
+                            [class.backpack-page__sigil-card--selected]="selectedSigil?.instanceId === sigil.instanceId"
+                            [class.backpack-page__sigil-card--equipped]="sigil.isEquipped"
+                            [class.backpack-page__sigil-card--locked]="sigil.isLocked"
+                            (click)="selectSigil(sigil.instanceId)"
+                          >
+                            <div class="backpack-page__sigil-card-head">
+                              <strong>{{ sigil.speciesDisplayName }}</strong>
+                              <div class="backpack-page__sigil-card-badges">
+                                @if (sigil.isEquipped) {
+                                  <span class="backpack-page__sigil-pill backpack-page__sigil-pill--equipped">Equipped</span>
+                                }
+                                @if (sigil.isLocked) {
+                                  <span class="backpack-page__sigil-pill backpack-page__sigil-pill--locked">Locked</span>
+                                }
+                                <span class="backpack-page__sigil-pill">{{ sigil.tierName }}</span>
+                              </div>
+                            </div>
+                            <p>Lv.{{ sigil.sigilLevel }} · HP +{{ sigil.hpBonus }} · Slot {{ sigil.slotIndex }}</p>
+                            @if (sigil.equippedByLabel) {
+                              <p class="backpack-page__sigil-card-note">{{ sigil.equippedByLabel }}</p>
+                            }
+                          </button>
+                        }
+                      </div>
+                    }
+                  </article>
+                }
+              }
+            </div>
+          </section>
+
+          <section class="backpack-page__sigil-panel backpack-page__sigil-panel--detail">
+            <div class="backpack-page__sigil-detail-head">
+              <h3>Sigil Detail</h3>
+            </div>
+
+            @if (selectedSigil; as sigil) {
+              <article class="backpack-page__sigil-detail-card">
+                <div class="backpack-page__sigil-detail-title">
+                  <strong>{{ sigil.speciesDisplayName }}</strong>
+                  <span>{{ sigil.tierName }}</span>
+                </div>
+
+                <div class="backpack-page__sigil-detail-stats">
+                  <div>
+                    <span>Level</span>
+                    <strong>{{ sigil.sigilLevel }}</strong>
+                  </div>
+                  <div>
+                    <span>HP Bonus</span>
+                    <strong>+{{ sigil.hpBonus }}</strong>
+                  </div>
+                  <div>
+                    <span>Slot Tier</span>
+                    <strong>Slot {{ sigil.slotIndex }}</strong>
+                  </div>
+                </div>
+
+                @if (sigil.equippedByLabel) {
+                  <p class="backpack-page__sigil-detail-note">Equipped by {{ sigil.equippedByLabel }}</p>
+                } @else {
+                  <p class="backpack-page__sigil-detail-note">Stored in account inventory.</p>
+                }
+
+                @if (sigil.isLocked) {
+                  <p class="backpack-page__sigil-detail-lock">This Sigil is currently locked.</p>
+                }
+
+                <a routerLink="/kaelis" class="backpack-page__sigil-cta">Open Kaelis Loadout</a>
+              </article>
+            } @else {
+              <p class="backpack-page__sigil-empty">Select a Sigil to preview details.</p>
+            }
+          </section>
+        </section>
+      }
     </section>
   }
 </section>

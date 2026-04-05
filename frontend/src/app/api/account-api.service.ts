@@ -22,12 +22,16 @@ export interface CharacterEquipment {
 
 export interface SigilInstance {
   instanceId: string;
+  definitionId?: string;
   speciesId: string;
   speciesDisplayName: string;
   sigilLevel: number;
   slotIndex: number;
+  tierId?: string;
   tierName: string;
   hpBonus: number;
+  isLocked?: boolean;
+  requiresAscendantUnlock?: boolean;
 }
 
 export interface CharacterSigilLoadout {
@@ -36,6 +40,36 @@ export interface CharacterSigilLoadout {
   slot3?: SigilInstance | null;
   slot4?: SigilInstance | null;
   slot5?: SigilInstance | null;
+}
+
+export interface SigilInventoryResponse {
+  accountId: string;
+  sigils: SigilInstance[];
+}
+
+export interface SigilSlotState {
+  slotIndex: number;
+  tierId: string;
+  tierName: string;
+  isUnlockedByMastery: boolean;
+  isPrerequisiteSatisfied: boolean;
+  isAscendantUnlocked: boolean;
+  canEquipNow: boolean;
+  lockReasonCode?: string | null;
+  lockReason?: string | null;
+  equippedSigil?: SigilInstance | null;
+}
+
+export interface CharacterSigilLoadoutStateResponse {
+  accountId: string;
+  characterId: string;
+  loadout: CharacterSigilLoadout;
+  slots: SigilSlotState[];
+}
+
+export interface SigilLoadoutMutationResponse {
+  inventory: SigilInventoryResponse;
+  characterLoadout: CharacterSigilLoadoutStateResponse;
 }
 
 export interface AscendantTierProgress {
@@ -263,6 +297,57 @@ export class AccountApiService {
       `/api/v1/bestiary/craft?accountId=${encodedAccountId}`,
       payload,
       "Bestiary craft"
+    );
+  }
+
+  async getSigilInventory(accountId: string): Promise<SigilInventoryResponse> {
+    const encodedAccountId = encodeURIComponent(accountId.trim());
+    return this.getJson<SigilInventoryResponse>(
+      `/api/v1/sigils/inventory?accountId=${encodedAccountId}`,
+      "Sigil inventory"
+    );
+  }
+
+  async getCharacterSigilLoadout(accountId: string, characterId: string): Promise<CharacterSigilLoadoutStateResponse> {
+    const encodedAccountId = encodeURIComponent(accountId.trim());
+    const encodedCharacterId = encodeURIComponent(characterId.trim());
+    return this.getJson<CharacterSigilLoadoutStateResponse>(
+      `/api/v1/sigils/loadout?accountId=${encodedAccountId}&characterId=${encodedCharacterId}`,
+      "Sigil loadout"
+    );
+  }
+
+  async equipSigilToSlot(
+    accountId: string,
+    characterId: string,
+    slotIndex: number,
+    sigilInstanceId: string
+  ): Promise<SigilLoadoutMutationResponse> {
+    const encodedAccountId = encodeURIComponent(accountId.trim());
+    return this.postJson<{ characterId: string; slotIndex: number; sigilInstanceId: string }, SigilLoadoutMutationResponse>(
+      `/api/v1/sigils/equip?accountId=${encodedAccountId}`,
+      {
+        characterId,
+        slotIndex,
+        sigilInstanceId
+      },
+      "Equip sigil to slot"
+    );
+  }
+
+  async unequipSigilFromSlot(
+    accountId: string,
+    characterId: string,
+    slotIndex: number
+  ): Promise<SigilLoadoutMutationResponse> {
+    const encodedAccountId = encodeURIComponent(accountId.trim());
+    return this.postJson<{ characterId: string; slotIndex: number }, SigilLoadoutMutationResponse>(
+      `/api/v1/sigils/unequip?accountId=${encodedAccountId}`,
+      {
+        characterId,
+        slotIndex
+      },
+      "Unequip sigil from slot"
     );
   }
 

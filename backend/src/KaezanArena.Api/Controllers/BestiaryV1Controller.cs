@@ -122,7 +122,7 @@ public sealed class BestiaryV1Controller : ControllerBase
                 if (kills >= maxRankThreshold) speciesAtMaxRank++;
                 else missingSpecies.Add(ArenaConfig.DisplayNames.TryGetValue(speciesId, out var name) ? name : speciesId);
             }
-            var tierName = ArenaConfig.SigilConfig.SlotTierNames.Length > tierIndex ? ArenaConfig.SigilConfig.SlotTierNames[tierIndex] : $"Tier {tierIndex + 1}";
+            var tierName = ArenaConfig.SigilConfig.ResolveTierNameForSlotIndex(tierIndex + 1);
             result.Add(new AscendantTierProgressDto(TierIndex: tierIndex, TierName: tierName, IsUnlocked: isUnlocked, SpeciesAtMaxRank: speciesAtMaxRank, SpeciesRequired: tierSpecies.Length, MissingSpecies: missingSpecies));
         }
         return result;
@@ -160,14 +160,25 @@ public sealed class BestiaryV1Controller : ControllerBase
         var safeSlotIndex = Math.Clamp(sigil.SlotIndex, 1, ArenaConfig.SigilConfig.SlotTierNames.Length);
         return new SigilInstanceDto(
             InstanceId: sigil.InstanceId,
+            DefinitionId: ResolveSigilDefinitionId(sigil),
             SpeciesId: sigil.SpeciesId,
             SpeciesDisplayName: ArenaConfig.DisplayNames.TryGetValue(sigil.SpeciesId, out var speciesDisplayName)
                 ? speciesDisplayName
                 : sigil.SpeciesId,
             SigilLevel: safeLevel,
             SlotIndex: safeSlotIndex,
-            TierName: ArenaConfig.SigilConfig.SlotTierNames[safeSlotIndex - 1],
-            HpBonus: safeLevel * ArenaConfig.SigilConfig.HpBonusPerSigilLevel);
+            TierId: ArenaConfig.SigilConfig.ResolveTierIdForSlotIndex(safeSlotIndex),
+            TierName: ArenaConfig.SigilConfig.ResolveTierNameForSlotIndex(safeSlotIndex),
+            HpBonus: safeLevel * ArenaConfig.SigilConfig.HpBonusPerSigilLevel,
+            IsLocked: sigil.IsLocked,
+            RequiresAscendantUnlock: sigil.RequiresAscendantUnlock);
+    }
+
+    private static string ResolveSigilDefinitionId(SigilInstance sigil)
+    {
+        return string.IsNullOrWhiteSpace(sigil.DefinitionId)
+            ? ArenaConfig.SigilConfig.ResolveDefinitionIdForSpeciesId(sigil.SpeciesId)
+            : sigil.DefinitionId;
     }
 
     private static int ResolveMasteryXpForCurrentLevel(CharacterState character)

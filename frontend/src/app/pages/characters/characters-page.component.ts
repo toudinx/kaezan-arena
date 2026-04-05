@@ -18,16 +18,26 @@ import { KaelisCenterPreviewComponent } from "./components/center-preview/center
 import {
   KaelisInfoPanelComponent,
   type InfoPanelStat,
-  type SetBonusDisplay,
   type WeaponInfo
 } from "./components/info-panel/info-panel.component";
 import {
   KaelisSelectionModalComponent,
   type SelectionModalMode,
-  type SelectionItem
+  type SelectionItem,
+  type SigilSelectionContext
 } from "./components/selection-modal/selection-modal.component";
 import { BestiaryPageComponent } from "../bestiary/bestiary-page.component";
-import type { CharacterState, EquipmentDefinition, ItemDefinition, OwnedEquipmentInstance } from "../../api/account-api.service";
+import type {
+  CharacterSigilLoadoutStateResponse,
+  CharacterState,
+  EquipmentDefinition,
+  ItemDefinition,
+  OwnedEquipmentInstance,
+  SigilInstance,
+  SigilLoadoutMutationResponse,
+  SigilSlotState
+} from "../../api/account-api.service";
+import type { SigilSlotCardViewModel } from "./components/sigil-pentagon/sigil-pentagon.component";
 
 @Component({
   selector: "app-characters-page",
@@ -44,12 +54,16 @@ import type { CharacterState, EquipmentDefinition, ItemDefinition, OwnedEquipmen
   styleUrl: "./characters-page.component.css"
 })
 export class CharactersPageComponent implements OnInit {
-  activeTab = signal<KaelisTab>('details');
+  activeTab = signal<KaelisTab>('overview');
   selectedCharacterId = signal<string | null>(null);
   modalOpen = signal(false);
   modalMode = signal<SelectionModalMode>('weapon');
   modalSelectedId = signal<string | null>(null);
-  selectedSigilIndex = signal(0);
+  selectedSigilSlotIndex = signal<number | null>(null);
+  sigilInventory = signal<SigilInstance[]>([]);
+  sigilLoadoutState = signal<CharacterSigilLoadoutStateResponse | null>(null);
+  sigilActionError = signal<string | null>(null);
+  sigilBusySlotIndex = signal<number | null>(null);
 
   constructor(
     private readonly accountStore: AccountStore,
@@ -68,6 +82,11 @@ export class CharactersPageComponent implements OnInit {
     if (characters.length > 0 && !this.selectedCharacterId()) {
       const activeId = this.accountStore.state()?.activeCharacterId;
       this.selectedCharacterId.set(activeId ?? characters[0].characterId);
+    }
+
+    const selectedCharacterId = this.selectedCharacterId();
+    if (selectedCharacterId) {
+      await this.loadSigilState(selectedCharacterId);
     }
   }
 
@@ -266,10 +285,50 @@ export class CharactersPageComponent implements OnInit {
     return stats;
   }
 
-  // Mock sigil data (no sigil API yet)
-  readonly sigilSlots: (string | null)[] = [null, null, null, null, null];
   readonly sigilStats: InfoPanelStat[] = [];
-  readonly sigilSetBonuses: SetBonusDisplay[] = [];
+  readonly sigilSetBonuses: never[] = [];
+
+  get sigilSlotCards(): SigilSlotCardViewModel[] {
+    const loadoutState = this.sigilLoadoutState();
+    const activeCharacter = this.activeCharacter;
+    const slots = loadoutState?.slots ?? buildFallbackSigilSlots(activeCharacter);
+
+    return slots
+      .slice()
+      .sort((left, right) => left.slotIndex - right.slotIndex)
+      .map((slot) => {
+        const ascendantProgress = activeCharacter?.ascendantProgress?.find(
+          (entry) => entry.tierIndex === slot.slotIndex - 1
+        );
+        const ascendantProgressLabel = ascendantProgress
+          ? ascendantProgress.isUnlocked
+            ? "Unlocked"
+            : `${ascendantProgress.speciesAtMaxRank}/${ascendantProgress.speciesRequired} species`
+          : slot.isAscendantUnlocked
+            ? "Unlocked"
+            : "Locked";
+
+        return {
+          slotIndex: slot.slotIndex,
+          tierName: slot.tierName,
+          isUnlockedByMastery: slot.isUnlockedByMastery,
+          isPrerequisiteSatisfied: slot.isPrerequisiteSatisfied,
+          isAscendantUnlocked: slot.isAscendantUnlocked,
+          canEquipNow: slot.canEquipNow,
+          lockReason: slot.lockReason ?? null,
+          ascendantProgressLabel,
+          equippedSigil: slot.equippedSigil
+            ? {
+                instanceId: slot.equippedSigil.instanceId,
+                speciesDisplayName: slot.equippedSigil.speciesDisplayName,
+                sigilLevel: slot.equippedSigil.sigilLevel,
+                hpBonus: slot.equippedSigil.hpBonus
+              }
+            : null,
+          canUnequip: this.canUnequipSlot(slot.slotIndex)
+        };
+      });
+  }
 
   get availableWeaponItems(): SelectionItem[] {
     return Object.entries(this.accountStore.catalogs().equipmentById)
@@ -282,12 +341,123 @@ export class CharactersPageComponent implements OnInit {
       }));
   }
 
+  get availableSigilItems(): SelectionItem[] {
+    const selectedSlotIndex = this.selectedSigilSlotIndex();
+    const selectedCharacterId = this.selectedCharacterId();
+    const usageByInstanceId = this.buildSigilUsageByInstanceId();
+
+    return this.sigilInventory()
+      .slice()
+      .sort((left, right) => {
+        if (left.sigilLevel !== right.sigilLevel) {
+          return right.sigilLevel - left.sigilLevel;
+        }
+
+        return left.instanceId.localeCompare(right.instanceId);
+      })
+      .map((sigil) => {
+        const usage = usageByInstanceId[sigil.instanceId];
+        const isEquipped = !!usage;
+        const isCurrentSlotEquipped = isEquipped
+          && usage.characterId === selectedCharacterId
+          && usage.slotIndex === selectedSlotIndex;
+        const isCompatible = selectedSlotIndex ? sigil.slotIndex === selectedSlotIndex : true;
+        const isSelectable = !sigil.isLocked && isCompatible && (!isEquipped || isCurrentSlotEquipped);
+        const equippedByLabel = usage
+          ? `${usage.characterName} - Slot ${usage.slotIndex}`
+          : undefined;
+
+        let unavailableReason: string | undefined;
+        if (sigil.isLocked) {
+          unavailableReason = "Sigil is locked in account inventory.";
+        } else if (!isCompatible && selectedSlotIndex) {
+          unavailableReason = `Requires Slot ${sigil.slotIndex} (${sigil.tierName}).`;
+        } else if (isEquipped && !isCurrentSlotEquipped) {
+          unavailableReason = "Already equipped on another loadout slot.";
+        }
+
+        return {
+          id: sigil.instanceId,
+          name: sigil.speciesDisplayName,
+          description: `${sigil.tierName} tier - Lv.${sigil.sigilLevel}`,
+          setKey: sigil.definitionId ?? sigil.speciesId,
+          setName: sigil.speciesDisplayName,
+          mainStatLabel: "HP Bonus",
+          mainStatValue: `+${sigil.hpBonus}`,
+          subStats: [
+            { label: "Tier", value: sigil.tierName },
+            { label: "Slot", value: `${sigil.slotIndex}` }
+          ],
+          tierId: sigil.tierId,
+          tierName: sigil.tierName,
+          sigilSlotIndex: sigil.slotIndex,
+          sigilLevel: sigil.sigilLevel,
+          hpBonus: sigil.hpBonus,
+          isEquipped,
+          equippedByLabel,
+          isCompatible,
+          isSelectable,
+          unavailableReason
+        } satisfies SelectionItem;
+      });
+  }
+
+  get modalItems(): SelectionItem[] {
+    return this.modalMode() === "sigil"
+      ? this.availableSigilItems
+      : this.availableWeaponItems;
+  }
+
+  get sigilModalContext(): SigilSelectionContext | null {
+    if (this.modalMode() !== "sigil") {
+      return null;
+    }
+
+    const slotIndex = this.selectedSigilSlotIndex();
+    if (!slotIndex) {
+      return null;
+    }
+
+    const slotState = this.findSigilSlotState(slotIndex);
+    return {
+      slotIndex,
+      slotTierName: slotState?.tierName ?? `Slot ${slotIndex}`,
+      isSlotUsable: slotState?.canEquipNow ?? true,
+      lockReason: slotState?.lockReason ?? null,
+      currentEquippedInstanceId: slotState?.equippedSigil?.instanceId ?? null
+    };
+  }
+
+  get activeTabLabel(): string {
+    const tab = this.activeTab();
+    if (tab === "overview") {
+      return "OVERVIEW";
+    }
+
+    if (tab === "weapon") {
+      return "WEAPON";
+    }
+
+    if (tab === "sigils") {
+      return "SIGILS";
+    }
+
+    return "BESTIARY";
+  }
+
   setActiveTab(tab: KaelisTab): void {
     this.activeTab.set(tab);
+    if (tab === "sigils") {
+      const characterId = this.selectedCharacterId();
+      if (characterId) {
+        void this.loadSigilState(characterId);
+      }
+    }
   }
 
   selectEntry(id: string): void {
     this.selectedCharacterId.set(id);
+    void this.syncActiveCharacterAndLoadout(id);
   }
 
   previousEntry(): void {
@@ -295,7 +465,7 @@ export class CharactersPageComponent implements OnInit {
     if (!entries.length) return;
     const idx = entries.findIndex(e => e.id === this.selectedCharacterId());
     const prev = idx <= 0 ? entries.length - 1 : idx - 1;
-    this.selectedCharacterId.set(entries[prev].id);
+    this.selectEntry(entries[prev].id);
   }
 
   nextEntry(): void {
@@ -303,7 +473,7 @@ export class CharactersPageComponent implements OnInit {
     if (!entries.length) return;
     const idx = entries.findIndex(e => e.id === this.selectedCharacterId());
     const next = idx < 0 || idx >= entries.length - 1 ? 0 : idx + 1;
-    this.selectedCharacterId.set(entries[next].id);
+    this.selectEntry(entries[next].id);
   }
 
   async openWeaponModal(): Promise<void> {
@@ -319,20 +489,86 @@ export class CharactersPageComponent implements OnInit {
     void this.router.navigateByUrl("/backpack");
   }
 
-  openSigilModal(index: number): void {
-    this.selectedSigilIndex.set(index);
+  openSigilModal(slotIndex: number): void {
+    const slot = this.sigilSlotCards.find((candidate) => candidate.slotIndex === slotIndex);
+    if (!slot || !slot.canEquipNow) {
+      return;
+    }
+
+    this.selectedSigilSlotIndex.set(slotIndex);
     this.modalMode.set('sigil');
-    this.modalSelectedId.set(null);
+    this.modalSelectedId.set(slot.equippedSigil?.instanceId ?? null);
     this.modalOpen.set(true);
   }
 
   closeModal(): void {
     this.modalOpen.set(false);
+    this.selectedSigilSlotIndex.set(null);
+    this.modalSelectedId.set(null);
   }
 
-  confirmSelection(_id: string | null): void {
-    // Selection persistence not yet implemented
-    this.modalOpen.set(false);
+  async confirmSelection(id: string | null): Promise<void> {
+    if (this.modalMode() !== "sigil") {
+      this.modalOpen.set(false);
+      return;
+    }
+
+    const slotIndex = this.selectedSigilSlotIndex();
+    const characterId = this.selectedCharacterId();
+    if (!slotIndex || !characterId) {
+      this.modalOpen.set(false);
+      return;
+    }
+
+    const currentEquippedId = this.findSigilSlotState(slotIndex)?.equippedSigil?.instanceId ?? null;
+    if ((id ?? null) === currentEquippedId || (!id && !currentEquippedId)) {
+      this.modalOpen.set(false);
+      this.selectedSigilSlotIndex.set(null);
+      this.modalSelectedId.set(null);
+      return;
+    }
+
+    if (id) {
+      const selectedItem = this.availableSigilItems.find((item) => item.id === id) ?? null;
+      if (selectedItem?.isSelectable === false) {
+        this.sigilActionError.set(selectedItem.unavailableReason ?? "Selected Sigil cannot be equipped in this slot.");
+        return;
+      }
+    }
+
+    this.sigilBusySlotIndex.set(slotIndex);
+    this.sigilActionError.set(null);
+    try {
+      const mutation = id
+        ? await this.accountStore.equipSigilToSlot(characterId, slotIndex, id)
+        : await this.accountStore.unequipSigilFromSlot(characterId, slotIndex);
+      this.applySigilMutationState(mutation);
+      this.modalOpen.set(false);
+      this.selectedSigilSlotIndex.set(null);
+      this.modalSelectedId.set(null);
+    } catch (error) {
+      this.sigilActionError.set(this.stringifyError(error));
+    } finally {
+      this.sigilBusySlotIndex.set(null);
+    }
+  }
+
+  async unequipSigilFromSlot(slotIndex: number): Promise<void> {
+    const characterId = this.selectedCharacterId();
+    if (!characterId || !this.canUnequipSlot(slotIndex)) {
+      return;
+    }
+
+    this.sigilBusySlotIndex.set(slotIndex);
+    this.sigilActionError.set(null);
+    try {
+      const mutation = await this.accountStore.unequipSigilFromSlot(characterId, slotIndex);
+      this.applySigilMutationState(mutation);
+    } catch (error) {
+      this.sigilActionError.set(this.stringifyError(error));
+    } finally {
+      this.sigilBusySlotIndex.set(null);
+    }
   }
 
   private normalizeRarity(instanceRarity: string | null | undefined, itemRarity: string | null | undefined): string {
@@ -362,6 +598,141 @@ export class CharactersPageComponent implements OnInit {
 
     return "";
   }
+
+  private canUnequipSlot(slotIndex: number): boolean {
+    const slots = this.sigilLoadoutState()?.slots ?? [];
+    return !slots.some((slot) => slot.slotIndex > slotIndex && !!slot.equippedSigil);
+  }
+
+  private findSigilSlotState(slotIndex: number): SigilSlotState | null {
+    const slots = this.sigilLoadoutState()?.slots ?? buildFallbackSigilSlots(this.activeCharacter);
+    return slots.find((slot) => slot.slotIndex === slotIndex) ?? null;
+  }
+
+  private buildSigilUsageByInstanceId(): Readonly<Record<string, {
+    characterId: string;
+    characterName: string;
+    slotIndex: number;
+  }>> {
+    const usageByInstanceId: Record<string, {
+      characterId: string;
+      characterName: string;
+      slotIndex: number;
+    }> = {};
+
+    const characters = Object.values(this.accountStore.state()?.characters ?? {});
+    for (const character of characters) {
+      const characterName = resolveCharacterDisplayName({
+        characterId: character.characterId,
+        preferredName: character.name
+      });
+
+      for (const slotIndex of [1, 2, 3, 4, 5]) {
+        const sigil = resolveLoadoutSlot(character.sigilLoadout, slotIndex);
+        if (!sigil?.instanceId) {
+          continue;
+        }
+
+        usageByInstanceId[sigil.instanceId] = {
+          characterId: character.characterId,
+          characterName,
+          slotIndex
+        };
+      }
+    }
+
+    return usageByInstanceId;
+  }
+
+  private async syncActiveCharacterAndLoadout(characterId: string): Promise<void> {
+    try {
+      await this.accountStore.setActiveCharacter(characterId);
+    } catch {
+      // Character selection should still update local UI even if backend sync fails.
+    }
+
+    await this.loadSigilState(characterId);
+  }
+
+  private async loadSigilState(characterId: string): Promise<void> {
+    this.sigilActionError.set(null);
+    try {
+      const [inventory, loadout] = await Promise.all([
+        this.accountStore.getSigilInventory(),
+        this.accountStore.getCharacterSigilLoadout(characterId)
+      ]);
+      this.sigilInventory.set(inventory.sigils ?? []);
+      this.sigilLoadoutState.set(loadout);
+    } catch (error) {
+      this.sigilActionError.set(this.stringifyError(error));
+    }
+  }
+
+  private applySigilMutationState(mutation: SigilLoadoutMutationResponse): void {
+    this.sigilInventory.set(mutation.inventory.sigils ?? []);
+    this.sigilLoadoutState.set(mutation.characterLoadout);
+  }
+
+  private stringifyError(error: unknown): string {
+    if (error instanceof Error) {
+      return error.message;
+    }
+
+    return "Failed to update Sigil loadout.";
+  }
+}
+
+function buildFallbackSigilSlots(character: CharacterState | null): SigilSlotState[] {
+  const unlockedSigilSlots = Math.min(5, Math.max(0, character?.unlockedSigilSlots ?? 0));
+  const loadout = character?.sigilLoadout;
+
+  return [1, 2, 3, 4, 5].map((slotIndex) => {
+    const equippedSigil = resolveLoadoutSlot(loadout, slotIndex);
+    const isUnlockedByMastery = slotIndex <= unlockedSigilSlots;
+    const isPrerequisiteSatisfied = slotIndex === 1 || !!resolveLoadoutSlot(loadout, slotIndex - 1);
+    const canEquipNow = isUnlockedByMastery && isPrerequisiteSatisfied;
+
+    return {
+      slotIndex,
+      tierId: `tier_${slotIndex}`,
+      tierName: `Tier ${slotIndex}`,
+      isUnlockedByMastery,
+      isPrerequisiteSatisfied,
+      isAscendantUnlocked: false,
+      canEquipNow,
+      lockReasonCode: isUnlockedByMastery ? (isPrerequisiteSatisfied ? null : "prerequisite_unmet") : "mastery_locked",
+      lockReason: isUnlockedByMastery ? (isPrerequisiteSatisfied ? null : "Equip previous slots first.") : "Slot is locked by mastery progression.",
+      equippedSigil
+    };
+  });
+}
+
+function resolveLoadoutSlot(loadout: CharacterState["sigilLoadout"] | null | undefined, slotIndex: number): SigilInstance | null {
+  if (!loadout) {
+    return null;
+  }
+
+  if (slotIndex === 1) {
+    return loadout.slot1 ?? null;
+  }
+
+  if (slotIndex === 2) {
+    return loadout.slot2 ?? null;
+  }
+
+  if (slotIndex === 3) {
+    return loadout.slot3 ?? null;
+  }
+
+  if (slotIndex === 4) {
+    return loadout.slot4 ?? null;
+  }
+
+  if (slotIndex === 5) {
+    return loadout.slot5 ?? null;
+  }
+
+  return null;
 }
 
 function readNumericModifier(modifiers: Readonly<Record<string, string>>, key: string): number | null {
@@ -399,3 +770,4 @@ function toTitleLabel(value: string | null | undefined): string {
     .map((token) => token.length > 0 ? token[0].toUpperCase() + token.slice(1) : token)
     .join(" ");
 }
+

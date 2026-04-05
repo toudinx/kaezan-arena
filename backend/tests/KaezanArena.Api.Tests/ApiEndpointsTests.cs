@@ -2,6 +2,7 @@ using System.Collections;
 using System.Net;
 using System.Net.Http.Json;
 using System.Reflection;
+using KaezanArena.Api.Account;
 using KaezanArena.Api.Battle;
 using KaezanArena.Api.Contracts.Account;
 using KaezanArena.Api.Contracts.Battle;
@@ -516,6 +517,230 @@ public sealed class ApiEndpointsTests : IClassFixture<ApiTestWebApplicationFacto
         Assert.NotNull(payload);
         Assert.Equal("validation_error", payload.Code);
         Assert.Contains("slot must be: weapon", payload.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task GetSigilsInventory_ReturnsAccountWideSigils()
+    {
+        const string accountId = "dev_account_sigils_inventory";
+
+        var response = await _client.GetAsync($"/api/v1/sigils/inventory?accountId={accountId}");
+        var payload = await response.Content.ReadFromJsonAsync<SigilInventoryResponseDto>();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(payload);
+        Assert.Equal(accountId, payload.AccountId);
+        Assert.NotEmpty(payload.Sigils);
+        Assert.All(payload.Sigils, sigil => Assert.False(string.IsNullOrWhiteSpace(sigil.InstanceId)));
+    }
+
+    [Fact]
+    public async Task GetSigilsLoadout_ReturnsFiveOrderedSlotsWithState()
+    {
+        const string accountId = "dev_account_sigils_loadout";
+        var state = await GetAccountStateAsync(accountId);
+        var characterId = state.Account.ActiveCharacterId;
+
+        var response = await _client.GetAsync($"/api/v1/sigils/loadout?accountId={accountId}&characterId={characterId}");
+        var payload = await response.Content.ReadFromJsonAsync<CharacterSigilLoadoutStateDto>();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(payload);
+        Assert.Equal(accountId, payload.AccountId);
+        Assert.Equal(characterId, payload.CharacterId);
+        Assert.Equal(5, payload.Slots.Count);
+        Assert.Equal(1, payload.Slots[0].SlotIndex);
+        Assert.Equal(5, payload.Slots[^1].SlotIndex);
+    }
+
+    [Fact]
+    public async Task PostSigilsEquip_EquipsSpecificSlotAndReturnsUpdatedLoadout()
+    {
+        const string accountId = "dev_account_sigils_equip";
+        var state = await GetAccountStateAsync(accountId);
+        var characterId = state.Account.ActiveCharacterId;
+        var sigil = state.Account.SigilInventory.First();
+
+        var response = await _client.PostAsJsonAsync(
+            $"/api/v1/sigils/equip?accountId={accountId}",
+            new EquipSigilToSlotRequestDto(
+                CharacterId: characterId,
+                SlotIndex: sigil.SlotIndex,
+                SigilInstanceId: sigil.InstanceId));
+        var payload = await response.Content.ReadFromJsonAsync<SigilLoadoutMutationResponseDto>();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(payload);
+        Assert.Equal(characterId, payload.CharacterLoadout.CharacterId);
+        var equippedSlot = payload.CharacterLoadout.Slots.Single(slot => slot.SlotIndex == sigil.SlotIndex);
+        Assert.Equal(sigil.InstanceId, equippedSlot.EquippedSigil?.InstanceId);
+    }
+
+    [Fact]
+    public async Task PostSigilsEquip_RejectsTierMismatch()
+    {
+        const string accountId = "dev_account_sigils_tier_mismatch";
+        var state = await GetAccountStateAsync(accountId);
+        var characterId = state.Account.ActiveCharacterId;
+        var sigil = state.Account.SigilInventory.First();
+        var wrongSlot = sigil.SlotIndex == 1 ? 2 : 1;
+
+        var response = await _client.PostAsJsonAsync(
+            $"/api/v1/sigils/equip?accountId={accountId}",
+            new EquipSigilToSlotRequestDto(
+                CharacterId: characterId,
+                SlotIndex: wrongSlot,
+                SigilInstanceId: sigil.InstanceId));
+        var payload = await response.Content.ReadFromJsonAsync<ApiErrorDto>();
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.NotNull(payload);
+        Assert.Contains("tier-compatible", payload.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task PostSigilsEquip_RejectsWhenSigilAlreadyEquippedByAnotherCharacter()
+    {
+        const string accountId = "dev_account_sigils_unique_equip";
+        var state = await GetAccountStateAsync(accountId);
+        var firstCharacterId = state.Account.ActiveCharacterId;
+        var secondCharacterId = state.Account.Characters.Keys.First(id =>
+            !string.Equals(id, firstCharacterId, StringComparison.Ordinal));
+        var sigil = state.Account.SigilInventory.First();
+
+        var firstEquipResponse = await _client.PostAsJsonAsync(
+            $"/api/v1/sigils/equip?accountId={accountId}",
+            new EquipSigilToSlotRequestDto(
+                CharacterId: firstCharacterId,
+                SlotIndex: sigil.SlotIndex,
+                SigilInstanceId: sigil.InstanceId));
+        Assert.Equal(HttpStatusCode.OK, firstEquipResponse.StatusCode);
+
+        var secondEquipResponse = await _client.PostAsJsonAsync(
+            $"/api/v1/sigils/equip?accountId={accountId}",
+            new EquipSigilToSlotRequestDto(
+                CharacterId: secondCharacterId,
+                SlotIndex: sigil.SlotIndex,
+                SigilInstanceId: sigil.InstanceId));
+        var payload = await secondEquipResponse.Content.ReadFromJsonAsync<ApiErrorDto>();
+
+        Assert.Equal(HttpStatusCode.BadRequest, secondEquipResponse.StatusCode);
+        Assert.NotNull(payload);
+        Assert.Contains("already equipped", payload.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task StartBattle_AppliesSigilPassiveModifiers_WhenCharacterHasEquippedSigil()
+    {
+        const string accountId = "dev_account";
+        var state = await GetAccountStateAsync(accountId);
+        var characterId = state.Account.ActiveCharacterId;
+        var sigil = state.Account.SigilInventory
+            .OrderBy(candidate => candidate.SlotIndex)
+            .ThenByDescending(candidate => candidate.SigilLevel)
+            .First();
+
+        var initialUnequipResponse = await _client.PostAsJsonAsync(
+            $"/api/v1/sigils/unequip?accountId={accountId}",
+            new UnequipSigilFromSlotRequestDto(
+                CharacterId: characterId,
+                SlotIndex: sigil.SlotIndex));
+        Assert.Equal(HttpStatusCode.OK, initialUnequipResponse.StatusCode);
+
+        try
+        {
+            var equipResponse = await _client.PostAsJsonAsync(
+                $"/api/v1/sigils/equip?accountId={accountId}",
+                new EquipSigilToSlotRequestDto(
+                    CharacterId: characterId,
+                    SlotIndex: sigil.SlotIndex,
+                    SigilInstanceId: sigil.InstanceId));
+            Assert.Equal(HttpStatusCode.OK, equipResponse.StatusCode);
+
+            var start = await StartBattleAsync("arena-sigil-passive-applied", characterId, 1337);
+            AssertArenaInvariants(start.Actors, characterId);
+            var player = GetActor(start.Actors, characterId);
+            Assert.True(player.MaxHp > ArenaConfig.PlayerBaseHp);
+            Assert.Equal(player.MaxHp, player.Hp);
+        }
+        finally
+        {
+            var cleanupResponse = await _client.PostAsJsonAsync(
+                $"/api/v1/sigils/unequip?accountId={accountId}",
+                new UnequipSigilFromSlotRequestDto(
+                    CharacterId: characterId,
+                    SlotIndex: sigil.SlotIndex));
+            Assert.Equal(HttpStatusCode.OK, cleanupResponse.StatusCode);
+        }
+    }
+
+    [Fact]
+    public async Task StartBattle_PreservesBaseStats_WhenNoSigilsAreEquipped()
+    {
+        const string accountId = "dev_account";
+        var state = await GetAccountStateAsync(accountId);
+        var characterId = state.Account.ActiveCharacterId;
+        var sigil = state.Account.SigilInventory
+            .OrderBy(candidate => candidate.SlotIndex)
+            .ThenByDescending(candidate => candidate.SigilLevel)
+            .First();
+
+        var unequipResponse = await _client.PostAsJsonAsync(
+            $"/api/v1/sigils/unequip?accountId={accountId}",
+            new UnequipSigilFromSlotRequestDto(
+                CharacterId: characterId,
+                SlotIndex: sigil.SlotIndex));
+        Assert.Equal(HttpStatusCode.OK, unequipResponse.StatusCode);
+
+        var start = await StartBattleAsync("arena-sigil-passive-none", characterId, 1337);
+        AssertArenaInvariants(start.Actors, characterId);
+        var player = GetActor(start.Actors, characterId);
+        Assert.Equal(ArenaConfig.PlayerBaseHp, player.MaxHp);
+        Assert.Equal(ArenaConfig.PlayerBaseHp, player.Hp);
+    }
+
+    [Fact]
+    public async Task StartBattle_IgnoresInvalidMissingSigilLoadoutState_Safely()
+    {
+        const string accountId = "dev_account";
+        var state = await GetAccountStateAsync(accountId);
+        var characterId = state.Account.ActiveCharacterId;
+        var sigil = state.Account.SigilInventory
+            .OrderBy(candidate => candidate.SlotIndex)
+            .ThenByDescending(candidate => candidate.SigilLevel)
+            .First();
+        var slotIndex = sigil.SlotIndex;
+
+        var initialUnequipResponse = await _client.PostAsJsonAsync(
+            $"/api/v1/sigils/unequip?accountId={accountId}",
+            new UnequipSigilFromSlotRequestDto(
+                CharacterId: characterId,
+                SlotIndex: slotIndex));
+        Assert.Equal(HttpStatusCode.OK, initialUnequipResponse.StatusCode);
+
+        try
+        {
+            CorruptCharacterSigilLoadoutWithMissingSigil(
+                accountId: accountId,
+                characterId: characterId,
+                slotIndex: slotIndex,
+                missingSigilInstanceId: "sigil_missing_001");
+
+            var start = await StartBattleAsync("arena-sigil-passive-invalid", characterId, 1337);
+            AssertArenaInvariants(start.Actors, characterId);
+            var player = GetActor(start.Actors, characterId);
+            Assert.Equal(ArenaConfig.PlayerBaseHp, player.MaxHp);
+            Assert.Equal(ArenaConfig.PlayerBaseHp, player.Hp);
+        }
+        finally
+        {
+            var cleanupResponse = await _client.PostAsJsonAsync(
+                $"/api/v1/sigils/unequip?accountId={accountId}",
+                new UnequipSigilFromSlotRequestDto(
+                    CharacterId: characterId,
+                    SlotIndex: slotIndex));
+            Assert.Equal(HttpStatusCode.OK, cleanupResponse.StatusCode);
+        }
     }
 
     [Fact]
@@ -4853,6 +5078,55 @@ public sealed class ApiEndpointsTests : IClassFixture<ApiTestWebApplicationFacto
     private InMemoryBattleStore GetBattleStore()
     {
         return (InMemoryBattleStore)_factory.Services.GetRequiredService<IBattleStore>();
+    }
+
+    private void CorruptCharacterSigilLoadoutWithMissingSigil(
+        string accountId,
+        string characterId,
+        int slotIndex,
+        string missingSigilInstanceId)
+    {
+        var accountStateStore = _factory.Services.GetRequiredService<IAccountStateStore>();
+        _ = accountStateStore.GetAccountState(accountId);
+
+        var accountsField = accountStateStore.GetType().GetField("_accounts", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(accountsField);
+        var accounts = accountsField!.GetValue(accountStateStore);
+        Assert.NotNull(accounts);
+
+        var tryGetValueMethod = accounts!.GetType().GetMethod("TryGetValue");
+        Assert.NotNull(tryGetValueMethod);
+        var tryGetValueArgs = new object?[] { accountId, null };
+        var found = (bool)tryGetValueMethod!.Invoke(accounts, tryGetValueArgs)!;
+        Assert.True(found);
+        var storedAccount = tryGetValueArgs[1];
+        Assert.NotNull(storedAccount);
+
+        var stateProperty = storedAccount!.GetType().GetProperty("State", BindingFlags.Instance | BindingFlags.Public);
+        Assert.NotNull(stateProperty);
+        var accountState = (AccountState)stateProperty!.GetValue(storedAccount)!;
+
+        Assert.True(accountState.Characters.TryGetValue(characterId, out var character));
+        var updatedCharacter = character with
+        {
+            SigilLoadout = character.SigilLoadout.SetSlotInstanceId(slotIndex, missingSigilInstanceId)
+        };
+
+        var updatedCharacters = new Dictionary<string, CharacterState>(accountState.Characters, StringComparer.Ordinal)
+        {
+            [characterId] = updatedCharacter
+        };
+        var updatedSigilInventory = new Dictionary<string, SigilInstance>(accountState.SigilInventory, StringComparer.Ordinal);
+        updatedSigilInventory.Remove(missingSigilInstanceId);
+
+        var updatedState = accountState with
+        {
+            Version = accountState.Version + 1,
+            Characters = updatedCharacters,
+            SigilInventory = updatedSigilInventory
+        };
+
+        stateProperty.SetValue(storedAccount, updatedState);
     }
 
     /// <summary>

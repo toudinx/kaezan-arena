@@ -98,7 +98,10 @@ public sealed record SigilInstance(
     string InstanceId,       // unique ID e.g. "sigil_abc123"
     string SpeciesId,        // which mob species this came from
     int SigilLevel,          // 1-95
-    int SlotIndex);          // 1-5, which slot tier this belongs to
+    int SlotIndex,           // 1-5, which slot tier this belongs to
+    string DefinitionId = "", // stable sigil definition ID e.g. "sigil_def:melee_brute"
+    bool IsLocked = false,   // backend-authoritative lock state
+    bool RequiresAscendantUnlock = false); // if true, tier ascendant unlock is required to equip
 
 public sealed record CharacterSigilLoadout(
     string? Slot1SigilInstanceId,
@@ -203,6 +206,11 @@ public sealed record ItemDefinition(
 public sealed record SpeciesDefinition(
     string SpeciesId,
     string DisplayName);
+
+public sealed record SigilDefinition(
+    string DefinitionId,
+    string SpeciesId,
+    IReadOnlyList<string> SupportedTierIds);
 
 public sealed record CharacterCatalogDefinition(
     string CharacterId,

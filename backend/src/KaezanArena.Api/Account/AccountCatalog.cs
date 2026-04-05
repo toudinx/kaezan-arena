@@ -12,6 +12,26 @@ public static class AccountCatalog
         new SpeciesDefinition(ArenaConfig.SpeciesIds.RangedDragon, ArenaConfig.DisplayNames[ArenaConfig.SpeciesIds.RangedDragon]),
     ];
 
+    public static IReadOnlyList<SigilDefinition> SigilDefinitions { get; } =
+    [
+        new SigilDefinition(
+            DefinitionId: ArenaConfig.SigilConfig.DefinitionIds.MeleeBrute,
+            SpeciesId: ArenaConfig.SpeciesIds.MeleeBrute,
+            SupportedTierIds: ArenaConfig.SigilConfig.SlotTierIds.ToArray()),
+        new SigilDefinition(
+            DefinitionId: ArenaConfig.SigilConfig.DefinitionIds.RangedArcher,
+            SpeciesId: ArenaConfig.SpeciesIds.RangedArcher,
+            SupportedTierIds: ArenaConfig.SigilConfig.SlotTierIds.ToArray()),
+        new SigilDefinition(
+            DefinitionId: ArenaConfig.SigilConfig.DefinitionIds.MeleeDemon,
+            SpeciesId: ArenaConfig.SpeciesIds.MeleeDemon,
+            SupportedTierIds: ArenaConfig.SigilConfig.SlotTierIds.ToArray()),
+        new SigilDefinition(
+            DefinitionId: ArenaConfig.SigilConfig.DefinitionIds.RangedDragon,
+            SpeciesId: ArenaConfig.SpeciesIds.RangedDragon,
+            SupportedTierIds: ArenaConfig.SigilConfig.SlotTierIds.ToArray())
+    ];
+
     public static IReadOnlyList<CharacterCatalogDefinition> CharacterDefinitions { get; } =
     [
         BuildCharacterDefinition(
@@ -112,6 +132,9 @@ public static class AccountCatalog
     public static IReadOnlyDictionary<string, EquipmentDefinition> EquipmentByItemId { get; } =
         EquipmentDefinitions.ToDictionary(def => def.ItemId, StringComparer.Ordinal);
 
+    public static IReadOnlyDictionary<string, SigilDefinition> SigilDefinitionsById { get; } =
+        SigilDefinitions.ToDictionary(definition => definition.DefinitionId, StringComparer.Ordinal);
+
     public static IReadOnlyDictionary<string, DropTable> EquipmentDropTables { get; } =
         new Dictionary<string, DropTable>(StringComparer.Ordinal)
         {
@@ -170,6 +193,11 @@ public static class AccountCatalog
     public static bool TryGetEquipment(string itemId, out EquipmentDefinition definition)
     {
         return EquipmentByItemId.TryGetValue(itemId, out definition!);
+    }
+
+    public static bool TryGetSigilDefinition(string definitionId, out SigilDefinition definition)
+    {
+        return SigilDefinitionsById.TryGetValue(definitionId, out definition!);
     }
 
     public static int ResolveEquipmentDropChancePercent(string sourceType)

@@ -49,7 +49,7 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
             }
 
             _accounts[normalizedAccountId] = new StoredAccount(
-                state: CloneAccountState(persistedAccount.State),
+                state: CloneAccountState(NormalizeLoadedAccountState(persistedAccount.State)),
                 awardedBySourceKeyByCharacter: CloneAwardedBySourceKeyByCharacter(
                     persistedAccount.AwardedBySourceKeyByCharacter));
         }
@@ -217,6 +217,16 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
         return EquipItem(accountId, characterId, EquipmentSlot.Weapon, weaponInstanceId);
     }
 
+    public AccountState EquipSigil(string accountId, string characterId, int slotIndex, string sigilInstanceId)
+    {
+        var account = GetOrCreateAccount(accountId);
+        lock (account.Sync)
+        {
+            EnsureDailyContractsRefreshed(account);
+            return EquipSigilInternal(account, characterId, slotIndex, sigilInstanceId);
+        }
+    }
+
     public AccountState EquipSigil(string accountId, string characterId, string sigilInstanceId)
     {
         var account = GetOrCreateAccount(accountId);
@@ -235,49 +245,99 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
                     $"Sigil '{normalizedSigilInstanceId}' was not found in account inventory.");
             }
 
-            if (!ArenaConfig.SigilConfig.ValidSpeciesIds.Contains(sigil.SpeciesId, StringComparer.Ordinal))
+            return EquipSigilInternal(account, characterId, sigil.SlotIndex, normalizedSigilInstanceId);
+        }
+    }
+
+    private AccountState EquipSigilInternal(StoredAccount account, string characterId, int slotIndex, string sigilInstanceId)
+    {
+        if (string.IsNullOrWhiteSpace(sigilInstanceId))
+        {
+            throw new InvalidOperationException("sigilInstanceId is required.");
+        }
+
+        var normalizedSigilInstanceId = sigilInstanceId.Trim();
+        ValidateSigilSlotIndex(slotIndex);
+        if (!account.State.SigilInventory.TryGetValue(normalizedSigilInstanceId, out var sigil))
+        {
+            throw new InvalidOperationException(
+                $"Sigil '{normalizedSigilInstanceId}' was not found in account inventory.");
+        }
+
+        if (sigil.IsLocked)
+        {
+            throw new InvalidOperationException($"Sigil '{normalizedSigilInstanceId}' is locked and cannot be equipped.");
+        }
+
+        if (!ArenaConfig.SigilConfig.IsValidSpeciesId(sigil.SpeciesId))
+        {
+            throw new InvalidOperationException(
+                $"Sigil '{normalizedSigilInstanceId}' has invalid species '{sigil.SpeciesId}'.");
+        }
+
+        var expectedDefinitionId = ArenaConfig.SigilConfig.ResolveDefinitionIdForSpeciesId(sigil.SpeciesId);
+        if (!string.Equals(sigil.DefinitionId, expectedDefinitionId, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"Sigil '{normalizedSigilInstanceId}' has invalid definition '{sigil.DefinitionId}' for species '{sigil.SpeciesId}'.");
+        }
+
+        var expectedSlotIndex = SigilSlotResolver.ResolveSlotIndexForLevel(sigil.SigilLevel);
+        if (expectedSlotIndex != sigil.SlotIndex)
+        {
+            throw new InvalidOperationException(
+                $"Sigil '{normalizedSigilInstanceId}' has inconsistent slot mapping for level {sigil.SigilLevel}.");
+        }
+
+        if (slotIndex != sigil.SlotIndex)
+        {
+            throw new InvalidOperationException(
+                $"Sigil '{normalizedSigilInstanceId}' is tier-compatible only with slot {sigil.SlotIndex}.");
+        }
+
+        var character = GetCharacterOrThrow(account.State, characterId);
+        if (slotIndex > character.UnlockedSigilSlots)
+        {
+            throw new InvalidOperationException(
+                $"Sigil slot {slotIndex} is locked for character '{characterId}'.");
+        }
+
+        var loadout = character.SigilLoadout;
+        for (var requiredSlotIndex = 1; requiredSlotIndex < slotIndex; requiredSlotIndex += 1)
+        {
+            if (string.IsNullOrWhiteSpace(loadout.GetSlotInstanceId(requiredSlotIndex)))
             {
                 throw new InvalidOperationException(
-                    $"Sigil '{normalizedSigilInstanceId}' has invalid species '{sigil.SpeciesId}'.");
+                    $"Cannot equip slot {slotIndex} without slot {requiredSlotIndex} filled.");
             }
+        }
 
-            var character = GetCharacterOrThrow(account.State, characterId);
-            var slotIndex = sigil.SlotIndex;
-            ValidateSigilSlotIndex(slotIndex);
-            if (slotIndex > character.UnlockedSigilSlots)
-            {
-                throw new InvalidOperationException(
-                    $"Sigil slot {slotIndex} is locked for character '{characterId}'.");
-            }
+        if (sigil.RequiresAscendantUnlock && !IsAscendantTierUnlocked(character, slotIndex))
+        {
+            throw new InvalidOperationException(
+                $"Sigil '{normalizedSigilInstanceId}' requires Ascendant unlock for slot {slotIndex}.");
+        }
 
-            var loadout = character.SigilLoadout;
-            if (slotIndex > 1 && string.IsNullOrWhiteSpace(loadout.GetSlotInstanceId(slotIndex - 1)))
-            {
-                throw new InvalidOperationException(
-                    $"Cannot equip slot {slotIndex} without slot {slotIndex - 1} filled.");
-            }
+        if (TryFindSigilEquippedLocation(account.State, normalizedSigilInstanceId, out var equippedCharacterId, out var equippedSlotIndex) &&
+            (!string.Equals(equippedCharacterId, character.CharacterId, StringComparison.Ordinal) || equippedSlotIndex != slotIndex))
+        {
+            throw new InvalidOperationException(
+                $"Sigil '{normalizedSigilInstanceId}' is already equipped by character '{equippedCharacterId}' in slot {equippedSlotIndex}.");
+        }
 
-            var expectedSlotIndex = SigilSlotResolver.ResolveSlotIndexForLevel(sigil.SigilLevel);
-            if (expectedSlotIndex != slotIndex)
-            {
-                throw new InvalidOperationException(
-                    $"Sigil '{normalizedSigilInstanceId}' has inconsistent slot mapping for level {sigil.SigilLevel}.");
-            }
+        var updatedCharacter = character with
+        {
+            SigilLoadout = loadout.SetSlotInstanceId(slotIndex, normalizedSigilInstanceId)
+        };
 
-            var updatedCharacter = character with
-            {
-                SigilLoadout = loadout.SetSlotInstanceId(slotIndex, normalizedSigilInstanceId)
-            };
-
-            if (updatedCharacter == character)
-            {
-                return CloneAccountState(account.State);
-            }
-
-            account.State = UpdateCharacter(account.State, updatedCharacter, versionIncrement: 1);
-            PersistAccount(account);
+        if (updatedCharacter == character)
+        {
             return CloneAccountState(account.State);
         }
+
+        account.State = UpdateCharacter(account.State, updatedCharacter, versionIncrement: 1);
+        PersistAccount(account);
+        return CloneAccountState(account.State);
     }
 
     public AccountState UnequipSigil(string accountId, string characterId, int slotIndex)
@@ -313,6 +373,38 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
             PersistAccount(account);
             return CloneAccountState(account.State);
         }
+    }
+
+    private static bool IsAscendantTierUnlocked(CharacterState character, int slotIndex)
+    {
+        var tierIndex = slotIndex - 1;
+        return character.AscendantSigilSlotsUnlocked.TryGetValue(tierIndex, out var isUnlocked) && isUnlocked;
+    }
+
+    private static bool TryFindSigilEquippedLocation(
+        AccountState account,
+        string sigilInstanceId,
+        out string characterId,
+        out int slotIndex)
+    {
+        foreach (var (candidateCharacterId, candidateCharacter) in account.Characters)
+        {
+            for (var candidateSlotIndex = 1; candidateSlotIndex <= ArenaConfig.SigilConfig.SlotLevelRanges.Length; candidateSlotIndex += 1)
+            {
+                if (!string.Equals(candidateCharacter.SigilLoadout.GetSlotInstanceId(candidateSlotIndex), sigilInstanceId, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                characterId = candidateCharacterId;
+                slotIndex = candidateSlotIndex;
+                return true;
+            }
+        }
+
+        characterId = string.Empty;
+        slotIndex = 0;
+        return false;
     }
 
     public AccountState AwardMasteryXp(string accountId, string characterId, int xpAmount)
@@ -983,7 +1075,7 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
             }
 
             var sigilSpecies = NormalizeSpecies(source.Species);
-            if (ArenaConfig.SigilConfig.ValidSpeciesIds.Contains(sigilSpecies, StringComparer.Ordinal) &&
+            if (ArenaConfig.SigilConfig.IsValidSpeciesId(sigilSpecies) &&
                 rng.Next(100) < ArenaConfig.SigilConfig.SigilDropChancePercent)
             {
                 var sigilLevel = rng.Next(
@@ -995,7 +1087,9 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
                     InstanceId: sigilInstanceId,
                     SpeciesId: sigilSpecies,
                     SigilLevel: sigilLevel,
-                    SlotIndex: slotIndex);
+                    SlotIndex: slotIndex,
+                    DefinitionId: ArenaConfig.SigilConfig.ResolveDefinitionIdForSpeciesId(sigilSpecies),
+                    IsLocked: false);
 
                 events.Add(new DropEvent(
                     DropEventId: DeterministicSeed.HashId("dropevt", accountId, characterId, sourceKey, sigilInstanceId, "sigil"),
@@ -1462,11 +1556,76 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
 
     private static void ValidateSigilSlotIndex(int slotIndex)
     {
-        if (slotIndex < 1 || slotIndex > ArenaConfig.SigilConfig.SlotLevelRanges.Length)
+        if (!ArenaConfig.SigilConfig.IsValidSlotIndex(slotIndex))
         {
             throw new InvalidOperationException(
                 $"slotIndex must be between 1 and {ArenaConfig.SigilConfig.SlotLevelRanges.Length}.");
         }
+    }
+
+    private static AccountState NormalizeLoadedAccountState(AccountState state)
+    {
+        if (state.SigilInventory.Count == 0)
+        {
+            return state;
+        }
+
+        var normalizedSigilInventory = new Dictionary<string, SigilInstance>(StringComparer.Ordinal);
+        var changed = false;
+        foreach (var (instanceId, sigil) in state.SigilInventory)
+        {
+            var normalizedSigil = NormalizeSigilInstance(instanceId, sigil);
+            normalizedSigilInventory[instanceId] = normalizedSigil;
+            if (normalizedSigil != sigil)
+            {
+                changed = true;
+            }
+        }
+
+        if (!changed)
+        {
+            return state;
+        }
+
+        return state with
+        {
+            SigilInventory = normalizedSigilInventory
+        };
+    }
+
+    private static SigilInstance NormalizeSigilInstance(string instanceId, SigilInstance sigil)
+    {
+        var normalizedInstanceId = string.IsNullOrWhiteSpace(instanceId)
+            ? sigil.InstanceId.Trim()
+            : instanceId.Trim();
+
+        var normalizedSpeciesId = NormalizeSpecies(sigil.SpeciesId);
+        var normalizedLevel = Math.Max(1, sigil.SigilLevel);
+        var normalizedSlotIndex = sigil.SlotIndex;
+        try
+        {
+            normalizedSlotIndex = SigilSlotResolver.ResolveSlotIndexForLevel(normalizedLevel);
+        }
+        catch (InvalidOperationException)
+        {
+            if (!ArenaConfig.SigilConfig.IsValidSlotIndex(normalizedSlotIndex))
+            {
+                normalizedSlotIndex = 1;
+            }
+        }
+
+        var normalizedDefinitionId = string.IsNullOrWhiteSpace(sigil.DefinitionId)
+            ? ArenaConfig.SigilConfig.ResolveDefinitionIdForSpeciesId(normalizedSpeciesId)
+            : sigil.DefinitionId.Trim();
+
+        return sigil with
+        {
+            InstanceId = normalizedInstanceId,
+            SpeciesId = normalizedSpeciesId,
+            SigilLevel = normalizedLevel,
+            SlotIndex = normalizedSlotIndex,
+            DefinitionId = normalizedDefinitionId
+        };
     }
 
     private static IReadOnlyDictionary<string, SigilInstance> BuildSeedSigilInventory()
@@ -1478,7 +1637,9 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
                 InstanceId: SeedSigilInstanceId,
                 SpeciesId: SeedSigilSpeciesId,
                 SigilLevel: SeedSigilLevel,
-                SlotIndex: slotIndex)
+                SlotIndex: slotIndex,
+                DefinitionId: ArenaConfig.SigilConfig.ResolveDefinitionIdForSpeciesId(SeedSigilSpeciesId),
+                IsLocked: false)
         };
     }
 
@@ -1924,13 +2085,20 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
             primalCoreBySpecies[species] = balance;
         }
 
+        var ascendantSigilSlotsUnlocked = new SortedDictionary<int, bool>();
+        foreach (var (tierIndex, isUnlocked) in character.AscendantSigilSlotsUnlocked.OrderBy(entry => entry.Key))
+        {
+            ascendantSigilSlotsUnlocked[tierIndex] = isUnlocked;
+        }
+
         return character with
         {
             Inventory = new CharacterInventory(
                 MaterialStacks: materialStacks,
                 EquipmentInstances: equipmentInstances),
             BestiaryKillsBySpecies = bestiaryKillsBySpecies,
-            PrimalCoreBySpecies = primalCoreBySpecies
+            PrimalCoreBySpecies = primalCoreBySpecies,
+            AscendantSigilSlotsUnlocked = ascendantSigilSlotsUnlocked
         };
     }
 
