@@ -1,5 +1,4 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnDestroy, OnInit } from "@angular/core";
-import { Router } from "@angular/router";
 import { AccountStore } from "../../account/account-store.service";
 import { HomeBackgroundComponent } from "./components/home-background/home-background.component";
 import { HomeCharacterStageComponent } from "./components/home-character-stage/home-character-stage.component";
@@ -23,24 +22,6 @@ import {
 
 type DailyElementKey = "fire" | "ice" | "earth" | "energy";
 type DailyWidgetTab = "contracts" | "element";
-
-type ElementalArenaKey = "fire" | "ice" | "earth" | "energy";
-
-type ElementalArenaCard = Readonly<{
-  arenaId: string;
-  displayName: string;
-  elementKey: ElementalArenaKey;
-  elementLabel: string;
-  coreDrop: string;
-  dustDrop: string;
-}>;
-
-const ELEMENTAL_ARENA_CARDS: ReadonlyArray<ElementalArenaCard> = [
-  { arenaId: "arena:forge_of_ash",  displayName: "Forge of Ash",  elementKey: "fire",   elementLabel: "Fire",   coreDrop: "EmberCore", dustDrop: "EmberDust" },
-  { arenaId: "arena:frozen_vault",  displayName: "Frozen Vault",  elementKey: "ice",    elementLabel: "Ice",    coreDrop: "FrostCore", dustDrop: "FrostDust" },
-  { arenaId: "arena:grove_of_ruin", displayName: "Grove of Ruin", elementKey: "earth",  elementLabel: "Earth",  coreDrop: "StoneCore", dustDrop: "StoneDust" },
-  { arenaId: "arena:storm_sanctum", displayName: "Storm Sanctum", elementKey: "energy", elementLabel: "Energy", coreDrop: "VoltCore",  dustDrop: "VoltDust"  }
-];
 
 type DailyElementVisual = Readonly<{
   key: DailyElementKey;
@@ -74,8 +55,7 @@ const DAILY_ELEMENT_VISUALS: Readonly<Record<DailyElementKey, DailyElementVisual
 export class HomePageComponent implements OnInit, OnDestroy {
   constructor(
     private readonly accountStore: AccountStore,
-    private readonly changeDetectorRef: ChangeDetectorRef,
-    private readonly router: Router
+    private readonly changeDetectorRef: ChangeDetectorRef
   ) {}
   private readonly resetAtLabel = "Resets at 00:00 UTC";
   private readonly dailyWidgetRotateEveryMs = 5000;
@@ -383,18 +363,12 @@ export class HomePageComponent implements OnInit, OnDestroy {
     return `daily-widget--${key}`;
   }
 
-  readonly elementalArenaCards: ReadonlyArray<ElementalArenaCard> = ELEMENTAL_ARENA_CARDS;
-
-  enterElementalArena(arenaId: string): void {
-    void this.router.navigate(["/arena"], { queryParams: { arenaId } });
-  }
-
   readonly mainNavItems: HomeNavItem[] = [
     {
       id: 'arena',
       title: 'Arena',
       subtitle: 'Enter the Arena',
-      route: '/arena-prep',
+      route: '/arena-select',
       tone: 'arena'
     },
     {

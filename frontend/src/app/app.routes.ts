@@ -32,6 +32,16 @@ export const routes: Routes = [
           import('./pages/arena-prep/arena-prep-page.component').then(m => m.ArenaPrepPageComponent)
       },
       {
+        path: 'arena-select',
+        loadComponent: () =>
+          import('./pages/arena-select/arena-select-page.component').then(m => m.ArenaSelectPageComponent)
+      },
+      {
+        path: 'arena-elemental',
+        loadComponent: () =>
+          import('./pages/arena-elemental/arena-elemental-page.component').then(m => m.ArenaElementalPageComponent)
+      },
+      {
         path: 'backpack',
         loadComponent: () =>
           import('./pages/backpack/backpack-page.component').then(m => m.BackpackPageComponent)

@@ -255,7 +255,7 @@ export class ArenaPrepPageComponent implements OnInit {
   }
 
   goBack(): void {
-    this.router.navigateByUrl("/");
+    void this.router.navigateByUrl("/arena-select");
   }
 
   confirm(): void {

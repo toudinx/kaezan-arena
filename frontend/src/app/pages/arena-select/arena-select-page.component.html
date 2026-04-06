@@ -1,0 +1,37 @@
+<div class="arena-select">
+  <header class="arena-select__header">
+    <a class="header-back" routerLink="/">
+      <svg class="header-back__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+      Home
+    </a>
+    <span class="header-title">
+      Arena <span class="header-title__sep">//</span> <strong>Select Mode</strong>
+    </span>
+  </header>
+
+  <div class="arena-select__body">
+    <p class="arena-select__eyebrow">Choose your battle</p>
+
+    <div class="mode-grid">
+      <a class="mode-card mode-card--zone" routerLink="/arena-prep">
+        <div class="mode-card__glow" aria-hidden="true"></div>
+        <div class="mode-card__inner">
+          <span class="mode-card__kicker">Zone Arena</span>
+          <p class="mode-card__title">Standard Run</p>
+          <p class="mode-card__body">Fight through zone waves. Daily element bonus active. Unlock new zones as you advance.</p>
+          <span class="mode-card__cta">Enter Zone Arena</span>
+        </div>
+      </a>
+
+      <a class="mode-card mode-card--elemental" routerLink="/arena-elemental">
+        <div class="mode-card__glow" aria-hidden="true"></div>
+        <div class="mode-card__inner">
+          <span class="mode-card__kicker">Elemental Arenas</span>
+          <p class="mode-card__title">Elemental Run</p>
+          <p class="mode-card__body">Four dedicated arenas, each locked to a single element. Earn Cores and Dust for enchanting.</p>
+          <span class="mode-card__cta">Choose Arena</span>
+        </div>
+      </a>
+    </div>
+  </div>
+</div>
