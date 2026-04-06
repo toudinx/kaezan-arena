@@ -1,4 +1,5 @@
 using KaezanArena.Api.Battle;
+using KaezanArena.Api.Contracts.Battle;
 
 namespace KaezanArena.Api.Account;
 
@@ -60,11 +61,37 @@ public static class DailyContractCatalog
         new("contract_007", ArenaConfig.ContractConfig.TypeOpenChests, "Open 3 chests in any run", 3, ArenaConfig.ContractConfig.KaerosRewardPerContract, ArenaConfig.ContractConfig.AccountXpRewardPerContract),
         new("contract_008", ArenaConfig.ContractConfig.TypeKillElites, "Kill 5 Elite enemies in a single run", 5, ArenaConfig.ContractConfig.KaerosRewardPerContract, ArenaConfig.ContractConfig.AccountXpRewardPerContract),
         new("contract_009", ArenaConfig.ContractConfig.TypeKillElites, "Kill 10 Elite enemies in any run", 10, ArenaConfig.ContractConfig.KaerosRewardPerContract, ArenaConfig.ContractConfig.AccountXpRewardPerContract),
-        new("contract_010", ArenaConfig.ContractConfig.TypeCompleteRun, "Complete 2 runs in a day", 2, ArenaConfig.ContractConfig.KaerosRewardPerContract, ArenaConfig.ContractConfig.AccountXpRewardPerContract)
+        new("contract_010", ArenaConfig.ContractConfig.TypeCompleteRun, "Complete 2 runs in a day", 2, ArenaConfig.ContractConfig.KaerosRewardPerContract, ArenaConfig.ContractConfig.AccountXpRewardPerContract),
+        new("contract_daily_fire", ArenaConfig.ContractConfig.TypeDailyElementRun, "Daily Surge: Complete 1 run while Fire is active", 1, ArenaConfig.ContractConfig.KaerosRewardPerContract, ArenaConfig.ContractConfig.AccountXpRewardPerContract),
+        new("contract_daily_ice", ArenaConfig.ContractConfig.TypeDailyElementRun, "Daily Surge: Complete 1 run while Ice is active", 1, ArenaConfig.ContractConfig.KaerosRewardPerContract, ArenaConfig.ContractConfig.AccountXpRewardPerContract),
+        new("contract_daily_earth", ArenaConfig.ContractConfig.TypeDailyElementRun, "Daily Surge: Complete 1 run while Earth is active", 1, ArenaConfig.ContractConfig.KaerosRewardPerContract, ArenaConfig.ContractConfig.AccountXpRewardPerContract),
+        new("contract_daily_energy", ArenaConfig.ContractConfig.TypeDailyElementRun, "Daily Surge: Complete 1 run while Energy is active", 1, ArenaConfig.ContractConfig.KaerosRewardPerContract, ArenaConfig.ContractConfig.AccountXpRewardPerContract)
     ];
+
+    public static readonly IReadOnlyDictionary<ElementType, string> DailyElementContractIdByElement =
+        new Dictionary<ElementType, string>
+        {
+            [ElementType.Fire] = "contract_daily_fire",
+            [ElementType.Ice] = "contract_daily_ice",
+            [ElementType.Earth] = "contract_daily_earth",
+            [ElementType.Energy] = "contract_daily_energy"
+        };
 
     public static readonly IReadOnlyDictionary<string, ContractDefinition> ContractById =
         ContractPool.ToDictionary(contract => contract.ContractId, StringComparer.Ordinal);
+
+    public static bool TryResolveDailyElementContract(DateOnly assignedDate, out ContractDefinition definition)
+    {
+        var dailyElement = ArenaConfig.ElementalConfig.ResolveDailyElement(assignedDate);
+        if (!DailyElementContractIdByElement.TryGetValue(dailyElement, out var contractId) ||
+            !ContractById.TryGetValue(contractId, out definition!))
+        {
+            definition = null!;
+            return false;
+        }
+
+        return true;
+    }
 }
 
 public sealed record CharacterState(
@@ -167,7 +194,9 @@ public sealed record OwnedEquipmentInstance(
     string? Slot = null,
     string? Rarity = null,
     string? CraftedByCharacterId = null,
-    string? CraftedByCharacterName = null);
+    string? CraftedByCharacterName = null,
+    ElementType? DamageElementEnchant = null,
+    ElementType? ResistanceElementEnchant = null);
 
 public sealed record EquipmentState(
     string? WeaponInstanceId)

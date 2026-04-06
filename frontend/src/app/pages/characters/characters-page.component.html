@@ -36,28 +36,209 @@
         (unequipClick)="unequipSigilFromSlot($event)"
       ></app-kaelis-center-preview>
 
-      <app-kaelis-info-panel
-        [activeTab]="activeTab()"
-        [characterName]="activeCharacterName"
-        [characterSubtitle]="activeCharacterSubtitle"
-        [masteryLevel]="masteryLevel"
-        [masteryXp]="masteryXp"
-        [masteryXpRequired]="masteryXpRequired"
-        [baseStats]="baseStats"
-        [weapon]="weaponInfo"
-        [weaponStats]="weaponStats"
-        [equippedWeaponName]="equippedWeaponName"
-        [fixedKitNames]="activeCharacterFixedKit"
-        [isActiveCharacter]="isSelectedCharacterActive"
-        [sigilSlots]="sigilSlotCards"
-        (changeWeapon)="openWeaponModal()"
-        (setActiveCharacter)="setSelectedCharacterAsActive()"
-      ></app-kaelis-info-panel>
+      <div class="right-column" [class.right-column--weapon]="activeTab() === 'weapon'">
+        <app-kaelis-info-panel
+          [activeTab]="activeTab()"
+          [characterName]="activeCharacterName"
+          [characterSubtitle]="activeCharacterSubtitle"
+          [masteryLevel]="masteryLevel"
+          [masteryXp]="masteryXp"
+          [masteryXpRequired]="masteryXpRequired"
+          [baseStats]="baseStats"
+          [weapon]="weaponInfo"
+          [weaponStats]="weaponStats"
+          [equippedWeaponName]="equippedWeaponName"
+          [fixedKitNames]="activeCharacterFixedKit"
+          [isActiveCharacter]="isSelectedCharacterActive"
+          [canManageInfusion]="activeTab() === 'weapon' && !!equippedWeaponInstanceId"
+          [sigilSlots]="sigilSlotCards"
+          (changeWeapon)="openWeaponModal()"
+          (manageInfusion)="openInfusionDrawer()"
+          (setActiveCharacter)="setSelectedCharacterAsActive()"
+        ></app-kaelis-info-panel>
+      </div>
     }
   </div>
 
   @if (activeTab() === 'sigils' && sigilActionError()) {
     <div class="sigil-error-banner" role="alert">{{ sigilActionError() }}</div>
+  }
+
+  @if (infusionDrawerOpen() && activeTab() === 'weapon' && equippedWeaponInstanceId) {
+    <div class="infusion-modal-overlay" (click)="closeInfusionDrawer()">
+      <section
+        class="infusion-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Weapon infusion popup"
+        (click)="$event.stopPropagation()"
+      >
+        <header class="infusion-modal__header">
+          <div>
+            <p class="infusion-modal__kicker">Weapon Infusion</p>
+            <h3 class="infusion-modal__title">Enchantment Matrix</h3>
+          </div>
+          <button type="button" class="infusion-modal__close" (click)="closeInfusionDrawer()" aria-label="Close infusion popup">X</button>
+        </header>
+
+        <div class="infusion-modal__tabs" role="tablist" aria-label="Infusion tabs">
+          <button
+            type="button"
+            role="tab"
+            class="infusion-modal__tab infusion-modal__tab--damage"
+            [class.infusion-modal__tab--active]="infusionTab() === 'damage'"
+            [attr.aria-selected]="infusionTab() === 'damage'"
+            aria-controls="infusion-panel-damage"
+            (click)="setInfusionTab('damage')"
+          >
+            <span class="infusion-modal__tab-label">Damage</span>
+            <span
+              class="infusion-modal__tab-status"
+              [class.infusion-modal__tab-status--equipped]="getInfusionTabStatus('damage') === 'Equipped'"
+            >
+              {{ getInfusionTabStatus('damage') }}
+            </span>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            class="infusion-modal__tab infusion-modal__tab--resist"
+            [class.infusion-modal__tab--active]="infusionTab() === 'resistance'"
+            [attr.aria-selected]="infusionTab() === 'resistance'"
+            aria-controls="infusion-panel-resistance"
+            (click)="setInfusionTab('resistance')"
+          >
+            <span class="infusion-modal__tab-label">Resistance</span>
+            <span
+              class="infusion-modal__tab-status"
+              [class.infusion-modal__tab-status--equipped]="getInfusionTabStatus('resistance') === 'Equipped'"
+            >
+              {{ getInfusionTabStatus('resistance') }}
+            </span>
+          </button>
+        </div>
+
+        @if (infusionTab() === 'damage') {
+          <article class="infusion-panel infusion-panel--damage" id="infusion-panel-damage" role="tabpanel">
+            <div class="infusion-slot__head">
+              <div>
+                <p class="infusion-slot__kicker">Slot 1</p>
+                <h4 class="infusion-slot__name">Damage Infusion</h4>
+              </div>
+              <span class="infusion-slot__cost">Core x10</span>
+            </div>
+
+            <div class="infusion-slot__socket">
+              <span class="infusion-slot__socket-label">Socketed</span>
+              <span class="infusion-slot__socket-value" [class.infusion-slot__socket-value--empty]="!weaponEnchantment?.damageElement">
+                {{ weaponEnchantment?.damageElement || 'Empty Socket' }}
+              </span>
+            </div>
+            <div class="infusion-slot__socket infusion-slot__socket--preview">
+              <span class="infusion-slot__socket-label">Equipped Material</span>
+              <span class="infusion-slot__socket-value" [class.infusion-slot__socket-value--empty]="!selectedEnchantDamageMaterial()">
+                {{ resolveSelectedEnchantMaterialLabel('damage') }}
+              </span>
+            </div>
+
+            <p class="infusion-panel__inventory-title">Elemental Cores</p>
+            <div class="infusion-panel__materials">
+              @for (mat of damageEnchantMaterials; track mat.id) {
+                <article class="infusion-material" [class.infusion-material--equipped]="isEnchantMaterialEquipped('damage', mat.id)">
+                  <div class="infusion-material__info">
+                    <p class="infusion-material__name">{{ mat.label }}</p>
+                    <p class="infusion-material__count">Owned x{{ getMaterialBalance(mat.id) }}</p>
+                  </div>
+                  <button
+                    type="button"
+                    class="infusion-material__equip-btn infusion-material__equip-btn--damage"
+                    [class.infusion-material__equip-btn--active]="isEnchantMaterialEquipped('damage', mat.id)"
+                    [disabled]="enchantBusy()"
+                    (click)="equipEnchantMaterial('damage', mat.id)"
+                  >
+                    {{ isEnchantMaterialEquipped('damage', mat.id) ? 'Equipped' : 'Equip' }}
+                  </button>
+                </article>
+              } @empty {
+                <p class="infusion-panel__empty">No elemental cores found.</p>
+              }
+            </div>
+
+            <div class="infusion-panel__actions">
+              <button
+                type="button"
+                class="infusion-slot__btn infusion-slot__btn--damage"
+                [disabled]="enchantBusy() || !selectedEnchantDamageMaterial()"
+                (click)="enchantWeapon('damage')"
+              >
+                Infuse
+              </button>
+            </div>
+          </article>
+        } @else {
+          <article class="infusion-panel infusion-panel--resist" id="infusion-panel-resistance" role="tabpanel">
+            <div class="infusion-slot__head">
+              <div>
+                <p class="infusion-slot__kicker">Slot 2</p>
+                <h4 class="infusion-slot__name">Resistance Infusion</h4>
+              </div>
+              <span class="infusion-slot__cost">Dust x10</span>
+            </div>
+
+            <div class="infusion-slot__socket">
+              <span class="infusion-slot__socket-label">Socketed</span>
+              <span class="infusion-slot__socket-value" [class.infusion-slot__socket-value--empty]="!weaponEnchantment?.resistanceElement">
+                {{ weaponEnchantment?.resistanceElement || 'Empty Socket' }}
+              </span>
+            </div>
+            <div class="infusion-slot__socket infusion-slot__socket--preview">
+              <span class="infusion-slot__socket-label">Equipped Material</span>
+              <span class="infusion-slot__socket-value" [class.infusion-slot__socket-value--empty]="!selectedEnchantResistanceMaterial()">
+                {{ resolveSelectedEnchantMaterialLabel('resistance') }}
+              </span>
+            </div>
+
+            <p class="infusion-panel__inventory-title">Elemental Dust</p>
+            <div class="infusion-panel__materials">
+              @for (mat of resistanceEnchantMaterials; track mat.id) {
+                <article class="infusion-material" [class.infusion-material--equipped]="isEnchantMaterialEquipped('resistance', mat.id)">
+                  <div class="infusion-material__info">
+                    <p class="infusion-material__name">{{ mat.label }}</p>
+                    <p class="infusion-material__count">Owned x{{ getMaterialBalance(mat.id) }}</p>
+                  </div>
+                  <button
+                    type="button"
+                    class="infusion-material__equip-btn infusion-material__equip-btn--resist"
+                    [class.infusion-material__equip-btn--active]="isEnchantMaterialEquipped('resistance', mat.id)"
+                    [disabled]="enchantBusy()"
+                    (click)="equipEnchantMaterial('resistance', mat.id)"
+                  >
+                    {{ isEnchantMaterialEquipped('resistance', mat.id) ? 'Equipped' : 'Equip' }}
+                  </button>
+                </article>
+              } @empty {
+                <p class="infusion-panel__empty">No elemental dust found.</p>
+              }
+            </div>
+
+            <div class="infusion-panel__actions">
+              <button
+                type="button"
+                class="infusion-slot__btn infusion-slot__btn--resist"
+                [disabled]="enchantBusy() || !selectedEnchantResistanceMaterial()"
+                (click)="enchantWeapon('resistance')"
+              >
+                Infuse
+              </button>
+            </div>
+          </article>
+        }
+
+        @if (enchantError()) {
+          <div class="infusion-modal__error" role="alert">{{ enchantError() }}</div>
+        }
+      </section>
+    </div>
   }
 
   <app-kaelis-selection-modal

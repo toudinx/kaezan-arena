@@ -842,6 +842,8 @@ export class ArenaEngine {
     const isCrit = event.hitKind === "crit" || event.isCrit;
     const isDamageReceived = this.isDamageReceived(sourceEntityId, targetEntityId, playerActorId);
     const element = this.normalizeElement(event.elementType);
+    const isWeaknessHit = event.isWeaknessHit ?? false;
+    const isResistanceHit = event.isResistanceHit ?? false;
     const entries: DamageNumberInstance[] = [];
 
     if (shieldDamageAmount > 0) {
@@ -882,7 +884,9 @@ export class ArenaEngine {
         stackIndex: 0,
         spawnOrder: 0,
         elapsedMs: 0,
-        durationMs: 950
+        durationMs: 950,
+        isWeaknessHit,
+        isResistanceHit
       });
     }
 

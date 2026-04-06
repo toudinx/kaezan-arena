@@ -45,6 +45,69 @@ const SPECIES_PORTRAIT_BY_ID: Readonly<Record<string, SpeciesPortraitSpec>> = {
     runImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/orc_shaman_run_anim_f1.png",
     hitImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/orc_shaman_idle_anim_f0.png",
     sigil: "SH"
+  },
+  melee_skeleton: {
+    tone: "slate",
+    imageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/skelet_idle_anim_f0.png",
+    runImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/skelet_run_anim_f0.png",
+    hitImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/skelet_idle_anim_f0.png",
+    sigil: "SK"
+  },
+  melee_wogol: {
+    tone: "amber",
+    imageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/wogol_idle_anim_f0.png",
+    runImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/wogol_run_anim_f0.png",
+    hitImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/wogol_idle_anim_f0.png",
+    sigil: "WO"
+  },
+  melee_warrior: {
+    tone: "amber",
+    imageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/orc_warrior_idle_anim_f0.png",
+    runImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/orc_warrior_run_anim_f0.png",
+    hitImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/orc_warrior_idle_anim_f0.png",
+    sigil: "WR"
+  },
+  melee_zombie: {
+    tone: "slate",
+    imageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/zombie_anim_f1.png",
+    runImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/zombie_anim_f1.png",
+    hitImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/zombie_anim_f1.png",
+    sigil: "ZM"
+  },
+  melee_tiny_zombie: {
+    tone: "slate",
+    imageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/tiny_zombie_idle_anim_f0.png",
+    runImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/tiny_zombie_run_anim_f0.png",
+    hitImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/tiny_zombie_idle_anim_f0.png",
+    sigil: "TZ"
+  },
+  ranged_imp: {
+    tone: "crimson",
+    imageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/imp_idle_anim_f0.png",
+    runImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/imp_run_anim_f0.png",
+    hitImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/imp_idle_anim_f0.png",
+    sigil: "IM"
+  },
+  ranged_swampy: {
+    tone: "teal",
+    imageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/swampy_anim_f0.png",
+    runImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/swampy_anim_f0.png",
+    hitImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/swampy_anim_f0.png",
+    sigil: "SW"
+  },
+  ranged_muddy: {
+    tone: "teal",
+    imageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/muddy_anim_f0.png",
+    runImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/muddy_anim_f0.png",
+    hitImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/muddy_anim_f0.png",
+    sigil: "MU"
+  },
+  melee_slug: {
+    tone: "teal",
+    imageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/tiny_slug_anim_f0.png",
+    runImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/tiny_slug_anim_f0.png",
+    hitImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/tiny_slug_anim_f0.png",
+    sigil: "SL"
   }
 } as const;
 

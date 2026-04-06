@@ -136,6 +136,25 @@ Data source: all stats are read from existing component properties (`combatTotal
 
 Bestiary delta calculation: `runStartBestiaryKills` is captured from the account state at `beginNewRun()` before resetting `bestiaryEntries`. Post-run delta = `bestiaryEntry.killsTotal − runStartBestiaryKills[species]`.
 
+## Elemental Arenas
+
+Four permanent Elemental Arenas, always accessible regardless of Account Level. All mobs have their element forced to the arena's element. Primary source of Elemental Core and Dust materials for weapon enchantment.
+
+| Arena | Element | Core Drop | Dust Drop |
+|---|---|---|---|
+| Forge of Ash | Fire | EmberCore (12%) | EmberDust (8%) |
+| Frozen Vault | Ice | FrostCore (12%) | FrostDust (8%) |
+| Grove of Ruin | Earth | StoneCore (12%) | StoneDust (8%) |
+| Storm Sanctum | Energy | VoltCore (12%) | VoltDust (8%) |
+
+- All mob `AttackElement` values are overridden to the arena's forced element in the snapshot.
+- Mobs whose **natural** element matches the forced element gain +15% HP and +15% damage (same bonus as the daily rotation).
+- Sigil drops are suppressed in Elemental Arenas.
+- Core and Dust drop events carry `RewardKind = "material"` and are added to `CharacterInventory.MaterialStacks`.
+- Arena IDs follow the `arena:` prefix convention: `arena:forge_of_ash`, `arena:frozen_vault`, `arena:grove_of_ruin`, `arena:storm_sanctum`.
+- All definitions are data-driven in `ArenaConfig.ElementalArenaConfig`.
+- Home Hub shows 4 elemental arena cards in a row; clicking one navigates to `/arena?arenaId=<id>`.
+
 ## Current Gameplay
 
 - Player is fixed at the center tile (3,3) - no WASD movement
@@ -150,6 +169,10 @@ Bestiary delta calculation: `runStartBestiaryKills` is captured from the account
   - Zone 4 / Exalted: strong purple aura
   - Zone 5 / Ascendant: intense orange-gold aura
 - Daily Contracts system assigns 3 deterministic account-specific contracts per UTC day (resets at midnight UTC)
+- Zone Arenas use a UTC-daily rotating element seed (Fire / Ice / Earth / Energy):
+  - Rotation is deterministic per UTC date and shared by all players.
+  - Mobs whose attack element matches the daily element gain +15% HP and +15% damage.
+  - Home Hub highlights "Today's Element" with tooltip guidance, and at least one daily contract is tied to the active element.
 - Kaeros is primarily earned through Daily Contracts completion (not regular kill/run baseline rewards)
 - Completing Daily Contracts also grants Account XP rewards in addition to Kaeros
 - Character progression uses Mastery (Mastery Level + Mastery XP), earned from run completion and kills

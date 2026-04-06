@@ -94,6 +94,22 @@
   overflow: hidden;
 }
 
+.right-column {
+  grid-column: 3;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.right-column app-kaelis-info-panel {
+  min-height: 0;
+}
+
+.right-column--weapon app-kaelis-info-panel {
+  flex: 0 0 auto;
+}
+
 .sigil-error-banner {
   border: 1px solid rgba(248, 113, 113, 0.65);
   background: rgba(127, 29, 29, 0.55);
@@ -107,5 +123,394 @@
 @media (max-width: 960px) {
   .bestiary-area {
     grid-column: 1;
+  }
+}
+
+.infusion-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(2, 6, 23, 0.7);
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  backdrop-filter: blur(2px);
+}
+
+.infusion-modal {
+  width: min(600px, calc(100vw - 48px));
+  max-height: min(82vh, 740px);
+  border: 1px solid rgba(139, 92, 246, 0.34);
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at top left, rgba(109, 40, 217, 0.22), transparent 42%),
+    linear-gradient(180deg, rgba(8, 11, 21, 0.98), rgba(8, 12, 24, 0.98));
+  box-shadow:
+    0 22px 40px rgba(2, 6, 23, 0.56),
+    0 0 0 1px rgba(167, 139, 250, 0.14) inset;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+}
+
+.infusion-modal__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.infusion-modal__kicker {
+  margin: 0;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #c4b5fd;
+  font-weight: 700;
+}
+
+.infusion-modal__title {
+  margin: 2px 0 0;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #f5f3ff;
+}
+
+.infusion-modal__close {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.5);
+  background: rgba(30, 41, 59, 0.45);
+  color: #cbd5e1;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 0;
+  cursor: pointer;
+}
+
+.infusion-modal__close:hover {
+  background: rgba(71, 85, 105, 0.52);
+}
+
+.infusion-modal__tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.infusion-modal__tab {
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.32);
+  background: rgba(15, 23, 42, 0.72);
+  color: #e2e8f0;
+  padding: 8px 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.infusion-modal__tab-label {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.infusion-modal__tab-status {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  color: #94a3b8;
+  background: rgba(30, 41, 59, 0.6);
+  padding: 2px 7px;
+  font-weight: 700;
+}
+
+.infusion-modal__tab-status--equipped {
+  border-color: rgba(74, 222, 128, 0.45);
+  color: #86efac;
+  background: rgba(21, 128, 61, 0.25);
+}
+
+.infusion-modal__tab--damage.infusion-modal__tab--active {
+  border-color: rgba(249, 115, 22, 0.52);
+  box-shadow: inset 0 0 0 1px rgba(249, 115, 22, 0.2);
+  background: rgba(124, 45, 18, 0.35);
+}
+
+.infusion-modal__tab--resist.infusion-modal__tab--active {
+  border-color: rgba(56, 189, 248, 0.52);
+  box-shadow: inset 0 0 0 1px rgba(56, 189, 248, 0.2);
+  background: rgba(12, 74, 110, 0.35);
+}
+
+.infusion-panel {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: rgba(15, 16, 28, 0.84);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.infusion-panel--damage {
+  border-color: rgba(249, 115, 22, 0.34);
+  box-shadow: inset 0 0 0 1px rgba(249, 115, 22, 0.08);
+}
+
+.infusion-panel--resist {
+  border-color: rgba(56, 189, 248, 0.34);
+  box-shadow: inset 0 0 0 1px rgba(56, 189, 248, 0.08);
+}
+
+.infusion-slot__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.infusion-slot__kicker {
+  margin: 0;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #a1a1aa;
+  font-weight: 700;
+}
+
+.infusion-slot__name {
+  margin: 1px 0 0;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #fafafa;
+}
+
+.infusion-slot__cost {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  background: rgba(51, 65, 85, 0.3);
+  color: #cbd5e1;
+  padding: 3px 8px;
+  font-weight: 700;
+}
+
+.infusion-slot__socket {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(2, 6, 23, 0.8);
+  padding: 7px 9px;
+}
+
+.infusion-slot__socket--preview {
+  background: rgba(2, 6, 23, 0.52);
+}
+
+.infusion-slot__socket-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #a1a1aa;
+}
+
+.infusion-slot__socket-value {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #f8fafc;
+}
+
+.infusion-slot__socket-value--empty {
+  color: #71717a;
+}
+
+.infusion-panel__inventory-title {
+  margin: 3px 0 0;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #a1a1aa;
+  font-weight: 700;
+}
+
+.infusion-panel__materials {
+  display: grid;
+  gap: 8px;
+  max-height: min(36vh, 320px);
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.infusion-material {
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 9px;
+  background: rgba(15, 23, 42, 0.62);
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.infusion-material--equipped {
+  border-color: rgba(74, 222, 128, 0.55);
+  box-shadow: inset 0 0 0 1px rgba(74, 222, 128, 0.22);
+}
+
+.infusion-material__info {
+  min-width: 0;
+}
+
+.infusion-material__name {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: #f8fafc;
+  letter-spacing: 0.02em;
+}
+
+.infusion-material__count {
+  margin: 2px 0 0;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #94a3b8;
+}
+
+.infusion-material__equip-btn {
+  border-radius: 8px;
+  border: 1px solid transparent;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  min-width: 74px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.infusion-material__equip-btn--damage {
+  border-color: rgba(249, 115, 22, 0.44);
+  background: rgba(194, 65, 12, 0.22);
+  color: #fdba74;
+}
+
+.infusion-material__equip-btn--resist {
+  border-color: rgba(56, 189, 248, 0.44);
+  background: rgba(3, 105, 161, 0.22);
+  color: #7dd3fc;
+}
+
+.infusion-material__equip-btn--active {
+  border-color: rgba(74, 222, 128, 0.6);
+  background: rgba(21, 128, 61, 0.26);
+  color: #bbf7d0;
+}
+
+.infusion-panel__actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.infusion-panel__empty {
+  margin: 0;
+  border-radius: 8px;
+  border: 1px dashed rgba(148, 163, 184, 0.35);
+  background: rgba(2, 6, 23, 0.35);
+  padding: 9px;
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.infusion-slot__btn {
+  border-radius: 8px;
+  border: 1px solid transparent;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  min-width: 120px;
+  padding: 7px 14px;
+  cursor: pointer;
+}
+
+.infusion-slot__btn--damage {
+  border-color: rgba(249, 115, 22, 0.46);
+  background: rgba(194, 65, 12, 0.2);
+  color: #fdba74;
+}
+
+.infusion-slot__btn--resist {
+  border-color: rgba(56, 189, 248, 0.46);
+  background: rgba(3, 105, 161, 0.2);
+  color: #7dd3fc;
+}
+
+.infusion-slot__btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.infusion-material__equip-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.infusion-slot__btn:not(:disabled):hover {
+  filter: brightness(1.1);
+}
+
+.infusion-material__equip-btn:not(:disabled):hover {
+  filter: brightness(1.1);
+}
+
+.infusion-modal__error {
+  border: 1px solid rgba(248, 113, 113, 0.65);
+  background: rgba(127, 29, 29, 0.55);
+  color: #fecaca;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+@media (max-width: 960px) {
+  .right-column {
+    grid-column: 1;
+  }
+
+  .infusion-modal-overlay {
+    padding: 14px;
+  }
+
+  .infusion-modal {
+    width: min(680px, calc(100vw - 28px));
+    max-height: 86vh;
+  }
+}
+
+@media (max-width: 700px) {
+  .infusion-panel__actions .infusion-slot__btn {
+    width: 100%;
   }
 }

@@ -1,5 +1,10 @@
 import { Injectable } from "@angular/core";
 
+export interface WeaponEnchantment {
+  damageElement?: string | null;
+  resistanceElement?: string | null;
+}
+
 export interface OwnedEquipmentInstance {
   instanceId: string;
   definitionId: string;
@@ -9,6 +14,7 @@ export interface OwnedEquipmentInstance {
   rarity?: string | null;
   craftedByCharacterId?: string | null;
   craftedByCharacterName?: string | null;
+  enchantment?: WeaponEnchantment | null;
 }
 
 export interface CharacterInventory {
@@ -123,6 +129,7 @@ export interface AccountState {
   accountXpForCurrentLevel: number;
   accountXpRequiredForNextLevel: number;
   unlockedZoneCount: number;
+  todayZoneElement: string;
   dailyContracts: DailyContractsDto;
   sigilInventory: SigilInstance[];
   characters: Record<string, CharacterState>;
@@ -171,7 +178,7 @@ export interface DropEvent {
   itemId: string;
   quantity: number;
   equipmentInstanceId?: string | null;
-  rewardKind: "item" | "echo_fragments" | "primal_core" | "sigil";
+  rewardKind: "item" | "echo_fragments" | "primal_core" | "sigil" | "material";
   species?: string | null;
   awardedAtUtc: string;
   sigilLevel?: number | null;
@@ -363,6 +370,23 @@ export class AccountApiService {
       `/api/v1/items/refine?accountId=${encodedAccountId}`,
       payload,
       "Item refine"
+    );
+  }
+
+  async enchantWeapon(
+    accountId: string,
+    characterId: string,
+    weaponInstanceId: string,
+    slot: "damage" | "resistance",
+    materialId: string
+  ): Promise<CharacterState> {
+    return this.postJson<
+      { accountId: string; characterId: string; weaponInstanceId: string; slot: string; materialId: string },
+      CharacterState
+    >(
+      "/api/v1/account/enchant-weapon",
+      { accountId, characterId, weaponInstanceId, slot, materialId },
+      "Enchant weapon"
     );
   }
 

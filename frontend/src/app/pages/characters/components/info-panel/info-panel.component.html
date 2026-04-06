@@ -1,4 +1,8 @@
-<aside class="info-panel">
+<aside
+  class="info-panel"
+  [class.info-panel--weapon]="activeTab === 'weapon'"
+  [ngClass]="weaponRarityClass"
+>
   @if (activeTab === 'overview') {
     <div>
       <h2>{{ characterName || 'Kaelis' }}</h2>
@@ -71,35 +75,66 @@
   }
 
   @if (activeTab === 'weapon') {
-    <div>
-      <div class="sub-title">Weapon</div>
-      <h2 class="tone-warn">{{ weapon?.name || 'No weapon equipped' }}</h2>
-      @if (weapon?.description) {
-        <div class="muted">{{ weapon?.description }}</div>
-      }
-    </div>
+    <div class="weapon-card">
+      <header class="weapon-card__header">
+        <p class="weapon-card__kicker">Equipped Weapon</p>
+        <h2 class="weapon-card__name">{{ weapon?.name || 'No weapon equipped' }}</h2>
+      </header>
 
-    @if (weaponStats.length) {
-      <h3>Weapon Stats</h3>
-      <div class="stat-list">
-        @for (stat of weaponStats; track stat.label) {
-          <div class="stat-row">
-            <span class="stat-label">{{ stat.label }}</span>
-            <span class="stat-value">{{ stat.value }}</span>
-          </div>
-        }
+      <div class="weapon-card__stats">
+        <div class="weapon-card__stat-row">
+          <span class="weapon-card__stat-label">Rarity</span>
+          <span class="weapon-card__stat-value">{{ weaponRarity }}</span>
+        </div>
+        <div class="weapon-card__stat-row">
+          <span class="weapon-card__stat-label">Class / Type</span>
+          <span class="weapon-card__stat-value">{{ weaponClassType }}</span>
+        </div>
+        <div class="weapon-card__stat-row">
+          <span class="weapon-card__stat-label">Element</span>
+          <span class="weapon-card__stat-value">{{ weaponElement }}</span>
+        </div>
+        <div class="weapon-card__stat-row">
+          <span class="weapon-card__stat-label">Damage</span>
+          <span class="weapon-card__stat-value">{{ weaponDamage }}</span>
+        </div>
       </div>
-    }
 
-    @if (weapon?.passive) {
-      <h3>Weapon Passive</h3>
-      <div class="muted">{{ weapon?.passive }}</div>
-    }
+      <div class="weapon-card__traits">
+        <div class="weapon-card__trait">
+          <p class="weapon-card__trait-label">Finisher</p>
+          <p class="weapon-card__trait-value">{{ weaponFinisher }}</p>
+        </div>
+        <div class="weapon-card__trait">
+          <p class="weapon-card__trait-label">Passive</p>
+          <p class="weapon-card__trait-value">{{ weaponPassive }}</p>
+        </div>
+      </div>
 
-    <div class="panel-actions">
-      <button type="button" class="change-btn" (click)="changeWeapon.emit()">
-        Change Weapon
-      </button>
+      @if (weaponSecondaryStats.length) {
+        <div class="weapon-card__secondary">
+          @for (stat of weaponSecondaryStats; track stat.label) {
+            <div class="weapon-chip">
+              <span class="weapon-chip__label">{{ stat.label }}</span>
+              <span class="weapon-chip__value">{{ stat.value }}</span>
+            </div>
+          }
+        </div>
+      }
+
+      <div class="panel-actions panel-actions--weapon">
+        <button type="button" class="change-btn change-btn--weapon" (click)="changeWeapon.emit()">
+          Change Weapon
+        </button>
+        <button
+          type="button"
+          class="change-btn change-btn--infusion"
+          [disabled]="!canManageInfusion"
+          (click)="manageInfusion.emit()"
+        >
+          Manage Infusion
+        </button>
+      </div>
     </div>
   }
 

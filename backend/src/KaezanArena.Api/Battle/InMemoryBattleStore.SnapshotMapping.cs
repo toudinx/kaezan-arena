@@ -14,20 +14,32 @@ public sealed partial class InMemoryBattleStore
 
         var actors = state.Actors.Values
             .OrderBy(actor => actor.ActorId, StringComparer.Ordinal)
-            .Select(actor => new ActorStateDto(
-                ActorId: actor.ActorId,
-                Kind: actor.Kind,
-                MobType: actor.MobType,
-                MobTierIndex: string.Equals(actor.Kind, "mob", StringComparison.Ordinal) ? safeZoneIndex : null,
-                IsElite: actor.IsElite,
-                IsBuffedByElite: actor.BuffSourceEliteId is not null,
-                BuffSourceEliteId: actor.BuffSourceEliteId,
-                TileX: actor.TileX,
-                TileY: actor.TileY,
-                Hp: actor.Hp,
-                MaxHp: actor.MaxHp,
-                Shield: actor.Shield,
-                MaxShield: actor.MaxShield))
+            .Select(actor =>
+            {
+                var elemCfg = actor.MobType is MobArchetype mType ? MobConfigs.GetValueOrDefault(mType) : null;
+                var effectiveAttackElement = elemCfg is null
+                    ? (string?)null
+                    : (state.ArenaType == ArenaType.Elemental && state.ForcedElement.HasValue
+                        ? state.ForcedElement.Value.ToString()
+                        : elemCfg.AttackElement.ToString());
+                return new ActorStateDto(
+                    ActorId: actor.ActorId,
+                    Kind: actor.Kind,
+                    MobType: actor.MobType,
+                    MobTierIndex: string.Equals(actor.Kind, "mob", StringComparison.Ordinal) ? safeZoneIndex : null,
+                    IsElite: actor.IsElite,
+                    IsBuffedByElite: actor.BuffSourceEliteId is not null,
+                    BuffSourceEliteId: actor.BuffSourceEliteId,
+                    TileX: actor.TileX,
+                    TileY: actor.TileY,
+                    Hp: actor.Hp,
+                    MaxHp: actor.MaxHp,
+                    Shield: actor.Shield,
+                    MaxShield: actor.MaxShield,
+                    AttackElement: effectiveAttackElement,
+                    WeakTo: elemCfg?.WeakTo.ToString(),
+                    ResistantTo: elemCfg?.ResistantTo.ToString());
+            })
             .ToList();
 
         var skills = state.Skills.Values
@@ -158,6 +170,7 @@ public sealed partial class InMemoryBattleStore
             GroundTargetPos: groundTargetPos,
             AssistConfig: ToAssistConfigDto(state.AssistConfig),
             RangedConfig: BuildRangedConfigDto(),
+            DailyElement: state.DailyElement.ToString().ToLowerInvariant(),
             PlayerBaseElement: GetPlayerBaseElement(state),
             WeaponElement: state.EquippedWeaponElement,
             Decals: decals,
@@ -176,7 +189,9 @@ public sealed partial class InMemoryBattleStore
             ZoneIndex: safeZoneIndex,
             UltimateGauge: state.UltimateGauge,
             UltimateGaugeMax: ArenaConfig.UltimateConfig.GaugeMax,
-            UltimateReady: state.UltimateReady);
+            UltimateReady: state.UltimateReady,
+            ArenaType: state.ArenaType.ToString().ToLowerInvariant(),
+            ArenaDisplayName: state.ElementalArenaDef?.DisplayName);
     }
 
     private static BattleRangedConfigDto BuildRangedConfigDto()

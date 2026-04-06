@@ -126,11 +126,12 @@ function mapDamageEventToEntry(event: DamageNumberInstance, tick: number, sorted
   const targetLabel = normalizeEntityLabel(event.targetEntityId ?? event.actorId);
   const kind = resolveKind(event);
 
+  const elemTag = event.isWeaknessHit ? " ▲WEAK" : event.isResistanceHit ? " ▼RES" : "";
   let message = "";
   if (kind === "incoming") {
     message = `-${amount} from ${sourceLabel ?? "Unknown"}`;
   } else if (kind === "outgoing") {
-    message = `+${amount} to ${targetLabel ?? "Unknown"}`;
+    message = `+${amount} to ${targetLabel ?? "Unknown"}${elemTag}`;
   } else if (kind === "heal") {
     message = `+${amount} HP`;
   } else if (kind === "shield") {

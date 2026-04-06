@@ -19,6 +19,8 @@ const FLOATING_NUMBER_PALETTE = {
   healNeonGreen: "#39ff14",
   shieldGainBlue: "#93c5fd",
   shieldLossBlue: "#3b82f6",
+  weaknessOrange: "#f97316",
+  resistanceGrey: "#9ca3af",
   outline: "rgba(10, 10, 10, 0.95)",
   element: {
     1: "#ff9f2d", // Fire
@@ -927,6 +929,14 @@ export class CanvasLayeredRenderer {
       return FLOATING_NUMBER_PALETTE.damageReceivedRed;
     }
 
+    if (entry.isWeaknessHit) {
+      return FLOATING_NUMBER_PALETTE.weaknessOrange;
+    }
+
+    if (entry.isResistanceHit) {
+      return FLOATING_NUMBER_PALETTE.resistanceGrey;
+    }
+
     return this.resolveElementDamageColor(entry.element);
   }
 
@@ -956,6 +966,14 @@ export class CanvasLayeredRenderer {
   private formatDamageNumberText(entry: ArenaScene["damageNumbers"][number]): string {
     if (entry.isHeal || (entry.isShieldChange && entry.shieldChangeDirection === "gain")) {
       return `+${entry.amount}`;
+    }
+
+    if (entry.isWeaknessHit) {
+      return `▲${entry.amount}`;
+    }
+
+    if (entry.isResistanceHit) {
+      return `▼${entry.amount}`;
     }
 
     return `${entry.amount}`;

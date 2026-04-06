@@ -11,6 +11,60 @@
   overflow-y: auto;
 }
 
+.info-panel--weapon {
+  --weapon-accent: #a78bfa;
+  --weapon-accent-soft: #c4b5fd;
+  --weapon-accent-border: rgba(167, 139, 250, 0.44);
+  --weapon-accent-bg: rgba(91, 33, 182, 0.28);
+  --weapon-accent-glow: rgba(167, 139, 250, 0.22);
+  --weapon-radial: rgba(167, 139, 250, 0.14);
+  height: auto;
+  overflow: hidden;
+  padding: 14px;
+  gap: 12px;
+  border-color: var(--weapon-accent-border);
+  background:
+    radial-gradient(circle at top right, var(--weapon-radial), transparent 45%),
+    linear-gradient(180deg, rgba(12, 13, 23, 0.96), rgba(10, 11, 20, 0.94));
+  box-shadow: 0 16px 30px rgba(3, 4, 12, 0.44);
+}
+
+.info-panel--weapon.rarity-epic {
+  --weapon-accent: #a78bfa;
+  --weapon-accent-soft: #c4b5fd;
+  --weapon-accent-border: rgba(167, 139, 250, 0.44);
+  --weapon-accent-bg: rgba(91, 33, 182, 0.28);
+  --weapon-accent-glow: rgba(167, 139, 250, 0.22);
+  --weapon-radial: rgba(167, 139, 250, 0.14);
+}
+
+.info-panel--weapon.rarity-legendary {
+  --weapon-accent: #fbbf24;
+  --weapon-accent-soft: #fcd34d;
+  --weapon-accent-border: rgba(251, 191, 36, 0.46);
+  --weapon-accent-bg: rgba(146, 64, 14, 0.28);
+  --weapon-accent-glow: rgba(251, 191, 36, 0.22);
+  --weapon-radial: rgba(251, 191, 36, 0.15);
+}
+
+.info-panel--weapon.rarity-rare {
+  --weapon-accent: #60a5fa;
+  --weapon-accent-soft: #93c5fd;
+  --weapon-accent-border: rgba(96, 165, 250, 0.44);
+  --weapon-accent-bg: rgba(30, 58, 138, 0.28);
+  --weapon-accent-glow: rgba(96, 165, 250, 0.22);
+  --weapon-radial: rgba(96, 165, 250, 0.13);
+}
+
+.info-panel--weapon.rarity-common {
+  --weapon-accent: #cbd5e1;
+  --weapon-accent-soft: #e2e8f0;
+  --weapon-accent-border: rgba(203, 213, 225, 0.38);
+  --weapon-accent-bg: rgba(71, 85, 105, 0.25);
+  --weapon-accent-glow: rgba(203, 213, 225, 0.16);
+  --weapon-radial: rgba(148, 163, 184, 0.1);
+}
+
 h2 {
   margin: 0;
   font-size: 20px;
@@ -178,8 +232,142 @@ h3 {
 
 .tone-warn { color: #fbbf24; }
 
+.weapon-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.weapon-card__header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.weapon-card__kicker {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--weapon-accent-soft);
+}
+
+.weapon-card__name {
+  margin: 0;
+  color: var(--weapon-accent-soft);
+  font-size: 19px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.weapon-card__stats {
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 10px;
+  overflow: hidden;
+  background: rgba(15, 16, 30, 0.85);
+}
+
+.weapon-card__stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.weapon-card__stat-row:last-child {
+  border-bottom: none;
+}
+
+.weapon-card__stat-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #a1a1aa;
+  font-weight: 700;
+}
+
+.weapon-card__stat-value {
+  font-size: 12px;
+  color: #f8fafc;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  text-align: right;
+}
+
+.weapon-card__traits {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+.weapon-card__trait {
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(2, 6, 23, 0.72);
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.weapon-card__trait-label {
+  margin: 0;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.11em;
+  color: #a1a1aa;
+  font-weight: 700;
+}
+
+.weapon-card__trait-value {
+  margin: 0;
+  font-size: 12px;
+  color: #e5e7eb;
+  line-height: 1.35;
+}
+
+.weapon-card__secondary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.weapon-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  border: 1px solid rgba(96, 165, 250, 0.42);
+  background: rgba(30, 58, 138, 0.22);
+  padding: 4px 9px;
+}
+
+.weapon-chip__label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #bfdbfe;
+}
+
+.weapon-chip__value {
+  font-size: 11px;
+  color: #e0f2fe;
+}
+
 .panel-actions {
   margin-top: auto;
+}
+
+.panel-actions--weapon {
+  margin-top: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
 }
 
 .change-btn {
@@ -210,6 +398,28 @@ h3 {
   background: rgba(148, 163, 184, 0.12);
   border-color: rgba(148, 163, 184, 0.45);
   color: #cbd5e1;
+}
+
+.change-btn--weapon {
+  border-color: var(--weapon-accent-border);
+  background: var(--weapon-accent-bg);
+  color: var(--weapon-accent-soft);
+}
+
+.change-btn--weapon:hover {
+  filter: brightness(1.08);
+  box-shadow: 0 0 18px var(--weapon-accent-glow);
+}
+
+.change-btn--infusion {
+  border-color: rgba(148, 163, 184, 0.48);
+  background: rgba(30, 41, 59, 0.28);
+  color: #cbd5e1;
+}
+
+.change-btn--infusion:hover {
+  background: rgba(51, 65, 85, 0.42);
+  box-shadow: none;
 }
 
 /* Sigil loadout summary */

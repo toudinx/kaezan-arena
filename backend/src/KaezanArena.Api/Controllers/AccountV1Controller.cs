@@ -240,13 +240,17 @@ public sealed class AccountV1Controller : ControllerBase
                 battleSeed = resolvedBattleSeed;
             }
 
+            Battle.ArenaConfig.ElementalArenaConfig.ElementalArenaDef? elementalArenaDef = null;
+            _battleStore.TryGetBattleElementalArenaDef(normalizedBattleId, out elementalArenaDef);
+
             var result = _accountStateStore.AwardDrops(
                 accountId: request.AccountId.Trim(),
                 characterId: request.CharacterId.Trim(),
                 battleId: normalizedBattleId,
                 sources: parsedSources,
                 runId: normalizedRunId,
-                battleSeed: battleSeed);
+                battleSeed: battleSeed,
+                elementalArenaDef: elementalArenaDef);
             var account = _accountStateStore.GetAccountState(request.AccountId.Trim());
 
             return Ok(new AwardDropsResponseDto(
@@ -359,6 +363,42 @@ public sealed class AccountV1Controller : ControllerBase
         }
     }
 
+    [HttpPost("enchant-weapon")]
+    public ActionResult<CharacterStateDto> EnchantWeapon([FromBody] EnchantWeaponRequestDto request)
+    {
+        if (string.IsNullOrWhiteSpace(request.AccountId))
+            return BadRequest(BuildValidationError("accountId is required"));
+
+        if (string.IsNullOrWhiteSpace(request.CharacterId))
+            return BadRequest(BuildValidationError("characterId is required"));
+
+        if (string.IsNullOrWhiteSpace(request.WeaponInstanceId))
+            return BadRequest(BuildValidationError("weaponInstanceId is required"));
+
+        if (string.IsNullOrWhiteSpace(request.Slot))
+            return BadRequest(BuildValidationError("slot is required (damage or resistance)"));
+
+        if (string.IsNullOrWhiteSpace(request.MaterialId))
+            return BadRequest(BuildValidationError("materialId is required"));
+
+        try
+        {
+            var normalizedAccountId = request.AccountId.Trim();
+            var character = _accountStateStore.EnchantWeapon(
+                accountId: normalizedAccountId,
+                characterId: request.CharacterId.Trim(),
+                weaponInstanceId: request.WeaponInstanceId.Trim(),
+                slot: request.Slot.Trim(),
+                materialId: request.MaterialId.Trim());
+            var account = _accountStateStore.GetAccountState(normalizedAccountId);
+            return Ok(ToCharacterDto(character, account.SigilInventory));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(BuildValidationError(ex.Message));
+        }
+    }
+
     private ApiErrorDto BuildValidationError(string message)
     {
         return new ApiErrorDto(
@@ -383,6 +423,11 @@ public sealed class AccountV1Controller : ControllerBase
             characters[characterId] = ToCharacterDto(character, account.SigilInventory);
         }
 
+        var todayZoneElement = ArenaConfig.ElementalConfig
+            .ResolveDailyElement(DateOnly.FromDateTime(DateTime.UtcNow))
+            .ToString()
+            .ToLowerInvariant();
+
         return new AccountStateDto(
             AccountId: account.AccountId,
             ActiveCharacterId: account.ActiveCharacterId,
@@ -394,6 +439,7 @@ public sealed class AccountV1Controller : ControllerBase
             AccountXpForCurrentLevel: ResolveAccountXpForCurrentLevel(account),
             AccountXpRequiredForNextLevel: ResolveAccountXpRequiredForNextLevel(account),
             UnlockedZoneCount: ResolveUnlockedZoneCount(account.AccountLevel),
+            TodayZoneElement: todayZoneElement,
             DailyContracts: ToDailyContractsDto(account),
             SigilInventory: sigilInventory,
             Characters: characters);
@@ -689,7 +735,10 @@ public sealed class AccountV1Controller : ControllerBase
         var sorted = new SortedDictionary<string, int>(StringComparer.Ordinal);
         foreach (var (species, value) in source.OrderBy(entry => entry.Key, StringComparer.Ordinal))
         {
-            sorted[species] = value;
+            if (ArenaConfig.DisplayNames.ContainsKey(species))
+            {
+                sorted[species] = value;
+            }
         }
 
         return sorted;
@@ -754,6 +803,14 @@ public sealed class AccountV1Controller : ControllerBase
 
     private static OwnedEquipmentInstanceDto ToOwnedEquipmentInstanceDto(OwnedEquipmentInstance instance)
     {
+        WeaponEnchantmentDto? enchantment = null;
+        if (instance.DamageElementEnchant.HasValue || instance.ResistanceElementEnchant.HasValue)
+        {
+            enchantment = new WeaponEnchantmentDto(
+                DamageElement: instance.DamageElementEnchant?.ToString(),
+                ResistanceElement: instance.ResistanceElementEnchant?.ToString());
+        }
+
         return new OwnedEquipmentInstanceDto(
             InstanceId: instance.InstanceId,
             DefinitionId: instance.DefinitionId,
@@ -762,6 +819,7 @@ public sealed class AccountV1Controller : ControllerBase
             Slot: instance.Slot,
             Rarity: instance.Rarity,
             CraftedByCharacterId: instance.CraftedByCharacterId,
-            CraftedByCharacterName: instance.CraftedByCharacterName);
+            CraftedByCharacterName: instance.CraftedByCharacterName,
+            Enchantment: enchantment);
     }
 }

@@ -306,6 +306,33 @@ export class AccountStore {
     }
   }
 
+  async enchantWeapon(
+    characterId: string,
+    weaponInstanceId: string,
+    slot: "damage" | "resistance",
+    materialId: string
+  ): Promise<CharacterState> {
+    const accountId = this.session.accountId();
+    const normalizedCharacterId = this.normalizeRequired(characterId, "Character ID");
+    const normalizedWeaponInstanceId = this.normalizeRequired(weaponInstanceId, "Weapon instance ID");
+    this.errorSignal.set(null);
+
+    try {
+      const character = await this.accountApi.enchantWeapon(
+        accountId,
+        normalizedCharacterId,
+        normalizedWeaponInstanceId,
+        slot,
+        materialId
+      );
+      this.applyCharacterUpdate(character);
+      return character;
+    } catch (error) {
+      this.errorSignal.set(this.stringifyError(error));
+      throw error;
+    }
+  }
+
   async awardDrops(
     characterId: string,
     battleId: string,

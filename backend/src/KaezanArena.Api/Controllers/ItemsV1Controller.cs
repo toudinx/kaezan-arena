@@ -224,7 +224,10 @@ public sealed class ItemsV1Controller : ControllerBase
         var sorted = new SortedDictionary<string, int>(StringComparer.Ordinal);
         foreach (var (species, value) in source.OrderBy(entry => entry.Key, StringComparer.Ordinal))
         {
-            sorted[species] = value;
+            if (ArenaConfig.DisplayNames.ContainsKey(species))
+            {
+                sorted[species] = value;
+            }
         }
 
         return sorted;

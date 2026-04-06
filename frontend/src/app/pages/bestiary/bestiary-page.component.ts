@@ -77,7 +77,7 @@ function computeRank(killsTotal: number, thresholds: ReadonlyArray<number>): num
 export class BestiaryPageComponent implements OnInit {
   readonly primalCoreCost = 20;
   readonly echoFragmentsCost = 100;
-  readonly speciesPageSize = 8;
+  readonly speciesPageSize = 6;
   private readonly contextCharacterIdSignal = signal<string | null>(null);
   private readonly selectedSpeciesIdSignal = signal<string | null>(null);
   private readonly searchQuerySignal = signal("");
@@ -585,17 +585,8 @@ export class BestiaryPageComponent implements OnInit {
     const knownRows = speciesCatalog.map((species) =>
       this.buildSpeciesRow(species.speciesId, species.displayName, killsBySpecies, primalCoreBySpecies, thresholds)
     );
-    const knownIds = new Set(speciesCatalog.map((species) => species.speciesId));
-    const extraIds = Array.from(
-      new Set<string>([...Object.keys(killsBySpecies), ...Object.keys(primalCoreBySpecies)])
-    )
-      .filter((speciesId) => !knownIds.has(speciesId))
-      .sort((left, right) => left.localeCompare(right));
-    const extraRows = extraIds.map((speciesId) =>
-      this.buildSpeciesRow(speciesId, this.toSpeciesLabel(speciesId), killsBySpecies, primalCoreBySpecies, thresholds)
-    );
 
-    return [...knownRows, ...extraRows];
+    return knownRows;
   }
 
   private buildSpeciesRow(

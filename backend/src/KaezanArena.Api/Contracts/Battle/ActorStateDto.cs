@@ -13,4 +13,7 @@ public sealed record ActorStateDto(
     int Hp,
     int MaxHp,
     int Shield,
-    int MaxShield);
+    int MaxShield,
+    string? AttackElement = null,
+    string? WeakTo = null,
+    string? ResistantTo = null);

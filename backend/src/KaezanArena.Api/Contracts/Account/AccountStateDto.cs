@@ -11,6 +11,7 @@ public sealed record AccountStateDto(
     int AccountXpForCurrentLevel,
     int AccountXpRequiredForNextLevel,
     int UnlockedZoneCount,
+    string TodayZoneElement,
     DailyContractsDto DailyContracts,
     IReadOnlyList<SigilInstanceDto> SigilInventory,
     IReadOnlyDictionary<string, CharacterStateDto> Characters);
@@ -75,6 +76,10 @@ public sealed record CharacterInventoryDto(
     IReadOnlyDictionary<string, long> MaterialStacks,
     IReadOnlyDictionary<string, OwnedEquipmentInstanceDto> EquipmentInstances);
 
+public sealed record WeaponEnchantmentDto(
+    string? DamageElement,
+    string? ResistanceElement);
+
 public sealed record OwnedEquipmentInstanceDto(
     string InstanceId,
     string DefinitionId,
@@ -83,7 +88,8 @@ public sealed record OwnedEquipmentInstanceDto(
     string? Slot = null,
     string? Rarity = null,
     string? CraftedByCharacterId = null,
-    string? CraftedByCharacterName = null);
+    string? CraftedByCharacterName = null,
+    WeaponEnchantmentDto? Enchantment = null);
 
 public sealed record CharacterEquipmentDto(
     string? WeaponInstanceId);

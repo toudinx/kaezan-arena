@@ -466,6 +466,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   runXp = RUN_INITIAL_XP;
   xpToNextLevel = this.computeRunXpToNextLevel(RUN_INITIAL_LEVEL);
   selectedZoneIndex = DEFAULT_ZONE_INDEX;
+  selectedArenaId: string | null = null;
   activeZoneIndex = DEFAULT_ZONE_INDEX;
   lastRunRecording: RunRecording | null = null;
   isReplayInProgress = false;
@@ -1038,6 +1039,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
 
   async ngAfterViewInit(): Promise<void> {
     this.selectedZoneIndex = this.resolveZoneIndexFromRoute();
+    this.selectedArenaId = this.route.snapshot.queryParamMap.get("arenaId");
     this.activeZoneIndex = this.selectedZoneIndex;
     this.scene = this.engine.createTestScene();
     this.activeFxCount = 0;
@@ -2682,9 +2684,9 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         this.accountState?.activeCharacterId ||
         "player_demo";
       const request: StartBattleRequest & { seedOverride?: number | null } = {
-        arenaId: "arena_demo",
+        arenaId: this.selectedArenaId ?? "arena_demo",
         playerId,
-        zoneIndex: this.selectedZoneIndex
+        zoneIndex: this.selectedArenaId ? undefined : this.selectedZoneIndex
       };
       if (typeof seedOverride === "number") {
         request.seed = seedOverride;
@@ -3297,7 +3299,8 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         const amountLabel = event.isHeal || (event.isShieldChange && event.shieldChangeDirection === "gain")
           ? `+${event.amount}`
           : `-${event.amount}`;
-        return `t${this.currentBattleTick} ${event.actorId} ${amountLabel}${event.isCrit ? " (CRIT)" : ""}`;
+        const elemTag = event.isWeaknessHit ? " (WEAK)" : event.isResistanceHit ? " (RES)" : "";
+        return `t${this.currentBattleTick} ${event.actorId} ${amountLabel}${event.isCrit ? " (CRIT)" : ""}${elemTag}`;
       }
     );
 
@@ -3418,7 +3421,10 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         hp: typedActor.hp ?? 0,
         maxHp: typedActor.maxHp ?? 1,
         shield: typedActor.shield ?? 0,
-        maxShield: typedActor.maxShield ?? 0
+        maxShield: typedActor.maxShield ?? 0,
+        attackElement: this.readString((typedActor as Record<string, unknown>)["attackElement"]) ?? null,
+        weakTo: this.readString((typedActor as Record<string, unknown>)["weakTo"]) ?? null,
+        resistantTo: this.readString((typedActor as Record<string, unknown>)["resistantTo"]) ?? null
       });
     }
 
@@ -3664,6 +3670,8 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         }
 
         const resolvedIsCrit = isCrit ?? hitKind === "crit";
+        const isWeaknessHit = this.readBoolean(value["isWeaknessHit"]) ?? false;
+        const isResistanceHit = this.readBoolean(value["isResistanceHit"]) ?? false;
 
         mapped.push({
           type: "damage_number",
@@ -3683,7 +3691,9 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
           hitId,
           shieldDamageAmount: shieldDamageAmount ?? undefined,
           hpDamageAmount: hpDamageAmount ?? undefined,
-          elementType: elementType ?? undefined
+          elementType: elementType ?? undefined,
+          isWeaknessHit,
+          isResistanceHit
         });
         continue;
       }

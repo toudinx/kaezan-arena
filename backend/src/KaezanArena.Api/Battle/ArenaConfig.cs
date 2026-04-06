@@ -373,7 +373,7 @@ public static class ArenaConfig
     {
         public const int ZoneCount = 5;
         public const int AccountLevelCap = 100;
-        public static readonly int[] AccountLevelToUnlockZone = [1, 21, 41, 61, 81];
+        public static readonly int[] AccountLevelToUnlockZone = [1, 2, 4, 6, 8];
 
         // HP and damage multipliers per zone (applied on top of existing run scaling)
         public static readonly float[] ZoneHpMultiplier = [1.0f, 1.5f, 2.2f, 3.2f, 4.5f];
@@ -422,6 +422,100 @@ public static class ArenaConfig
         public const string TypeKillCount = "kill_count";
         public const string TypeOpenChests = "open_chests";
         public const string TypeKillElites = "kill_elites";
+        public const string TypeDailyElementRun = "daily_element_run";
+    }
+
+    public static class ElementalConfig
+    {
+        public const float WeaknessMultiplier = 1.30f;
+        public const float ResistanceMultiplier = 0.70f;
+        public const float DailyElementBonusMultiplier = 1.15f; // +15% HP and damage
+        public static readonly ElementType[] RotationElements =
+            [ElementType.Fire, ElementType.Ice, ElementType.Earth, ElementType.Energy];
+
+        /// <summary>
+        /// Natural element profile: element → (WeakTo, ResistantTo).
+        /// Individual mob configs store their own values and may differ from this chart.
+        /// </summary>
+        public static readonly IReadOnlyDictionary<ElementType, (ElementType WeakTo, ElementType ResistantTo)> ElementChart =
+            new Dictionary<ElementType, (ElementType, ElementType)>
+            {
+                [ElementType.Fire]     = (ElementType.Ice,      ElementType.Earth),
+                [ElementType.Ice]      = (ElementType.Energy,   ElementType.Fire),
+                [ElementType.Earth]    = (ElementType.Fire,     ElementType.Ice),
+                [ElementType.Energy]   = (ElementType.Physical, ElementType.Energy),
+            };
+
+        public static ElementType ResolveDailyElement(DateOnly date)
+        {
+            var seed = Math.Abs(date.DayNumber);
+            return RotationElements[seed % RotationElements.Length];
+        }
+    }
+
+    public static class ElementalArenaConfig
+    {
+        public sealed record ElementalArenaDef(
+            string ArenaId,
+            string DisplayName,
+            ElementType ForcedElement,
+            string CoreMaterialId,
+            string DustMaterialId,
+            int CoreDropChancePercent,
+            int DustDropChancePercent);
+
+        public static readonly IReadOnlyList<ElementalArenaDef> Arenas =
+        [
+            new("arena:forge_of_ash",  "Forge of Ash",   ElementType.Fire,   EnchantmentConfig.EmberCore, EnchantmentConfig.EmberDust, 12, 8),
+            new("arena:frozen_vault",  "Frozen Vault",   ElementType.Ice,    EnchantmentConfig.FrostCore, EnchantmentConfig.FrostDust, 12, 8),
+            new("arena:grove_of_ruin", "Grove of Ruin",  ElementType.Earth,  EnchantmentConfig.StoneCore, EnchantmentConfig.StoneDust, 12, 8),
+            new("arena:storm_sanctum", "Storm Sanctum",  ElementType.Energy, EnchantmentConfig.VoltCore,  EnchantmentConfig.VoltDust,  12, 8),
+        ];
+
+        public static ElementalArenaDef? TryResolveArena(string arenaId)
+        {
+            foreach (var def in Arenas)
+            {
+                if (string.Equals(def.ArenaId, arenaId, StringComparison.Ordinal))
+                {
+                    return def;
+                }
+            }
+
+            return null;
+        }
+    }
+
+    public static class EnchantmentConfig
+    {
+        public const string EmberCore = "material:ember_core";
+        public const string FrostCore = "material:frost_core";
+        public const string StoneCore = "material:stone_core";
+        public const string VoltCore  = "material:volt_core";
+        public const string EmberDust = "material:ember_dust";
+        public const string FrostDust = "material:frost_dust";
+        public const string StoneDust = "material:stone_dust";
+        public const string VoltDust  = "material:volt_dust";
+        public const int CoreCostPerEnchant = 10;
+        public const int DustCostPerEnchant = 10;
+
+        public static readonly IReadOnlyDictionary<string, ElementType> CoreToElement =
+            new Dictionary<string, ElementType>(StringComparer.Ordinal)
+            {
+                [EmberCore] = ElementType.Fire,
+                [FrostCore] = ElementType.Ice,
+                [StoneCore] = ElementType.Earth,
+                [VoltCore]  = ElementType.Energy,
+            };
+
+        public static readonly IReadOnlyDictionary<string, ElementType> DustToElement =
+            new Dictionary<string, ElementType>(StringComparer.Ordinal)
+            {
+                [EmberDust] = ElementType.Fire,
+                [FrostDust] = ElementType.Ice,
+                [StoneDust] = ElementType.Earth,
+                [VoltDust]  = ElementType.Energy,
+            };
     }
 
     #region Player Class
@@ -845,9 +939,9 @@ public static class ArenaConfig
             [CharacterIds.Lizard]          = "Kaelis Vex",
             [CharacterIds.KaelisDawn]      = "Kaelis Dawn",
             [CharacterIds.KaelisEmber]     = "Kaelis Ember",
-            [SpeciesIds.MeleeBrute]      = "Melee Brute",
-            [SpeciesIds.RangedArcher]    = "Ranged Archer",
-            [SpeciesIds.MeleeDemon]      = "Melee Demon",
+            [SpeciesIds.MeleeBrute]      = "Hollow Melee Brute",
+            [SpeciesIds.RangedArcher]    = "Hollow Ranged Archer",
+            [SpeciesIds.MeleeDemon]      = "Hollow Melee Demon",
             [SpeciesIds.RangedShaman]    = "Hollow Shaman",
             [SpeciesIds.MeleeSkeleton]   = "Hollow Skeleton",
             [SpeciesIds.MeleeWogol]      = "Hollow Wogol",

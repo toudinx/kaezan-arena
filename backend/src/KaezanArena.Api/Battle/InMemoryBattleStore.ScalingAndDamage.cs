@@ -1,3 +1,5 @@
+using KaezanArena.Api.Contracts.Battle;
+
 namespace KaezanArena.Api.Battle;
 
 public sealed partial class InMemoryBattleStore
@@ -63,6 +65,18 @@ public sealed partial class InMemoryBattleStore
         return Math.Max(1, adjustedDamage);
     }
 
+    private static float ResolveElementalModifier(
+        ElementType attackElement,
+        ElementType defenderWeakTo,
+        ElementType defenderResistantTo)
+    {
+        if (attackElement == defenderWeakTo)
+            return ArenaConfig.ElementalConfig.WeaknessMultiplier;
+        if (attackElement == defenderResistantTo)
+            return ArenaConfig.ElementalConfig.ResistanceMultiplier;
+        return 1.0f;
+    }
+
     private static int ResolveMobAutoAttackCooldownMs(MobArchetypeConfig config, StoredActor mob)
     {
         var attackSpeedBonusPercent = mob.BuffSourceEliteId is null
@@ -96,6 +110,15 @@ public sealed partial class InMemoryBattleStore
         }
 
         adjusted = ScaleByMultiplier(adjusted, ResolveZoneDmgMultiplier(state.ZoneIndex));
+        if (attacker.MobType is MobArchetype mobArchetype)
+        {
+            var mobAttackElement = GetMobConfig(mobArchetype).AttackElement;
+            if (ShouldApplyElementBonus(state, mobAttackElement))
+            {
+                adjusted = ScaleByMultiplier(adjusted, ArenaConfig.ElementalConfig.DailyElementBonusMultiplier);
+            }
+        }
+
         return Math.Max(1, adjusted);
     }
 

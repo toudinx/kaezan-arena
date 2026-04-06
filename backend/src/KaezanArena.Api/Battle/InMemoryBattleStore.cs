@@ -232,7 +232,10 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                 AbilityDamage: ArenaConfig.MeleeBruteAbilityDamage,
                 AbilityRangeTiles: ArenaConfig.MeleeBruteAbilityRangeTiles,
                 AbilityCooldownMs: ArenaConfig.MeleeBruteAbilityCooldownMs,
-                AbilityFxId: ArenaConfig.MobCleaveFxId),
+                AbilityFxId: ArenaConfig.MobCleaveFxId,
+                AttackElement: ElementType.Physical,
+                WeakTo: ElementType.Fire,
+                ResistantTo: ElementType.Ice),
             [MobArchetype.RangedArcher] = new(
                 MaxHp: ArenaConfig.RangedArcherMaxHp,
                 MoveCooldownMs: ArenaConfig.RangedArcherMoveCooldownMs,
@@ -242,7 +245,10 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                 AbilityDamage: ArenaConfig.RangedArcherAbilityDamage,
                 AbilityRangeTiles: ArenaConfig.RangedArcherAbilityRangeTiles,
                 AbilityCooldownMs: ArenaConfig.RangedArcherAbilityCooldownMs,
-                AbilityFxId: ArenaConfig.MobPowerShotFxId),
+                AbilityFxId: ArenaConfig.MobPowerShotFxId,
+                AttackElement: ElementType.Physical,
+                WeakTo: ElementType.Ice,
+                ResistantTo: ElementType.Physical),
             [MobArchetype.MeleeDemon] = new(
                 MaxHp: ArenaConfig.MeleeDemonMaxHp,
                 MoveCooldownMs: ArenaConfig.MeleeDemonMoveCooldownMs,
@@ -252,7 +258,10 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                 AbilityDamage: ArenaConfig.MeleeDemonAbilityDamage,
                 AbilityRangeTiles: ArenaConfig.MeleeDemonAbilityRangeTiles,
                 AbilityCooldownMs: ArenaConfig.MeleeDemonAbilityCooldownMs,
-                AbilityFxId: ArenaConfig.MobDemonBeamFxId),
+                AbilityFxId: ArenaConfig.MobDemonBeamFxId,
+                AttackElement: ElementType.Fire,
+                WeakTo: ElementType.Ice,
+                ResistantTo: ElementType.Fire),
             [MobArchetype.RangedShaman] = new(
                 MaxHp: ArenaConfig.RangedShamanMaxHp,
                 MoveCooldownMs: ArenaConfig.RangedShamanMoveCooldownMs,
@@ -262,7 +271,10 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                 AbilityDamage: ArenaConfig.RangedShamanAbilityDamage,
                 AbilityRangeTiles: ArenaConfig.RangedShamanAbilityRangeTiles,
                 AbilityCooldownMs: ArenaConfig.RangedShamanAbilityCooldownMs,
-                AbilityFxId: ArenaConfig.MobShamanStormPulseFxId),
+                AbilityFxId: ArenaConfig.MobShamanStormPulseFxId,
+                AttackElement: ElementType.Energy,
+                WeakTo: ElementType.Physical,
+                ResistantTo: ElementType.Energy),
             [MobArchetype.MeleeSkeleton] = new(
                 MaxHp: ArenaConfig.MeleeSkeletonMaxHp,
                 MoveCooldownMs: ArenaConfig.MeleeSkeletonMoveCooldownMs,
@@ -272,7 +284,10 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                 AbilityDamage: ArenaConfig.MeleeSkeletonAbilityDamage,
                 AbilityRangeTiles: ArenaConfig.MeleeSkeletonAbilityRangeTiles,
                 AbilityCooldownMs: ArenaConfig.MeleeSkeletonAbilityCooldownMs,
-                AbilityFxId: ArenaConfig.MobSkeletonSoulBurstFxId),
+                AbilityFxId: ArenaConfig.MobSkeletonSoulBurstFxId,
+                AttackElement: ElementType.Physical,
+                WeakTo: ElementType.Fire,
+                ResistantTo: ElementType.Ice),
             [MobArchetype.MeleeWogol] = new(
                 MaxHp: ArenaConfig.MeleeWogolMaxHp,
                 MoveCooldownMs: ArenaConfig.MeleeWogolMoveCooldownMs,
@@ -282,7 +297,10 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                 AbilityDamage: ArenaConfig.MeleeWogolAbilityDamage,
                 AbilityRangeTiles: ArenaConfig.MeleeWogolAbilityRangeTiles,
                 AbilityCooldownMs: ArenaConfig.MeleeWogolAbilityCooldownMs,
-                AbilityFxId: ArenaConfig.MobWogolGroundSlamFxId),
+                AbilityFxId: ArenaConfig.MobWogolGroundSlamFxId,
+                AttackElement: ElementType.Physical,
+                WeakTo: ElementType.Energy,
+                ResistantTo: ElementType.Physical),
             [MobArchetype.MeleeWarrior] = new(
                 MaxHp: ArenaConfig.MeleeWarriorMaxHp,
                 MoveCooldownMs: ArenaConfig.MeleeWarriorMoveCooldownMs,
@@ -292,7 +310,10 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                 AbilityDamage: ArenaConfig.MeleeWarriorAbilityDamage,
                 AbilityRangeTiles: ArenaConfig.MeleeWarriorAbilityRangeTiles,
                 AbilityCooldownMs: ArenaConfig.MeleeWarriorAbilityCooldownMs,
-                AbilityFxId: ArenaConfig.MobWarriorCleaveFxId),
+                AbilityFxId: ArenaConfig.MobWarriorCleaveFxId,
+                AttackElement: ElementType.Physical,
+                WeakTo: ElementType.Ice,
+                ResistantTo: ElementType.Physical),
             [MobArchetype.MeleeZombie] = new(
                 MaxHp: ArenaConfig.MeleeZombieMaxHp,
                 MoveCooldownMs: ArenaConfig.MeleeZombieMoveCooldownMs,
@@ -302,7 +323,10 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                 AbilityDamage: ArenaConfig.MeleeZombieAbilityDamage,
                 AbilityRangeTiles: ArenaConfig.MeleeZombieAbilityRangeTiles,
                 AbilityCooldownMs: ArenaConfig.MeleeZombieAbilityCooldownMs,
-                AbilityFxId: ArenaConfig.MobZombieSelfHealFxId),
+                AbilityFxId: ArenaConfig.MobZombieSelfHealFxId,
+                AttackElement: ElementType.Physical,
+                WeakTo: ElementType.Fire,
+                ResistantTo: ElementType.Ice),
             [MobArchetype.MeleeTinyZombie] = new(
                 MaxHp: ArenaConfig.MeleeTinyZombieMaxHp,
                 MoveCooldownMs: ArenaConfig.MeleeTinyZombieMoveCooldownMs,
@@ -312,7 +336,10 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                 AbilityDamage: ArenaConfig.MeleeTinyZombieAbilityDamage,
                 AbilityRangeTiles: ArenaConfig.MeleeTinyZombieAbilityRangeTiles,
                 AbilityCooldownMs: ArenaConfig.MeleeTinyZombieAbilityCooldownMs,
-                AbilityFxId: ""),
+                AbilityFxId: "",
+                AttackElement: ElementType.Physical,
+                WeakTo: ElementType.Fire,
+                ResistantTo: ElementType.Ice),
             [MobArchetype.RangedImp] = new(
                 MaxHp: ArenaConfig.RangedImpMaxHp,
                 MoveCooldownMs: ArenaConfig.RangedImpMoveCooldownMs,
@@ -322,7 +349,10 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                 AbilityDamage: ArenaConfig.RangedImpAbilityDamage,
                 AbilityRangeTiles: ArenaConfig.RangedImpAbilityRangeTiles,
                 AbilityCooldownMs: ArenaConfig.RangedImpAbilityCooldownMs,
-                AbilityFxId: ArenaConfig.MobImpFireballFxId),
+                AbilityFxId: ArenaConfig.MobImpFireballFxId,
+                AttackElement: ElementType.Fire,
+                WeakTo: ElementType.Ice,
+                ResistantTo: ElementType.Fire),
             [MobArchetype.RangedSwampy] = new(
                 MaxHp: ArenaConfig.RangedSwampyMaxHp,
                 MoveCooldownMs: ArenaConfig.RangedSwampyMoveCooldownMs,
@@ -332,7 +362,10 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                 AbilityDamage: ArenaConfig.RangedSwampyAbilityDamage,
                 AbilityRangeTiles: ArenaConfig.RangedSwampyAbilityRangeTiles,
                 AbilityCooldownMs: ArenaConfig.RangedSwampyAbilityCooldownMs,
-                AbilityFxId: ArenaConfig.MobSwampyMudLobFxId),
+                AbilityFxId: ArenaConfig.MobSwampyMudLobFxId,
+                AttackElement: ElementType.Earth,
+                WeakTo: ElementType.Fire,
+                ResistantTo: ElementType.Earth),
             [MobArchetype.RangedMuddy] = new(
                 MaxHp: ArenaConfig.RangedMuddyMaxHp,
                 MoveCooldownMs: ArenaConfig.RangedMuddyMoveCooldownMs,
@@ -342,7 +375,10 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                 AbilityDamage: ArenaConfig.RangedMuddyAbilityDamage,
                 AbilityRangeTiles: ArenaConfig.RangedMuddyAbilityRangeTiles,
                 AbilityCooldownMs: ArenaConfig.RangedMuddyAbilityCooldownMs,
-                AbilityFxId: ArenaConfig.MobMuddyOozeShotFxId),
+                AbilityFxId: ArenaConfig.MobMuddyOozeShotFxId,
+                AttackElement: ElementType.Earth,
+                WeakTo: ElementType.Fire,
+                ResistantTo: ElementType.Earth),
             [MobArchetype.MeleeSlug] = new(
                 MaxHp: ArenaConfig.MeleeSlugMaxHp,
                 MoveCooldownMs: ArenaConfig.MeleeSlugMoveCooldownMs,
@@ -352,7 +388,10 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                 AbilityDamage: ArenaConfig.MeleeSlugAbilityDamage,
                 AbilityRangeTiles: ArenaConfig.MeleeSlugAbilityRangeTiles,
                 AbilityCooldownMs: ArenaConfig.MeleeSlugAbilityCooldownMs,
-                AbilityFxId: "")
+                AbilityFxId: "",
+                AttackElement: ElementType.Earth,
+                WeakTo: ElementType.Fire,
+                ResistantTo: ElementType.Earth)
         };
     private static readonly IReadOnlyDictionary<MobArchetype, IMobBehavior> MobBehaviors =
         new Dictionary<MobArchetype, IMobBehavior>
@@ -393,12 +432,18 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         var mobSlots = BuildMobSlots();
         var bestiary = BuildInitialBestiaryEntries(mobSlots, bestiaryRng);
         var resolvedPlayerClassId = ResolvePlayerClassId(normalizedPlayer);
+        var elementalArenaDef = ArenaConfig.ElementalArenaConfig.TryResolveArena(normalizedArena);
+        var arenaType = elementalArenaDef is not null ? ArenaType.Elemental : ArenaType.Standard;
+        var dailyElement = ArenaConfig.ElementalConfig.ResolveDailyElement(DateOnly.FromDateTime(DateTime.UtcNow));
 
         var state = new StoredBattle(
             battleId: battleId,
             arenaId: normalizedArena,
             playerActorId: normalizedPlayer,
             playerClassId: resolvedPlayerClassId,
+            arenaType: arenaType,
+            elementalArenaDef: elementalArenaDef,
+            dailyElement: dailyElement,
             seed: resolvedSeed,
             rng: battleRng,
             poiRng: poiRng,
@@ -480,6 +525,38 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         ValidateInvariants(state);
         _battles[battleId] = state;
         return ToSnapshot(state, [], []);
+    }
+
+    private static ArenaType ResolveArenaType(string arenaId)
+    {
+        return ArenaConfig.ElementalArenaConfig.TryResolveArena(arenaId) is not null
+            ? ArenaType.Elemental
+            : ArenaType.Standard;
+    }
+
+    private static bool ShouldApplyElementBonus(StoredBattle state, ElementType naturalMobElement)
+    {
+        return state.ArenaType switch
+        {
+            ArenaType.Standard  => naturalMobElement == state.DailyElement,
+            ArenaType.Elemental => state.ElementalArenaDef is not null && naturalMobElement == state.ElementalArenaDef.ForcedElement,
+            _                   => false
+        };
+    }
+
+    public bool TryGetBattleElementalArenaDef(string battleId, out ArenaConfig.ElementalArenaConfig.ElementalArenaDef? def)
+    {
+        def = null;
+        if (string.IsNullOrWhiteSpace(battleId) || !_battles.TryGetValue(battleId.Trim(), out var state))
+        {
+            return false;
+        }
+
+        lock (state.Sync)
+        {
+            def = state.ElementalArenaDef;
+            return true;
+        }
     }
 
 
@@ -872,6 +949,22 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         player.Hp = resolvedMaxHp;
         player.MaxShield = ComputePlayerMaxShield(resolvedMaxHp);
         player.Shield = Math.Min(player.Shield, player.MaxShield);
+
+        // Apply weapon enchantments from the equipped weapon
+        var equippedWeaponInstanceId = character.Equipment.WeaponInstanceId;
+        if (!string.IsNullOrWhiteSpace(equippedWeaponInstanceId) &&
+            character.Inventory.EquipmentInstances.TryGetValue(equippedWeaponInstanceId, out var equippedWeapon))
+        {
+            if (equippedWeapon.DamageElementEnchant.HasValue)
+            {
+                state.EquippedWeaponElement = equippedWeapon.DamageElementEnchant.Value;
+            }
+
+            if (equippedWeapon.ResistanceElementEnchant.HasValue)
+            {
+                state.EquippedWeaponResistanceElement = equippedWeapon.ResistanceElementEnchant.Value;
+            }
+        }
     }
 
     private static ArenaConfig.SigilConfig.SigilPassiveStatBundle ResolveSigilPassiveModifiersForCharacter(
@@ -1743,6 +1836,11 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         var config = GetMobConfig(slot.Archetype);
         var spawnAsElite = ShouldSpawnEliteForSlot(state, slot);
         var maxHp = ResolveScaledMobMaxHp(state, config, spawnAsElite);
+        if (ShouldApplyElementBonus(state, config.AttackElement))
+        {
+            maxHp = ScaleByMultiplier(maxHp, ArenaConfig.ElementalConfig.DailyElementBonusMultiplier);
+        }
+
         state.Actors[slot.ActorId] = new StoredActor(
             actorId: slot.ActorId,
             kind: slot.Kind,
@@ -1995,7 +2093,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                 attackFxKind,
                 fromActor: liveMob,
                 toActor: player,
-                elementType: ArenaConfig.DefaultMobElement,
+                elementType: config.AttackElement,
                 durationMs: attackFxDuration);
 
             events.Add(new FxSpawnEventDto(
@@ -2004,14 +2102,14 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                 TileY: player.TileY,
                 Layer: "hitFx",
                 DurationMs: 620,
-                Element: ArenaConfig.DefaultMobElement));
+                Element: config.AttackElement));
 
             ApplyDamageToPlayer(
                 state,
                 events,
                 player,
                 ResolveMobOutgoingDamage(state, liveMob, config.AutoAttackDamage),
-                ArenaConfig.DefaultMobElement,
+                config.AttackElement,
                 attacker: liveMob,
                 isRangedAutoAttack: config.AutoAttackRangeTiles > 1);
             slot.AttackCooldownRemainingMs = ResolveMobAutoAttackCooldownMs(config, liveMob);
@@ -2089,15 +2187,15 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             fxKind: CombatFxKind.MeleeSwing,
             fromActor: mob,
             toActor: player,
-            elementType: ArenaConfig.DefaultMobElement,
+            elementType: config.AttackElement,
             durationMs: ArenaConfig.MeleeSwingDurationMs);
-        EmitFxForTiles(events, tiles, config.AbilityFxId, ArenaConfig.DefaultMobElement);
+        EmitFxForTiles(events, tiles, config.AbilityFxId, config.AttackElement);
         ApplyDamageToPlayer(
             state,
             events,
             player,
             ResolveMobOutgoingDamage(state, mob, config.AbilityDamage),
-            ArenaConfig.DefaultMobElement,
+            config.AttackElement,
             attacker: mob);
         return true;
     }
@@ -2122,15 +2220,15 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             fxKind: CombatFxKind.RangedProjectile,
             fromActor: mob,
             toActor: player,
-            elementType: ArenaConfig.DefaultMobElement,
+            elementType: config.AttackElement,
             durationMs: ArenaConfig.RangedProjectileDurationMs);
-        EmitFxForTiles(events, tiles, config.AbilityFxId, ArenaConfig.DefaultMobElement);
+        EmitFxForTiles(events, tiles, config.AbilityFxId, config.AttackElement);
         ApplyDamageToPlayer(
             state,
             events,
             player,
             ResolveMobOutgoingDamage(state, mob, config.AbilityDamage),
-            ArenaConfig.DefaultMobElement,
+            config.AttackElement,
             attacker: mob);
         return true;
     }
@@ -2151,7 +2249,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             return false;
         }
 
-        EmitFxForTiles(events, lineTiles, config.AbilityFxId, ArenaConfig.DefaultMobElement);
+        EmitFxForTiles(events, lineTiles, config.AbilityFxId, config.AttackElement);
         if (playerCollinearInFront)
         {
             ApplyDamageToPlayer(
@@ -2159,7 +2257,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                 events,
                 player,
                 ResolveMobOutgoingDamage(state, mob, config.AbilityDamage),
-                ArenaConfig.DefaultMobElement,
+                config.AttackElement,
                 attacker: mob);
         }
 
@@ -2180,13 +2278,13 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         }
 
         var pulseTiles = BuildSquareTiles(mob.TileX, mob.TileY, config.AbilityRangeTiles, includeCenter: true).ToList();
-        EmitFxForTiles(events, pulseTiles, config.AbilityFxId, ArenaConfig.DefaultMobElement);
+        EmitFxForTiles(events, pulseTiles, config.AbilityFxId, config.AttackElement);
         ApplyDamageToPlayer(
             state,
             events,
             player,
             ResolveMobOutgoingDamage(state, mob, config.AbilityDamage),
-            ArenaConfig.DefaultMobElement,
+            config.AttackElement,
             attacker: mob);
         return true;
     }
@@ -2202,14 +2300,15 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             return;
         }
 
+        var skeletonElement = MobConfigs[MobArchetype.MeleeSkeleton].AttackElement;
         var tiles = new[] { (mob.TileX, mob.TileY) };
-        EmitFxForTiles(events, tiles, ArenaConfig.MobSkeletonSoulBurstFxId, ArenaConfig.DefaultMobElement);
+        EmitFxForTiles(events, tiles, ArenaConfig.MobSkeletonSoulBurstFxId, skeletonElement);
         ApplyDamageToPlayer(
             state,
             events,
             player,
             ResolveMobOutgoingDamage(state, mob, ArenaConfig.MeleeSkeletonAbilityDamage),
-            ArenaConfig.DefaultMobElement,
+            skeletonElement,
             attacker: mob);
     }
 
@@ -2226,7 +2325,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         }
 
         var aoeSquareTiles = BuildSquareTiles(mob.TileX, mob.TileY, 1, includeCenter: true).ToList();
-        EmitFxForTiles(events, aoeSquareTiles, config.AbilityFxId, ArenaConfig.DefaultMobElement);
+        EmitFxForTiles(events, aoeSquareTiles, config.AbilityFxId, config.AttackElement);
         var playerInAoe = ComputeChebyshevDistance(mob, player.TileX, player.TileY) <= 1;
         if (playerInAoe)
         {
@@ -2235,7 +2334,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                 events,
                 player,
                 ResolveMobOutgoingDamage(state, mob, config.AbilityDamage),
-                ArenaConfig.DefaultMobElement,
+                config.AttackElement,
                 attacker: mob);
         }
 
@@ -2261,15 +2360,15 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             fxKind: CombatFxKind.MeleeSwing,
             fromActor: mob,
             toActor: player,
-            elementType: ArenaConfig.DefaultMobElement,
+            elementType: config.AttackElement,
             durationMs: ArenaConfig.MeleeSwingDurationMs);
-        EmitFxForTiles(events, tiles, config.AbilityFxId, ArenaConfig.DefaultMobElement);
+        EmitFxForTiles(events, tiles, config.AbilityFxId, config.AttackElement);
         ApplyDamageToPlayer(
             state,
             events,
             player,
             ResolveMobOutgoingDamage(state, mob, config.AbilityDamage),
-            ArenaConfig.DefaultMobElement,
+            config.AttackElement,
             attacker: mob);
         return true;
     }
@@ -2280,15 +2379,14 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         MobArchetypeConfig config,
         List<BattleEventDto> events)
     {
-        var maxHp = ResolveScaledMobMaxHp(state, config, mob.IsElite);
-        if (mob.Hp >= maxHp)
+        if (mob.Hp >= mob.MaxHp)
         {
             return false;
         }
 
-        mob.Hp = Math.Min(maxHp, mob.Hp + ArenaConfig.MeleeZombieSelfHealAmount);
+        mob.Hp = Math.Min(mob.Hp + ArenaConfig.MeleeZombieSelfHealAmount, mob.MaxHp);
         var tiles = new[] { (mob.TileX, mob.TileY) };
-        EmitFxForTiles(events, tiles, config.AbilityFxId, ArenaConfig.DefaultMobElement);
+        EmitFxForTiles(events, tiles, config.AbilityFxId, config.AttackElement);
         return true;
     }
 
@@ -2314,15 +2412,15 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                 fxKind: CombatFxKind.RangedProjectile,
                 fromActor: mob,
                 toActor: player,
-                elementType: ArenaConfig.DefaultMobElement,
+                elementType: config.AttackElement,
                 durationMs: ArenaConfig.RangedProjectileDurationMs);
-            EmitFxForTiles(events, new[] { (player.TileX, player.TileY) }, config.AbilityFxId, ArenaConfig.DefaultMobElement);
+            EmitFxForTiles(events, new[] { (player.TileX, player.TileY) }, config.AbilityFxId, config.AttackElement);
             ApplyDamageToPlayer(
                 state,
                 events,
                 player,
                 ResolveMobOutgoingDamage(state, mob, damagePerProjectile),
-                ArenaConfig.DefaultMobElement,
+                config.AttackElement,
                 attacker: mob);
         }
 
@@ -2348,15 +2446,15 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             fxKind: CombatFxKind.RangedProjectile,
             fromActor: mob,
             toActor: player,
-            elementType: ArenaConfig.DefaultMobElement,
+            elementType: config.AttackElement,
             durationMs: ArenaConfig.RangedProjectileDurationMs);
-        EmitFxForTiles(events, new[] { (player.TileX, player.TileY) }, config.AbilityFxId, ArenaConfig.DefaultMobElement);
+        EmitFxForTiles(events, new[] { (player.TileX, player.TileY) }, config.AbilityFxId, config.AttackElement);
         ApplyDamageToPlayer(
             state,
             events,
             player,
             ResolveMobOutgoingDamage(state, mob, config.AbilityDamage),
-            ArenaConfig.DefaultMobElement,
+            config.AttackElement,
             attacker: mob);
 
         AddDamagingHazardDecal(
@@ -2388,15 +2486,15 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             fxKind: CombatFxKind.RangedProjectile,
             fromActor: mob,
             toActor: player,
-            elementType: ArenaConfig.DefaultMobElement,
+            elementType: config.AttackElement,
             durationMs: ArenaConfig.RangedProjectileDurationMs);
-        EmitFxForTiles(events, new[] { (player.TileX, player.TileY) }, config.AbilityFxId, ArenaConfig.DefaultMobElement);
+        EmitFxForTiles(events, new[] { (player.TileX, player.TileY) }, config.AbilityFxId, config.AttackElement);
         ApplyDamageToPlayer(
             state,
             events,
             player,
             ResolveMobOutgoingDamage(state, mob, config.AbilityDamage),
-            ArenaConfig.DefaultMobElement,
+            config.AttackElement,
             attacker: mob);
         return true;
     }
@@ -2696,6 +2794,18 @@ public sealed partial class InMemoryBattleStore : IBattleStore
 
         var previousHp = player.Hp;
         var modifiedDamage = ApplyIncomingDamageModifiers(state, damage, isRangedAutoAttack);
+
+        var isPlayerResistanceHit = false;
+        if (state.EquippedWeaponResistanceElement.HasValue)
+        {
+            var elemMult = ResolveElementalModifier(element, ElementType.Physical, state.EquippedWeaponResistanceElement.Value);
+            if (elemMult < 1.0f)
+            {
+                isPlayerResistanceHit = true;
+                modifiedDamage = Math.Max(1, (int)Math.Round(modifiedDamage * elemMult));
+            }
+        }
+
         var remainingDamage = RollDamageForAttacker(state, modifiedDamage, attacker);
         var absorbed = Math.Min(player.Shield, remainingDamage);
         player.Shield -= absorbed;
@@ -2730,7 +2840,8 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             HitId: NextTickEventId(state),
             ShieldDamageAmount: absorbed,
             HpDamageAmount: hpDamageApplied,
-            HitKind: hitKind));
+            HitKind: hitKind,
+            IsResistanceHit: isPlayerResistanceHit));
 
         AddUltimateGauge(
             state,
@@ -2893,6 +3004,19 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             remainingDamage = ApplyPercentIncrease(remainingDamage, ResolvePlayerCriticalDamageBonusPercent(state));
         }
 
+        var isWeaknessHit = false;
+        var isResistanceHit = false;
+        if (mob.MobType is MobArchetype mobArchetypeForElem && MobConfigs.TryGetValue(mobArchetypeForElem, out var mobElemConfig))
+        {
+            var elementalMult = ResolveElementalModifier(element, mobElemConfig.WeakTo, mobElemConfig.ResistantTo);
+            if (elementalMult > 1.0f)
+                isWeaknessHit = true;
+            else if (elementalMult < 1.0f)
+                isResistanceHit = true;
+            if (elementalMult != 1.0f)
+                remainingDamage = Math.Max(1, (int)Math.Round(remainingDamage * elementalMult));
+        }
+
         var absorbed = 0;
         if (mob.Shield > 0 && remainingDamage > 0)
         {
@@ -2924,7 +3048,9 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             HitId: NextTickEventId(state),
             ShieldDamageAmount: absorbed,
             HpDamageAmount: hpDamageApplied,
-            HitKind: hitKind));
+            HitKind: hitKind,
+            IsWeaknessHit: isWeaknessHit,
+            IsResistanceHit: isResistanceHit));
 
         if (isCrit)
         {
@@ -3498,7 +3624,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             return 0;
         }
 
-        player.Hp += appliedHeal;
+        player.Hp = Math.Min(player.Hp + appliedHeal, player.MaxHp);
         events.Add(new HealNumberEventDto(
             ActorId: player.ActorId,
             Amount: appliedHeal,
@@ -3907,7 +4033,10 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         int AbilityDamage,
         int AbilityRangeTiles,
         int AbilityCooldownMs,
-        string AbilityFxId);
+        string AbilityFxId,
+        ElementType AttackElement,
+        ElementType WeakTo,
+        ElementType ResistantTo);
 
     private sealed class MeleeBruteBehavior : IMobBehavior
     {
@@ -4909,6 +5038,9 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             string arenaId,
             string playerActorId,
             string playerClassId,
+            ArenaType arenaType,
+            ArenaConfig.ElementalArenaConfig.ElementalArenaDef? elementalArenaDef,
+            ElementType dailyElement,
             int seed,
             Random rng,
             Random poiRng,
@@ -4962,6 +5094,9 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             ArenaId = arenaId;
             PlayerActorId = playerActorId;
             PlayerClassId = playerClassId;
+            ArenaType = arenaType;
+            ElementalArenaDef = elementalArenaDef;
+            DailyElement = dailyElement;
             Seed = seed;
             Rng = rng;
             PoiRng = poiRng;
@@ -5022,6 +5157,14 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         public string PlayerActorId { get; }
 
         public string PlayerClassId { get; }
+
+        public ArenaType ArenaType { get; }
+
+        public ArenaConfig.ElementalArenaConfig.ElementalArenaDef? ElementalArenaDef { get; }
+
+        public ElementType? ForcedElement => ElementalArenaDef?.ForcedElement;
+
+        public ElementType DailyElement { get; }
 
         public int Seed { get; }
 
@@ -5087,7 +5230,9 @@ public sealed partial class InMemoryBattleStore : IBattleStore
 
         public Dictionary<string, StoredSkill> Skills { get; }
 
-        public ElementType? EquippedWeaponElement { get; }
+        public ElementType? EquippedWeaponElement { get; set; }
+
+        public ElementType? EquippedWeaponResistanceElement { get; set; }
 
         public List<StoredDecal> Decals { get; }
 

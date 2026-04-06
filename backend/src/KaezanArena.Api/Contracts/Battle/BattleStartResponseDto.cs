@@ -36,6 +36,7 @@ public sealed record BattleStartResponseDto(
     BattleTilePosDto? GroundTargetPos,
     AssistConfigDto AssistConfig,
     BattleRangedConfigDto RangedConfig,
+    string DailyElement,
     ElementType PlayerBaseElement,
     ElementType? WeaponElement,
     IReadOnlyList<BattleDecalDto> Decals,
@@ -50,4 +51,6 @@ public sealed record BattleStartResponseDto(
     int ZoneIndex,
     int UltimateGauge,
     int UltimateGaugeMax,
-    bool UltimateReady);
+    bool UltimateReady,
+    string ArenaType,
+    string? ArenaDisplayName);

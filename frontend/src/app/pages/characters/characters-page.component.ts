@@ -39,6 +39,8 @@ import type {
 } from "../../api/account-api.service";
 import type { SigilSlotCardViewModel } from "./components/sigil-pentagon/sigil-pentagon.component";
 
+type InfusionTab = "damage" | "resistance";
+
 @Component({
   selector: "app-characters-page",
   standalone: true,
@@ -64,6 +66,12 @@ export class CharactersPageComponent implements OnInit {
   sigilLoadoutState = signal<CharacterSigilLoadoutStateResponse | null>(null);
   sigilActionError = signal<string | null>(null);
   sigilBusySlotIndex = signal<number | null>(null);
+  enchantError = signal<string | null>(null);
+  enchantBusy = signal(false);
+  infusionDrawerOpen = signal(false);
+  infusionTab = signal<InfusionTab>("damage");
+  selectedEnchantDamageMaterial = signal<string | null>(null);
+  selectedEnchantResistanceMaterial = signal<string | null>(null);
 
   constructor(
     private readonly accountStore: AccountStore,
@@ -305,6 +313,103 @@ export class CharactersPageComponent implements OnInit {
     return stats;
   }
 
+  get weaponEnchantment() {
+    return this.activeWeaponContext?.instance.enchantment ?? null;
+  }
+
+  get equippedWeaponInstanceId(): string | null {
+    const char = this.activeCharacter;
+    if (!char) return null;
+    return char.equipment.weaponInstanceId ?? null;
+  }
+
+  get damageEnchantMaterials(): { id: string; label: string }[] {
+    return [
+      { id: "material:ember_core", label: "Ember Core (Fire)" },
+      { id: "material:frost_core", label: "Frost Core (Ice)" },
+      { id: "material:stone_core", label: "Stone Core (Earth)" },
+      { id: "material:volt_core", label: "Volt Core (Energy)" }
+    ];
+  }
+
+  get resistanceEnchantMaterials(): { id: string; label: string }[] {
+    return [
+      { id: "material:ember_dust", label: "Ember Dust (Fire)" },
+      { id: "material:frost_dust", label: "Frost Dust (Ice)" },
+      { id: "material:stone_dust", label: "Stone Dust (Earth)" },
+      { id: "material:volt_dust", label: "Volt Dust (Energy)" }
+    ];
+  }
+
+  getMaterialBalance(materialId: string): number {
+    const char = this.activeCharacter;
+    if (!char) return 0;
+    return char.inventory.materialStacks[materialId] ?? 0;
+  }
+
+  setInfusionTab(tab: InfusionTab): void {
+    this.infusionTab.set(tab);
+  }
+
+  getInfusionTabStatus(tab: InfusionTab): "Empty" | "Equipped" {
+    const socketedElement = tab === "damage"
+      ? this.weaponEnchantment?.damageElement
+      : this.weaponEnchantment?.resistanceElement;
+    return socketedElement ? "Equipped" : "Empty";
+  }
+
+  equipEnchantMaterial(slot: InfusionTab, materialId: string): void {
+    if (slot === "damage") {
+      this.selectedEnchantDamageMaterial.set(materialId);
+    } else {
+      this.selectedEnchantResistanceMaterial.set(materialId);
+    }
+  }
+
+  isEnchantMaterialEquipped(slot: InfusionTab, materialId: string): boolean {
+    return this.getSelectedEnchantMaterial(slot) === materialId;
+  }
+
+  getSelectedEnchantMaterial(slot: InfusionTab): string | null {
+    return slot === "damage"
+      ? this.selectedEnchantDamageMaterial()
+      : this.selectedEnchantResistanceMaterial();
+  }
+
+  resolveSelectedEnchantMaterialLabel(slot: InfusionTab): string {
+    const materialId = this.getSelectedEnchantMaterial(slot);
+    if (!materialId) {
+      return "None";
+    }
+
+    const materials = slot === "damage"
+      ? this.damageEnchantMaterials
+      : this.resistanceEnchantMaterials;
+    return this.resolveMaterialLabel(materialId, materials);
+  }
+
+  async enchantWeapon(slot: "damage" | "resistance"): Promise<void> {
+    const characterId = this.selectedCharacterId();
+    const weaponInstanceId = this.equippedWeaponInstanceId;
+    const materialId = slot === "damage"
+      ? this.selectedEnchantDamageMaterial()
+      : this.selectedEnchantResistanceMaterial();
+
+    if (!characterId || !weaponInstanceId || !materialId) {
+      return;
+    }
+
+    this.enchantBusy.set(true);
+    this.enchantError.set(null);
+    try {
+      await this.accountStore.enchantWeapon(characterId, weaponInstanceId, slot, materialId);
+    } catch (error) {
+      this.enchantError.set(error instanceof Error ? error.message : "Enchantment failed.");
+    } finally {
+      this.enchantBusy.set(false);
+    }
+  }
+
   readonly sigilStats: InfoPanelStat[] = [];
   readonly sigilSetBonuses: never[] = [];
 
@@ -467,6 +572,9 @@ export class CharactersPageComponent implements OnInit {
 
   setActiveTab(tab: KaelisTab): void {
     this.activeTab.set(tab);
+    if (tab !== "weapon") {
+      this.closeInfusionDrawer();
+    }
     if (tab === "sigils") {
       const characterId = this.selectedCharacterId();
       if (characterId) {
@@ -477,6 +585,7 @@ export class CharactersPageComponent implements OnInit {
 
   selectEntry(id: string): void {
     this.selectedCharacterId.set(id);
+    this.closeInfusionDrawer();
     void this.loadSigilState(id);
   }
 
@@ -497,6 +606,7 @@ export class CharactersPageComponent implements OnInit {
   }
 
   async openWeaponModal(): Promise<void> {
+    this.closeInfusionDrawer();
     const activeCharacterId = this.selectedCharacterId();
     if (activeCharacterId) {
       try {
@@ -507,6 +617,20 @@ export class CharactersPageComponent implements OnInit {
     }
 
     void this.router.navigateByUrl("/backpack");
+  }
+
+  openInfusionDrawer(): void {
+    if (this.activeTab() !== "weapon" || !this.equippedWeaponInstanceId) {
+      return;
+    }
+
+    this.enchantError.set(null);
+    this.infusionTab.set("damage");
+    this.infusionDrawerOpen.set(true);
+  }
+
+  closeInfusionDrawer(): void {
+    this.infusionDrawerOpen.set(false);
   }
 
   openSigilModal(slotIndex: number): void {
@@ -703,6 +827,13 @@ export class CharactersPageComponent implements OnInit {
 
     return "Failed to update Sigil loadout.";
   }
+
+  private resolveMaterialLabel(
+    materialId: string,
+    materials: ReadonlyArray<{ id: string; label: string }>
+  ): string {
+    return materials.find((material) => material.id === materialId)?.label ?? materialId;
+  }
 }
 
 function buildFallbackSigilSlots(character: CharacterState | null): SigilSlotState[] {
@@ -793,4 +924,3 @@ function toTitleLabel(value: string | null | undefined): string {
     .map((token) => token.length > 0 ? token[0].toUpperCase() + token.slice(1) : token)
     .join(" ");
 }
-

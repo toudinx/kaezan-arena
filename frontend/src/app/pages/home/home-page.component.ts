@@ -1,4 +1,5 @@
-import { ChangeDetectionStrategy, Component, OnInit } from "@angular/core";
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnDestroy, OnInit } from "@angular/core";
+import { Router } from "@angular/router";
 import { AccountStore } from "../../account/account-store.service";
 import { HomeBackgroundComponent } from "./components/home-background/home-background.component";
 import { HomeCharacterStageComponent } from "./components/home-character-stage/home-character-stage.component";
@@ -11,7 +12,6 @@ import {
   HomeMainNavigationComponent,
   type HomeNavItem
 } from "./components/home-main-navigation/home-main-navigation.component";
-import { HomeEventBannerComponent } from "./components/home-event-banner/home-event-banner.component";
 import {
   DailyContractsModalComponent,
   type DailyContractRowViewModel
@@ -20,6 +20,41 @@ import {
   resolveCharacterDisplayName,
   resolveCharacterPortraitVisual
 } from "../../shared/characters/character-visuals.helpers";
+
+type DailyElementKey = "fire" | "ice" | "earth" | "energy";
+type DailyWidgetTab = "contracts" | "element";
+
+type ElementalArenaKey = "fire" | "ice" | "earth" | "energy";
+
+type ElementalArenaCard = Readonly<{
+  arenaId: string;
+  displayName: string;
+  elementKey: ElementalArenaKey;
+  elementLabel: string;
+  coreDrop: string;
+  dustDrop: string;
+}>;
+
+const ELEMENTAL_ARENA_CARDS: ReadonlyArray<ElementalArenaCard> = [
+  { arenaId: "arena:forge_of_ash",  displayName: "Forge of Ash",  elementKey: "fire",   elementLabel: "Fire",   coreDrop: "EmberCore", dustDrop: "EmberDust" },
+  { arenaId: "arena:frozen_vault",  displayName: "Frozen Vault",  elementKey: "ice",    elementLabel: "Ice",    coreDrop: "FrostCore", dustDrop: "FrostDust" },
+  { arenaId: "arena:grove_of_ruin", displayName: "Grove of Ruin", elementKey: "earth",  elementLabel: "Earth",  coreDrop: "StoneCore", dustDrop: "StoneDust" },
+  { arenaId: "arena:storm_sanctum", displayName: "Storm Sanctum", elementKey: "energy", elementLabel: "Energy", coreDrop: "VoltCore",  dustDrop: "VoltDust"  }
+];
+
+type DailyElementVisual = Readonly<{
+  key: DailyElementKey;
+  label: string;
+  iconLabel: string;
+  counterElementLabel: string;
+}>;
+
+const DAILY_ELEMENT_VISUALS: Readonly<Record<DailyElementKey, DailyElementVisual>> = {
+  fire: { key: "fire", label: "Fire", iconLabel: "FR", counterElementLabel: "Ice" },
+  ice: { key: "ice", label: "Ice", iconLabel: "IC", counterElementLabel: "Fire" },
+  earth: { key: "earth", label: "Earth", iconLabel: "EA", counterElementLabel: "Energy" },
+  energy: { key: "energy", label: "Energy", iconLabel: "EN", counterElementLabel: "Earth" }
+};
 
 @Component({
   selector: "app-home-page",
@@ -31,20 +66,30 @@ import {
     HomeTopLeftHudComponent,
     HomeTopRightActionsComponent,
     HomeMainNavigationComponent,
-    HomeEventBannerComponent,
     DailyContractsModalComponent
   ],
   templateUrl: "./home-page.component.html",
   styleUrl: "./home-page.component.css"
 })
-export class HomePageComponent implements OnInit {
-  constructor(private readonly accountStore: AccountStore) {}
+export class HomePageComponent implements OnInit, OnDestroy {
+  constructor(
+    private readonly accountStore: AccountStore,
+    private readonly changeDetectorRef: ChangeDetectorRef,
+    private readonly router: Router
+  ) {}
   private readonly resetAtLabel = "Resets at 00:00 UTC";
+  private readonly dailyWidgetRotateEveryMs = 5000;
+  private readonly dailyWidgetManualSuspendMs = 12000;
+  private dailyWidgetRotationTimerId: number | null = null;
+  private dailyWidgetManualSuspendTimerId: number | null = null;
+  private isDailyWidgetAutoRotationSuspended = false;
 
   dailyContractsOpen = false;
   dailyContractsRefreshing = false;
   dailyContractsError: string | null = null;
   selectedBackgroundIndex = 0;
+  activeDailyWidgetTab: DailyWidgetTab = "contracts";
+  isDailyWidgetHovered = false;
 
   readonly homeBackgrounds: ReadonlyArray<{
     readonly id: string;
@@ -81,7 +126,14 @@ export class HomePageComponent implements OnInit {
       await this.accountStore.load();
     } catch {
       // Render uses store error state.
+    } finally {
+      this.startDailyWidgetRotation();
     }
+  }
+
+  ngOnDestroy(): void {
+    this.clearDailyWidgetRotationTimer();
+    this.clearDailyWidgetManualSuspendTimer();
   }
 
   get commanderName(): string {
@@ -217,6 +269,34 @@ export class HomePageComponent implements OnInit {
     return `Account XP ${current}/${required}`;
   }
 
+  get todayZoneElementLabel(): string {
+    return this.resolveElementDisplayName(this.accountStore.state()?.todayZoneElement);
+  }
+
+  get todayZoneElementIconLabel(): string {
+    return this.resolveElementIconLabel(this.accountStore.state()?.todayZoneElement);
+  }
+
+  get todayZoneElementThemeClass(): string {
+    return this.resolveElementThemeClass(this.accountStore.state()?.todayZoneElement);
+  }
+
+  get todayZoneElementHeadlineLabel(): string {
+    return this.todayZoneElementLabel.toUpperCase();
+  }
+
+  get todayZoneElementStrengthHint(): string {
+    return `${this.todayZoneElementLabel} mobs are +15% stronger today`;
+  }
+
+  get todayZoneElementCounterHint(): string {
+    return this.resolveCounterElementHint(this.accountStore.state()?.todayZoneElement);
+  }
+
+  get todayZoneElementTooltip(): string {
+    return `${this.todayZoneElementStrengthHint}. ${this.todayZoneElementCounterHint}.`;
+  }
+
   get dailyContractRows(): ReadonlyArray<DailyContractRowViewModel> {
     const contracts = this.accountStore.state()?.dailyContracts?.contracts ?? [];
     return contracts.map(contract => {
@@ -276,6 +356,39 @@ export class HomePageComponent implements OnInit {
     this.selectedBackgroundIndex = (this.selectedBackgroundIndex + 1) % this.homeBackgrounds.length;
   }
 
+  setDailyWidgetTab(tab: DailyWidgetTab): void {
+    this.activeDailyWidgetTab = tab;
+    this.suspendDailyWidgetAutoRotation();
+  }
+
+  onDailyWidgetMouseEnter(): void {
+    this.isDailyWidgetHovered = true;
+  }
+
+  onDailyWidgetMouseLeave(): void {
+    this.isDailyWidgetHovered = false;
+  }
+
+  resolveElementDisplayName(element: string | null | undefined): string {
+    return this.resolveElementVisual(element).label;
+  }
+
+  resolveCounterElementHint(element: string | null | undefined): string {
+    const counterElement = this.resolveElementVisual(element).counterElementLabel;
+    return `Bring ${counterElement} weapons`;
+  }
+
+  resolveElementThemeClass(element: string | null | undefined): string {
+    const key = this.resolveElementVisual(element).key;
+    return `daily-widget--${key}`;
+  }
+
+  readonly elementalArenaCards: ReadonlyArray<ElementalArenaCard> = ELEMENTAL_ARENA_CARDS;
+
+  enterElementalArena(arenaId: string): void {
+    void this.router.navigate(["/arena"], { queryParams: { arenaId } });
+  }
+
   readonly mainNavItems: HomeNavItem[] = [
     {
       id: 'arena',
@@ -330,4 +443,60 @@ export class HomePageComponent implements OnInit {
       iconPath: 'M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z'
     }
   ];
+
+  private resolveElementIconLabel(element: string | null | undefined): string {
+    return this.resolveElementVisual(element).iconLabel;
+  }
+
+  private resolveElementVisual(element: string | null | undefined): DailyElementVisual {
+    const normalizedElement = (element ?? "").trim().toLowerCase();
+    if (normalizedElement === "fire" || normalizedElement === "ice" || normalizedElement === "earth" || normalizedElement === "energy") {
+      return DAILY_ELEMENT_VISUALS[normalizedElement];
+    }
+
+    return DAILY_ELEMENT_VISUALS.fire;
+  }
+
+  private startDailyWidgetRotation(): void {
+    if (this.dailyWidgetRotationTimerId !== null) {
+      return;
+    }
+
+    this.dailyWidgetRotationTimerId = window.setInterval(() => {
+      if (this.isDailyWidgetHovered || this.isDailyWidgetAutoRotationSuspended) {
+        return;
+      }
+
+      this.activeDailyWidgetTab = this.activeDailyWidgetTab === "contracts" ? "element" : "contracts";
+      this.changeDetectorRef.markForCheck();
+    }, this.dailyWidgetRotateEveryMs);
+  }
+
+  private suspendDailyWidgetAutoRotation(): void {
+    this.isDailyWidgetAutoRotationSuspended = true;
+    this.clearDailyWidgetManualSuspendTimer();
+    this.dailyWidgetManualSuspendTimerId = window.setTimeout(() => {
+      this.isDailyWidgetAutoRotationSuspended = false;
+      this.dailyWidgetManualSuspendTimerId = null;
+      this.changeDetectorRef.markForCheck();
+    }, this.dailyWidgetManualSuspendMs);
+  }
+
+  private clearDailyWidgetRotationTimer(): void {
+    if (this.dailyWidgetRotationTimerId === null) {
+      return;
+    }
+
+    window.clearInterval(this.dailyWidgetRotationTimerId);
+    this.dailyWidgetRotationTimerId = null;
+  }
+
+  private clearDailyWidgetManualSuspendTimer(): void {
+    if (this.dailyWidgetManualSuspendTimerId === null) {
+      return;
+    }
+
+    window.clearTimeout(this.dailyWidgetManualSuspendTimerId);
+    this.dailyWidgetManualSuspendTimerId = null;
+  }
 }

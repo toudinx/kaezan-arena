@@ -6,10 +6,19 @@ public static class AccountCatalog
 {
     public static IReadOnlyList<SpeciesDefinition> SpeciesDefinitions { get; } =
     [
-        new SpeciesDefinition(ArenaConfig.SpeciesIds.MeleeBrute,   ArenaConfig.DisplayNames[ArenaConfig.SpeciesIds.MeleeBrute]),
-        new SpeciesDefinition(ArenaConfig.SpeciesIds.RangedArcher, ArenaConfig.DisplayNames[ArenaConfig.SpeciesIds.RangedArcher]),
-        new SpeciesDefinition(ArenaConfig.SpeciesIds.MeleeDemon,   ArenaConfig.DisplayNames[ArenaConfig.SpeciesIds.MeleeDemon]),
-        new SpeciesDefinition(ArenaConfig.SpeciesIds.RangedShaman, ArenaConfig.DisplayNames[ArenaConfig.SpeciesIds.RangedShaman]),
+        new SpeciesDefinition(ArenaConfig.SpeciesIds.MeleeBrute,      ArenaConfig.DisplayNames[ArenaConfig.SpeciesIds.MeleeBrute]),
+        new SpeciesDefinition(ArenaConfig.SpeciesIds.RangedArcher,    ArenaConfig.DisplayNames[ArenaConfig.SpeciesIds.RangedArcher]),
+        new SpeciesDefinition(ArenaConfig.SpeciesIds.MeleeDemon,      ArenaConfig.DisplayNames[ArenaConfig.SpeciesIds.MeleeDemon]),
+        new SpeciesDefinition(ArenaConfig.SpeciesIds.RangedShaman,    ArenaConfig.DisplayNames[ArenaConfig.SpeciesIds.RangedShaman]),
+        new SpeciesDefinition(ArenaConfig.SpeciesIds.MeleeSkeleton,   ArenaConfig.DisplayNames[ArenaConfig.SpeciesIds.MeleeSkeleton]),
+        new SpeciesDefinition(ArenaConfig.SpeciesIds.MeleeWogol,      ArenaConfig.DisplayNames[ArenaConfig.SpeciesIds.MeleeWogol]),
+        new SpeciesDefinition(ArenaConfig.SpeciesIds.MeleeWarrior,    ArenaConfig.DisplayNames[ArenaConfig.SpeciesIds.MeleeWarrior]),
+        new SpeciesDefinition(ArenaConfig.SpeciesIds.MeleeZombie,     ArenaConfig.DisplayNames[ArenaConfig.SpeciesIds.MeleeZombie]),
+        new SpeciesDefinition(ArenaConfig.SpeciesIds.MeleeTinyZombie, ArenaConfig.DisplayNames[ArenaConfig.SpeciesIds.MeleeTinyZombie]),
+        new SpeciesDefinition(ArenaConfig.SpeciesIds.RangedImp,       ArenaConfig.DisplayNames[ArenaConfig.SpeciesIds.RangedImp]),
+        new SpeciesDefinition(ArenaConfig.SpeciesIds.RangedSwampy,    ArenaConfig.DisplayNames[ArenaConfig.SpeciesIds.RangedSwampy]),
+        new SpeciesDefinition(ArenaConfig.SpeciesIds.RangedMuddy,     ArenaConfig.DisplayNames[ArenaConfig.SpeciesIds.RangedMuddy]),
+        new SpeciesDefinition(ArenaConfig.SpeciesIds.MeleeSlug,       ArenaConfig.DisplayNames[ArenaConfig.SpeciesIds.MeleeSlug]),
     ];
 
     public static IReadOnlyList<SigilDefinition> SigilDefinitions { get; } =

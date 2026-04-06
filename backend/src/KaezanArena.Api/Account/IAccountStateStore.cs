@@ -1,3 +1,5 @@
+using KaezanArena.Api.Battle;
+
 namespace KaezanArena.Api.Account;
 
 public interface IAccountStateStore
@@ -30,9 +32,12 @@ public interface IAccountStateStore
         string battleId,
         IReadOnlyList<DropSource> sources,
         string? runId = null,
-        int? battleSeed = null);
+        int? battleSeed = null,
+        ArenaConfig.ElementalArenaConfig.ElementalArenaDef? elementalArenaDef = null);
 
     BestiaryCraftResult CraftBestiaryItem(string accountId, string speciesId, EquipmentSlot slot, string? characterId = null);
 
     ItemRefineResult RefineItem(string accountId, string itemInstanceId, string? characterId = null);
+
+    CharacterState EnchantWeapon(string accountId, string characterId, string weaponInstanceId, string slot, string materialId);
 }

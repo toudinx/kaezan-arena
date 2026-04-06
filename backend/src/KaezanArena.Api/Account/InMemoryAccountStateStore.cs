@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using KaezanArena.Api.Battle;
+using KaezanArena.Api.Contracts.Battle;
 
 namespace KaezanArena.Api.Account;
 
@@ -24,6 +25,7 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
     private const string RewardKindEchoFragments = "echo_fragments";
     private const string RewardKindPrimalCore = "primal_core";
     private const string RewardKindSigil = "sigil";
+    private const string RewardKindMaterial = "material";
     private const string EchoFragmentsItemId = "currency.echo_fragments";
     private const string UnknownSpeciesId = "unknown_species";
     private const string SeedSigilInstanceId = "sigil_test_001";
@@ -48,10 +50,17 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
                 continue;
             }
 
-            _accounts[normalizedAccountId] = new StoredAccount(
-                state: CloneAccountState(NormalizeLoadedAccountState(persistedAccount.State)),
+            var needsMigration = NeedsMigration(persistedAccount.State);
+            var normalizedState = NormalizeLoadedAccountState(persistedAccount.State);
+            var storedAccount = new StoredAccount(
+                state: CloneAccountState(normalizedState),
                 awardedBySourceKeyByCharacter: CloneAwardedBySourceKeyByCharacter(
                     persistedAccount.AwardedBySourceKeyByCharacter));
+            _accounts[normalizedAccountId] = storedAccount;
+            if (needsMigration)
+            {
+                PersistAccount(storedAccount);
+            }
         }
     }
 
@@ -639,7 +648,8 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
         string battleId,
         IReadOnlyList<DropSource> sources,
         string? runId = null,
-        int? battleSeed = null)
+        int? battleSeed = null,
+        ArenaConfig.ElementalArenaConfig.ElementalArenaDef? elementalArenaDef = null)
     {
         var account = GetOrCreateAccount(accountId);
         lock (account.Sync)
@@ -647,6 +657,7 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
             EnsureDailyContractsRefreshed(account);
             var character = GetCharacterOrThrow(account.State, characterId);
             var equipmentInstances = new Dictionary<string, OwnedEquipmentInstance>(character.Inventory.EquipmentInstances, StringComparer.Ordinal);
+            var materialStacks = new Dictionary<string, long>(character.Inventory.MaterialStacks, StringComparer.Ordinal);
             var sigilInventory = new Dictionary<string, SigilInstance>(account.State.SigilInventory, StringComparer.Ordinal);
             var bestiaryKillsBySpecies = new Dictionary<string, int>(character.BestiaryKillsBySpecies, StringComparer.Ordinal);
             var primalCoreBySpecies = new Dictionary<string, int>(character.PrimalCoreBySpecies, StringComparer.Ordinal);
@@ -686,10 +697,19 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
                     equipmentInstances: equipmentInstances,
                     sigilInventory: sigilInventory,
                     battleSeed: battleSeed,
-                    killsTotalForSpecies: killsTotalForSpecies);
+                    killsTotalForSpecies: killsTotalForSpecies,
+                    elementalArenaDef: elementalArenaDef);
 
                 alreadyAwardedBySourceKey[sourceKey] = rolledEvents;
                 awarded.AddRange(rolledEvents);
+                foreach (var dropEvent in rolledEvents)
+                {
+                    if (string.Equals(dropEvent.RewardKind, RewardKindMaterial, StringComparison.Ordinal))
+                    {
+                        materialStacks[dropEvent.ItemId] = materialStacks.GetValueOrDefault(dropEvent.ItemId, 0L) + dropEvent.Quantity;
+                    }
+                }
+
                 if (IsMobSourceType(source.SourceType))
                 {
                     var normalizedSpecies = NormalizeSpecies(source.Species);
@@ -706,7 +726,7 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
                 var updatedCharacter = character with
                 {
                     Inventory = new CharacterInventory(
-                        MaterialStacks: new Dictionary<string, long>(character.Inventory.MaterialStacks, StringComparer.Ordinal),
+                        MaterialStacks: materialStacks,
                         EquipmentInstances: new Dictionary<string, OwnedEquipmentInstance>(equipmentInstances, StringComparer.Ordinal)),
                     BestiaryKillsBySpecies = new Dictionary<string, int>(bestiaryKillsBySpecies, StringComparer.Ordinal),
                     PrimalCoreBySpecies = new Dictionary<string, int>(primalCoreBySpecies, StringComparer.Ordinal)
@@ -940,6 +960,87 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
         }
     }
 
+    public CharacterState EnchantWeapon(string accountId, string characterId, string weaponInstanceId, string slot, string materialId)
+    {
+        var account = GetOrCreateAccount(accountId);
+        lock (account.Sync)
+        {
+            EnsureDailyContractsRefreshed(account);
+
+            if (string.IsNullOrWhiteSpace(weaponInstanceId))
+                throw new InvalidOperationException("weaponInstanceId is required.");
+
+            if (string.IsNullOrWhiteSpace(materialId))
+                throw new InvalidOperationException("materialId is required.");
+
+            if (!account.State.Characters.TryGetValue(characterId, out var character))
+                throw new InvalidOperationException($"Character '{characterId}' was not found.");
+
+            var normalizedWeaponInstanceId = weaponInstanceId.Trim();
+            var equippedWeaponInstanceId = character.Equipment.WeaponInstanceId;
+            if (!string.Equals(equippedWeaponInstanceId, normalizedWeaponInstanceId, StringComparison.Ordinal))
+                throw new InvalidOperationException("Only the currently equipped weapon can be enchanted.");
+
+            if (!character.Inventory.EquipmentInstances.TryGetValue(normalizedWeaponInstanceId, out var weapon))
+                throw new InvalidOperationException($"Weapon instance '{normalizedWeaponInstanceId}' not found in inventory.");
+
+            var normalizedSlot = slot.Trim().ToLowerInvariant();
+            var normalizedMaterialId = materialId.Trim();
+
+            bool isDamageSlot;
+            ElementType enchantElement;
+            int cost;
+
+            if (string.Equals(normalizedSlot, "damage", StringComparison.Ordinal))
+            {
+                if (!ArenaConfig.EnchantmentConfig.CoreToElement.TryGetValue(normalizedMaterialId, out enchantElement))
+                    throw new InvalidOperationException($"Material '{normalizedMaterialId}' is not a valid Elemental Core.");
+                isDamageSlot = true;
+                cost = ArenaConfig.EnchantmentConfig.CoreCostPerEnchant;
+            }
+            else if (string.Equals(normalizedSlot, "resistance", StringComparison.Ordinal))
+            {
+                if (!ArenaConfig.EnchantmentConfig.DustToElement.TryGetValue(normalizedMaterialId, out enchantElement))
+                    throw new InvalidOperationException($"Material '{normalizedMaterialId}' is not a valid Elemental Dust.");
+                isDamageSlot = false;
+                cost = ArenaConfig.EnchantmentConfig.DustCostPerEnchant;
+            }
+            else
+            {
+                throw new InvalidOperationException($"Invalid enchantment slot '{slot}'. Expected 'damage' or 'resistance'.");
+            }
+
+            var materialStacks = new Dictionary<string, long>(character.Inventory.MaterialStacks, StringComparer.Ordinal);
+            var currentMaterialBalance = materialStacks.GetValueOrDefault(normalizedMaterialId, 0L);
+            if (currentMaterialBalance < cost)
+                throw new InvalidOperationException(
+                    $"Not enough '{normalizedMaterialId}'. Required {cost}, current {currentMaterialBalance}.");
+
+            materialStacks[normalizedMaterialId] = currentMaterialBalance - cost;
+
+            var updatedWeapon = isDamageSlot
+                ? weapon with { DamageElementEnchant = enchantElement }
+                : weapon with { ResistanceElementEnchant = enchantElement };
+
+            var equipmentInstances = new Dictionary<string, OwnedEquipmentInstance>(
+                character.Inventory.EquipmentInstances, StringComparer.Ordinal)
+            {
+                [normalizedWeaponInstanceId] = updatedWeapon
+            };
+
+            var updatedCharacter = character with
+            {
+                Inventory = new CharacterInventory(
+                    MaterialStacks: materialStacks,
+                    EquipmentInstances: equipmentInstances)
+            };
+
+            account.State = UpdateAccountAfterDropAward(account.State, updatedCharacter, account.State.EchoFragmentsBalance);
+            PersistAccount(account);
+            return CloneCharacterState(updatedCharacter);
+        }
+    }
+
     private static List<DropEvent> RollDrops(
         string accountId,
         string characterId,
@@ -949,7 +1050,8 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
         IDictionary<string, OwnedEquipmentInstance> equipmentInstances,
         IDictionary<string, SigilInstance> sigilInventory,
         int? battleSeed,
-        int killsTotalForSpecies)
+        int killsTotalForSpecies,
+        ArenaConfig.ElementalArenaConfig.ElementalArenaDef? elementalArenaDef = null)
     {
         var normalizedSourceType = NormalizeSourceType(source.SourceType);
         var normalizedSpecies = NormalizeSpeciesOrNull(source.Species);
@@ -1038,6 +1140,47 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
                 RewardKind: RewardKindItem,
                 Species: normalizedSpecies,
                 AwardedAtUtc: nowUtc));
+        }
+
+        if (IsMobSourceType(normalizedSourceType) && elementalArenaDef is not null)
+        {
+            if (rng.Next(100) < elementalArenaDef.CoreDropChancePercent)
+            {
+                events.Add(new DropEvent(
+                    DropEventId: DeterministicSeed.HashId("dropevt", accountId, characterId, sourceKey, elementalArenaDef.CoreMaterialId, "core"),
+                    AccountId: accountId,
+                    CharacterId: characterId,
+                    BattleId: battleId,
+                    Tick: source.Tick,
+                    SourceType: normalizedSourceType,
+                    SourceId: source.SourceId,
+                    ItemId: elementalArenaDef.CoreMaterialId,
+                    Quantity: 1,
+                    EquipmentInstanceId: null,
+                    RewardKind: RewardKindMaterial,
+                    Species: normalizedSpecies,
+                    AwardedAtUtc: nowUtc));
+            }
+
+            if (rng.Next(100) < elementalArenaDef.DustDropChancePercent)
+            {
+                events.Add(new DropEvent(
+                    DropEventId: DeterministicSeed.HashId("dropevt", accountId, characterId, sourceKey, elementalArenaDef.DustMaterialId, "dust"),
+                    AccountId: accountId,
+                    CharacterId: characterId,
+                    BattleId: battleId,
+                    Tick: source.Tick,
+                    SourceType: normalizedSourceType,
+                    SourceId: source.SourceId,
+                    ItemId: elementalArenaDef.DustMaterialId,
+                    Quantity: 1,
+                    EquipmentInstanceId: null,
+                    RewardKind: RewardKindMaterial,
+                    Species: normalizedSpecies,
+                    AwardedAtUtc: nowUtc));
+            }
+
+            return events;
         }
 
         if (IsMobSourceType(normalizedSourceType))
@@ -1307,9 +1450,20 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
             normalizedAccountId,
             assignedDate.ToString("yyyy-MM-dd"));
         var rng = new Random(rngSeed);
+        var selectedContracts = new List<ContractDefinition>(contractCount);
+        if (DailyContractCatalog.TryResolveDailyElementContract(assignedDate, out var dailyElementContract))
+        {
+            selectedContracts.Add(dailyElementContract);
+        }
+
+        var remainingSlots = Math.Max(0, contractCount - selectedContracts.Count);
         var randomizedPool = pool
+            .Where(definition => selectedContracts.All(selected => !string.Equals(selected.ContractId, definition.ContractId, StringComparison.Ordinal)))
             .OrderBy(_ => rng.Next())
-            .Take(contractCount)
+            .Take(remainingSlots);
+        selectedContracts.AddRange(randomizedPool);
+
+        var contractStates = selectedContracts
             .Select(definition => new DailyContractState(
                 ContractId: definition.ContractId,
                 IsCompleted: false,
@@ -1319,7 +1473,7 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
 
         return new DailyContractsState(
             AssignedDate: assignedDate,
-            Contracts: randomizedPool);
+            Contracts: contractStates);
     }
 
     private static RunSummary NormalizeRunSummary(RunSummary runSummary)
@@ -1374,6 +1528,15 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
             case ArenaConfig.ContractConfig.TypeKillElites:
                 currentProgress += runSummary.EliteKillCount;
                 isCompleted = currentProgress >= targetValue;
+                break;
+
+            case ArenaConfig.ContractConfig.TypeDailyElementRun:
+                if (runSummary.RunCompleted)
+                {
+                    currentProgress += 1;
+                    isCompleted = currentProgress >= targetValue;
+                }
+
                 break;
         }
 
@@ -1563,8 +1726,18 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
         }
     }
 
+    private static bool NeedsMigration(AccountState state)
+    {
+        const string legacySpeciesId = "ranged_dragon";
+        return state.Characters.Values.Any(character =>
+            character.BestiaryKillsBySpecies.ContainsKey(legacySpeciesId) ||
+            character.PrimalCoreBySpecies.ContainsKey(legacySpeciesId));
+    }
+
     private static AccountState NormalizeLoadedAccountState(AccountState state)
     {
+        state = MigrateRangedDragonToShaman(state);
+
         if (state.SigilInventory.Count == 0)
         {
             return state;
@@ -1591,6 +1764,53 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
         {
             SigilInventory = normalizedSigilInventory
         };
+    }
+
+    private static AccountState MigrateRangedDragonToShaman(AccountState state)
+    {
+        const string legacySpeciesId = "ranged_dragon";
+        var targetSpeciesId = ArenaConfig.SpeciesIds.RangedShaman;
+
+        var characters = new Dictionary<string, CharacterState>(state.Characters, StringComparer.Ordinal);
+        var anyChanged = false;
+
+        foreach (var (charId, character) in state.Characters)
+        {
+            if (!character.BestiaryKillsBySpecies.ContainsKey(legacySpeciesId) &&
+                !character.PrimalCoreBySpecies.ContainsKey(legacySpeciesId))
+            {
+                continue;
+            }
+
+            var bestiary = new Dictionary<string, int>(character.BestiaryKillsBySpecies, StringComparer.Ordinal);
+            var primalCore = new Dictionary<string, int>(character.PrimalCoreBySpecies, StringComparer.Ordinal);
+
+            if (bestiary.TryGetValue(legacySpeciesId, out var dragonKills))
+            {
+                bestiary.Remove(legacySpeciesId);
+                bestiary[targetSpeciesId] = bestiary.GetValueOrDefault(targetSpeciesId, 0) + dragonKills;
+            }
+
+            if (primalCore.TryGetValue(legacySpeciesId, out var dragonCore))
+            {
+                primalCore.Remove(legacySpeciesId);
+                primalCore[targetSpeciesId] = primalCore.GetValueOrDefault(targetSpeciesId, 0) + dragonCore;
+            }
+
+            characters[charId] = character with
+            {
+                BestiaryKillsBySpecies = bestiary,
+                PrimalCoreBySpecies = primalCore
+            };
+            anyChanged = true;
+        }
+
+        if (!anyChanged)
+        {
+            return state;
+        }
+
+        return state with { Characters = characters };
     }
 
     private static SigilInstance NormalizeSigilInstance(string instanceId, SigilInstance sigil)

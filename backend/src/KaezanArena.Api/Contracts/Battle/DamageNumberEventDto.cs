@@ -17,4 +17,6 @@ public sealed record DamageNumberEventDto(
     int HitId,
     int ShieldDamageAmount = 0,
     int HpDamageAmount = 0,
-    string HitKind = BattleHitKinds.Normal) : BattleEventDto;
+    string HitKind = BattleHitKinds.Normal,
+    bool IsWeaknessHit = false,
+    bool IsResistanceHit = false) : BattleEventDto;

@@ -13,4 +13,6 @@ public interface IBattleStore
     bool TryGetBattleSeed(string battleId, out int seed);
 
     bool TryExportReplay(string battleId, out BattleReplayDto replay);
+
+    bool TryGetBattleElementalArenaDef(string battleId, out ArenaConfig.ElementalArenaConfig.ElementalArenaDef? def);
 }

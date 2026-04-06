@@ -23,12 +23,82 @@
       [items]="mainNavItems"
     ></app-home-main-navigation>
 
-    <app-home-event-banner
-      [label]="contractsBannerLabel"
-      title="Daily Contracts"
-      [timer]="dailyContractsResetLabel"
-      (bannerClick)="openDailyContracts()"
-    ></app-home-event-banner>
+    <section
+      class="daily-widget"
+      (mouseenter)="onDailyWidgetMouseEnter()"
+      (mouseleave)="onDailyWidgetMouseLeave()"
+      aria-label="Daily overview"
+    >
+      <div class="daily-widget__panel-frame">
+        <section
+          id="daily-widget-panel-contracts"
+          role="tabpanel"
+          class="daily-widget__panel daily-widget__panel--contracts"
+          [class.is-active]="activeDailyWidgetTab === 'contracts'"
+          [attr.aria-hidden]="activeDailyWidgetTab !== 'contracts'"
+        >
+          <p class="daily-widget__kicker">{{ contractsBannerLabel }}</p>
+          <p class="daily-widget__title">Daily Contracts</p>
+          <p class="daily-widget__meta">Assigned {{ dailyContractsAssignedDateLabel }} | {{ dailyContractsResetLabel }}</p>
+          <button type="button" class="daily-widget__action" (click)="openDailyContracts()">
+            Open Contracts
+          </button>
+        </section>
+
+        <section
+          id="daily-widget-panel-element"
+          role="tabpanel"
+          [class]="'daily-widget__panel daily-widget__panel--element ' + todayZoneElementThemeClass + (activeDailyWidgetTab === 'element' ? ' is-active' : '')"
+          [attr.aria-hidden]="activeDailyWidgetTab !== 'element'"
+          [attr.title]="todayZoneElementTooltip"
+        >
+          <span class="daily-widget__element-badge" aria-hidden="true">{{ todayZoneElementIconLabel }}</span>
+          <p class="daily-widget__kicker">Today's Element</p>
+          <p class="daily-widget__element-name">{{ todayZoneElementHeadlineLabel }}</p>
+          <p class="daily-widget__meta">{{ todayZoneElementStrengthHint }}</p>
+          <p class="daily-widget__counter">{{ todayZoneElementCounterHint }}</p>
+        </section>
+      </div>
+
+      <div class="daily-widget__indicators" role="tablist" aria-label="Daily panel indicators">
+        <button
+          type="button"
+          role="tab"
+          class="daily-widget__dot"
+          [class.is-active]="activeDailyWidgetTab === 'contracts'"
+          [attr.aria-selected]="activeDailyWidgetTab === 'contracts'"
+          aria-label="Show Daily Contracts panel"
+          (click)="setDailyWidgetTab('contracts')"
+        ></button>
+        <button
+          type="button"
+          role="tab"
+          class="daily-widget__dot"
+          [class.is-active]="activeDailyWidgetTab === 'element'"
+          [attr.aria-selected]="activeDailyWidgetTab === 'element'"
+          aria-label="Show Today's Element panel"
+          (click)="setDailyWidgetTab('element')"
+        ></button>
+      </div>
+    </section>
+
+    <section class="elemental-arenas" aria-label="Elemental Arenas">
+      <p class="elemental-arenas__label">Elemental Arenas</p>
+      <div class="elemental-arenas__grid">
+        @for (arena of elementalArenaCards; track arena.arenaId) {
+          <button
+            type="button"
+            class="elemental-arena-card"
+            [class]="'elemental-arena-card elemental-arena-card--' + arena.elementKey"
+            (click)="enterElementalArena(arena.arenaId)"
+          >
+            <span class="elemental-arena-card__element-badge">{{ arena.elementLabel[0] }}</span>
+            <span class="elemental-arena-card__name">{{ arena.displayName }}</span>
+            <span class="elemental-arena-card__drops">{{ arena.coreDrop }} · {{ arena.dustDrop }}</span>
+          </button>
+        }
+      </div>
+    </section>
 
     <button type="button" class="home-background-toggle" (click)="cycleBackground()">
       Background: {{ currentBackground.label }}

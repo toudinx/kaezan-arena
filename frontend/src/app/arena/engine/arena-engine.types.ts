@@ -45,6 +45,9 @@ export interface ArenaActorState {
   maxHp: number;
   shield?: number;
   maxShield?: number;
+  attackElement?: string | null;
+  weakTo?: string | null;
+  resistantTo?: string | null;
 }
 
 export type MobArchetypeValue = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13;
@@ -116,6 +119,8 @@ export interface DamageNumberInstance {
   spawnOrder: number;
   elapsedMs: number;
   durationMs: number;
+  isWeaknessHit?: boolean;
+  isResistanceHit?: boolean;
 }
 
 export interface QueuedDamageNumberInstance {
@@ -237,6 +242,8 @@ export interface ArenaDamageNumberEvent {
   shieldDamageAmount?: number;
   hpDamageAmount?: number;
   elementType?: ElementTypeValue;
+  isWeaknessHit?: boolean;
+  isResistanceHit?: boolean;
 }
 
 export interface ArenaCritTextEvent {

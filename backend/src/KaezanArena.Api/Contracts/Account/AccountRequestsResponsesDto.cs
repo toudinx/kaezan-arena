@@ -44,3 +44,10 @@ public sealed record EquipSigilRequestDto(
 public sealed record UnequipSigilRequestDto(
     string CharacterId,
     int SlotIndex);
+
+public sealed record EnchantWeaponRequestDto(
+    string AccountId,
+    string CharacterId,
+    string WeaponInstanceId,
+    string Slot,
+    string MaterialId);

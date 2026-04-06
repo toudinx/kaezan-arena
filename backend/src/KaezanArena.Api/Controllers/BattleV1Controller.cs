@@ -235,6 +235,7 @@ public sealed class BattleV1Controller : ControllerBase
             GroundTargetPos: snapshot.GroundTargetPos,
             AssistConfig: snapshot.AssistConfig,
             RangedConfig: snapshot.RangedConfig,
+            DailyElement: snapshot.DailyElement,
             PlayerBaseElement: snapshot.PlayerBaseElement,
             WeaponElement: snapshot.WeaponElement,
             Decals: snapshot.Decals,
@@ -249,7 +250,9 @@ public sealed class BattleV1Controller : ControllerBase
             ZoneIndex: snapshot.ZoneIndex,
             UltimateGauge: snapshot.UltimateGauge,
             UltimateGaugeMax: snapshot.UltimateGaugeMax,
-            UltimateReady: snapshot.UltimateReady);
+            UltimateReady: snapshot.UltimateReady,
+            ArenaType: snapshot.ArenaType,
+            ArenaDisplayName: snapshot.ArenaDisplayName);
     }
 
     private BattleStepResponseDto ToStepResponse(BattleSnapshot snapshot)
@@ -290,6 +293,7 @@ public sealed class BattleV1Controller : ControllerBase
             GroundTargetPos: snapshot.GroundTargetPos,
             AssistConfig: snapshot.AssistConfig,
             RangedConfig: snapshot.RangedConfig,
+            DailyElement: snapshot.DailyElement,
             PlayerBaseElement: snapshot.PlayerBaseElement,
             WeaponElement: snapshot.WeaponElement,
             Decals: snapshot.Decals,
@@ -306,7 +310,9 @@ public sealed class BattleV1Controller : ControllerBase
             ZoneIndex: snapshot.ZoneIndex,
             UltimateGauge: snapshot.UltimateGauge,
             UltimateGaugeMax: snapshot.UltimateGaugeMax,
-            UltimateReady: snapshot.UltimateReady);
+            UltimateReady: snapshot.UltimateReady,
+            ArenaType: snapshot.ArenaType,
+            ArenaDisplayName: snapshot.ArenaDisplayName);
     }
 
     private ApiErrorDto BuildValidationError(string message)
