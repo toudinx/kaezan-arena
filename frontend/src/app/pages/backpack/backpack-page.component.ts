@@ -66,6 +66,8 @@ export class BackpackPageComponent implements OnInit {
   activeInventoryTab: BackpackInventoryTab = "weapon";
   selectedSigilTierFilter: SigilTierKey | "all" = "all";
   selectedSigilInstanceId: string | null = null;
+  sigilCurrentPage = 0;
+  readonly sigilPageSize = 5;
 
   constructor(private readonly accountStore: AccountStore) {}
 
@@ -269,12 +271,45 @@ export class BackpackPageComponent implements OnInit {
     }));
   }
 
-  get visibleSigilTierBuckets(): ReadonlyArray<SigilTierBucket> {
+  get filteredSigilEntries(): ReadonlyArray<SigilInventoryEntry> {
     if (this.selectedSigilTierFilter === "all") {
-      return this.sigilTierBuckets;
+      return this.sigilEntries;
     }
 
-    return this.sigilTierBuckets.filter((tier) => tier.key === this.selectedSigilTierFilter);
+    const tier = SIGIL_TIERS.find((candidate) => candidate.key === this.selectedSigilTierFilter);
+    if (!tier) {
+      return [];
+    }
+
+    return this.sigilEntries.filter((entry) => entry.sigilLevel >= tier.minLevel && entry.sigilLevel <= tier.maxLevel);
+  }
+
+  get pagedSigilEntries(): ReadonlyArray<SigilInventoryEntry> {
+    const start = this.sigilCurrentPage * this.sigilPageSize;
+    return this.filteredSigilEntries.slice(start, start + this.sigilPageSize);
+  }
+
+  get sigilPageCount(): number {
+    const total = this.filteredSigilEntries.length;
+    return total > 0 ? Math.ceil(total / this.sigilPageSize) : 1;
+  }
+
+  get sigilPageNumber(): number {
+    return this.sigilCurrentPage + 1;
+  }
+
+  get visibleSigilTierBuckets(): ReadonlyArray<SigilTierBucket> {
+    const buckets = this.selectedSigilTierFilter === "all"
+      ? this.sigilTierBuckets
+      : this.sigilTierBuckets.filter((tier) => tier.key === this.selectedSigilTierFilter);
+    const pagedInstanceIds = new Set(this.pagedSigilEntries.map((entry) => entry.instanceId));
+
+    return buckets
+      .map((bucket) => ({
+        ...bucket,
+        items: bucket.items.filter((entry) => pagedInstanceIds.has(entry.instanceId))
+      }))
+      .filter((bucket) => bucket.items.length > 0);
   }
 
   get hasAnySigils(): boolean {
@@ -282,16 +317,17 @@ export class BackpackPageComponent implements OnInit {
   }
 
   get visibleSigilCount(): number {
-    return this.visibleSigilTierBuckets.reduce((sum, bucket) => sum + bucket.items.length, 0);
+    return this.filteredSigilEntries.length;
   }
 
   get selectedSigil(): SigilInventoryEntry | null {
-    const selected = this.sigilEntries.find((entry) => entry.instanceId === this.selectedSigilInstanceId) ?? null;
+    const visibleSigils = this.visibleSigilTierBuckets.flatMap((tier) => tier.items);
+    const selected = visibleSigils.find((entry) => entry.instanceId === this.selectedSigilInstanceId) ?? null;
     if (selected) {
       return selected;
     }
 
-    return this.sigilEntries[0] ?? null;
+    return visibleSigils[0] ?? null;
   }
 
   get frameEyebrow(): string {
@@ -344,9 +380,8 @@ export class BackpackPageComponent implements OnInit {
 
   setInventoryTab(tab: BackpackInventoryTab): void {
     this.activeInventoryTab = tab;
-    if (tab === "sigil") {
-      this.ensureSelectedSigil();
-    }
+    this.sigilCurrentPage = 0;
+    if (tab === "sigil") this.ensureSelectedSigil();
   }
 
   isInventoryTabActive(tab: BackpackInventoryTab): boolean {
@@ -355,6 +390,7 @@ export class BackpackPageComponent implements OnInit {
 
   setSigilTierFilter(filter: SigilTierKey | "all"): void {
     this.selectedSigilTierFilter = filter;
+    this.sigilCurrentPage = 0;
     this.ensureSelectedSigil();
   }
 
@@ -364,6 +400,24 @@ export class BackpackPageComponent implements OnInit {
 
   selectSigil(instanceId: string): void {
     this.selectedSigilInstanceId = instanceId;
+  }
+
+  prevSigilPage(): void {
+    if (this.sigilCurrentPage <= 0) {
+      return;
+    }
+
+    this.sigilCurrentPage -= 1;
+    this.ensureSelectedSigil();
+  }
+
+  nextSigilPage(): void {
+    if (this.sigilCurrentPage >= this.sigilPageCount - 1) {
+      return;
+    }
+
+    this.sigilCurrentPage += 1;
+    this.ensureSelectedSigil();
   }
 
   trackSigilByInstanceId(_index: number, sigil: SigilInventoryEntry): string {
@@ -383,6 +437,7 @@ export class BackpackPageComponent implements OnInit {
   }
 
   private ensureSelectedSigil(): void {
+    this.sigilCurrentPage = this.clampSigilPage(this.sigilCurrentPage);
     const visibleSigils = this.visibleSigilTierBuckets.flatMap((tier) => tier.items);
     if (visibleSigils.length === 0) {
       this.selectedSigilInstanceId = null;
@@ -392,6 +447,11 @@ export class BackpackPageComponent implements OnInit {
     if (!this.selectedSigilInstanceId || !visibleSigils.some((entry) => entry.instanceId === this.selectedSigilInstanceId)) {
       this.selectedSigilInstanceId = visibleSigils[0].instanceId;
     }
+  }
+
+  private clampSigilPage(value: number): number {
+    const maxPage = Math.max(0, this.sigilPageCount - 1);
+    return Math.min(Math.max(0, value), maxPage);
   }
 
   private get sigilUsageByInstanceId(): Readonly<Record<string, {

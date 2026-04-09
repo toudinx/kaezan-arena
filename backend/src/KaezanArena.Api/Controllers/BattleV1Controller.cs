@@ -41,7 +41,7 @@ public sealed class BattleV1Controller : ControllerBase
         }
 
         var resolvedSeed = request.SeedOverride ?? request.Seed;
-        var snapshot = _battleStore.StartBattle(request.ArenaId, request.PlayerId, resolvedSeed, zoneIndex);
+        var snapshot = _battleStore.StartBattle(request.ArenaId ?? string.Empty, request.PlayerId, resolvedSeed, zoneIndex);
         return Ok(ToStartResponse(snapshot));
     }
 

@@ -27,6 +27,13 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         MobArchetype.RangedMuddy,
         MobArchetype.MeleeSlug
     ];
+    private static readonly MobArchetype[] EliteCommanderPool =
+    [
+        MobArchetype.EliteMaskedOrc,
+        MobArchetype.ElitePumpkinDude,
+        MobArchetype.EliteDoc,
+        MobArchetype.EliteIceZombie,
+    ];
     // Offensive priority for the Assist: ExoriMas -> Exori -> ExoriMin.
     // Ultimate auto-cast is handled separately by the Ultimate gauge.
     // Heal and Guard are excluded — defensive survivability is now passive-card-only.
@@ -79,6 +86,11 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             [MobArchetype.RangedSwampy]      = ArenaConfig.SpeciesIds.RangedSwampy,
             [MobArchetype.RangedMuddy]       = ArenaConfig.SpeciesIds.RangedMuddy,
             [MobArchetype.MeleeSlug]         = ArenaConfig.SpeciesIds.MeleeSlug,
+            [MobArchetype.EliteMaskedOrc]    = ArenaConfig.SpeciesIds.EliteMaskedOrc,
+            [MobArchetype.ElitePumpkinDude]  = ArenaConfig.SpeciesIds.ElitePumpkinDude,
+            [MobArchetype.EliteDoc]          = ArenaConfig.SpeciesIds.EliteDoc,
+            [MobArchetype.EliteIceZombie]    = ArenaConfig.SpeciesIds.EliteIceZombie,
+            [MobArchetype.Mimic]             = "mimic",
         };
     private static readonly IReadOnlySet<string> IncompatibleCardPairs =
         new HashSet<string>(StringComparer.Ordinal)
@@ -391,7 +403,76 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                 AbilityFxId: "",
                 AttackElement: ElementType.Earth,
                 WeakTo: ElementType.Fire,
-                ResistantTo: ElementType.Earth)
+                ResistantTo: ElementType.Earth),
+            [MobArchetype.EliteMaskedOrc] = new(
+                MaxHp: ArenaConfig.EliteMaskedOrcMaxHp,
+                MoveCooldownMs: ArenaConfig.EliteMaskedOrcMoveCooldownMs,
+                AutoAttackRangeTiles: ArenaConfig.EliteMaskedOrcAutoAttackRangeTiles,
+                AutoAttackDamage: ArenaConfig.EliteMaskedOrcAutoAttackDamage,
+                AutoAttackCooldownMs: ArenaConfig.EliteMaskedOrcAutoAttackCooldownMs,
+                AbilityDamage: ArenaConfig.EliteMaskedOrcAbilityDamage,
+                AbilityRangeTiles: ArenaConfig.EliteMaskedOrcAbilityRangeTiles,
+                AbilityCooldownMs: ArenaConfig.EliteMaskedOrcAbilityCooldownMs,
+                AbilityFxId: "",
+                AttackElement: ElementType.Physical,
+                WeakTo: ElementType.Ice,
+                ResistantTo: ElementType.Physical,
+                IsEliteCommander: true),
+            [MobArchetype.ElitePumpkinDude] = new(
+                MaxHp: ArenaConfig.ElitePumpkinDudeMaxHp,
+                MoveCooldownMs: ArenaConfig.ElitePumpkinDudeMoveCooldownMs,
+                AutoAttackRangeTiles: ArenaConfig.ElitePumpkinDudeAutoAttackRangeTiles,
+                AutoAttackDamage: ArenaConfig.ElitePumpkinDudeAutoAttackDamage,
+                AutoAttackCooldownMs: ArenaConfig.ElitePumpkinDudeAutoAttackCooldownMs,
+                AbilityDamage: ArenaConfig.ElitePumpkinDudeAbilityDamage,
+                AbilityRangeTiles: ArenaConfig.ElitePumpkinDudeAbilityRangeTiles,
+                AbilityCooldownMs: ArenaConfig.ElitePumpkinDudeAbilityCooldownMs,
+                AbilityFxId: "",
+                AttackElement: ElementType.Fire,
+                WeakTo: ElementType.Ice,
+                ResistantTo: ElementType.Earth,
+                IsEliteCommander: true),
+            [MobArchetype.EliteDoc] = new(
+                MaxHp: ArenaConfig.EliteDocMaxHp,
+                MoveCooldownMs: ArenaConfig.EliteDocMoveCooldownMs,
+                AutoAttackRangeTiles: ArenaConfig.EliteDocAutoAttackRangeTiles,
+                AutoAttackDamage: ArenaConfig.EliteDocAutoAttackDamage,
+                AutoAttackCooldownMs: ArenaConfig.EliteDocAutoAttackCooldownMs,
+                AbilityDamage: ArenaConfig.EliteDocAbilityDamage,
+                AbilityRangeTiles: ArenaConfig.EliteDocAbilityRangeTiles,
+                AbilityCooldownMs: ArenaConfig.EliteDocAbilityCooldownMs,
+                AbilityFxId: "",
+                AttackElement: ElementType.Earth,
+                WeakTo: ElementType.Fire,
+                ResistantTo: ElementType.Physical,
+                IsEliteCommander: true),
+            [MobArchetype.EliteIceZombie] = new(
+                MaxHp: ArenaConfig.EliteIceZombieMaxHp,
+                MoveCooldownMs: ArenaConfig.EliteIceZombieMoveCooldownMs,
+                AutoAttackRangeTiles: ArenaConfig.EliteIceZombieAutoAttackRangeTiles,
+                AutoAttackDamage: ArenaConfig.EliteIceZombieAutoAttackDamage,
+                AutoAttackCooldownMs: ArenaConfig.EliteIceZombieAutoAttackCooldownMs,
+                AbilityDamage: ArenaConfig.EliteIceZombieAbilityDamage,
+                AbilityRangeTiles: ArenaConfig.EliteIceZombieAbilityRangeTiles,
+                AbilityCooldownMs: ArenaConfig.EliteIceZombieAbilityCooldownMs,
+                AbilityFxId: "",
+                AttackElement: ElementType.Ice,
+                WeakTo: ElementType.Energy,
+                ResistantTo: ElementType.Fire,
+                IsEliteCommander: true),
+            [MobArchetype.Mimic] = new(
+                MaxHp: ArenaConfig.MimicConfig.Hp,
+                MoveCooldownMs: 0,
+                AutoAttackRangeTiles: 1,
+                AutoAttackDamage: ArenaConfig.MimicConfig.AutoAttackDamage,
+                AutoAttackCooldownMs: ArenaConfig.MimicConfig.AutoAttackCooldownMs,
+                AbilityDamage: 0,
+                AbilityRangeTiles: 0,
+                AbilityCooldownMs: 0,
+                AbilityFxId: "",
+                AttackElement: ElementType.Physical,
+                WeakTo: ElementType.Physical,
+                ResistantTo: ElementType.Physical),
         };
     private static readonly IReadOnlyDictionary<MobArchetype, IMobBehavior> MobBehaviors =
         new Dictionary<MobArchetype, IMobBehavior>
@@ -408,7 +489,11 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             [MobArchetype.RangedImp]       = new RangedImpBehavior(),
             [MobArchetype.RangedSwampy]    = new RangedSwampyBehavior(),
             [MobArchetype.RangedMuddy]     = new RangedMuddyBehavior(),
-            [MobArchetype.MeleeSlug]       = new MeleeSlugBehavior()
+            [MobArchetype.MeleeSlug]         = new MeleeSlugBehavior(),
+            [MobArchetype.EliteMaskedOrc]    = new EliteGreedyMeleeBehavior(),
+            [MobArchetype.ElitePumpkinDude]  = new EliteGreedyMeleeBehavior(),
+            [MobArchetype.EliteDoc]          = new EliteGreedyMeleeBehavior(),
+            [MobArchetype.EliteIceZombie]    = new EliteGreedyMeleeBehavior(),
         };
 
     public InMemoryBattleStore(int? stepDeltaMs = null, IAccountStateStore? accountStateStore = null)
@@ -429,7 +514,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         var poiRng = new Random(GeneratePoiSeed(resolvedSeed));
         var bestiaryRng = new Random(GenerateBestiarySeed(resolvedSeed));
         var critRng = new Random(GenerateCritSeed(resolvedSeed));
-        var mobSlots = BuildMobSlots();
+        var mobSlots = BuildMobSlots(resolvedSeed);
         var bestiary = BuildInitialBestiaryEntries(mobSlots, bestiaryRng);
         var resolvedPlayerClassId = ResolvePlayerClassId(normalizedPlayer);
         var elementalArenaDef = ArenaConfig.ElementalArenaConfig.TryResolveArena(normalizedArena);
@@ -656,6 +741,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         TickPois(state, events);
         TickBuffs(state);
         MaintainEliteCommanderBuffs(state, events);
+        TickEliteDocRegen(state, events);
 
         var pendingLifeLeechHeal = 0;
         var hasExplicitFacingCommand = false;
@@ -693,6 +779,16 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         if (!IsDefeat(state))
         {
             ApplyMobAutoAttacks(state, events);
+        }
+
+        if (!IsDefeat(state))
+        {
+            TickMimicCombat(state, events);
+        }
+
+        if (!IsDefeat(state))
+        {
+            TickBossSystem(state, events);
         }
 
         if (!state.IsRunEnded)
@@ -804,12 +900,17 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         return true;
     }
 
-    private static Dictionary<int, MobSlotState> BuildMobSlots()
+    private static Dictionary<int, MobSlotState> BuildMobSlots(int battleSeed)
     {
+        var shuffleRng = new Random(battleSeed);
+        var shuffled = SpawnArchetypeCycle
+            .OrderBy(_ => shuffleRng.Next())
+            .ToArray();
+
         var slots = new Dictionary<int, MobSlotState>();
         for (var slotIndex = 1; slotIndex <= ArenaConfig.MaxAliveMobs; slotIndex += 1)
         {
-            var archetype = SpawnArchetypeCycle[(slotIndex - 1) % SpawnArchetypeCycle.Length];
+            var archetype = shuffled[(slotIndex - 1) % shuffled.Length];
             slots[slotIndex] = new MobSlotState(
                 slotIndex: slotIndex,
                 actorId: BuildMobActorId(slotIndex),
@@ -1833,8 +1934,14 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         var candidateTiles = preferredRingTiles.Count > 0 ? preferredRingTiles : freeTiles;
         var tileIndex = NextIntFromBattleRng(state, candidateTiles.Count);
         var tile = candidateTiles[tileIndex];
+        if (slot.IsEliteSlot)
+        {
+            var eliteIndex = NextIntFromBattleRng(state, EliteCommanderPool.Length);
+            slot.Archetype = EliteCommanderPool[eliteIndex];
+        }
+
         var config = GetMobConfig(slot.Archetype);
-        var spawnAsElite = ShouldSpawnEliteForSlot(state, slot);
+        var spawnAsElite = slot.IsEliteSlot || ShouldSpawnEliteForSlot(state, slot);
         var maxHp = ResolveScaledMobMaxHp(state, config, spawnAsElite);
         if (ShouldApplyElementBonus(state, config.AttackElement))
         {
@@ -1870,7 +1977,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         var spawnedMob = state.Actors[slot.ActorId];
         slot.AttackCooldownRemainingMs = RollInitialAutoAttackCooldownMs(
             state,
-            ResolveMobAutoAttackCooldownMs(config, spawnedMob));
+            ResolveMobAutoAttackCooldownMs(config, spawnedMob, state));
         slot.AbilityCooldownRemainingMs = 0;
         slot.MoveCooldownRemainingMs = 0;
         slot.CommitTicksRemaining = 0;
@@ -2021,6 +2128,13 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             return lockedTarget;
         }
 
+        // Active boss gets priority over regular mobs
+        var boss = state.Actors.Values.FirstOrDefault(actor => actor.Kind == "boss" && actor.Hp > 0);
+        if (boss is not null)
+        {
+            return boss;
+        }
+
         return state.Actors.Values
             .Where(actor => actor.Kind == "mob")
             .OrderBy(actor => ComputeChebyshevDistance(actor, player.TileX, player.TileY))
@@ -2112,7 +2226,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                 config.AttackElement,
                 attacker: liveMob,
                 isRangedAutoAttack: config.AutoAttackRangeTiles > 1);
-            slot.AttackCooldownRemainingMs = ResolveMobAutoAttackCooldownMs(config, liveMob);
+            slot.AttackCooldownRemainingMs = ResolveMobAutoAttackCooldownMs(config, liveMob, state);
             SetRangedCommitWindowIfNeeded(slot);
             if (IsDefeat(state))
             {
@@ -2735,7 +2849,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
     {
         var tileSet = new HashSet<(int TileX, int TileY)>(tiles.Where(tile => IsInBounds(tile.TileX, tile.TileY)));
         return state.Actors.Values
-            .Where(actor => actor.Kind == "mob" && tileSet.Contains((actor.TileX, actor.TileY)))
+            .Where(actor => (actor.Kind == "mob" || actor.Kind == "boss") && tileSet.Contains((actor.TileX, actor.TileY)))
             .OrderBy(actor => actor.ActorId, StringComparer.Ordinal)
             .Select(actor => actor.ActorId);
     }
@@ -3006,7 +3120,29 @@ public sealed partial class InMemoryBattleStore : IBattleStore
 
         var isWeaknessHit = false;
         var isResistanceHit = false;
-        if (mob.MobType is MobArchetype mobArchetypeForElem && MobConfigs.TryGetValue(mobArchetypeForElem, out var mobElemConfig))
+        if (string.Equals(mob.Kind, "boss", StringComparison.Ordinal))
+        {
+            // Boss has physical resistance; also track elemental weakness/resistance from its BossDef
+            var bossDef = ArenaConfig.BossConfig.TryResolveBossById(mob.ActorId);
+            if (bossDef is not null)
+            {
+                float bossMult;
+                if (element == ElementType.Physical)
+                {
+                    bossMult = ArenaConfig.BossConfig.PhysicalResistance;
+                    isResistanceHit = true;
+                }
+                else
+                {
+                    bossMult = ResolveElementalModifier(element, bossDef.WeakTo, ElementType.Physical);
+                    if (bossMult > 1.0f) isWeaknessHit = true;
+                    else if (bossMult < 1.0f) isResistanceHit = true;
+                }
+                if (bossMult != 1.0f)
+                    remainingDamage = Math.Max(1, (int)Math.Round(remainingDamage * bossMult));
+            }
+        }
+        else if (mob.MobType is MobArchetype mobArchetypeForElem && MobConfigs.TryGetValue(mobArchetypeForElem, out var mobElemConfig))
         {
             var elementalMult = ResolveElementalModifier(element, mobElemConfig.WeakTo, mobElemConfig.ResistantTo);
             if (elementalMult > 1.0f)
@@ -3015,6 +3151,12 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                 isResistanceHit = true;
             if (elementalMult != 1.0f)
                 remainingDamage = Math.Max(1, (int)Math.Round(remainingDamage * elementalMult));
+        }
+
+        if (GetBuffingEliteArchetype(state, mob) == MobArchetype.EliteIceZombie)
+        {
+            remainingDamage = ApplyPercentReduction(remainingDamage, ArenaConfig.EliteCommanderDamageReductionPercent);
+            remainingDamage = Math.Max(1, remainingDamage);
         }
 
         var absorbed = 0;
@@ -3070,6 +3212,12 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             return hpDamageApplied;
         }
 
+        if (string.Equals(mob.Kind, "boss", StringComparison.Ordinal))
+        {
+            OnBossDeath(state, events, mob);
+            return hpDamageApplied;
+        }
+
         if (mob.BuffSourceEliteId is string sourceEliteId)
         {
             TryRemoveEliteCommanderBuffFromMob(mob, sourceEliteId, events);
@@ -3080,12 +3228,17 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             RemoveEliteCommanderBuffs(state, mob.ActorId, events);
         }
 
-        EmitDeathEvent(state, events, mob, element, attacker?.ActorId);
+        EmitDeathEvent(state, events, mob, element, attacker?.ActorId, mob.IsMimic ? "mimic" : null);
         if (mob.IsElite && mob.MobType is MobArchetype eliteMobType)
         {
             events.Add(new EliteDiedEventDto(
                 EliteEntityId: mob.ActorId,
                 MobType: eliteMobType));
+        }
+
+        if (mob.IsMimic)
+        {
+            TryOfferCardChoice(state, events, CardOfferSource.Chest);
         }
 
         events.Add(new AttackFxEventDto(
@@ -3143,11 +3296,12 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         List<BattleEventDto> events,
         StoredActor entity,
         ElementType? elementType,
-        string? killerEntityId)
+        string? killerEntityId,
+        string? entityTypeOverride = null)
     {
         events.Add(new DeathEventDto(
             EntityId: entity.ActorId,
-            EntityType: entity.Kind,
+            EntityType: entityTypeOverride ?? entity.Kind,
             MobType: entity.MobType,
             TileX: entity.TileX,
             TileY: entity.TileY,
@@ -3673,6 +3827,17 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             return true;
         }
 
+        // Boss defeated victory
+        if (state.BossSpawned)
+        {
+            var bossActor = state.Actors.Values.FirstOrDefault(actor => actor.Kind == "boss");
+            if (bossActor is not null && bossActor.Hp <= 0)
+            {
+                EndRun(state, events, ArenaConfig.RunEndReasonVictoryBoss);
+                return true;
+            }
+        }
+
         var nowMs = GetElapsedMsForTick(state.Tick);
         if (nowMs >= ArenaConfig.RunDurationMs)
         {
@@ -3690,9 +3855,12 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             return;
         }
 
-        var resolvedReason = string.Equals(runEndReason, ArenaConfig.RunEndReasonDefeatDeath, StringComparison.Ordinal)
-            ? ArenaConfig.RunEndReasonDefeatDeath
-            : ArenaConfig.RunEndReasonVictoryTime;
+        var resolvedReason = runEndReason switch
+        {
+            ArenaConfig.RunEndReasonDefeatDeath => ArenaConfig.RunEndReasonDefeatDeath,
+            ArenaConfig.RunEndReasonVictoryBoss => ArenaConfig.RunEndReasonVictoryBoss,
+            _ => ArenaConfig.RunEndReasonVictoryTime
+        };
         var endedAtMs = GetElapsedMsForTick(state.Tick);
         state.IsRunEnded = true;
         state.RunEndReason = resolvedReason;
@@ -4036,7 +4204,8 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         string AbilityFxId,
         ElementType AttackElement,
         ElementType WeakTo,
-        ElementType ResistantTo);
+        ElementType ResistantTo,
+        bool IsEliteCommander = false);
 
     private sealed class MeleeBruteBehavior : IMobBehavior
     {
@@ -4507,6 +4676,47 @@ public sealed partial class InMemoryBattleStore : IBattleStore
     }
 
     private sealed class MeleeSlugBehavior : IMobBehavior
+    {
+        public bool TryChooseMove(
+            StoredBattle state,
+            StoredActor mob,
+            StoredActor player,
+            MobSlotState slot,
+            MobArchetypeConfig config,
+            out (int TileX, int TileY)? destination)
+        {
+            if (IsAdjacent(mob, player))
+            {
+                destination = null;
+                return false;
+            }
+
+            return TryGetFirstWalkableGreedyStepTowardTarget(state, mob, player.TileX, player.TileY, out destination);
+        }
+
+        public bool CanAutoAttack(
+            StoredBattle state,
+            StoredActor mob,
+            StoredActor player,
+            MobSlotState slot,
+            MobArchetypeConfig config)
+        {
+            return IsAdjacent(mob, player);
+        }
+
+        public bool TryCastAbility(
+            StoredBattle state,
+            StoredActor mob,
+            StoredActor player,
+            MobSlotState slot,
+            MobArchetypeConfig config,
+            List<BattleEventDto> events)
+        {
+            return false;
+        }
+    }
+
+    private sealed class EliteGreedyMeleeBehavior : IMobBehavior
     {
         public bool TryChooseMove(
             StoredBattle state,
@@ -5202,6 +5412,18 @@ public sealed partial class InMemoryBattleStore : IBattleStore
 
         public int ChestsSpawned { get; set; }
 
+        public int MimicAttackCooldownRemainingMs { get; set; }
+
+        public bool BossSpawned { get; set; }
+
+        public long MobSpawnPausedUntilMs { get; set; }
+
+        public int BossAttackCooldownRemainingMs { get; set; }
+
+        public int BossAbilityCooldownRemainingMs { get; set; }
+
+        public int BossMoveCooldownRemainingMs { get; set; }
+
         public int PlayerMoveCooldownRemainingMs { get; set; }
 
         public int PlayerAttackCooldownRemainingMs { get; set; }
@@ -5409,12 +5631,14 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             int maxHp,
             int shield,
             int maxShield,
-            int? mobSlotIndex)
+            int? mobSlotIndex,
+            bool isMimic = false)
         {
             ActorId = actorId;
             Kind = kind;
             MobType = mobType;
             IsElite = isElite;
+            IsMimic = isMimic;
             BuffSourceEliteId = buffSourceEliteId;
             FacingDirection = NormalizeDirection(facingDirection) ?? ArenaConfig.FacingUp;
             TileX = tileX;
@@ -5433,6 +5657,8 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         public MobArchetype? MobType { get; }
 
         public bool IsElite { get; }
+
+        public bool IsMimic { get; }
 
         public string? BuffSourceEliteId { get; set; }
 
@@ -5616,7 +5842,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
 
         public string Kind { get; }
 
-        public MobArchetype Archetype { get; }
+        public MobArchetype Archetype { get; set; }
 
         public bool IsEliteSlot { get; }
 

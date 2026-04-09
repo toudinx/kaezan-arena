@@ -1135,6 +1135,78 @@
   white-space: nowrap;
 }
 
+/* Boss HP bar */
+.boss-hud {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.22rem 0.6rem;
+  background: #100c16;
+  border-bottom: 1px solid #4a1b6e;
+}
+
+.boss-hud__name {
+  flex: 0 0 auto;
+  color: #e879f9;
+  font-size: 0.6rem;
+  font-weight: 600;
+  white-space: nowrap;
+  min-width: 5rem;
+}
+
+.boss-hud__track {
+  flex: 1;
+  height: 0.42rem;
+  background: #2d1a3e;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.boss-hud__fill {
+  height: 100%;
+  background: linear-gradient(90deg, #c026d3, #e879f9);
+  border-radius: 999px;
+  transition: width 80ms linear;
+}
+
+.boss-hud__value {
+  flex: 0 0 auto;
+  color: #e879f9;
+  font-size: 0.55rem;
+  white-space: nowrap;
+  min-width: 3.5rem;
+  text-align: right;
+}
+
+/* Boss appeared overlay */
+.boss-appeared-overlay {
+  position: absolute;
+  top: 30%;
+  left: 50%;
+  transform: translateX(-50%);
+  pointer-events: none;
+  z-index: 50;
+  animation: boss-appeared-fade 2000ms ease-out both;
+}
+
+.boss-appeared-overlay__text {
+  display: block;
+  color: #e879f9;
+  font-size: 1.4rem;
+  font-weight: 800;
+  text-align: center;
+  text-shadow: 0 0 16px #a21caf, 0 2px 4px #000;
+  white-space: nowrap;
+  letter-spacing: 0.06em;
+}
+
+@keyframes boss-appeared-fade {
+  0%   { opacity: 0; transform: translateX(-50%) scale(0.8); }
+  15%  { opacity: 1; transform: translateX(-50%) scale(1.05); }
+  70%  { opacity: 1; transform: translateX(-50%) scale(1); }
+  100% { opacity: 0; transform: translateX(-50%) scale(1); }
+}
+
 .canvas-container {
   flex: 1;
   min-height: 0;

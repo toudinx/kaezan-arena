@@ -85,11 +85,21 @@ public sealed partial class InMemoryBattleStore
             return false;
         }
 
-        var isOccupied = state.Actors.Values.Any(actor =>
+        var isOccupiedByActor = state.Actors.Values.Any(actor =>
             !string.Equals(actor.ActorId, mob.ActorId, StringComparison.Ordinal) &&
             actor.TileX == destination.TileX &&
             actor.TileY == destination.TileY);
-        return !isOccupied;
+        if (isOccupiedByActor)
+        {
+            return false;
+        }
+
+        var nowMs = GetElapsedMsForTick(state.Tick);
+        var isOccupiedByPoi = state.Pois.Values.Any(poi =>
+            poi.ExpiresAtMs > nowMs &&
+            poi.TileX == destination.TileX &&
+            poi.TileY == destination.TileY);
+        return !isOccupiedByPoi;
     }
 
     private static bool TryMoveMobToTile(StoredBattle state, StoredActor mob, (int TileX, int TileY)? destination)

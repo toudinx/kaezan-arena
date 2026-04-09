@@ -157,6 +157,14 @@
                 }
               }
             </div>
+
+            @if (visibleSigilCount > sigilPageSize) {
+              <div class="backpack-page__sigil-pagination">
+                <button type="button" [disabled]="sigilCurrentPage === 0" (click)="prevSigilPage()">Previous</button>
+                <span>Page {{ sigilPageNumber }} / {{ sigilPageCount }}</span>
+                <button type="button" [disabled]="sigilCurrentPage >= sigilPageCount - 1" (click)="nextSigilPage()">Next</button>
+              </div>
+            }
           </section>
 
           <section class="backpack-page__sigil-panel backpack-page__sigil-panel--detail">

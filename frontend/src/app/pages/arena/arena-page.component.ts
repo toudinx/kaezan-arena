@@ -23,10 +23,13 @@ import {
   DecalInstance,
   ArenaScene,
   ArenaSkillState,
-  DamageNumberInstance
+  DamageNumberInstance,
+  MAX_MOB_ARCHETYPE_VALUE,
+  MIN_MOB_ARCHETYPE_VALUE,
+  type MobArchetypeValue
 } from "../../arena/engine/arena-engine.types";
 import { normalizeDecalKind, resolveDecalSemanticId } from "../../arena/engine/decal.helpers";
-import { CanvasLayeredRenderer, type TierAuraConfig } from "../../arena/render/canvas-layered-renderer";
+import { CanvasLayeredRenderer } from "../../arena/render/canvas-layered-renderer";
 import { computeMaxTileSizeForViewport } from "../../arena/render/arena-board-layout.helpers";
 import type { UiWindowPositionChangedEvent } from "../../arena/ui/ui-window.component";
 import {
@@ -252,12 +255,6 @@ const ECONOMY_LOOT_PREVIEW_MAX_ENTRIES = 8;
 const SHIELD_LOW_THRESHOLD_PERCENT = 30;
 const SHIELD_BREAK_PULSE_DURATION_MS = 260;
 const LEVEL_UP_PULSE_DURATION_MS = 760;
-const TIER_AURA: TierAuraConfig = {
-  2: { color: "#50C850", blur: 8, alpha: 0.35 },
-  3: { color: "#508FFF", blur: 12, alpha: 0.45 },
-  4: { color: "#A050FF", blur: 16, alpha: 0.55 },
-  5: { color: "#FFA01E", blur: 22, alpha: 0.65 }
-};
 const CRAFTED_EQUIPMENT_ITEM_IDS = new Set<string>([
   "wpn.primal_forged_blade",
   "arm.primal_forged_mail",
@@ -313,11 +310,7 @@ type BootPhase =
   | "error";
 
 const PLAYER_SPRITE_ASSET_IDS = getPlayerSpriteAssetIdsForPreload();
-
-const DEV_LOG_ASSET_IDS: ReadonlyArray<string> = [
-  "tile.floor.default",
-  "tile.wall.stone",
-  ...PLAYER_SPRITE_ASSET_IDS,
+const MOB_SPRITE_ASSET_IDS: ReadonlyArray<string> = [
   "sprite.mob.slime.idle",
   "sprite.mob.slime.run",
   "sprite.mob.slime.hit",
@@ -333,6 +326,55 @@ const DEV_LOG_ASSET_IDS: ReadonlyArray<string> = [
   "sprite.mob.shaman.idle",
   "sprite.mob.shaman.run",
   "sprite.mob.shaman.hit",
+  "sprite.mob.skeleton.idle",
+  "sprite.mob.skeleton.run",
+  "sprite.mob.skeleton.hit",
+  "sprite.mob.wogol.idle",
+  "sprite.mob.wogol.run",
+  "sprite.mob.wogol.hit",
+  "sprite.mob.warrior.idle",
+  "sprite.mob.warrior.run",
+  "sprite.mob.warrior.hit",
+  "sprite.mob.zombie.idle",
+  "sprite.mob.zombie.run",
+  "sprite.mob.zombie.hit",
+  "sprite.mob.tiny_zombie.idle",
+  "sprite.mob.tiny_zombie.run",
+  "sprite.mob.tiny_zombie.hit",
+  "sprite.mob.imp.idle",
+  "sprite.mob.imp.run",
+  "sprite.mob.imp.hit",
+  "sprite.mob.swampy.idle",
+  "sprite.mob.swampy.run",
+  "sprite.mob.swampy.hit",
+  "sprite.mob.muddy.idle",
+  "sprite.mob.muddy.run",
+  "sprite.mob.muddy.hit",
+  "sprite.mob.slug.idle",
+  "sprite.mob.slug.run",
+  "sprite.mob.slug.hit",
+  "sprite.mob.masked_orc.idle",
+  "sprite.mob.masked_orc.run",
+  "sprite.mob.masked_orc.hit",
+  "sprite.mob.pumpkin_dude.idle",
+  "sprite.mob.pumpkin_dude.run",
+  "sprite.mob.pumpkin_dude.hit",
+  "sprite.mob.doc.idle",
+  "sprite.mob.doc.run",
+  "sprite.mob.doc.hit",
+  "sprite.mob.ice_zombie.idle",
+  "sprite.mob.ice_zombie.run",
+  "sprite.mob.ice_zombie.hit",
+  "sprite.mob.mimic.idle",
+  "sprite.mob.mimic.run",
+  "sprite.mob.mimic.hit"
+];
+
+const DEV_LOG_ASSET_IDS: ReadonlyArray<string> = [
+  "tile.floor.default",
+  "tile.wall.stone",
+  ...PLAYER_SPRITE_ASSET_IDS,
+  ...MOB_SPRITE_ASSET_IDS,
   "fx.hit.small",
   "fx.mob.brute.cleave",
   "fx.mob.archer.power_shot",
@@ -341,6 +383,10 @@ const DEV_LOG_ASSET_IDS: ReadonlyArray<string> = [
   "fx.skill.exori",
   "fx.skill.exori_min",
   "fx.skill.exori_mas",
+  "fx.tier.brave",
+  "fx.tier.awakened",
+  "fx.tier.exalted",
+  "fx.tier.ascendant",
   "ui.hp.frame",
   "ui.cooldown.frame"
 ];
@@ -360,6 +406,13 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   @ViewChild("toolsPanel", { static: false }) private readonly toolsPanelRef?: ElementRef<HTMLElement>;
   @ViewChild("rightInfoPane", { static: false }) private readonly rightInfoPaneRef?: ElementRef<HTMLElement>;
   @ViewChild("statusPanel", { static: false }) private readonly statusPanelRef?: ElementRef<HTMLElement>;
+
+  private readonly ARENA_TILES: Record<string, { floorId: string; wallId: string }> = {
+    'arena:forge_of_ash':  { floorId: 'tile.floor.fire',   wallId: 'tile.wall.banner.red'    },
+    'arena:frozen_vault':  { floorId: 'tile.floor.ice',    wallId: 'tile.wall.banner.blue'   },
+    'arena:grove_of_ruin': { floorId: 'tile.floor.earth',  wallId: 'tile.wall.goo'           },
+    'arena:storm_sanctum': { floorId: 'tile.floor.energy', wallId: 'tile.wall.banner.yellow' },
+  };
 
   fxPreviewUrl = "";
   activeFxCount = 0;
@@ -470,6 +523,12 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   activeZoneIndex = DEFAULT_ZONE_INDEX;
   lastRunRecording: RunRecording | null = null;
   isReplayInProgress = false;
+  bossActive = false;
+  bossDisplayName: string | null = null;
+  bossHp = 0;
+  bossMaxHp = 100;
+  bossAppearedOverlayActive = false;
+  private bossAppearedOverlayTimeoutId: ReturnType<typeof setTimeout> | null = null;
   private expLogSequence = 0;
   private eventFeedSequence = 0;
   private runEndedNarrativeLogged = false;
@@ -677,12 +736,16 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   }
 
   get runCompleteTitle(): string {
-    return this.runEndReason === "victory_time" ? "Victory" : "Defeat";
+    return this.runOutcomeIsVictory ? "Victory" : "Defeat";
   }
 
   get runCompleteReasonText(): string {
     if (this.runEndReason === "victory_time") {
       return "You survived until the time target.";
+    }
+
+    if (this.runEndReason === "victory_boss") {
+      return "You defeated the boss!";
     }
 
     if (this.runEndReason === "defeat_death") {
@@ -739,7 +802,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   }
 
   get runOutcomeIsVictory(): boolean {
-    return this.runEndReason === "victory_time";
+    return this.runEndReason === "victory_time" || this.runEndReason === "victory_boss";
   }
 
   get runDurationFormatted(): string {
@@ -1041,7 +1104,8 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.selectedZoneIndex = this.resolveZoneIndexFromRoute();
     this.selectedArenaId = this.route.snapshot.queryParamMap.get("arenaId");
     this.activeZoneIndex = this.selectedZoneIndex;
-    this.scene = this.engine.createTestScene();
+    const initTheme = this.ARENA_TILES[this.selectedArenaId ?? ''] ?? { floorId: 'tile.floor.default', wallId: 'tile.wall.stone' };
+    this.scene = this.engine.createTestScene(7, 7, 48, initTheme.floorId, initTheme.wallId);
     this.activeFxCount = 0;
     await this.loadAccountState();
 
@@ -1056,7 +1120,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     }
 
     this.canvasContext = context;
-    this.renderer = new CanvasLayeredRenderer(context, TIER_AURA);
+    this.renderer = new CanvasLayeredRenderer(context);
     try {
       await Promise.resolve();
       await this.nextAnimationFrame();
@@ -1070,25 +1134,21 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
 
       this.bootPhase = "preloading_assets";
       const playerSpritePreloads = PLAYER_SPRITE_ASSET_IDS.map((assetId) => this.preloader.preloadAsset(assetId));
+      const mobSpritePreloads = MOB_SPRITE_ASSET_IDS.map((assetId) => this.preloader.preloadAsset(assetId));
       await Promise.all([
         this.preloader.preloadAsset("tile.floor.default"),
         this.preloader.preloadAsset("tile.wall.stone"),
+        this.preloader.preloadAsset("tile.floor.fire"),
+        this.preloader.preloadAsset("tile.floor.ice"),
+        this.preloader.preloadAsset("tile.floor.earth"),
+        this.preloader.preloadAsset("tile.floor.energy"),
+        this.preloader.preloadAsset("tile.wall.goo"),
+        this.preloader.preloadAsset("tile.wall.banner.red"),
+        this.preloader.preloadAsset("tile.wall.banner.blue"),
+        this.preloader.preloadAsset("tile.wall.banner.green"),
+        this.preloader.preloadAsset("tile.wall.banner.yellow"),
         ...playerSpritePreloads,
-        this.preloader.preloadAsset("sprite.mob.slime.idle"),
-        this.preloader.preloadAsset("sprite.mob.slime.run"),
-        this.preloader.preloadAsset("sprite.mob.slime.hit"),
-        this.preloader.preloadAsset("sprite.mob.brute.idle"),
-        this.preloader.preloadAsset("sprite.mob.brute.run"),
-        this.preloader.preloadAsset("sprite.mob.brute.hit"),
-        this.preloader.preloadAsset("sprite.mob.archer.idle"),
-        this.preloader.preloadAsset("sprite.mob.archer.run"),
-        this.preloader.preloadAsset("sprite.mob.archer.hit"),
-        this.preloader.preloadAsset("sprite.mob.demon.idle"),
-        this.preloader.preloadAsset("sprite.mob.demon.run"),
-        this.preloader.preloadAsset("sprite.mob.demon.hit"),
-        this.preloader.preloadAsset("sprite.mob.shaman.idle"),
-        this.preloader.preloadAsset("sprite.mob.shaman.run"),
-        this.preloader.preloadAsset("sprite.mob.shaman.hit"),
+        ...mobSpritePreloads,
         this.preloader.preloadAsset("fx.hit.small"),
         this.preloader.preloadAsset("fx.mob.brute.cleave"),
         this.preloader.preloadAsset("fx.mob.archer.power_shot"),
@@ -1096,7 +1156,11 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         this.preloader.preloadAsset("fx.mob.shaman.storm_pulse"),
         this.preloader.preloadAsset("fx.skill.exori"),
         this.preloader.preloadAsset("fx.skill.exori_min"),
-        this.preloader.preloadAsset("fx.skill.exori_mas")
+        this.preloader.preloadAsset("fx.skill.exori_mas"),
+        this.preloader.preloadAsset("fx.tier.brave"),
+        this.preloader.preloadAsset("fx.tier.awakened"),
+        this.preloader.preloadAsset("fx.tier.exalted"),
+        this.preloader.preloadAsset("fx.tier.ascendant")
       ]);
 
       this.fxPreviewUrl = this.resolver.getFx("hitSmall").url;
@@ -1648,6 +1712,11 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.isRunEnded = false;
     this.runEndReason = null;
     this.runEndedAtMs = null;
+    this.bossActive = false;
+    this.bossDisplayName = null;
+    this.bossHp = 0;
+    this.bossMaxHp = 100;
+    this.bossAppearedOverlayActive = false;
     await this.restartBattle();
   }
 
@@ -1722,6 +1791,11 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.runTotalKills = 0;
     this.runEliteKills = 0;
     this.runChestsOpened = 0;
+    this.bossActive = false;
+    this.bossDisplayName = null;
+    this.bossHp = 0;
+    this.bossMaxHp = 100;
+    this.bossAppearedOverlayActive = false;
     this.currentMobHpMult = 1;
     this.currentMobDmgMult = 1;
     this.scalingNormalHpMult = 1;
@@ -1758,6 +1832,10 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         globalCooldownRemainingMs: 0
       }
     };
+
+    const arenaTheme = this.ARENA_TILES[this.selectedArenaId ?? '']
+      ?? { floorId: 'tile.floor.default', wallId: 'tile.wall.stone' };
+    this.scene = this.engine.createTestScene(7, 7, 48, arenaTheme.floorId, arenaTheme.wallId);
 
     if (!this.canvasReady) {
       this.bootPhase = "measuring_canvas";
@@ -2684,9 +2762,9 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         this.accountState?.activeCharacterId ||
         "player_demo";
       const request: StartBattleRequest & { seedOverride?: number | null } = {
-        arenaId: this.selectedArenaId ?? "arena_demo",
+        arenaId: this.selectedArenaId ?? undefined,
         playerId,
-        zoneIndex: this.selectedArenaId ? undefined : this.selectedZoneIndex
+        zoneIndex: this.selectedZoneIndex ?? 1
       };
       if (typeof seedOverride === "number") {
         request.seed = seedOverride;
@@ -2722,6 +2800,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         this.applyCardChoiceStateFromSnapshot(response);
         this.applyUltimateFromSnapshot(response);
         this.applyZoneFromSnapshot(response);
+        this.applyBossStateFromSnapshot(response);
         this.runResultLogger.startRun({
           battleSeed: this.currentSeed,
           stepDeltaMs: this.stepIntervalMs,
@@ -3031,6 +3110,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   private extractLootSourcesFromSnapshot(response: StepBattleResponse): DropSource[] {
     const events = response.events ?? [];
     const fallbackTick = response.tick ?? this.currentBattleTick;
+    const sourceZoneIndex = this.clampZoneIndex(this.activeZoneIndex);
     const sources: DropSource[] = [];
 
     for (const event of events) {
@@ -3043,17 +3123,38 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       if (eventType === "death") {
         const entityType = this.readString(value["entityType"]);
         const sourceId = this.readString(value["entityId"]);
-        if (!sourceId || entityType !== "mob") {
+        if (!sourceId) {
           continue;
         }
 
-        const tick = this.readNumber(value["tickIndex"]) ?? fallbackTick;
-        sources.push({
-          tick,
-          sourceType: "mob",
-          sourceId,
-          species: mapMobTypeToSpecies(this.readNumber(value["mobType"]))
-        });
+        if (entityType === "mob") {
+          const tick = this.readNumber(value["tickIndex"]) ?? fallbackTick;
+          sources.push({
+            tick,
+            sourceType: "mob",
+            sourceId,
+            species: mapMobTypeToSpecies(this.readNumber(value["mobType"])),
+            zoneIndex: sourceZoneIndex
+          });
+        } else if (entityType === "boss") {
+          const tick = this.readNumber(value["tickIndex"]) ?? fallbackTick;
+          sources.push({
+            tick,
+            sourceType: "mob",
+            sourceId,
+            species: sourceId,
+            zoneIndex: sourceZoneIndex
+          });
+        } else if (entityType === "mimic") {
+          const tick = this.readNumber(value["tickIndex"]) ?? fallbackTick;
+          sources.push({
+            tick,
+            sourceType: "mimic",
+            sourceId,
+            species: null,
+            zoneIndex: sourceZoneIndex
+          });
+        }
         continue;
       }
 
@@ -3068,7 +3169,8 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
           tick: fallbackTick,
           sourceType: "chest",
           sourceId: poiId,
-          species: this.readString(value["species"]) ?? null
+          species: this.readString(value["species"]) ?? null,
+          zoneIndex: sourceZoneIndex
         });
       }
     }
@@ -3192,6 +3294,8 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.updateCardChoicePresentationFromEvents(response.events);
     this.applyUltimateFromSnapshot(response);
     this.applyZoneFromSnapshot(response);
+    this.applyBossStateFromSnapshot(response);
+    this.processBossEventsFromSnapshot(response);
     this.activeFxCount = this.getActiveFxCount(this.scene);
     this.appendDamageLogs(applied.damageNumbers);
     this.appendDamageConsoleLogs(applied.damageNumbers);
@@ -3538,7 +3642,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       const species = this.readString(poi.species) ?? undefined;
       if (
         !poiId ||
-        (type !== "altar" && type !== "chest" && type !== "species_chest") ||
+        (type !== "altar" && type !== "chest" && type !== "species_chest" && type !== "mimic_dormant") ||
         tileX === null ||
         tileY === null ||
         remainingMs === null
@@ -3826,7 +3930,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         continue;
       }
 
-      if (eventType === "elite_spawned" || eventType === "elite_died") {
+      if (eventType === "elite_spawned") {
         const eliteEntityId = this.readString(value["eliteEntityId"]);
         const mobType = this.readMobArchetypeValue(value["mobType"]);
         if (!eliteEntityId || !mobType) {
@@ -3834,7 +3938,22 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         }
 
         mapped.push({
-          type: eventType,
+          type: "elite_spawned",
+          eliteEntityId,
+          mobType
+        });
+        continue;
+      }
+
+      if (eventType === "elite_died") {
+        const eliteEntityId = this.readString(value["eliteEntityId"]);
+        const mobType = this.readMobArchetypeValue(value["mobType"]);
+        if (!eliteEntityId || !mobType) {
+          continue;
+        }
+
+        mapped.push({
+          type: "elite_died",
           eliteEntityId,
           mobType
         });
@@ -3890,6 +4009,25 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
           actorId,
           fromTile: { x: fromX, y: fromY },
           toTile: { x: toX, y: toY }
+        });
+        continue;
+      }
+
+      if (eventType === "mimic_activated") {
+        const actorId = this.readString(value["actorId"]);
+        const tileX = this.readNumber(value["tileX"]);
+        const tileY = this.readNumber(value["tileY"]);
+        const poiId = this.readString(value["poiId"]);
+        if (!actorId || tileX === null || tileY === null || !poiId) {
+          continue;
+        }
+
+        mapped.push({
+          type: "mimic_activated",
+          poiId,
+          actorId,
+          tileX,
+          tileY
         });
         continue;
       }
@@ -4166,6 +4304,52 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     const normalizedZoneIndex = this.clampZoneIndex(parsedZoneIndex);
     this.activeZoneIndex = normalizedZoneIndex;
     this.selectedZoneIndex = normalizedZoneIndex;
+  }
+
+  private applyBossStateFromSnapshot(snapshot: StartBattleResponse | StepBattleResponse): void {
+    const record = snapshot as Record<string, unknown>;
+    const bossActive = this.readBoolean(record["bossActive"]) ?? false;
+    this.bossActive = bossActive;
+    if (bossActive) {
+      const boss = this.readRecord(record["boss"]);
+      if (boss) {
+        this.bossDisplayName = this.readString(boss["displayName"]) ?? this.bossDisplayName;
+        this.bossHp = Math.max(0, Math.floor(this.readNumber(boss["hp"]) ?? this.bossHp));
+        this.bossMaxHp = Math.max(1, Math.floor(this.readNumber(boss["maxHp"]) ?? this.bossMaxHp));
+      }
+    }
+  }
+
+  get bossHpPercent(): number {
+    return this.bossMaxHp > 0 ? (this.bossHp / this.bossMaxHp) * 100 : 0;
+  }
+
+  private processBossEventsFromSnapshot(snapshot: StartBattleResponse | StepBattleResponse): void {
+    const eventsValue = (snapshot as Record<string, unknown>)["events"];
+    if (!Array.isArray(eventsValue)) {
+      return;
+    }
+
+    for (const event of eventsValue) {
+      const eventRecord = event as Record<string, unknown>;
+      const eventType = this.readString(eventRecord["type"]);
+      if (eventType === "boss_spawned") {
+        this.triggerBossAppearedOverlay();
+      }
+    }
+  }
+
+  private triggerBossAppearedOverlay(): void {
+    if (this.bossAppearedOverlayTimeoutId) {
+      clearTimeout(this.bossAppearedOverlayTimeoutId);
+      this.bossAppearedOverlayTimeoutId = null;
+    }
+
+    this.bossAppearedOverlayActive = true;
+    this.bossAppearedOverlayTimeoutId = setTimeout(() => {
+      this.bossAppearedOverlayActive = false;
+      this.bossAppearedOverlayTimeoutId = null;
+    }, 2000);
   }
 
   private applyRunProgressFromSnapshot(snapshot: StartBattleResponse | StepBattleResponse): void {
@@ -5505,6 +5689,11 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.runTotalKills = 0;
     this.runEliteKills = 0;
     this.runChestsOpened = 0;
+    this.bossActive = false;
+    this.bossDisplayName = null;
+    this.bossHp = 0;
+    this.bossMaxHp = 100;
+    this.bossAppearedOverlayActive = false;
     this.isAwaitingCardChoice = false;
     this.pendingCardChoiceId = null;
     this.offeredCards = [];
@@ -5837,11 +6026,8 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
 
   private readMobTierIndex(value: unknown): number {
     const parsed = this.readNumber(value);
-    if (parsed === null) {
-      return DEFAULT_ZONE_INDEX;
-    }
-
-    return this.clampZoneIndex(parsed);
+    if (parsed === null || parsed < 1) return 1;
+    return Math.min(parsed, 5);
   }
 
   private readBoolean(value: unknown): boolean | null {
@@ -5899,10 +6085,14 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     return null;
   }
 
-  private readMobArchetypeValue(value: unknown): 1 | 2 | 3 | 4 | null {
+  private readMobArchetypeValue(value: unknown): MobArchetypeValue | null {
     const numberValue = this.readNumber(value);
-    if (numberValue === 1 || numberValue === 2 || numberValue === 3 || numberValue === 4) {
-      return numberValue;
+    if (
+      numberValue !== null &&
+      numberValue >= MIN_MOB_ARCHETYPE_VALUE &&
+      numberValue <= MAX_MOB_ARCHETYPE_VALUE
+    ) {
+      return numberValue as MobArchetypeValue;
     }
 
     return null;

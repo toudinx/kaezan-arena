@@ -162,9 +162,10 @@ export interface EquipmentDefinition {
 
 export interface DropSource {
   tick: number;
-  sourceType: "mob" | "chest";
+  sourceType: "mob" | "chest" | "mimic";
   sourceId: string;
   species?: string | null;
+  zoneIndex?: number;
 }
 
 export interface DropEvent {
@@ -196,6 +197,7 @@ export interface AccountStateResponse {
 export interface BestiarySpecies {
   speciesId: string;
   displayName: string;
+  category: "common" | "elite" | "boss";
 }
 
 export interface CharacterBestiaryState {

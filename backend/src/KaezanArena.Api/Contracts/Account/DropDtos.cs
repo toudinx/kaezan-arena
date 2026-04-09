@@ -21,4 +21,5 @@ public sealed record DropSourceDto(
     int Tick,
     string SourceType,
     string SourceId,
-    string? Species = null);
+    string? Species = null,
+    int? ZoneIndex = null);

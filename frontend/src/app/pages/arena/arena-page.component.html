@@ -352,6 +352,22 @@
         </div>
       </header>
 
+      @if (bossActive) {
+        <div class="boss-hud">
+          <span class="boss-hud__name">{{ bossDisplayName ?? 'Boss' }}</span>
+          <div class="boss-hud__track">
+            <div class="boss-hud__fill" [style.width.%]="bossHpPercent"></div>
+          </div>
+          <span class="boss-hud__value">{{ bossHp }} / {{ bossMaxHp }}</span>
+        </div>
+      }
+
+      @if (bossAppearedOverlayActive) {
+        <div class="boss-appeared-overlay">
+          <span class="boss-appeared-overlay__text">BOSS APPEARED!</span>
+        </div>
+      }
+
       <div class="canvas-container">
         <div class="canvas-wrap" #canvasViewport>
           <canvas

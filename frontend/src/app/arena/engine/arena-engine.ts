@@ -27,7 +27,7 @@ import {
 } from "./arena-engine.types";
 import { computeDirectionAngleRad, normalizeCombatFxKind } from "./attack-fx.helpers";
 import { planSquareAreaFx, spawnAreaFx, spawnFx, spawnFxPlan, tickFx } from "./fx-spawner";
-import { resolveMobSpriteSemanticId } from "./mob-visuals";
+import { resolveBossSpriteSemanticId, resolveMobSpriteSemanticId } from "./mob-visuals";
 import { resolvePlayerSpriteSemanticId } from "./player-visuals";
 const HIT_VISUAL_DURATION_MS = 200;
 const RUN_VISUAL_DURATION_MS = 300;
@@ -44,6 +44,22 @@ const REWARD_CHOICE_CUE_DURATION_MS = 520;
 const REWARD_CHOSEN_CUE_DURATION_MS = 460;
 const MIN_MOB_TIER_INDEX = 1;
 const MAX_MOB_TIER_INDEX = 5;
+
+export function resolveTierAuraFxId(tierIndex: number): string | null {
+  const normalizedTier = Math.floor(Number.isFinite(tierIndex) ? tierIndex : MIN_MOB_TIER_INDEX);
+  switch (normalizedTier) {
+    case 2:
+      return "fx.tier.brave";
+    case 3:
+      return "fx.tier.awakened";
+    case 4:
+      return "fx.tier.exalted";
+    case 5:
+      return "fx.tier.ascendant";
+    default:
+      return null;
+  }
+}
 
 type AssistCastCalloutProfile = Readonly<{
   cueDurationMs: number;
@@ -62,7 +78,7 @@ const ASSIST_CAST_CALLOUT_PROFILES: Readonly<Record<string, AssistCastCalloutPro
 };
 
 export class ArenaEngine {
-  createTestScene(columns = 7, rows = 7, tileSize = 48): ArenaScene {
+  createTestScene(columns = 7, rows = 7, tileSize = 48, floorId = 'tile.floor.default', wallId = 'tile.wall.stone'): ArenaScene {
     const playerTile = { x: Math.floor(columns / 2), y: Math.floor(rows / 2) };
     const tiles: TileEntity[] = [];
 
@@ -70,7 +86,7 @@ export class ArenaEngine {
       for (let x = 0; x < columns; x += 1) {
         const isBorderTile = x === 0 || y === 0 || x === columns - 1 || y === rows - 1;
         tiles.push({
-          semanticId: isBorderTile ? "tile.wall.stone" : "tile.floor.default",
+          semanticId: isBorderTile ? wallId : floorId,
           tilePos: { x, y },
           layer: "ground"
         });
@@ -410,6 +426,13 @@ export class ArenaEngine {
         spawnedMomentCues.push(this.createMomentCue("elite_died", eliteActor.tileX, eliteActor.tileY, ELITE_CUE_DURATION_MS));
         spawnedFloatingTexts.push(
           this.createCombatCalloutText("ELITE DOWN", eliteActor.tileX, eliteActor.tileY, "elite", ELITE_CUE_DURATION_MS, 0.94)
+        );
+        continue;
+      }
+
+      if (event.type === "mimic_activated") {
+        spawnedFloatingTexts.push(
+          this.createCombatCalloutText("IT'S A MIMIC!", event.tileX, event.tileY, "danger", ELITE_CUE_DURATION_MS, 1.1)
         );
         continue;
       }
@@ -807,6 +830,10 @@ export class ArenaEngine {
 
     if (actor.kind === "mob") {
       return resolveMobSpriteSemanticId(actor.mobType, mode);
+    }
+
+    if (actor.kind === "boss") {
+      return resolveBossSpriteSemanticId(actor.actorId, mode);
     }
 
     return resolvePlayerSpriteSemanticId(null, "idle");

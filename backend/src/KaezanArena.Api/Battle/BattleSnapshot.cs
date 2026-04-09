@@ -56,4 +56,6 @@ public sealed record BattleSnapshot(
     int UltimateGaugeMax,
     bool UltimateReady,
     string ArenaType,
-    string? ArenaDisplayName);
+    string? ArenaDisplayName,
+    bool BossActive,
+    BossStateDto? Boss);

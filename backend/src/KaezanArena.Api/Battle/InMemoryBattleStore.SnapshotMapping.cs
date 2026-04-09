@@ -17,11 +17,20 @@ public sealed partial class InMemoryBattleStore
             .Select(actor =>
             {
                 var elemCfg = actor.MobType is MobArchetype mType ? MobConfigs.GetValueOrDefault(mType) : null;
-                var effectiveAttackElement = elemCfg is null
-                    ? (string?)null
-                    : (state.ArenaType == ArenaType.Elemental && state.ForcedElement.HasValue
-                        ? state.ForcedElement.Value.ToString()
-                        : elemCfg.AttackElement.ToString());
+                string? effectiveAttackElement;
+                if (string.Equals(actor.Kind, "boss", StringComparison.Ordinal))
+                {
+                    var bossCfg = ArenaConfig.BossConfig.TryResolveBossById(actor.ActorId);
+                    effectiveAttackElement = bossCfg?.AttackElement.ToString();
+                }
+                else
+                {
+                    effectiveAttackElement = elemCfg is null
+                        ? null
+                        : (state.ArenaType == ArenaType.Elemental && state.ForcedElement.HasValue
+                            ? state.ForcedElement.Value.ToString()
+                            : elemCfg.AttackElement.ToString());
+                }
                 return new ActorStateDto(
                     ActorId: actor.ActorId,
                     Kind: actor.Kind,
@@ -80,7 +89,7 @@ public sealed partial class InMemoryBattleStore
         var timeSurvivedMs = state.RunEndedAtMs ?? nowMs;
         var spawnPacing = ResolveSpawnPacingDirector(state);
         var scaling = ResolveScalingDirectorV2(nowMs, state.RunLevel);
-        var aliveMobs = state.Actors.Values.Count(actor => string.Equals(actor.Kind, "mob", StringComparison.Ordinal));
+        var aliveMobs = state.Actors.Values.Count(actor => string.Equals(actor.Kind, "mob", StringComparison.Ordinal) && !actor.IsMimic);
         var zoneHpMult = ArenaConfig.ZoneConfig.ZoneHpMultiplier[safeZoneIndex - 1];
         var zoneDmgMult = ArenaConfig.ZoneConfig.ZoneDmgMultiplier[safeZoneIndex - 1];
         var currentMobHpMult = scaling.NormalHpMult * zoneHpMult;
@@ -126,6 +135,21 @@ public sealed partial class InMemoryBattleStore
             .Select(definition => ToCardOfferDto(state, definition!))
             .ToList();
         var playerGlobalCooldownTotalMs = ResolvePlayerGlobalCooldownMs(state);
+        var bossActor = GetBossActor(state);
+        var bossActive = bossActor is not null && bossActor.Hp > 0;
+        BossStateDto? bossStateDto = null;
+        if (bossActive && bossActor is not null)
+        {
+            var bossDef = ArenaConfig.BossConfig.TryResolveBossById(bossActor.ActorId);
+            bossStateDto = new BossStateDto(
+                BossId: bossActor.ActorId,
+                DisplayName: bossDef?.DisplayName ?? bossActor.ActorId,
+                Hp: bossActor.Hp,
+                MaxHp: bossActor.MaxHp,
+                TileX: bossActor.TileX,
+                TileY: bossActor.TileY,
+                AttackElement: bossDef?.AttackElement.ToString() ?? ElementType.Physical.ToString());
+        }
 
         return new BattleSnapshot(
             BattleId: state.BattleId,
@@ -191,7 +215,9 @@ public sealed partial class InMemoryBattleStore
             UltimateGaugeMax: ArenaConfig.UltimateConfig.GaugeMax,
             UltimateReady: state.UltimateReady,
             ArenaType: state.ArenaType.ToString().ToLowerInvariant(),
-            ArenaDisplayName: state.ElementalArenaDef?.DisplayName);
+            ArenaDisplayName: state.ElementalArenaDef?.DisplayName,
+            BossActive: bossActive,
+            Boss: bossStateDto);
     }
 
     private static BattleRangedConfigDto BuildRangedConfigDto()

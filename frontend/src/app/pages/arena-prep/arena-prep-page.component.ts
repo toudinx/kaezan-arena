@@ -1,6 +1,6 @@
 import { Component, HostListener, OnInit } from "@angular/core";
 import { RouterLink } from "@angular/router";
-import { Router } from "@angular/router";
+import { ActivatedRoute, Router } from "@angular/router";
 import type { CharacterState } from "../../api/account-api.service";
 import { AccountStore } from "../../account/account-store.service";
 import {
@@ -27,6 +27,15 @@ interface StatRow {
   accent?: boolean;
 }
 
+type ArenaContext = Readonly<{
+  name: string;
+  element: string;
+  elementColor: string;
+  bgTint: string;
+  core: string;
+  dust: string;
+}>;
+
 const ZONE_DESCRIPTIONS: ReadonlyArray<string> = [
   "Starter grounds. Skirmish-level threats.",
   "Mid-range encounters. Balanced challenge.",
@@ -43,16 +52,54 @@ const ZONE_DESCRIPTIONS: ReadonlyArray<string> = [
   styleUrl: "./arena-prep-page.component.css"
 })
 export class ArenaPrepPageComponent implements OnInit {
+  private readonly ARENA_CONTEXT: Record<string, ArenaContext> = {
+    "arena:forge_of_ash": {
+      name: "Forge of Ash",
+      element: "FIRE",
+      elementColor: "#E05520",
+      bgTint: "rgba(180,60,20,0.08)",
+      core: "EmberCore",
+      dust: "EmberDust"
+    },
+    "arena:frozen_vault": {
+      name: "Frozen Vault",
+      element: "ICE",
+      elementColor: "#20B4D4",
+      bgTint: "rgba(20,120,180,0.08)",
+      core: "FrostCore",
+      dust: "FrostDust"
+    },
+    "arena:grove_of_ruin": {
+      name: "Grove of Ruin",
+      element: "EARTH",
+      elementColor: "#40A860",
+      bgTint: "rgba(40,140,60,0.08)",
+      core: "StoneCore",
+      dust: "StoneDust"
+    },
+    "arena:storm_sanctum": {
+      name: "Storm Sanctum",
+      element: "ENERGY",
+      elementColor: "#9040C8",
+      bgTint: "rgba(120,40,200,0.08)",
+      core: "VoltCore",
+      dust: "VoltDust"
+    }
+  };
+
   selectedZoneIndex = 1;
+  selectedArenaId: string | null = null;
   selectedCharacterId: string | null = null;
   isSwitchingCharacter = false;
 
   constructor(
     private readonly accountStore: AccountStore,
+    private readonly route: ActivatedRoute,
     private readonly router: Router
   ) {}
 
   async ngOnInit(): Promise<void> {
+    this.selectedArenaId = this.route.snapshot.queryParamMap.get("arenaId") ?? null;
     this.selectedZoneIndex = this.readPersistedZoneSelection();
     try {
       await this.accountStore.load();
@@ -203,8 +250,17 @@ export class ArenaPrepPageComponent implements OnInit {
     return `Zone ${this.clampZoneIndex(this.selectedZoneIndex)}`;
   }
 
-  get startRunQueryParams(): Readonly<{ zoneIndex: number }> {
-    return { zoneIndex: this.clampZoneIndex(this.selectedZoneIndex) };
+  get arenaContext(): ArenaContext | null {
+    return this.selectedArenaId ? this.ARENA_CONTEXT[this.selectedArenaId] ?? null : null;
+  }
+
+  get startRunQueryParams(): Readonly<{ zoneIndex: number; arenaId?: string }> {
+    const zoneIndex = this.clampZoneIndex(this.selectedZoneIndex);
+    if (!this.selectedArenaId) {
+      return { zoneIndex };
+    }
+
+    return { zoneIndex, arenaId: this.selectedArenaId };
   }
 
   async onSelectCharacter(characterId: string): Promise<void> {

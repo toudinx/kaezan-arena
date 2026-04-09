@@ -55,6 +55,10 @@ export class AssetPreloaderService {
       const declaredRowCount = Math.max(1, Math.floor(resolved.rowCount ?? 1));
       const computedRowCount = Math.max(1, Math.floor(image.height / frameHeight));
       const rowCount = Math.max(1, Math.min(declaredRowCount, computedRowCount));
+      const declaredRow = Math.floor(resolved.row ?? -1);
+      const row = declaredRow >= 0
+        ? Math.max(0, Math.min(rowCount - 1, declaredRow))
+        : undefined;
 
       return {
         image,
@@ -65,6 +69,7 @@ export class AssetPreloaderService {
           frameHeight,
           frameCount,
           rowCount,
+          row,
           fps: resolved.fps ?? 12
         }
       };

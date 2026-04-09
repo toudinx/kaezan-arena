@@ -14,5 +14,10 @@ public enum MobArchetype
     RangedImp = 10,
     RangedSwampy = 11,
     RangedMuddy = 12,
-    MeleeSlug = 13
+    MeleeSlug = 13,
+    EliteMaskedOrc   = 14,
+    ElitePumpkinDude = 15,
+    EliteDoc         = 16,
+    EliteIceZombie   = 17,
+    Mimic            = 18,
 }

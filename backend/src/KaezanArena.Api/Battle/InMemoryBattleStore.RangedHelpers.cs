@@ -42,7 +42,12 @@ public sealed partial class InMemoryBattleStore
 
         bool IsValidTarget(StoredActor actor)
         {
-            if (!string.Equals(actor.Kind, "mob", StringComparison.Ordinal) || actor.Hp <= 0)
+            if (actor.Kind != "mob" && actor.Kind != "boss")
+            {
+                return false;
+            }
+
+            if (actor.Hp <= 0)
             {
                 return false;
             }
@@ -424,7 +429,7 @@ public sealed partial class InMemoryBattleStore
         var hitActorIds = new List<string>();
         var hitActorIdsSet = new HashSet<string>(StringComparer.Ordinal);
         var livingMobsByTile = state.Actors.Values
-            .Where(actor => string.Equals(actor.Kind, "mob", StringComparison.Ordinal) && actor.Hp > 0)
+            .Where(actor => (actor.Kind == "mob" || actor.Kind == "boss") && actor.Hp > 0)
             .ToDictionary(actor => (actor.TileX, actor.TileY), actor => actor.ActorId);
         foreach (var tile in coneTiles)
         {
@@ -534,7 +539,7 @@ public sealed partial class InMemoryBattleStore
             {
                 var mobsOnTile = state.Actors.Values
                     .Where(actor =>
-                        string.Equals(actor.Kind, "mob", StringComparison.Ordinal) &&
+                        (actor.Kind == "mob" || actor.Kind == "boss") &&
                         actor.Hp > 0 &&
                         actor.TileX == tile.X &&
                         actor.TileY == tile.Y)

@@ -37,6 +37,96 @@
         16
       ]
     },
+    "tile.floor.fire": {
+      "type": "sheet",
+      "path": "sprites/floor_3.png",
+      "frame": [
+        0,
+        0,
+        16,
+        16
+      ]
+    },
+    "tile.floor.ice": {
+      "type": "sheet",
+      "path": "sprites/floor_2.png",
+      "frame": [
+        0,
+        0,
+        16,
+        16
+      ]
+    },
+    "tile.floor.earth": {
+      "type": "sheet",
+      "path": "sprites/floor_4.png",
+      "frame": [
+        0,
+        0,
+        16,
+        16
+      ]
+    },
+    "tile.floor.energy": {
+      "type": "sheet",
+      "path": "sprites/floor_6.png",
+      "frame": [
+        0,
+        0,
+        16,
+        16
+      ]
+    },
+    "tile.wall.goo": {
+      "type": "sheet",
+      "path": "sprites/wall_goo.png",
+      "frame": [
+        0,
+        0,
+        16,
+        16
+      ]
+    },
+    "tile.wall.banner.red": {
+      "type": "sheet",
+      "path": "sprites/wall_banner_red.png",
+      "frame": [
+        0,
+        0,
+        16,
+        16
+      ]
+    },
+    "tile.wall.banner.blue": {
+      "type": "sheet",
+      "path": "sprites/wall_banner_blue.png",
+      "frame": [
+        0,
+        0,
+        16,
+        16
+      ]
+    },
+    "tile.wall.banner.green": {
+      "type": "sheet",
+      "path": "sprites/wall_banner_green.png",
+      "frame": [
+        0,
+        0,
+        16,
+        16
+      ]
+    },
+    "tile.wall.banner.yellow": {
+      "type": "sheet",
+      "path": "sprites/wall_banner_yellow.png",
+      "frame": [
+        0,
+        0,
+        16,
+        16
+      ]
+    },
     "sprite.player.idle": {
       "type": "anim",
       "frames": [
@@ -580,6 +670,222 @@
       ],
       "fps": 12
     },
+    "sprite.mob.masked_orc.idle": {
+      "type": "anim",
+      "frames": [
+        "sprites/masked_orc_idle_anim_f0.png",
+        "sprites/masked_orc_idle_anim_f1.png",
+        "sprites/masked_orc_idle_anim_f2.png",
+        "sprites/masked_orc_idle_anim_f3.png"
+      ],
+      "fps": 8
+    },
+    "sprite.mob.masked_orc.run": {
+      "type": "anim",
+      "frames": [
+        "sprites/masked_orc_run_anim_f0.png",
+        "sprites/masked_orc_run_anim_f1.png",
+        "sprites/masked_orc_run_anim_f2.png",
+        "sprites/masked_orc_run_anim_f3.png"
+      ],
+      "fps": 10
+    },
+    "sprite.mob.masked_orc.hit": {
+      "type": "anim",
+      "frames": [
+        "sprites/masked_orc_idle_anim_f0.png"
+      ],
+      "fps": 12
+    },
+    "sprite.mob.pumpkin_dude.idle": {
+      "type": "anim",
+      "frames": [
+        "sprites/pumpkin_dude_idle_anim_f0.png",
+        "sprites/pumpkin_dude_idle_anim_f1.png",
+        "sprites/pumpkin_dude_idle_anim_f2.png",
+        "sprites/pumpkin_dude_idle_anim_f3.png"
+      ],
+      "fps": 8
+    },
+    "sprite.mob.pumpkin_dude.run": {
+      "type": "anim",
+      "frames": [
+        "sprites/pumpkin_dude_run_anim_f0.png",
+        "sprites/pumpkin_dude_run_anim_f1.png",
+        "sprites/pumpkin_dude_run_anim_f2.png",
+        "sprites/pumpkin_dude_run_anim_f3.png"
+      ],
+      "fps": 10
+    },
+    "sprite.mob.pumpkin_dude.hit": {
+      "type": "anim",
+      "frames": [
+        "sprites/pumpkin_dude_idle_anim_f0.png"
+      ],
+      "fps": 12
+    },
+    "sprite.mob.doc.idle": {
+      "type": "anim",
+      "frames": [
+        "sprites/doc_idle_anim_f0.png",
+        "sprites/doc_idle_anim_f1.png",
+        "sprites/doc_idle_anim_f2.png",
+        "sprites/doc_idle_anim_f3.png"
+      ],
+      "fps": 8
+    },
+    "sprite.mob.doc.run": {
+      "type": "anim",
+      "frames": [
+        "sprites/doc_run_anim_f0.png",
+        "sprites/doc_run_anim_f1.png",
+        "sprites/doc_run_anim_f2.png",
+        "sprites/doc_run_anim_f3.png"
+      ],
+      "fps": 10
+    },
+    "sprite.mob.doc.hit": {
+      "type": "anim",
+      "frames": [
+        "sprites/doc_idle_anim_f0.png"
+      ],
+      "fps": 12
+    },
+    "sprite.mob.ice_zombie.idle": {
+      "type": "anim",
+      "frames": [
+        "sprites/ice_zombie_anim_f0.png",
+        "sprites/ice_zombie_anim_f1.png",
+        "sprites/ice_zombie_anim_f2.png",
+        "sprites/ice_zombie_anim_f3.png"
+      ],
+      "fps": 8
+    },
+    "sprite.mob.ice_zombie.run": {
+      "type": "anim",
+      "frames": [
+        "sprites/ice_zombie_anim_f0.png",
+        "sprites/ice_zombie_anim_f1.png",
+        "sprites/ice_zombie_anim_f2.png",
+        "sprites/ice_zombie_anim_f3.png"
+      ],
+      "fps": 8
+    },
+    "sprite.mob.ice_zombie.hit": {
+      "type": "anim",
+      "frames": [
+        "sprites/ice_zombie_anim_f0.png"
+      ],
+      "fps": 12
+    },
+    "sprite.mob.mimic.idle": {
+      "type": "anim",
+      "frames": [
+        "sprites/pumpkin_dude_idle_anim_f0.png",
+        "sprites/pumpkin_dude_idle_anim_f1.png",
+        "sprites/pumpkin_dude_idle_anim_f2.png",
+        "sprites/pumpkin_dude_idle_anim_f3.png"
+      ],
+      "fps": 8
+    },
+    "sprite.mob.mimic.run": {
+      "type": "anim",
+      "frames": [
+        "sprites/pumpkin_dude_run_anim_f0.png",
+        "sprites/pumpkin_dude_run_anim_f1.png",
+        "sprites/pumpkin_dude_run_anim_f2.png",
+        "sprites/pumpkin_dude_run_anim_f3.png"
+      ],
+      "fps": 10
+    },
+    "sprite.mob.mimic.hit": {
+      "type": "anim",
+      "frames": [
+        "sprites/pumpkin_dude_idle_anim_f0.png"
+      ],
+      "fps": 12
+    },
+    "sprite.boss.big_demon.idle": {
+      "type": "anim",
+      "frames": [
+        "sprites/big_demon_idle_anim_f0.png",
+        "sprites/big_demon_idle_anim_f1.png",
+        "sprites/big_demon_idle_anim_f2.png",
+        "sprites/big_demon_idle_anim_f3.png"
+      ],
+      "fps": 8
+    },
+    "sprite.boss.big_demon.run": {
+      "type": "anim",
+      "frames": [
+        "sprites/big_demon_run_anim_f0.png",
+        "sprites/big_demon_run_anim_f1.png",
+        "sprites/big_demon_run_anim_f2.png",
+        "sprites/big_demon_run_anim_f3.png"
+      ],
+      "fps": 10
+    },
+    "sprite.boss.big_demon.hit": {
+      "type": "anim",
+      "frames": [
+        "sprites/big_demon_idle_anim_f0.png"
+      ],
+      "fps": 12
+    },
+    "sprite.boss.big_zombie.idle": {
+      "type": "anim",
+      "frames": [
+        "sprites/big_zombie_idle_anim_f0.png",
+        "sprites/big_zombie_idle_anim_f1.png",
+        "sprites/big_zombie_idle_anim_f2.png",
+        "sprites/big_zombie_idle_anim_f3.png"
+      ],
+      "fps": 8
+    },
+    "sprite.boss.big_zombie.run": {
+      "type": "anim",
+      "frames": [
+        "sprites/big_zombie_run_anim_f0.png",
+        "sprites/big_zombie_run_anim_f1.png",
+        "sprites/big_zombie_run_anim_f2.png",
+        "sprites/big_zombie_run_anim_f3.png"
+      ],
+      "fps": 10
+    },
+    "sprite.boss.big_zombie.hit": {
+      "type": "anim",
+      "frames": [
+        "sprites/big_zombie_idle_anim_f0.png"
+      ],
+      "fps": 12
+    },
+    "sprite.boss.necromancer.idle": {
+      "type": "anim",
+      "frames": [
+        "sprites/necromancer_anim_f0.png",
+        "sprites/necromancer_anim_f1.png",
+        "sprites/necromancer_anim_f2.png",
+        "sprites/necromancer_anim_f3.png"
+      ],
+      "fps": 8
+    },
+    "sprite.boss.necromancer.run": {
+      "type": "anim",
+      "frames": [
+        "sprites/necromancer_anim_f0.png",
+        "sprites/necromancer_anim_f1.png",
+        "sprites/necromancer_anim_f2.png",
+        "sprites/necromancer_anim_f3.png"
+      ],
+      "fps": 6
+    },
+    "sprite.boss.necromancer.hit": {
+      "type": "anim",
+      "frames": [
+        "sprites/necromancer_anim_f1.png"
+      ],
+      "fps": 12
+    },
     "fx.hit.base": {
       "type": "anim_strip_rows",
       "src": "fx/rpg_effect_all_free/Part 1/03.png",
@@ -597,6 +903,46 @@
       "fps": 12,
       "rowCount": 9,
       "frameCount": 0
+    },
+    "fx.tier.brave": {
+      "type": "anim_strip_rows",
+      "src": "fx/rpg_effect_all_free/Part 9/439.png",
+      "frameWidth": 64,
+      "frameHeight": 64,
+      "row": 4,
+      "fps": 12,
+      "rowCount": 9,
+      "frameCount": 10
+    },
+    "fx.tier.awakened": {
+      "type": "anim_strip_rows",
+      "src": "fx/rpg_effect_all_free/Part 9/439.png",
+      "frameWidth": 64,
+      "frameHeight": 64,
+      "row": 6,
+      "fps": 12,
+      "rowCount": 9,
+      "frameCount": 10
+    },
+    "fx.tier.exalted": {
+      "type": "anim_strip_rows",
+      "src": "fx/rpg_effect_all_free/Part 9/439.png",
+      "frameWidth": 64,
+      "frameHeight": 64,
+      "row": 7,
+      "fps": 12,
+      "rowCount": 9,
+      "frameCount": 10
+    },
+    "fx.tier.ascendant": {
+      "type": "anim_strip_rows",
+      "src": "fx/rpg_effect_all_free/Part 9/439.png",
+      "frameWidth": 64,
+      "frameHeight": 64,
+      "row": 8,
+      "fps": 12,
+      "rowCount": 9,
+      "frameCount": 10
     },
     "fx.hit.small": {
       "type": "alias",

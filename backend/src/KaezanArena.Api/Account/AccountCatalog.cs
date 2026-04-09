@@ -4,21 +4,32 @@ namespace KaezanArena.Api.Account;
 
 public static class AccountCatalog
 {
+    private const string SpeciesCategoryCommon = "common";
+    private const string SpeciesCategoryElite = "elite";
+    private const string SpeciesCategoryBoss = "boss";
+
     public static IReadOnlyList<SpeciesDefinition> SpeciesDefinitions { get; } =
     [
-        new SpeciesDefinition(ArenaConfig.SpeciesIds.MeleeBrute,      ArenaConfig.DisplayNames[ArenaConfig.SpeciesIds.MeleeBrute]),
-        new SpeciesDefinition(ArenaConfig.SpeciesIds.RangedArcher,    ArenaConfig.DisplayNames[ArenaConfig.SpeciesIds.RangedArcher]),
-        new SpeciesDefinition(ArenaConfig.SpeciesIds.MeleeDemon,      ArenaConfig.DisplayNames[ArenaConfig.SpeciesIds.MeleeDemon]),
-        new SpeciesDefinition(ArenaConfig.SpeciesIds.RangedShaman,    ArenaConfig.DisplayNames[ArenaConfig.SpeciesIds.RangedShaman]),
-        new SpeciesDefinition(ArenaConfig.SpeciesIds.MeleeSkeleton,   ArenaConfig.DisplayNames[ArenaConfig.SpeciesIds.MeleeSkeleton]),
-        new SpeciesDefinition(ArenaConfig.SpeciesIds.MeleeWogol,      ArenaConfig.DisplayNames[ArenaConfig.SpeciesIds.MeleeWogol]),
-        new SpeciesDefinition(ArenaConfig.SpeciesIds.MeleeWarrior,    ArenaConfig.DisplayNames[ArenaConfig.SpeciesIds.MeleeWarrior]),
-        new SpeciesDefinition(ArenaConfig.SpeciesIds.MeleeZombie,     ArenaConfig.DisplayNames[ArenaConfig.SpeciesIds.MeleeZombie]),
-        new SpeciesDefinition(ArenaConfig.SpeciesIds.MeleeTinyZombie, ArenaConfig.DisplayNames[ArenaConfig.SpeciesIds.MeleeTinyZombie]),
-        new SpeciesDefinition(ArenaConfig.SpeciesIds.RangedImp,       ArenaConfig.DisplayNames[ArenaConfig.SpeciesIds.RangedImp]),
-        new SpeciesDefinition(ArenaConfig.SpeciesIds.RangedSwampy,    ArenaConfig.DisplayNames[ArenaConfig.SpeciesIds.RangedSwampy]),
-        new SpeciesDefinition(ArenaConfig.SpeciesIds.RangedMuddy,     ArenaConfig.DisplayNames[ArenaConfig.SpeciesIds.RangedMuddy]),
-        new SpeciesDefinition(ArenaConfig.SpeciesIds.MeleeSlug,       ArenaConfig.DisplayNames[ArenaConfig.SpeciesIds.MeleeSlug]),
+        new SpeciesDefinition(ArenaConfig.SpeciesIds.MeleeBrute, "Hollow Melee Brute", SpeciesCategoryCommon),
+        new SpeciesDefinition(ArenaConfig.SpeciesIds.RangedArcher, "Hollow Ranged Archer", SpeciesCategoryCommon),
+        new SpeciesDefinition(ArenaConfig.SpeciesIds.MeleeDemon, "Hollow Melee Demon", SpeciesCategoryCommon),
+        new SpeciesDefinition(ArenaConfig.SpeciesIds.RangedShaman, "Hollow Shaman", SpeciesCategoryCommon),
+        new SpeciesDefinition(ArenaConfig.SpeciesIds.MeleeSkeleton, "Hollow Skeleton", SpeciesCategoryCommon),
+        new SpeciesDefinition(ArenaConfig.SpeciesIds.MeleeWogol, "Hollow Wogol", SpeciesCategoryCommon),
+        new SpeciesDefinition(ArenaConfig.SpeciesIds.MeleeWarrior, "Hollow Warrior", SpeciesCategoryCommon),
+        new SpeciesDefinition(ArenaConfig.SpeciesIds.MeleeZombie, "Hollow Zombie", SpeciesCategoryCommon),
+        new SpeciesDefinition(ArenaConfig.SpeciesIds.MeleeTinyZombie, "Hollow Tiny Zombie", SpeciesCategoryCommon),
+        new SpeciesDefinition(ArenaConfig.SpeciesIds.RangedImp, "Hollow Imp", SpeciesCategoryCommon),
+        new SpeciesDefinition(ArenaConfig.SpeciesIds.RangedSwampy, "Hollow Swampy", SpeciesCategoryCommon),
+        new SpeciesDefinition(ArenaConfig.SpeciesIds.RangedMuddy, "Hollow Muddy", SpeciesCategoryCommon),
+        new SpeciesDefinition(ArenaConfig.SpeciesIds.MeleeSlug, "Hollow Slug", SpeciesCategoryCommon),
+        new SpeciesDefinition(ArenaConfig.SpeciesIds.EliteMaskedOrc, "Masked Warlord", SpeciesCategoryElite),
+        new SpeciesDefinition(ArenaConfig.SpeciesIds.ElitePumpkinDude, "Pumpkin Herald", SpeciesCategoryElite),
+        new SpeciesDefinition(ArenaConfig.SpeciesIds.EliteDoc, "The Doc", SpeciesCategoryElite),
+        new SpeciesDefinition(ArenaConfig.SpeciesIds.EliteIceZombie, "Frost Revenant", SpeciesCategoryElite),
+        new SpeciesDefinition(ArenaConfig.SpeciesIds.BossBigDemon, "The Demon Lord", SpeciesCategoryBoss),
+        new SpeciesDefinition(ArenaConfig.SpeciesIds.BossBigZombie, "Plague Titan", SpeciesCategoryBoss),
+        new SpeciesDefinition(ArenaConfig.SpeciesIds.BossNecromancer, "The Ascendant", SpeciesCategoryBoss),
     ];
 
     public static IReadOnlyList<SigilDefinition> SigilDefinitions { get; } =

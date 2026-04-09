@@ -77,6 +77,32 @@ public sealed partial class InMemoryBattleStore
                 RequestedCount: ArenaConfig.AltarSummonSpawnCount,
                 SpawnedCount: spawnedCount));
         }
+        else if (string.Equals(poi.Type, ArenaConfig.PoiTypeMimicDormant, StringComparison.Ordinal))
+        {
+            var mimicActorId = $"mimic.{poi.PoiId}";
+            state.Actors[mimicActorId] = new StoredActor(
+                actorId: mimicActorId,
+                kind: "mob",
+                mobType: MobArchetype.Mimic,
+                isElite: false,
+                buffSourceEliteId: null,
+                facingDirection: ArenaConfig.FacingDown,
+                tileX: poi.TileX,
+                tileY: poi.TileY,
+                hp: ArenaConfig.MimicConfig.Hp,
+                maxHp: ArenaConfig.MimicConfig.Hp,
+                shield: 0,
+                maxShield: 0,
+                mobSlotIndex: null,
+                isMimic: true);
+            state.MimicAttackCooldownRemainingMs = RollInitialAutoAttackCooldownMs(state, ArenaConfig.MimicConfig.AutoAttackCooldownMs);
+            events.Add(new MimicActivatedEventDto(
+                PoiId: poi.PoiId,
+                ActorId: mimicActorId,
+                TileX: poi.TileX,
+                TileY: poi.TileY));
+            return true;
+        }
 
         TrySpawnPendingSpeciesChest(state, events, nowMs);
 
@@ -180,6 +206,28 @@ public sealed partial class InMemoryBattleStore
 
         if (HasAnyActiveChestPoi(state, checkAtMs))
         {
+            return;
+        }
+
+        // Roll for mimic before regular chest (20% chance when no mimic is active)
+        if (NextIntFromPoiRng(state, 100) < ArenaConfig.MimicConfig.SpawnChancePercent)
+        {
+            var mimicTiles = BuildPoiSpawnTiles(state, checkAtMs);
+            if (mimicTiles.Count > 0)
+            {
+                var mimicTileIndex = NextIntFromPoiRng(state, mimicTiles.Count);
+                var mimicTile = mimicTiles[mimicTileIndex];
+                var mimicPoiId = BuildMimicPoiId(state.NextPoiSequence);
+                state.NextPoiSequence += 1;
+                state.Pois[mimicPoiId] = new StoredPoi(
+                    poiId: mimicPoiId,
+                    type: ArenaConfig.PoiTypeMimicDormant,
+                    tileX: mimicTile.TileX,
+                    tileY: mimicTile.TileY,
+                    expiresAtMs: checkAtMs + ArenaConfig.ChestLifetimeMs,
+                    species: null,
+                    metadata: null);
+            }
             return;
         }
 
@@ -310,7 +358,26 @@ public sealed partial class InMemoryBattleStore
 
     private static bool HasAnyActiveChestPoi(StoredBattle state, long nowMs)
     {
-        return HasActiveChestPoi(state, nowMs);
+        if (HasActiveChestPoi(state, nowMs))
+        {
+            return true;
+        }
+
+        // Dormant mimic counts as a chest-like entity (prevents another chest/mimic from spawning)
+        if (state.Pois.Values.Any(poi =>
+                string.Equals(poi.Type, ArenaConfig.PoiTypeMimicDormant, StringComparison.Ordinal) &&
+                poi.ExpiresAtMs > nowMs))
+        {
+            return true;
+        }
+
+        // Active mimic actor also blocks new chest spawns
+        if (state.Actors.Values.Any(actor => actor.IsMimic && actor.Hp > 0))
+        {
+            return true;
+        }
+
+        return false;
     }
 
     private static bool HasActiveAltarPoi(StoredBattle state, long nowMs)
@@ -364,6 +431,11 @@ public sealed partial class InMemoryBattleStore
     private static string BuildAltarPoiId(int sequence)
     {
         return $"poi.altar.{sequence:D4}";
+    }
+
+    private static string BuildMimicPoiId(int sequence)
+    {
+        return $"poi.mimic.{sequence:D4}";
     }
 
     private static bool IsChestPoiType(string poiType)

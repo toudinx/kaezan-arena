@@ -41,81 +41,131 @@
             <span>{{ filteredSpeciesCount }} species</span>
             <span>{{ filteredSpeciesKillsTotal }} kills</span>
           </div>
-          @if (speciesPageCount > 1) {
-            <p class="species-list-context__page">Page {{ speciesPageNumber }} / {{ speciesPageCount }}</p>
-          }
         </div>
 
         @if (filteredSpeciesRows.length === 0) {
           <p class="bestiary-empty">No species match your search.</p>
         } @else {
-          <ul class="species-list">
-            @for (row of pagedSpeciesRows; track row.speciesId) {
-              <li>
-                <button
-                  type="button"
-                  class="species-row"
-                  [class.species-row--selected]="row.speciesId === selectedSpeciesId"
-                  [class.species-row--zero]="row.killsTotal === 0"
-                  (click)="selectSpecies(row.speciesId)"
-                >
-                  <div class="species-row__top">
-                    <div class="species-row__portrait" [attr.data-tone]="row.visual.tone" aria-hidden="true">
-                      @if (shouldRenderSpeciesImage(row.visual.imageUrl)) {
-                        <img
-                          class="species-row__portrait-image"
-                          [src]="row.visual.imageUrl!"
-                          [alt]="''"
-                          (error)="onSpeciesImageError(row.visual.imageUrl)"
-                        />
-                      } @else {
-                        <span class="species-row__portrait-fallback">{{ row.visual.monogram }}</span>
-                      }
-                      <span class="species-row__portrait-sigil">{{ row.visual.sigil }}</span>
-                    </div>
+          <div class="species-sections">
+            <div class="species-tabs" role="tablist" aria-label="Bestiary categories">
+              <button
+                type="button"
+                role="tab"
+                [class.active]="activeTab() === 'common'"
+                [attr.aria-selected]="activeTab() === 'common'"
+                (click)="setTab('common')"
+              >
+                Common <span class="tab-count">{{ commonSpeciesTotal }}</span>
+              </button>
+              <button
+                type="button"
+                role="tab"
+                [class.active]="activeTab() === 'elite'"
+                [attr.aria-selected]="activeTab() === 'elite'"
+                (click)="setTab('elite')"
+              >
+                Elite <span class="tab-count">{{ eliteSpeciesTotal }}</span>
+              </button>
+              <button
+                type="button"
+                role="tab"
+                [class.active]="activeTab() === 'boss'"
+                [attr.aria-selected]="activeTab() === 'boss'"
+                (click)="setTab('boss')"
+              >
+                Boss <span class="tab-count">{{ bossSpeciesTotal }}</span>
+              </button>
+            </div>
 
-                    <div class="species-row__identity">
-                      <div class="species-row__header">
-                        <span class="species-row__name">{{ row.displayName }}</span>
-                        @if (row.isMaxRank) {
-                          <span class="species-row__rank species-row__rank--max">MAX</span>
-                        } @else if (row.rank > 1) {
-                          <span class="species-row__rank">Rank {{ row.rank }}</span>
-                        }
-                      </div>
+            @if (activeSpeciesSection; as section) {
+              <section class="species-section">
+                <h3 class="species-section__title">{{ section.label }}</h3>
+                @if (section.rows.length === 0) {
+                  <p class="bestiary-empty">{{ section.emptyMessage }}</p>
+                } @else {
+                  <ul class="species-list">
+                    @for (row of getPagedSectionRows(section.key); track row.speciesId) {
+                      <li>
+                        <button
+                          type="button"
+                          class="species-row"
+                          [class.species-row--selected]="row.speciesId === selectedSpeciesId"
+                          [class.species-row--zero]="row.killsTotal === 0"
+                          (click)="selectSpecies(row.speciesId)"
+                        >
+                          <div class="species-row__top">
+                            <div class="species-row__portrait" [attr.data-tone]="row.visual.tone" aria-hidden="true">
+                              @if (shouldRenderSpeciesImage(row.visual.imageUrl)) {
+                                <img
+                                  class="species-row__portrait-image"
+                                  [src]="row.visual.imageUrl!"
+                                  [alt]="''"
+                                  (error)="onSpeciesImageError(row.visual.imageUrl)"
+                                />
+                              } @else {
+                                <span class="species-row__portrait-fallback">{{ row.visual.monogram }}</span>
+                              }
+                              <span class="species-row__portrait-sigil">{{ row.visual.sigil }}</span>
+                            </div>
 
-                      <div class="species-row__meta">
-                        @if (row.killsTotal > 0) {
-                          <span>{{ row.killsTotal }} kills</span>
-                          @if (row.isMaxRank) {
-                            <span class="species-row__max-label">Max Rank</span>
-                          } @else {
-                            <span>{{ row.killsToNextMilestone }} to Rank {{ row.rank + 1 }}</span>
+                            <div class="species-row__identity">
+                              <div class="species-row__header">
+                                <span class="species-row__name">{{ row.displayName }}</span>
+                                @if (row.isMaxRank) {
+                                  <span class="species-row__rank species-row__rank--max">MAX</span>
+                                } @else if (row.rank > 1) {
+                                  <span class="species-row__rank">Rank {{ row.rank }}</span>
+                                }
+                              </div>
+
+                              <div class="species-row__meta">
+                                @if (row.killsTotal > 0) {
+                                  <span>{{ row.killsTotal }} kills</span>
+                                  @if (row.isMaxRank) {
+                                    <span class="species-row__max-label">Max Rank</span>
+                                  } @else {
+                                    <span>{{ row.killsToNextMilestone }} to Rank {{ row.rank + 1 }}</span>
+                                  }
+                                } @else {
+                                  <span class="species-row__zero-meta">Not encountered</span>
+                                }
+                              </div>
+                            </div>
+                          </div>
+
+                          @if (row.killsTotal > 0) {
+                            <div class="species-row__track">
+                              <div class="species-row__fill" [style.width.%]="row.progressPercent"></div>
+                            </div>
                           }
-                        } @else {
-                          <span class="species-row__zero-meta">Not encountered</span>
-                        }
-                      </div>
-                    </div>
-                  </div>
+                        </button>
+                      </li>
+                    }
+                  </ul>
 
-                  @if (row.killsTotal > 0) {
-                    <div class="species-row__track">
-                      <div class="species-row__fill" [style.width.%]="row.progressPercent"></div>
+                  @if (getSectionPageCount(section.key) > 1) {
+                    <div class="species-pagination">
+                      <button
+                        type="button"
+                        [disabled]="getSectionIsPageStart(section.key)"
+                        (click)="goToPreviousSectionPage(section.key)"
+                      >
+                        Previous
+                      </button>
+                      <span>{{ getSectionPageWindowLabel(section.key) }}</span>
+                      <button
+                        type="button"
+                        [disabled]="getSectionIsPageEnd(section.key)"
+                        (click)="goToNextSectionPage(section.key)"
+                      >
+                        Next
+                      </button>
                     </div>
                   }
-                </button>
-              </li>
+                }
+              </section>
             }
-          </ul>
-
-          @if (speciesPageCount > 1) {
-            <div class="species-pagination">
-              <button type="button" [disabled]="isSpeciesPageStart" (click)="goToPreviousSpeciesPage()">Previous</button>
-              <span>{{ speciesPageWindowLabel }}</span>
-              <button type="button" [disabled]="isSpeciesPageEnd" (click)="goToNextSpeciesPage()">Next</button>
-            </div>
-          }
+          </div>
         }
       </aside>
 

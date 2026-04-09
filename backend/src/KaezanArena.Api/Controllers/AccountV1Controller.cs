@@ -57,7 +57,8 @@ public sealed class AccountV1Controller : ControllerBase
             SpeciesCatalog: AccountCatalog.SpeciesDefinitions
                 .Select(definition => new BestiarySpeciesDto(
                     SpeciesId: definition.SpeciesId,
-                    DisplayName: definition.DisplayName))
+                    DisplayName: definition.DisplayName,
+                    Category: definition.Category))
                 .ToList(),
             Character: new CharacterBestiaryStateDto(
                 CharacterId: character.CharacterId,
@@ -225,7 +226,8 @@ public sealed class AccountV1Controller : ControllerBase
                 Tick: source.Tick,
                 SourceType: source.SourceType.Trim(),
                 SourceId: source.SourceId.Trim(),
-                Species: string.IsNullOrWhiteSpace(source.Species) ? null : source.Species.Trim()));
+                Species: string.IsNullOrWhiteSpace(source.Species) ? null : source.Species.Trim(),
+                ZoneIndex: Math.Clamp(source.ZoneIndex ?? 1, 1, ArenaConfig.ZoneConfig.ZoneCount)));
         }
 
         try

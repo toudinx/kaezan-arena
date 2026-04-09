@@ -684,7 +684,7 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
                 var killsTotalForSpecies = 0;
                 if (IsMobSourceType(source.SourceType))
                 {
-                    var normalizedSpecies = NormalizeSpecies(source.Species);
+                    var normalizedSpecies = ResolveSpeciesForDropSource(source);
                     killsTotalForSpecies = bestiaryKillsBySpecies.GetValueOrDefault(normalizedSpecies, 0) + 1;
                 }
 
@@ -698,6 +698,7 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
                     sigilInventory: sigilInventory,
                     battleSeed: battleSeed,
                     killsTotalForSpecies: killsTotalForSpecies,
+                    zoneIndex: source.ZoneIndex,
                     elementalArenaDef: elementalArenaDef);
 
                 alreadyAwardedBySourceKey[sourceKey] = rolledEvents;
@@ -712,7 +713,7 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
 
                 if (IsMobSourceType(source.SourceType))
                 {
-                    var normalizedSpecies = NormalizeSpecies(source.Species);
+                    var normalizedSpecies = ResolveSpeciesForDropSource(source);
                     echoFragmentsBalance += ResolveEchoFragmentsAward(source.SourceType, source.Species);
                     IncrementSpeciesCounter(bestiaryKillsBySpecies, normalizedSpecies, amount: 1);
                     IncrementSpeciesCounter(primalCoreBySpecies, normalizedSpecies, amount: 1);
@@ -1051,6 +1052,7 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
         IDictionary<string, SigilInstance> sigilInventory,
         int? battleSeed,
         int killsTotalForSpecies,
+        int zoneIndex,
         ArenaConfig.ElementalArenaConfig.ElementalArenaDef? elementalArenaDef = null)
     {
         var normalizedSourceType = NormalizeSourceType(source.SourceType);
@@ -1221,9 +1223,8 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
             if (ArenaConfig.SigilConfig.IsValidSpeciesId(sigilSpecies) &&
                 rng.Next(100) < ArenaConfig.SigilConfig.SigilDropChancePercent)
             {
-                var sigilLevel = rng.Next(
-                    ArenaConfig.SigilConfig.HollowSigilLevelMin,
-                    ArenaConfig.SigilConfig.HollowSigilLevelMax + 1);
+                var (sigilMin, sigilMax) = ArenaConfig.SigilConfig.GetSigilLevelRangeForZone(zoneIndex);
+                var sigilLevel = rng.Next(sigilMin, sigilMax + 1);
                 var slotIndex = SigilSlotResolver.ResolveSlotIndexForLevel(sigilLevel);
                 var sigilInstanceId = $"sigil_{Guid.NewGuid():N}";
                 sigilInventory[sigilInstanceId] = new SigilInstance(
@@ -1420,6 +1421,11 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
     private static int ResolveEchoFragmentsAward(string sourceType, string? species)
     {
         _ = species;
+        if (string.Equals(NormalizeSourceType(sourceType), "mimic", StringComparison.Ordinal))
+        {
+            return ArenaConfig.MimicConfig.EchoFragmentsBonusDrop;
+        }
+
         return IsMobSourceType(sourceType) ? EchoFragmentsPerMobKill : 0;
     }
 
@@ -1868,6 +1874,23 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
         return string.Equals(NormalizeSourceType(sourceType), "mob", StringComparison.Ordinal);
     }
 
+    private static string ResolveSpeciesForDropSource(DropSource source)
+    {
+        var normalizedSpecies = NormalizeSpeciesOrNull(source.Species);
+        if (!string.IsNullOrWhiteSpace(normalizedSpecies))
+        {
+            return normalizedSpecies;
+        }
+
+        if (!string.IsNullOrWhiteSpace(source.SourceId) &&
+            source.SourceId.StartsWith("boss:", StringComparison.OrdinalIgnoreCase))
+        {
+            return source.SourceId.Trim().ToLowerInvariant();
+        }
+
+        return UnknownSpeciesId;
+    }
+
     private static string NormalizeSpecies(string? species)
     {
         return NormalizeSpeciesOrNull(species) ?? UnknownSpeciesId;
@@ -1890,9 +1913,17 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
 
     private static string NormalizeSourceType(string sourceType)
     {
-        return string.Equals(sourceType, "chest", StringComparison.OrdinalIgnoreCase)
-            ? "chest"
-            : "mob";
+        if (string.Equals(sourceType, "chest", StringComparison.OrdinalIgnoreCase))
+        {
+            return "chest";
+        }
+
+        if (string.Equals(sourceType, "mimic", StringComparison.OrdinalIgnoreCase))
+        {
+            return "mimic";
+        }
+
+        return "mob";
     }
 
     private static CharacterState GetCharacterOrThrow(AccountState account, string characterId)

@@ -51,6 +51,7 @@ export interface AnimStripRowsAssetManifestEntry {
   path?: string;
   frameWidth: number;
   frameHeight: number;
+  row?: number;
   fps?: number;
   rowCount: number;
   frameCount?: number;
@@ -84,6 +85,7 @@ export interface NormalizedAssetManifestEntry {
   frameHeight?: number;
   frameCount?: number;
   rowCount?: number;
+  row?: number;
   fps?: number;
   w?: number;
   h?: number;
@@ -114,6 +116,7 @@ export interface ResolvedAsset {
   frameHeight?: number;
   frameCount?: number;
   rowCount?: number;
+  row?: number;
   fps?: number;
   width?: number;
   height?: number;

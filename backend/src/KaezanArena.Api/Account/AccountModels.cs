@@ -234,7 +234,8 @@ public sealed record ItemDefinition(
 
 public sealed record SpeciesDefinition(
     string SpeciesId,
-    string DisplayName);
+    string DisplayName,
+    string Category);
 
 public sealed record SigilDefinition(
     string DefinitionId,
@@ -288,7 +289,8 @@ public sealed record DropSource(
     int Tick,
     string SourceType,
     string SourceId,
-    string? Species);
+    string? Species,
+    int ZoneIndex = 1);
 
 public sealed record AwardDropsResult(
     IReadOnlyList<DropEvent> Awarded,

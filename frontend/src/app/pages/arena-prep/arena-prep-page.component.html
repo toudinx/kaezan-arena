@@ -1,143 +1,162 @@
-<section class="arena-prep">
-  <header class="arena-prep__header">
-    <div class="header-title">Arena // <strong>Pre-Run</strong></div>
-  </header>
+<div class="prep-root" [style.background-color]="arenaContext?.bgTint ?? 'transparent'">
+  <section class="arena-prep">
+    <header class="arena-prep__header">
+      <div class="header-title">Arena // <strong>Pre-Run</strong></div>
+    </header>
 
-  <div class="arena-prep__grid">
-    <section class="character-stage" [attr.data-tone]="activeCharacterPortraitTone">
-      @if (hasMultipleCharacters) {
-        <button
-          type="button"
-          class="nav-btn nav-left"
-          (click)="cycleCharacter('prev')"
-          [disabled]="!canSwitchCharacter"
-          aria-label="Kaelis anterior"
-        >
-          &lt;
-        </button>
-      }
-
-      @if (activeCharacterImageUrl) {
-        <img
-          class="character-img"
-          [src]="activeCharacterImageUrl"
-          [alt]="activeCharacterName"
-          draggable="false"
-        />
-      } @else {
-        <div class="character-placeholder">
-          <span>{{ activeCharacterName.slice(0, 1) }}</span>
-        </div>
-      }
-
-      @if (hasMultipleCharacters) {
-        <button
-          type="button"
-          class="nav-btn nav-right"
-          (click)="cycleCharacter('next')"
-          [disabled]="!canSwitchCharacter"
-          aria-label="Proximo Kaelis"
-        >
-          &gt;
-        </button>
-      }
-
-      <div class="char-info-overlay">
-        <div class="char-level-badge">LV. {{ activeCharacterLevel }}</div>
-        <div class="char-name">{{ activeCharacterName }}</div>
-        @if (activeCharacterSubtitle) {
-          <div class="char-title">{{ activeCharacterSubtitle }}</div>
+    <div class="arena-prep__grid">
+      <section class="character-stage" [attr.data-tone]="activeCharacterPortraitTone">
+        @if (hasMultipleCharacters) {
+          <button
+            type="button"
+            class="nav-btn nav-left"
+            (click)="cycleCharacter('prev')"
+            [disabled]="!canSwitchCharacter"
+            aria-label="Kaelis anterior"
+          >
+            &lt;
+          </button>
         }
-      </div>
-    </section>
 
-    <aside class="prep-panel">
-      <div class="card card--compact">
-        <div class="card-header">
-          <span>Run Status</span>
-          <span class="card-header__meta">{{ selectedZoneLabel }}</span>
-        </div>
-        <div class="stats-grid">
-          @for (stat of statRows; track stat.label) {
-            <div class="stat-row">
-              <span class="stat-label">{{ stat.label }}</span>
-              <span class="stat-value" [class.stat-value--accent]="stat.accent">
-                {{ stat.value }}
-              </span>
-            </div>
+        @if (activeCharacterImageUrl) {
+          <img
+            class="character-img"
+            [src]="activeCharacterImageUrl"
+            [alt]="activeCharacterName"
+            draggable="false"
+          />
+        } @else {
+          <div class="character-placeholder">
+            <span>{{ activeCharacterName.slice(0, 1) }}</span>
+          </div>
+        }
+
+        @if (hasMultipleCharacters) {
+          <button
+            type="button"
+            class="nav-btn nav-right"
+            (click)="cycleCharacter('next')"
+            [disabled]="!canSwitchCharacter"
+            aria-label="Proximo Kaelis"
+          >
+            &gt;
+          </button>
+        }
+
+        <div class="char-info-overlay">
+          <div class="char-level-badge">LV. {{ activeCharacterLevel }}</div>
+          <div class="char-name">{{ activeCharacterName }}</div>
+          @if (activeCharacterSubtitle) {
+            <div class="char-title">{{ activeCharacterSubtitle }}</div>
           }
         </div>
-      </div>
+      </section>
 
-      <div class="card card--compact card--zones">
-        <div class="card-header">
-          <span>Select Zone</span>
-          <span class="card-header__meta">Keys 1-5</span>
-        </div>
-        <div class="zone-options">
-          @for (zone of zoneOptions; track zone.zoneIndex) {
-            <button
-              type="button"
-              class="zone-card"
-              [class.active]="zone.isSelected"
-              [class.locked]="!zone.isUnlocked"
-              [disabled]="!zone.isUnlocked"
-              (click)="onSelectZone(zone.zoneIndex)"
-              [attr.aria-pressed]="zone.isSelected"
-            >
-              <div class="zone-badge">{{ zone.zoneIndex }}</div>
-              <div class="zone-content">
-                <div class="zone-title">Zone {{ zone.zoneIndex }}</div>
-                <div class="zone-desc">
-                  @if (zone.isUnlocked) {
-                    {{ zone.description }}
-                  } @else {
-                    Unlocks at Account Lv {{ zone.unlockLevel }}
-                  }
-                </div>
+      <aside class="prep-panel">
+        @if (arenaContext) {
+          <div class="arena-banner">
+            <span class="arena-banner__label">ELEMENTAL ARENA</span>
+            <span class="arena-banner__name">{{ arenaContext.name }}</span>
+            <span class="arena-banner__badge" [style.background]="arenaContext.elementColor">
+              {{ arenaContext.element }}
+            </span>
+            <span class="arena-banner__drops">
+              Drops: {{ arenaContext.core }} &middot; {{ arenaContext.dust }}
+            </span>
+          </div>
+        } @else {
+          <div class="arena-banner arena-banner--standard">
+            <span class="arena-banner__label">STANDARD RUN</span>
+          </div>
+        }
+
+        <div class="card card--compact">
+          <div class="card-header">
+            <span>Run Status</span>
+            <span class="card-header__meta">{{ selectedZoneLabel }}</span>
+          </div>
+          <div class="stats-grid">
+            @for (stat of statRows; track stat.label) {
+              <div class="stat-row">
+                <span class="stat-label">{{ stat.label }}</span>
+                <span class="stat-value" [class.stat-value--accent]="stat.accent">
+                  {{ stat.value }}
+                </span>
               </div>
-              @if (!zone.isUnlocked) {
-                <span class="zone-lock">LOCK</span>
+            }
+          </div>
+        </div>
+
+        <div class="card card--compact card--zones">
+          <div class="card-header">
+            <span>Select Zone</span>
+            <span class="card-header__meta">Keys 1-5</span>
+          </div>
+          <div class="zone-options">
+            @for (zone of zoneOptions; track zone.zoneIndex) {
+              <button
+                type="button"
+                class="zone-card"
+                [class.active]="zone.isSelected"
+                [class.locked]="!zone.isUnlocked"
+                [disabled]="!zone.isUnlocked"
+                (click)="onSelectZone(zone.zoneIndex)"
+                [attr.aria-pressed]="zone.isSelected"
+              >
+                <div class="zone-badge">{{ zone.zoneIndex }}</div>
+                <div class="zone-content">
+                  <div class="zone-title">Zone {{ zone.zoneIndex }}</div>
+                  <div class="zone-desc">
+                    @if (zone.isUnlocked) {
+                      {{ zone.description }}
+                    } @else {
+                      Unlocks at Account Lv {{ zone.unlockLevel }}
+                    }
+                  </div>
+                </div>
+                @if (!zone.isUnlocked) {
+                  <span class="zone-lock">LOCK</span>
+                }
+              </button>
+            }
+          </div>
+        </div>
+
+        <div class="action-footer">
+          @if (loadError) {
+            <p class="prep-error">{{ loadError }}</p>
+          }
+
+          <div class="secondary-actions-row">
+            <button type="button" class="btn btn-secondary" (click)="goBack()">
+              Back
+            </button>
+            <a class="btn btn-secondary" routerLink="/kaelis">
+              Kaelis
+            </a>
+          </div>
+
+          @if (canStartRun) {
+            <a
+              class="btn btn-primary"
+              routerLink="/arena"
+              [queryParams]="startRunQueryParams"
+            >
+              Confirm &amp; Start Run
+              <span class="btn-hotkey">Space</span>
+            </a>
+          } @else {
+            <button type="button" class="btn btn-primary" disabled>
+              @if (isSwitchingCharacter) {
+                Syncing Kaelis...
+              } @else {
+                Confirm &amp; Start Run
               }
+              <span class="btn-hotkey">Space</span>
             </button>
           }
         </div>
-      </div>
-
-      <div class="action-footer">
-        @if (loadError) {
-          <p class="prep-error">{{ loadError }}</p>
-        }
-
-        <div class="secondary-actions-row">
-          <button type="button" class="btn btn-secondary" (click)="goBack()">
-            Back
-          </button>
-          <a class="btn btn-secondary" routerLink="/kaelis">
-            Kaelis
-          </a>
-        </div>
-
-        @if (canStartRun) {
-          <a
-            class="btn btn-primary"
-            routerLink="/arena"
-            [queryParams]="startRunQueryParams"
-          >
-            Confirm &amp; Start Run
-            <span class="btn-hotkey">Space</span>
-          </a>
-        } @else {
-          <button type="button" class="btn btn-primary" disabled>
-            @if (isSwitchingCharacter) {
-              Syncing Kaelis...
-            } @else {
-              Confirm &amp; Start Run
-            }
-            <span class="btn-hotkey">Space</span>
-          </button>
-        }
-      </div>
-    </aside>
-  </div>
-</section>
+      </aside>
+    </div>
+  </section>
+</div>

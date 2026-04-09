@@ -125,6 +125,9 @@ export class AssetResolverService {
           frameWidth: Math.max(1, rawFrameWidth),
           frameHeight: Math.max(1, rawFrameHeight),
           rowCount: rawRowCount,
+          row: typeof normalized.row === "number" && Number.isFinite(normalized.row)
+            ? Math.floor(normalized.row)
+            : undefined,
           fps: normalized.fps ?? 12,
           frameCount: Math.max(0, Math.floor(normalized.frameCount ?? 0))
         };
@@ -220,6 +223,9 @@ export class AssetResolverService {
           frameWidth: entry.frameWidth,
           frameHeight: entry.frameHeight,
           rowCount: entry.rowCount,
+          row: typeof entry.row === "number" && Number.isFinite(entry.row)
+            ? Math.floor(entry.row)
+            : undefined,
           fps: entry.fps ?? 12,
           frameCount: entry.frameCount ?? 0
         };

@@ -308,6 +308,16 @@ public static class ArenaConfig
         public const int HollowSigilLevelMin = 1;
         public const int HollowSigilLevelMax = 20;
 
+        // ZoneIndex (1-based) -> [MinLevel, MaxLevel]
+        public static readonly (int Min, int Max)[] ZoneSigilLevelRanges =
+        [
+            (1, 20),   // Zone 1 - Hollow
+            (21, 40),  // Zone 2 - Brave
+            (41, 60),  // Zone 3 - Awakened
+            (61, 80),  // Zone 4 - Exalted
+            (81, 95)   // Zone 5 - Ascendant
+        ];
+
         public static bool IsValidSlotIndex(int slotIndex)
         {
             return slotIndex >= 1 && slotIndex <= SlotLevelRanges.Length;
@@ -316,6 +326,12 @@ public static class ArenaConfig
         public static bool IsValidSpeciesId(string speciesId)
         {
             return ValidSpeciesIds.Contains(speciesId, StringComparer.Ordinal);
+        }
+
+        public static (int Min, int Max) GetSigilLevelRangeForZone(int zoneIndex)
+        {
+            var idx = Math.Clamp(zoneIndex - 1, 0, ZoneSigilLevelRanges.Length - 1);
+            return ZoneSigilLevelRanges[idx];
         }
 
         public static string ResolveTierIdForSlotIndex(int slotIndex)
@@ -366,6 +382,74 @@ public static class ArenaConfig
             }
 
             return Math.Max(0, level / divisor);
+        }
+    }
+
+    public static class MimicConfig
+    {
+        public const int SpawnChancePercent = 20;
+        public const int MaxActiveMimics = 1;
+        public const int Hp = 60;
+        public const int AutoAttackDamage = 3;
+        public const int AutoAttackCooldownMs = 1200;
+        public const int EchoFragmentsBonusDrop = 40;
+    }
+
+    public static class BossConfig
+    {
+        public const int SpawnTimeSeconds     = 165; // 2:45
+        public const int SpawnPauseDurationMs = 5000;
+        public const float PhysicalResistance = 0.70f; // boss takes 70% of physical damage (-30%)
+        public const int BossMoveCooldownMs   = 450;
+
+        public sealed record BossDef(
+            string BossId,
+            string DisplayName,
+            int Hp,
+            int AutoAttackDamage,
+            int AutoAttackCooldownMs,
+            int AbilityDamage,
+            int AbilityRange,
+            int AbilityCooldownMs,
+            string AbilityFxId,
+            ElementType AttackElement,
+            ElementType WeakTo,
+            int[] ZoneTiers);
+
+        public static readonly IReadOnlyList<BossDef> Bosses =
+        [
+            new("boss:big_demon",   "The Demon Lord",  400, 5,  800,  12, 2, 3000, "fx.boss.demon.slam",        ElementType.Fire,   ElementType.Ice,      [1, 2]),
+            new("boss:big_zombie",  "Plague Titan",    500, 4, 1000,  10, 2, 3500, "fx.boss.zombie.plague_aoe", ElementType.Earth,  ElementType.Fire,     [3, 4]),
+            new("boss:necromancer", "The Ascendant",   350, 3, 1200,  15, 4, 2800, "fx.boss.necro.barrage",     ElementType.Energy, ElementType.Physical, [5]),
+        ];
+
+        public static BossDef? TryResolveBossForZone(int zoneIndex)
+        {
+            foreach (var boss in Bosses)
+            {
+                foreach (var tier in boss.ZoneTiers)
+                {
+                    if (tier == zoneIndex)
+                    {
+                        return boss;
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        public static BossDef? TryResolveBossById(string bossId)
+        {
+            foreach (var boss in Bosses)
+            {
+                if (string.Equals(boss.BossId, bossId, StringComparison.Ordinal))
+                {
+                    return boss;
+                }
+            }
+
+            return null;
         }
     }
 
@@ -565,6 +649,8 @@ public static class ArenaConfig
     public const int EliteCommanderMaxBuffTargets = 3;
     public const int EliteCommanderDamageBonusPercent = 40;
     public const int EliteCommanderAttackSpeedBonusPercent = 30;
+    public const int EliteCommanderHpRegenPerTick = 2;
+    public const int EliteCommanderDamageReductionPercent = 20;
     #endregion
 
     #region Battle Status Strings
@@ -573,6 +659,7 @@ public static class ArenaConfig
     public const string StatusVictory = "victory";
     public const string RunEndReasonVictoryTime = "victory_time";
     public const string RunEndReasonDefeatDeath = "defeat_death";
+    public const string RunEndReasonVictoryBoss = "victory_boss";
     #endregion
 
     #region Facing Direction Strings
@@ -645,6 +732,7 @@ public static class ArenaConfig
     public const string PoiTypeChest = "chest";
     public const string PoiTypeSpeciesChest = "species_chest";
     public const string PoiTypeAltar = "altar";
+    public const string PoiTypeMimicDormant = "mimic_dormant";
     #endregion
 
     #region Buff IDs
@@ -793,6 +881,38 @@ public static class ArenaConfig
     public const int MeleeSlugAbilityDamage = 0;
     public const int MeleeSlugAbilityRangeTiles = 0;
     public const int MeleeSlugAbilityCooldownMs = 99999;
+    public const int EliteMaskedOrcMaxHp = 120;
+    public const int EliteMaskedOrcMoveCooldownMs = 450;
+    public const int EliteMaskedOrcAutoAttackRangeTiles = 1;
+    public const int EliteMaskedOrcAutoAttackDamage = 3;
+    public const int EliteMaskedOrcAutoAttackCooldownMs = 900;
+    public const int EliteMaskedOrcAbilityDamage = 0;
+    public const int EliteMaskedOrcAbilityRangeTiles = 0;
+    public const int EliteMaskedOrcAbilityCooldownMs = 99999;
+    public const int ElitePumpkinDudeMaxHp = 100;
+    public const int ElitePumpkinDudeMoveCooldownMs = 500;
+    public const int ElitePumpkinDudeAutoAttackRangeTiles = 1;
+    public const int ElitePumpkinDudeAutoAttackDamage = 3;
+    public const int ElitePumpkinDudeAutoAttackCooldownMs = 1000;
+    public const int ElitePumpkinDudeAbilityDamage = 0;
+    public const int ElitePumpkinDudeAbilityRangeTiles = 0;
+    public const int ElitePumpkinDudeAbilityCooldownMs = 99999;
+    public const int EliteDocMaxHp = 90;
+    public const int EliteDocMoveCooldownMs = 500;
+    public const int EliteDocAutoAttackRangeTiles = 1;
+    public const int EliteDocAutoAttackDamage = 2;
+    public const int EliteDocAutoAttackCooldownMs = 1100;
+    public const int EliteDocAbilityDamage = 0;
+    public const int EliteDocAbilityRangeTiles = 0;
+    public const int EliteDocAbilityCooldownMs = 99999;
+    public const int EliteIceZombieMaxHp = 110;
+    public const int EliteIceZombieMoveCooldownMs = 500;
+    public const int EliteIceZombieAutoAttackRangeTiles = 1;
+    public const int EliteIceZombieAutoAttackDamage = 2;
+    public const int EliteIceZombieAutoAttackCooldownMs = 1000;
+    public const int EliteIceZombieAbilityDamage = 0;
+    public const int EliteIceZombieAbilityRangeTiles = 0;
+    public const int EliteIceZombieAbilityCooldownMs = 99999;
     #endregion
 
     #region Batch Processing
@@ -914,6 +1034,13 @@ public static class ArenaConfig
         public const string RangedSwampy    = "ranged_swampy";
         public const string RangedMuddy     = "ranged_muddy";
         public const string MeleeSlug       = "melee_slug";
+        public const string EliteMaskedOrc   = "elite_masked_orc";
+        public const string ElitePumpkinDude = "elite_pumpkin_dude";
+        public const string EliteDoc         = "elite_doc";
+        public const string EliteIceZombie   = "elite_ice_zombie";
+        public const string BossBigDemon     = "boss:big_demon";
+        public const string BossBigZombie    = "boss:big_zombie";
+        public const string BossNecromancer  = "boss:necromancer";
     }
     #endregion
 
@@ -952,6 +1079,13 @@ public static class ArenaConfig
             [SpeciesIds.RangedSwampy]    = "Hollow Swampy",
             [SpeciesIds.RangedMuddy]     = "Hollow Muddy",
             [SpeciesIds.MeleeSlug]       = "Hollow Slug",
+            [SpeciesIds.EliteMaskedOrc]   = "Masked Warlord",
+            [SpeciesIds.ElitePumpkinDude] = "Pumpkin Herald",
+            [SpeciesIds.EliteDoc]         = "The Doc",
+            [SpeciesIds.EliteIceZombie]   = "Frost Revenant",
+            [SpeciesIds.BossBigDemon]     = "The Demon Lord",
+            [SpeciesIds.BossBigZombie]    = "Plague Titan",
+            [SpeciesIds.BossNecromancer]  = "The Ascendant",
         };
 
     // Maps simulation skill logic IDs to stable WeaponIds for display name resolution.

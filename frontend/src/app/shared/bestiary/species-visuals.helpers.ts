@@ -108,6 +108,55 @@ const SPECIES_PORTRAIT_BY_ID: Readonly<Record<string, SpeciesPortraitSpec>> = {
     runImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/tiny_slug_anim_f0.png",
     hitImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/tiny_slug_anim_f0.png",
     sigil: "SL"
+  },
+  elite_masked_orc: {
+    tone: "amber",
+    imageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/masked_orc_idle_anim_f0.png",
+    runImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/masked_orc_run_anim_f0.png",
+    hitImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/masked_orc_idle_anim_f0.png",
+    sigil: "MW"
+  },
+  elite_pumpkin_dude: {
+    tone: "crimson",
+    imageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/pumpkin_dude_idle_anim_f0.png",
+    runImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/pumpkin_dude_run_anim_f0.png",
+    hitImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/pumpkin_dude_idle_anim_f0.png",
+    sigil: "PH"
+  },
+  elite_doc: {
+    tone: "teal",
+    imageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/doc_idle_anim_f0.png",
+    runImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/doc_run_anim_f0.png",
+    hitImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/doc_idle_anim_f0.png",
+    sigil: "DC"
+  },
+  elite_ice_zombie: {
+    tone: "violet",
+    imageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/ice_zombie_anim_f0.png",
+    runImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/ice_zombie_anim_f0.png",
+    hitImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/ice_zombie_anim_f0.png",
+    sigil: "IZ"
+  },
+  "boss:big_demon": {
+    tone: "crimson",
+    imageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/big_demon_idle_anim_f0.png",
+    runImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/big_demon_run_anim_f0.png",
+    hitImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/big_demon_idle_anim_f0.png",
+    sigil: "DL"
+  },
+  "boss:big_zombie": {
+    tone: "amber",
+    imageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/big_zombie_idle_anim_f0.png",
+    runImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/big_zombie_run_anim_f0.png",
+    hitImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/big_zombie_idle_anim_f0.png",
+    sigil: "PT"
+  },
+  "boss:necromancer": {
+    tone: "violet",
+    imageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/necromancer_anim_f0.png",
+    runImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/necromancer_anim_f0.png",
+    hitImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/necromancer_anim_f0.png",
+    sigil: "AS"
   }
 } as const;
 

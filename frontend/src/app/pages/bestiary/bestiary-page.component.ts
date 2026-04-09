@@ -10,9 +10,20 @@ import { mapInventoryToBackpackSlots } from "../../shared/backpack/backpack-inve
 import { type SpeciesVisual, resolveSpeciesVisual } from "../../shared/bestiary/species-visuals.helpers";
 import { type ItemIconTone } from "../../shared/items/item-visuals.helpers";
 
+type BestiaryCategory = "common" | "elite" | "boss";
+type BestiaryTab = BestiaryCategory;
+
+type BestiarySection = Readonly<{
+  key: BestiaryCategory;
+  label: string;
+  rows: BestiaryRow[];
+  emptyMessage: string;
+}>;
+
 type BestiaryRow = Readonly<{
   speciesId: string;
   displayName: string;
+  category: BestiaryCategory;
   visual: SpeciesVisual;
   killsTotal: number;
   primalCoreBalance: number;
@@ -68,6 +79,17 @@ function computeRank(killsTotal: number, thresholds: ReadonlyArray<number>): num
   return rank;
 }
 
+const SPECIES_CATEGORY_ORDER: Record<BestiaryCategory, number> = {
+  common: 0,
+  elite: 1,
+  boss: 2
+};
+const SECTION_PAGE_SIZE: Readonly<Record<BestiaryCategory, number>> = {
+  common: 5,
+  elite: 5,
+  boss: 5
+};
+
 @Component({
   selector: "app-bestiary-page",
   standalone: true,
@@ -77,11 +99,13 @@ function computeRank(killsTotal: number, thresholds: ReadonlyArray<number>): num
 export class BestiaryPageComponent implements OnInit {
   readonly primalCoreCost = 20;
   readonly echoFragmentsCost = 100;
-  readonly speciesPageSize = 6;
+  readonly activeTab = signal<BestiaryTab>("common");
+  readonly commonPage = signal(1);
+  readonly elitePage = signal(1);
+  readonly bossPage = signal(1);
   private readonly contextCharacterIdSignal = signal<string | null>(null);
   private readonly selectedSpeciesIdSignal = signal<string | null>(null);
   private readonly searchQuerySignal = signal("");
-  private readonly speciesPageSignal = signal(0);
   private readonly scopedCharacterSignal = computed(() => this.resolveScopedCharacter(this.contextCharacterIdSignal()));
   private readonly speciesRowsSignal = computed(() =>
     this.buildRows(
@@ -99,10 +123,13 @@ export class BestiaryPageComponent implements OnInit {
           row.speciesId.toLowerCase().includes(query)
         );
     return [...filtered].sort((a, b) => {
+      const byCategory = SPECIES_CATEGORY_ORDER[a.category] - SPECIES_CATEGORY_ORDER[b.category];
+      if (byCategory !== 0) return byCategory;
+
       const aHasKills = a.killsTotal > 0 ? 1 : 0;
       const bHasKills = b.killsTotal > 0 ? 1 : 0;
       if (aHasKills !== bHasKills) return bHasKills - aHasKills;
-      if (a.rank !== b.rank) return b.rank - a.rank;
+      if (aHasKills === 1 && a.killsTotal !== b.killsTotal) return b.killsTotal - a.killsTotal;
       if (a.killsTotal !== b.killsTotal) return b.killsTotal - a.killsTotal;
       return a.displayName.localeCompare(b.displayName);
     });
@@ -128,13 +155,10 @@ export class BestiaryPageComponent implements OnInit {
       this.selectedSpeciesIdSignal.set(rows[0].speciesId);
     }
   }, { allowSignalWrites: true });
-  private readonly maintainSpeciesPageEffect = effect(() => {
-    const rows = this.filteredSpeciesRowsSignal();
-    const currentPage = this.speciesPageSignal();
-    const clamped = this.clampSpeciesPage(currentPage, rows.length);
-    if (currentPage !== clamped) {
-      this.speciesPageSignal.set(clamped);
-    }
+  private readonly maintainSectionPagesEffect = effect(() => {
+    this.clampSectionPage("common");
+    this.clampSectionPage("elite");
+    this.clampSectionPage("boss");
   }, { allowSignalWrites: true });
 
   constructor(private readonly accountStore: AccountStore) {}
@@ -200,40 +224,95 @@ export class BestiaryPageComponent implements OnInit {
     return this.filteredSpeciesRows.reduce((total, row) => total + row.killsTotal, 0);
   }
 
-  get speciesPageCount(): number {
-    const count = this.filteredSpeciesRows.length;
-    if (count === 0) {
+  get commonSpeciesRows(): BestiaryRow[] {
+    return this.filteredSpeciesRows.filter((row) => row.category === "common");
+  }
+
+  get eliteSpeciesRows(): BestiaryRow[] {
+    return this.filteredSpeciesRows.filter((row) => row.category === "elite");
+  }
+
+  get bossSpeciesRows(): BestiaryRow[] {
+    return this.filteredSpeciesRows.filter((row) => row.category === "boss");
+  }
+
+  get speciesSections(): ReadonlyArray<BestiarySection> {
+    return [
+      {
+        key: "common",
+        label: "Common",
+        rows: this.commonSpeciesRows,
+        emptyMessage: "No common species match your search."
+      },
+      {
+        key: "elite",
+        label: "Elite Commanders",
+        rows: this.eliteSpeciesRows,
+        emptyMessage: "No elite commanders match your search."
+      },
+      {
+        key: "boss",
+        label: "Bosses",
+        rows: this.bossSpeciesRows,
+        emptyMessage: "No bosses match your search."
+      }
+    ];
+  }
+
+  get commonSpeciesTotal(): number {
+    return this.speciesRows.filter((row) => row.category === "common").length;
+  }
+
+  get eliteSpeciesTotal(): number {
+    return this.speciesRows.filter((row) => row.category === "elite").length;
+  }
+
+  get bossSpeciesTotal(): number {
+    return this.speciesRows.filter((row) => row.category === "boss").length;
+  }
+
+  get activeSpeciesSection(): BestiarySection | null {
+    return this.speciesSections.find((section) => section.key === this.activeTab()) ?? null;
+  }
+
+  getSectionPageCount(category: BestiaryCategory): number {
+    const rows = this.getSectionRows(category);
+    const pageSize = SECTION_PAGE_SIZE[category];
+    if (rows.length === 0) {
       return 0;
     }
-    return Math.ceil(count / this.speciesPageSize);
+
+    return Math.ceil(rows.length / pageSize);
   }
 
-  get speciesPageNumber(): number {
-    return this.speciesPageCount === 0 ? 0 : this.speciesPageSignal() + 1;
+  getSectionIsPageStart(category: BestiaryCategory): boolean {
+    return this.getSectionPage(category) <= 1;
   }
 
-  get isSpeciesPageStart(): boolean {
-    return this.speciesPageSignal() <= 0;
+  getSectionIsPageEnd(category: BestiaryCategory): boolean {
+    const pageCount = this.getSectionPageCount(category);
+    return pageCount === 0 || this.getSectionPage(category) >= pageCount;
   }
 
-  get isSpeciesPageEnd(): boolean {
-    return this.speciesPageSignal() >= Math.max(0, this.speciesPageCount - 1);
-  }
-
-  get speciesPageWindowLabel(): string {
-    const total = this.filteredSpeciesRows.length;
+  getSectionPageWindowLabel(category: BestiaryCategory): string {
+    const rows = this.getSectionRows(category);
+    const total = rows.length;
+    const pageSize = SECTION_PAGE_SIZE[category];
     if (total === 0) {
       return "0 / 0";
     }
 
-    const start = this.speciesPageSignal() * this.speciesPageSize + 1;
-    const end = Math.min(total, start + this.speciesPageSize - 1);
+    const start = (this.getSectionPage(category) - 1) * pageSize + 1;
+    const end = Math.min(total, start + pageSize - 1);
     return `${start}-${end} / ${total}`;
   }
 
-  get pagedSpeciesRows(): BestiaryRow[] {
-    const start = this.speciesPageSignal() * this.speciesPageSize;
-    return this.filteredSpeciesRows.slice(start, start + this.speciesPageSize);
+  getPagedSectionRows(category: BestiaryCategory): BestiaryRow[] {
+    const rows = this.getSectionRows(category);
+    const pageSize = SECTION_PAGE_SIZE[category];
+    const currentPage = this.getSectionPage(category);
+    const start = Math.max(0, (currentPage - 1) * pageSize);
+    return rows.slice(start, start + pageSize);
   }
 
   get selectedSpecies(): BestiaryRow | null {
@@ -301,19 +380,36 @@ export class BestiaryPageComponent implements OnInit {
     this.selectedSpeciesIdSignal.set(speciesId);
   }
 
+  setTab(tab: BestiaryTab): void {
+    if (this.activeTab() === tab) {
+      return;
+    }
+
+    this.activeTab.set(tab);
+    const tabRows = this.getSectionRows(tab);
+    const selectedSpeciesId = this.selectedSpeciesIdSignal();
+    if (tabRows.length > 0 && !tabRows.some((row) => row.speciesId === selectedSpeciesId)) {
+      this.selectedSpeciesIdSignal.set(tabRows[0].speciesId);
+    }
+  }
+
   onSearchInput(event: Event): void {
     const input = event.target;
     this.searchQuerySignal.set(input instanceof HTMLInputElement ? input.value : "");
-    this.speciesPageSignal.set(0);
+    this.commonPage.set(1);
+    this.elitePage.set(1);
+    this.bossPage.set(1);
   }
 
-  goToPreviousSpeciesPage(): void {
-    this.speciesPageSignal.update((page) => Math.max(0, page - 1));
+  goToPreviousSectionPage(category: BestiaryCategory): void {
+    const pageSignal = this.getSectionPageSignal(category);
+    pageSignal.update((page) => Math.max(1, page - 1));
   }
 
-  goToNextSpeciesPage(): void {
-    const maxPage = Math.max(0, this.speciesPageCount - 1);
-    this.speciesPageSignal.update((page) => Math.min(maxPage, page + 1));
+  goToNextSectionPage(category: BestiaryCategory): void {
+    const pageSignal = this.getSectionPageSignal(category);
+    const maxPage = Math.max(1, this.getSectionPageCount(category));
+    pageSignal.update((page) => Math.min(maxPage, page + 1));
   }
 
   get canCraftSelectedSpecies(): boolean {
@@ -583,7 +679,14 @@ export class BestiaryPageComponent implements OnInit {
     const killsBySpecies = character?.bestiaryKillsBySpecies ?? {};
     const primalCoreBySpecies = character?.primalCoreBySpecies ?? {};
     const knownRows = speciesCatalog.map((species) =>
-      this.buildSpeciesRow(species.speciesId, species.displayName, killsBySpecies, primalCoreBySpecies, thresholds)
+      this.buildSpeciesRow(
+        species.speciesId,
+        species.displayName,
+        this.normalizeSpeciesCategory(species.category),
+        killsBySpecies,
+        primalCoreBySpecies,
+        thresholds
+      )
     );
 
     return knownRows;
@@ -592,6 +695,7 @@ export class BestiaryPageComponent implements OnInit {
   private buildSpeciesRow(
     speciesId: string,
     displayName: string,
+    category: BestiaryCategory,
     killsBySpecies: Record<string, number>,
     primalCoreBySpecies: Record<string, number>,
     thresholds: ReadonlyArray<number>
@@ -609,6 +713,7 @@ export class BestiaryPageComponent implements OnInit {
     return {
       speciesId,
       displayName,
+      category,
       visual: resolveSpeciesVisual({ speciesId, displayName }),
       killsTotal,
       primalCoreBalance: Math.max(0, primalCoreBySpecies[speciesId] ?? 0),
@@ -618,6 +723,15 @@ export class BestiaryPageComponent implements OnInit {
       rank,
       isMaxRank
     };
+  }
+
+  private normalizeSpeciesCategory(category: string | null | undefined): BestiaryCategory {
+    const normalized = category?.trim().toLowerCase();
+    if (normalized === "elite" || normalized === "boss") {
+      return normalized;
+    }
+
+    return "common";
   }
 
   private resolveRefineRule(rarity: string): RefineRule | null {
@@ -687,12 +801,52 @@ export class BestiaryPageComponent implements OnInit {
     return normalized.length > 0 ? normalized : null;
   }
 
-  private clampSpeciesPage(page: number, rowCount: number): number {
+  private getSectionRows(category: BestiaryCategory): BestiaryRow[] {
+    switch (category) {
+      case "common":
+        return this.commonSpeciesRows;
+      case "elite":
+        return this.eliteSpeciesRows;
+      case "boss":
+        return this.bossSpeciesRows;
+      default:
+        return [];
+    }
+  }
+
+  private getSectionPage(category: BestiaryCategory): number {
+    return this.getSectionPageSignal(category)();
+  }
+
+  private getSectionPageSignal(category: BestiaryCategory) {
+    switch (category) {
+      case "common":
+        return this.commonPage;
+      case "elite":
+        return this.elitePage;
+      case "boss":
+        return this.bossPage;
+      default:
+        return this.commonPage;
+    }
+  }
+
+  private clampSectionPage(category: BestiaryCategory): void {
+    const pageSignal = this.getSectionPageSignal(category);
+    const currentPage = pageSignal();
+    const rowCount = this.getSectionRows(category).length;
     if (rowCount <= 0) {
-      return 0;
+      if (currentPage !== 1) {
+        pageSignal.set(1);
+      }
+      return;
     }
 
-    const maxPage = Math.max(0, Math.ceil(rowCount / this.speciesPageSize) - 1);
-    return Math.min(Math.max(page, 0), maxPage);
+    const pageSize = SECTION_PAGE_SIZE[category];
+    const maxPage = Math.max(1, Math.ceil(rowCount / pageSize));
+    const clamped = Math.min(Math.max(currentPage, 1), maxPage);
+    if (clamped !== currentPage) {
+      pageSignal.set(clamped);
+    }
   }
 }

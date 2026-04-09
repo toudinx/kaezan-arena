@@ -293,6 +293,38 @@
   padding-right: 0.08rem;
 }
 
+.backpack-page__sigil-pagination {
+  margin-top: 0.48rem;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.backpack-page__sigil-pagination span {
+  text-align: center;
+  font-size: 0.58rem;
+  color: #9ab3cc;
+}
+
+.backpack-page__sigil-pagination button {
+  border: 1px solid #2f4863;
+  border-radius: 0.34rem;
+  background: #122235;
+  color: #c7dcf0;
+  font-size: 0.58rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 0.28rem 0.44rem;
+  cursor: pointer;
+}
+
+.backpack-page__sigil-pagination button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .backpack-page__sigil-group {
   border: 1px solid #223349;
   border-radius: 0.4rem;

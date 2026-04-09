@@ -1,4 +1,5 @@
 import { ArenaScene, ElementTypeValue, RenderLayer } from "../engine/arena-engine.types";
+import { resolveTierAuraFxId } from "../engine/arena-engine";
 import {
   COMBAT_FX_DEATH_BURST,
   COMBAT_FX_HIT_IMPACT,
@@ -38,24 +39,16 @@ const CRIT_TEXT_PALETTE = {
   fill: "#fde047",
   outline: "rgba(15, 23, 42, 0.95)"
 } as const;
-export type TierAuraConfig = Readonly<Record<number, Readonly<{
-  color: string;
-  blur: number;
-  alpha: number;
-}>>>;
-
 export class CanvasLayeredRenderer {
   private readonly pipeline: RenderLayer[] = ["ground", "groundFx", "actors", "hitFx", "ui"];
   private readonly warnedMissingAssetIds = new Set<string>();
+  private readonly warnedTierAuraAssetIds = new Set<string>();
   private readonly missingAssetIds = new Set<string>();
   private readonly projectileAnimator = new ProjectileAnimator();
   private readonly seenPoiIds = new Set<string>();
   private readonly poiPulseExpiresAtMsById = new Map<string, number>();
 
-  constructor(
-    private readonly context: CanvasRenderingContext2D,
-    private readonly tierAuraConfig: TierAuraConfig = {}
-  ) {}
+  constructor(private readonly context: CanvasRenderingContext2D) {}
 
   async render(
     scene: ArenaScene,
@@ -87,10 +80,12 @@ export class CanvasLayeredRenderer {
       if (layer === "actors") {
         const actors = scene.sprites.filter((sprite) => sprite.layer === "actors");
         for (const actor of actors) {
-          const spriteSize = scene.tileSize * 0.88;
+          const actorState = scene.actorsById[actor.actorId];
+          const isBoss = actorState?.kind === "boss";
+          const sizeMultiplier = isBoss ? 1.5 : 0.88;
+          const spriteSize = scene.tileSize * sizeMultiplier;
           const destX = viewport.originX + actor.tilePos.x * scene.tileSize + (scene.tileSize - spriteSize) / 2;
           const destY = viewport.originY + actor.tilePos.y * scene.tileSize + (scene.tileSize - spriteSize) / 2;
-          const actorState = scene.actorsById[actor.actorId];
           if (actorState?.kind === "mob" && actorState.isElite === true) {
             this.drawEliteSpriteAura(scene, viewport, actor.tilePos.x, actor.tilePos.y);
           }
@@ -101,7 +96,6 @@ export class CanvasLayeredRenderer {
           }
 
           this.drawResolvedAsset(loaded, destX, destY, spriteSize, spriteSize, actor.animationElapsedMs);
-          this.drawMobTierAura(scene, actorState, destX, destY, spriteSize);
         }
 
         this.drawMobHpBars(scene, viewport);
@@ -121,6 +115,8 @@ export class CanvasLayeredRenderer {
 
             this.drawDecal(scene, viewport, loaded, decal);
           }
+
+          await this.drawMobTierAuraGroundFx(scene, viewport, imageCache, imageLoader);
         }
 
         const fxEntries = scene.fxInstances.filter((fx) => fx.layer === layer);
@@ -229,6 +225,59 @@ export class CanvasLayeredRenderer {
       element
     );
     this.context.restore();
+  }
+
+  private async drawMobTierAuraGroundFx(
+    scene: ArenaScene,
+    viewport: RenderViewport,
+    imageCache: Map<string, Promise<PreloadedAsset | null>>,
+    imageLoader: (semanticId: string) => Promise<PreloadedAsset>
+  ): Promise<void> {
+    const ringElapsedMs = this.nowMs();
+    const ringSizePx = scene.tileSize * 1.8;
+    const ringOffsetX = (scene.tileSize - ringSizePx) / 2;
+    const ringOffsetY = (scene.tileSize - ringSizePx) / 2;
+    const sprites = scene.sprites.filter((sprite) => sprite.layer === "actors");
+    console.log("[TierAura] Processing sprites:", sprites.length);
+    for (const sprite of sprites) {
+      const actorStateFromMap = (scene.actorsById as unknown as {
+        get?: (actorId: string) => ArenaScene["actorsById"][string] | undefined;
+      }).get?.(sprite.actorId);
+      const actorState = actorStateFromMap ?? scene.actorsById[sprite.actorId];
+      console.log("[TierAura] actorId:", sprite.actorId, "actorState:", actorState?.kind, "tierIndex:", actorState?.tierIndex);
+      if (actorState?.kind !== "mob") {
+        continue;
+      }
+
+      const tierAuraFxId = resolveTierAuraFxId(actorState.tierIndex ?? 1);
+      if (!tierAuraFxId) {
+        continue;
+      }
+
+      const loaded = await this.getAsset(imageCache, tierAuraFxId, imageLoader);
+      console.log("[TierAura] fxId:", tierAuraFxId, "loaded:", !!loaded);
+      if (!loaded) {
+        if (!this.warnedTierAuraAssetIds.has(tierAuraFxId)) {
+          this.warnedTierAuraAssetIds.add(tierAuraFxId);
+          console.warn(`[TierAura] Asset not loaded: ${tierAuraFxId}`);
+        }
+        continue;
+      }
+
+      const centerX = viewport.originX + sprite.tilePos.x * scene.tileSize + scene.tileSize / 2;
+      const centerY = viewport.originY + sprite.tilePos.y * scene.tileSize + scene.tileSize / 2;
+      this.context.save();
+      this.context.globalAlpha = 0.7;
+      this.drawResolvedAsset(
+        loaded,
+        centerX - ringSizePx / 2,
+        centerY - ringSizePx / 4,
+        ringSizePx,
+        ringSizePx,
+        ringElapsedMs
+      );
+      this.context.restore();
+    }
   }
 
   private drawAttackFx(scene: ArenaScene, viewport: RenderViewport, attackFx: ArenaScene["attackFxInstances"][number]): void {
@@ -562,7 +611,12 @@ export class CanvasLayeredRenderer {
       const computedFrameCount = Math.floor(image.width / frameWidth);
       const frameCount = Math.max(1, declaredFrameCount > 0 ? declaredFrameCount : computedFrameCount);
       const rowCount = Math.max(1, Math.floor(resolved.rowCount ?? Math.floor(image.height / frameHeight)));
-      const rowIndex = Math.min(rowCount, Math.max(1, element));
+      const explicitRow = typeof resolved.row === "number" && Number.isFinite(resolved.row)
+        ? Math.floor(resolved.row)
+        : null;
+      const rowIndex = explicitRow === null
+        ? Math.min(rowCount, Math.max(1, element))
+        : Math.max(1, Math.min(rowCount, explicitRow + 1));
       const frameIndex = this.getAnimFrameIndex(elapsedMs, resolved.fps ?? 12, frameCount, startFrame);
       const sx = Math.min(image.width - frameWidth, frameIndex * frameWidth);
       const sy = Math.min(image.height - frameHeight, (rowIndex - 1) * frameHeight);
@@ -650,41 +704,6 @@ export class CanvasLayeredRenderer {
     this.context.fillStyle = "rgba(251, 191, 36, 0.09)";
     this.context.beginPath();
     this.context.arc(centerX, centerY, innerRadius, 0, Math.PI * 2);
-    this.context.fill();
-    this.context.restore();
-  }
-
-  private drawMobTierAura(
-    scene: ArenaScene,
-    actorState: ArenaScene["actorsById"][string] | undefined,
-    spriteX: number,
-    spriteY: number,
-    spriteSize: number
-  ): void {
-    if (actorState?.kind !== "mob") {
-      return;
-    }
-
-    const tierIndex = Math.floor(actorState.tierIndex ?? 1);
-    if (tierIndex <= 1) {
-      return;
-    }
-
-    const aura = this.tierAuraConfig[tierIndex];
-    if (!aura) {
-      return;
-    }
-
-    const centerX = spriteX + spriteSize / 2;
-    const centerY = spriteY + spriteSize / 2;
-    const auraRadius = Math.max(2, scene.tileSize * 0.15);
-    this.context.save();
-    this.context.globalAlpha = Math.max(0, Math.min(1, aura.alpha));
-    this.context.shadowBlur = Math.max(0, aura.blur);
-    this.context.shadowColor = aura.color;
-    this.context.fillStyle = aura.color;
-    this.context.beginPath();
-    this.context.arc(centerX, centerY, auraRadius, 0, Math.PI * 2);
     this.context.fill();
     this.context.restore();
   }
@@ -1003,6 +1022,10 @@ export class CanvasLayeredRenderer {
         const isSpeciesChest = poi.type === "species_chest";
         this.drawChestAmbientAura(scene.tileSize, centerX, centerY, poi.poiId, nowMs, isSpeciesChest);
         this.drawChestPoiMarker(scene.tileSize, centerX, centerY, isSpeciesChest, poi.poiId, nowMs);
+      } else if (poi.type === "mimic_dormant") {
+        // Dormant mimic looks like a chest but has a subtle red tint on the aura
+        this.drawChestAmbientAura(scene.tileSize, centerX, centerY, poi.poiId, nowMs, false);
+        this.drawChestPoiMarker(scene.tileSize, centerX, centerY, false, poi.poiId, nowMs);
       } else {
         this.drawAltarPoiMarker(scene.tileSize, centerX, centerY);
       }
@@ -1024,7 +1047,9 @@ export class CanvasLayeredRenderer {
           ? `rgba(125, 211, 252, ${pulseAlpha})`
           : poi.type === "chest"
             ? `rgba(251, 191, 36, ${pulseAlpha})`
-            : `rgba(103, 232, 249, ${pulseAlpha * 0.9})`;
+            : poi.type === "mimic_dormant"
+              ? `rgba(251, 191, 36, ${pulseAlpha})`
+              : `rgba(103, 232, 249, ${pulseAlpha * 0.9})`;
         this.context.strokeStyle = pulseColor;
         this.context.lineWidth = Math.max(1.8, scene.tileSize * 0.045);
         this.context.beginPath();
@@ -1047,7 +1072,7 @@ export class CanvasLayeredRenderer {
       this.seenPoiIds.add(poi.poiId);
       const pulseDurationMs = poi.type === "species_chest"
         ? 1600
-        : poi.type === "chest"
+        : poi.type === "chest" || poi.type === "mimic_dormant"
           ? 1300
           : 900;
       this.poiPulseExpiresAtMsById.set(poi.poiId, nowMs + pulseDurationMs);

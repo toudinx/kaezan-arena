@@ -2,7 +2,8 @@ namespace KaezanArena.Api.Contracts.Account;
 
 public sealed record BestiarySpeciesDto(
     string SpeciesId,
-    string DisplayName);
+    string DisplayName,
+    string Category);
 
 public sealed record CharacterBestiaryStateDto(
     string CharacterId,

@@ -90,6 +90,12 @@ public sealed partial class InMemoryBattleStore
 
     private static void TickMobRespawns(StoredBattle state, List<BattleEventDto> events)
     {
+        var nowMs = GetElapsedMsForTick(state.Tick);
+        if (nowMs < state.MobSpawnPausedUntilMs)
+        {
+            return;
+        }
+
         var maxAliveMobs = ResolveSpawnPacingDirector(state).MaxAliveMobs;
         foreach (var slot in state.MobSlots.Values.OrderBy(value => value.SlotIndex))
         {

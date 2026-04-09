@@ -91,6 +91,7 @@ public sealed partial class InMemoryBattleStore
     {
         return string.Equals(candidate.Kind, "mob", StringComparison.Ordinal) &&
                !candidate.IsElite &&
+               !candidate.IsMimic &&
                candidate.Hp > 0 &&
                string.IsNullOrWhiteSpace(candidate.BuffSourceEliteId) &&
                !string.Equals(candidate.ActorId, elite.ActorId, StringComparison.Ordinal);
@@ -111,6 +112,34 @@ public sealed partial class InMemoryBattleStore
             EliteEntityId: sourceEliteId,
             TargetEntityId: mob.ActorId));
         return true;
+    }
+
+    private static void TickEliteDocRegen(StoredBattle state, List<BattleEventDto> events)
+    {
+        var docBuffedMobs = state.Actors.Values
+            .Where(actor =>
+                string.Equals(actor.Kind, "mob", StringComparison.Ordinal) &&
+                !actor.IsElite &&
+                actor.Hp > 0 &&
+                actor.BuffSourceEliteId is not null &&
+                state.Actors.TryGetValue(actor.BuffSourceEliteId, out var srcElite) &&
+                srcElite.MobType == MobArchetype.EliteDoc)
+            .ToList();
+
+        foreach (var mob in docBuffedMobs)
+        {
+            if (mob.Hp >= mob.MaxHp)
+            {
+                continue;
+            }
+
+            var healed = Math.Min(ArenaConfig.EliteCommanderHpRegenPerTick, mob.MaxHp - mob.Hp);
+            mob.Hp += healed;
+            events.Add(new HealNumberEventDto(
+                ActorId: mob.ActorId,
+                Amount: healed,
+                Source: "elite_doc_regen"));
+        }
     }
 
     private static void RemoveEliteCommanderBuffs(StoredBattle state, string eliteActorId, List<BattleEventDto>? events)

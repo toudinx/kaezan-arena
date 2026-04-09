@@ -3,6 +3,10 @@ export type ElementTypeValue = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 export type CombatFxKindValue = 1 | 2 | 3 | 4 | 5;
 export type DecalKindValue = 1;
 export type HitKindValue = "normal" | "crit";
+export const MOB_ARCHETYPE_VALUES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18] as const;
+export type MobArchetypeValue = (typeof MOB_ARCHETYPE_VALUES)[number];
+export const MIN_MOB_ARCHETYPE_VALUE: MobArchetypeValue = MOB_ARCHETYPE_VALUES[0];
+export const MAX_MOB_ARCHETYPE_VALUE: MobArchetypeValue = MOB_ARCHETYPE_VALUES[MOB_ARCHETYPE_VALUES.length - 1];
 
 export interface TilePos {
   x: number;
@@ -49,8 +53,6 @@ export interface ArenaActorState {
   weakTo?: string | null;
   resistantTo?: string | null;
 }
-
-export type MobArchetypeValue = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13;
 
 export type ArenaActorMap = Record<string, ArenaActorState>;
 
@@ -192,7 +194,7 @@ export interface DecalInstance {
   createdTick: number;
 }
 
-export type ArenaPoiType = "altar" | "chest" | "species_chest";
+export type ArenaPoiType = "altar" | "chest" | "species_chest" | "mimic_dormant";
 
 export interface ArenaPoiState {
   poiId: string;
@@ -351,6 +353,14 @@ export interface ArenaCardChosenEvent {
   cardName?: string;
 }
 
+export interface ArenaMimicActivatedEvent {
+  type: "mimic_activated";
+  poiId: string;
+  actorId: string;
+  tileX: number;
+  tileY: number;
+}
+
 export type ArenaBattleEvent =
   | ArenaFxSpawnEvent
   | ArenaDamageNumberEvent
@@ -366,7 +376,8 @@ export type ArenaBattleEvent =
   | ArenaCardChoiceOfferedEvent
   | ArenaCardChosenEvent
   | ArenaRangedProjectileFiredEvent
-  | ArenaMobKnockedBackEvent;
+  | ArenaMobKnockedBackEvent
+  | ArenaMimicActivatedEvent;
 
 export interface ApplyBattleStepResult {
   scene: ArenaScene;

@@ -65,7 +65,7 @@ export class ArenaElementalPageComponent {
   constructor(private readonly router: Router) {}
 
   enterArena(arenaId: string): void {
-    void this.router.navigate(["/arena"], { queryParams: { arenaId } });
+    void this.router.navigate(["/arena-prep"], { queryParams: { arenaId } });
   }
 
   goBack(): void {

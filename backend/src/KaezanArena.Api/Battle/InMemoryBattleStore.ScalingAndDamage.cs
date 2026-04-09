@@ -77,11 +77,21 @@ public sealed partial class InMemoryBattleStore
         return 1.0f;
     }
 
-    private static int ResolveMobAutoAttackCooldownMs(MobArchetypeConfig config, StoredActor mob)
+    private static MobArchetype? GetBuffingEliteArchetype(StoredBattle state, StoredActor mob)
     {
-        var attackSpeedBonusPercent = mob.BuffSourceEliteId is null
-            ? 0
-            : ArenaConfig.EliteCommanderAttackSpeedBonusPercent;
+        if (mob.BuffSourceEliteId is not string eliteId)
+        {
+            return null;
+        }
+
+        return state.Actors.TryGetValue(eliteId, out var sourceElite) ? sourceElite.MobType : null;
+    }
+
+    private static int ResolveMobAutoAttackCooldownMs(MobArchetypeConfig config, StoredActor mob, StoredBattle state)
+    {
+        var attackSpeedBonusPercent = GetBuffingEliteArchetype(state, mob) == MobArchetype.EliteMaskedOrc
+            ? ArenaConfig.EliteCommanderAttackSpeedBonusPercent
+            : 0;
         return Math.Max(
             1,
             ApplyPercentReduction(
@@ -104,7 +114,7 @@ public sealed partial class InMemoryBattleStore
                 ? scaling.EliteDmgMult
                 : scaling.NormalDmgMult);
 
-        if (attacker.BuffSourceEliteId is not null)
+        if (GetBuffingEliteArchetype(state, attacker) == MobArchetype.ElitePumpkinDude)
         {
             adjusted = ApplyPercentIncrease(adjusted, ArenaConfig.EliteCommanderDamageBonusPercent);
         }
