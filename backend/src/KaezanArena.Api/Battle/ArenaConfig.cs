@@ -175,15 +175,23 @@ public static class ArenaConfig
         public const int XpPerKill = 2;
         public const int XpRequiredPerLevelMultiplier = 120;
         public const int XpRequiredPerLevelBase = 80;
-        public const int MasteryLevelCap = 50;
+        public const int MasteryLevelCap = 10;
         public const int MilestoneLevelInterval = 10;
         public const int InitialUnlockedSigilSlots = 1;
         public const int MaxUnlockedSigilSlots = 5;
 
+        public static readonly Dictionary<int, int> SigilSlotUnlockAtLevel = new()
+        {
+            { 1, 1 },
+            { 2, 2 },
+            { 4, 3 },
+            { 6, 4 },
+            { 8, 5 },
+        };
+
         // Milestone rewards per milestone index (0 = level 10, 1 = level 20, etc.)
         public static readonly int[] KaerosRewardPerMilestone = [30, 40, 50, 60, 100];
         public static readonly int[] EchoFragmentsRewardPerMilestone = [200, 350, 500, 700, 1000];
-        public static readonly int[] SigilSlotsUnlockedPerMilestone = [2, 3, 4, 5, 5];
 
         // Barrier materials
         public const string HollowEssenceId = "material:hollow_essence";
@@ -456,7 +464,7 @@ public static class ArenaConfig
     public static class ZoneConfig
     {
         public const int ZoneCount = 5;
-        public const int AccountLevelCap = 100;
+        public const int AccountLevelCap = 10;
         public static readonly int[] AccountLevelToUnlockZone = [1, 2, 4, 6, 8];
 
         // HP and damage multipliers per zone (applied on top of existing run scaling)

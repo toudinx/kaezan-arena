@@ -447,17 +447,16 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
                 1,
                 ArenaConfig.MasteryConfig.MasteryLevelCap);
             var nextLevel = ResolveMasteryLevelFromTotalXp(cappedMasteryXp, character.HollowEssenceBarrierCleared);
-
+            var nextUnlockedSigilSlots = ResolveSigilSlotsForMasteryLevel(nextLevel);
             var rewardDelta = ResolveMilestoneRewardDelta(
                 previousLevel: previousLevel,
-                nextLevel: nextLevel,
-                currentUnlockedSigilSlots: character.UnlockedSigilSlots);
+                nextLevel: nextLevel);
 
             var updatedCharacter = character with
             {
                 MasteryXp = cappedMasteryXp,
                 MasteryLevel = nextLevel,
-                UnlockedSigilSlots = rewardDelta.UnlockedSigilSlots
+                UnlockedSigilSlots = nextUnlockedSigilSlots
             };
 
             var updatedEchoFragmentsBalance = account.State.EchoFragmentsBalance + rewardDelta.EchoFragmentsAward;
@@ -573,6 +572,14 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
         {
             EnsureDailyContractsRefreshed(account);
             var character = GetCharacterOrThrow(account.State, characterId);
+            if (!IsHollowEssenceBarrierEnabled())
+            {
+                return new SpendHollowEssenceBarrierResult(
+                    Success: false,
+                    FailureReason: "Hollow Essence barrier is disabled at the current Mastery level cap.",
+                    Account: CloneAccountState(account.State));
+            }
+
             if (character.MasteryLevel != ArenaConfig.MasteryConfig.MilestoneLevelInterval)
             {
                 return new SpendHollowEssenceBarrierResult(
@@ -614,15 +621,15 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
                 1,
                 ArenaConfig.MasteryConfig.MasteryLevelCap);
             var nextLevel = ResolveMasteryLevelFromTotalXp(Math.Max(0L, character.MasteryXp), barrierCleared: true);
+            var nextUnlockedSigilSlots = ResolveSigilSlotsForMasteryLevel(nextLevel);
             var rewardDelta = ResolveMilestoneRewardDelta(
                 previousLevel: previousLevel,
-                nextLevel: nextLevel,
-                currentUnlockedSigilSlots: character.UnlockedSigilSlots);
+                nextLevel: nextLevel);
             var updatedCharacter = character with
             {
                 HollowEssenceBarrierCleared = true,
                 MasteryLevel = nextLevel,
-                UnlockedSigilSlots = rewardDelta.UnlockedSigilSlots,
+                UnlockedSigilSlots = nextUnlockedSigilSlots,
                 Inventory = character.Inventory with
                 {
                     MaterialStacks = materialStacks
@@ -1618,10 +1625,11 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
         var level = 1;
         var remainingXp = safeXp;
         var levelCap = ArenaConfig.MasteryConfig.MasteryLevelCap;
+        var barrierApplies = IsHollowEssenceBarrierEnabled();
 
         while (level < levelCap)
         {
-            if (level == ArenaConfig.MasteryConfig.MilestoneLevelInterval && !barrierCleared)
+            if (barrierApplies && level == ArenaConfig.MasteryConfig.MilestoneLevelInterval && !barrierCleared)
             {
                 break;
             }
@@ -1637,6 +1645,35 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
         }
 
         return Math.Clamp(level, 1, levelCap);
+    }
+
+    private static bool IsHollowEssenceBarrierEnabled()
+    {
+        return ArenaConfig.MasteryConfig.MasteryLevelCap > ArenaConfig.MasteryConfig.MilestoneLevelInterval;
+    }
+
+    private static int ResolveSigilSlotsForMasteryLevel(int masteryLevel)
+    {
+        var safeMasteryLevel = Math.Clamp(
+            masteryLevel,
+            1,
+            ArenaConfig.MasteryConfig.MasteryLevelCap);
+        var unlockedSigilSlots = ArenaConfig.MasteryConfig.InitialUnlockedSigilSlots;
+
+        foreach (var unlockEntry in ArenaConfig.MasteryConfig.SigilSlotUnlockAtLevel.OrderBy(entry => entry.Key))
+        {
+            if (safeMasteryLevel < unlockEntry.Key)
+            {
+                break;
+            }
+
+            unlockedSigilSlots = Math.Max(unlockedSigilSlots, unlockEntry.Value);
+        }
+
+        return Math.Clamp(
+            unlockedSigilSlots,
+            ArenaConfig.MasteryConfig.InitialUnlockedSigilSlots,
+            ArenaConfig.MasteryConfig.MaxUnlockedSigilSlots);
     }
 
     private static long ResolveTotalAccountXpRequiredToReachLevel(int targetLevelInclusive)
@@ -1678,26 +1715,17 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
 
     private static MilestoneRewardDelta ResolveMilestoneRewardDelta(
         int previousLevel,
-        int nextLevel,
-        int currentUnlockedSigilSlots)
+        int nextLevel)
     {
         if (nextLevel <= previousLevel)
         {
             return new MilestoneRewardDelta(
                 KaerosAward: 0L,
-                EchoFragmentsAward: 0L,
-                UnlockedSigilSlots: Math.Clamp(
-                    currentUnlockedSigilSlots,
-                    ArenaConfig.MasteryConfig.InitialUnlockedSigilSlots,
-                    ArenaConfig.MasteryConfig.MaxUnlockedSigilSlots));
+                EchoFragmentsAward: 0L);
         }
 
         long kaerosAward = 0;
         long echoFragmentsAward = 0;
-        var unlockedSigilSlots = Math.Clamp(
-            currentUnlockedSigilSlots,
-            ArenaConfig.MasteryConfig.InitialUnlockedSigilSlots,
-            ArenaConfig.MasteryConfig.MaxUnlockedSigilSlots);
 
         for (var milestoneIndex = 0; milestoneIndex < ArenaConfig.MasteryConfig.KaerosRewardPerMilestone.Length; milestoneIndex += 1)
         {
@@ -1709,18 +1737,11 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
 
             kaerosAward += ArenaConfig.MasteryConfig.KaerosRewardPerMilestone[milestoneIndex];
             echoFragmentsAward += ArenaConfig.MasteryConfig.EchoFragmentsRewardPerMilestone[milestoneIndex];
-            unlockedSigilSlots = Math.Max(
-                unlockedSigilSlots,
-                ArenaConfig.MasteryConfig.SigilSlotsUnlockedPerMilestone[milestoneIndex]);
         }
 
         return new MilestoneRewardDelta(
             KaerosAward: kaerosAward,
-            EchoFragmentsAward: echoFragmentsAward,
-            UnlockedSigilSlots: Math.Clamp(
-                unlockedSigilSlots,
-                ArenaConfig.MasteryConfig.InitialUnlockedSigilSlots,
-                ArenaConfig.MasteryConfig.MaxUnlockedSigilSlots));
+            EchoFragmentsAward: echoFragmentsAward);
     }
 
     private static void ValidateSigilSlotIndex(int slotIndex)
@@ -1743,6 +1764,48 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
     private static AccountState NormalizeLoadedAccountState(AccountState state)
     {
         state = MigrateRangedDragonToShaman(state);
+        var changed = false;
+
+        var accountXpAtCap = ResolveTotalAccountXpRequiredToReachLevel(ArenaConfig.ZoneConfig.AccountLevelCap);
+        var normalizedAccountXp = Math.Clamp(Math.Max(0L, state.AccountXp), 0L, accountXpAtCap);
+        var normalizedAccountLevel = ResolveAccountLevelFromTotalXp(normalizedAccountXp);
+        if (normalizedAccountXp != state.AccountXp || normalizedAccountLevel != state.AccountLevel)
+        {
+            state = state with
+            {
+                AccountXp = normalizedAccountXp,
+                AccountLevel = normalizedAccountLevel
+            };
+            changed = true;
+        }
+
+        var normalizedCharacters = new Dictionary<string, CharacterState>(state.Characters.Count, StringComparer.Ordinal);
+        foreach (var (characterId, character) in state.Characters)
+        {
+            var masteryXpAtCap = ResolveTotalXpRequiredToReachLevel(ArenaConfig.MasteryConfig.MasteryLevelCap);
+            var normalizedMasteryXp = Math.Clamp(Math.Max(0L, character.MasteryXp), 0L, masteryXpAtCap);
+            var normalizedMasteryLevel = ResolveMasteryLevelFromTotalXp(normalizedMasteryXp, character.HollowEssenceBarrierCleared);
+            var normalizedUnlockedSigilSlots = ResolveSigilSlotsForMasteryLevel(normalizedMasteryLevel);
+            var normalizedCharacter = character with
+            {
+                MasteryXp = normalizedMasteryXp,
+                MasteryLevel = normalizedMasteryLevel,
+                UnlockedSigilSlots = normalizedUnlockedSigilSlots
+            };
+            normalizedCharacters[characterId] = normalizedCharacter;
+            if (normalizedCharacter != character)
+            {
+                changed = true;
+            }
+        }
+
+        if (changed)
+        {
+            state = state with
+            {
+                Characters = normalizedCharacters
+            };
+        }
 
         if (state.SigilInventory.Count == 0)
         {
@@ -1750,18 +1813,18 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
         }
 
         var normalizedSigilInventory = new Dictionary<string, SigilInstance>(StringComparer.Ordinal);
-        var changed = false;
+        var sigilsChanged = false;
         foreach (var (instanceId, sigil) in state.SigilInventory)
         {
             var normalizedSigil = NormalizeSigilInstance(instanceId, sigil);
             normalizedSigilInventory[instanceId] = normalizedSigil;
             if (normalizedSigil != sigil)
             {
-                changed = true;
+                sigilsChanged = true;
             }
         }
 
-        if (!changed)
+        if (!sigilsChanged)
         {
             return state;
         }
@@ -2409,6 +2472,5 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
 
     private readonly record struct MilestoneRewardDelta(
         long KaerosAward,
-        long EchoFragmentsAward,
-        int UnlockedSigilSlots);
+        long EchoFragmentsAward);
 }
