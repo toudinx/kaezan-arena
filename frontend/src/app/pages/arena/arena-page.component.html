@@ -464,72 +464,142 @@
           <div class="right-pane__status-body">
             <div class="status-details">
               <h3 class="status-details__title">{{ selectedCharacter?.name ?? "Unknown" }}</h3>
-              <div class="status-details__grid">
-                @for (row of statusTabRows; track row.label) {
-                  <div class="status-details__row">
-                    <span>{{ row.label }}</span>
-                    <strong>{{ row.value }}</strong>
+              <section class="hud-ultimate-panel">
+                <h4>Ultimate</h4>
+                @if (silverTempestActiveForHud) {
+                  <div class="hud-ultimate-panel__bar hud-ultimate-panel__bar--silver-tempest">
+                    <span class="hud-ultimate-panel__bar-fill" [style.width.%]="ultimateGaugePercentForHud"></span>
                   </div>
+                  <p class="hud-ultimate-panel__state hud-ultimate-panel__state--silver">
+                    SILVER TEMPEST ACTIVE ({{ silverTempestRemainingSecondsForHud }}s)
+                  </p>
+                } @else {
+                  <div class="hud-ultimate-panel__bar" [class.hud-ultimate-panel__bar--ready]="ultimateGaugeReadyForHud">
+                    <span class="hud-ultimate-panel__bar-fill" [style.width.%]="ultimateGaugePercentForHud"></span>
+                  </div>
+                  @if (ultimateGaugeReadyForHud) {
+                    <p class="hud-ultimate-panel__state hud-ultimate-panel__state--ready">READY</p>
+                  } @else {
+                    <p class="hud-ultimate-panel__state">{{ ultimateGaugeFractionLabelForHud }}</p>
+                  }
                 }
-              </div>
-              <div class="status-details__columns">
-                <section class="status-details__block">
-                  <h4>Skills</h4>
-                  <div class="status-details__list status-details__list--skills">
-                    @if (bottomBarSkillSlots.length === 0 || bottomBarSkillSlots.every(s => s.isLocked)) {
-                      <p class="right-panel-empty">No skills active.</p>
-                    }
-                    @for (slot of bottomBarSkillSlots; track slot.skillId) {
-                      <div
-                        class="right-panel-skill-row"
-                        [class.right-panel-skill-row--locked]="slot.isLocked"
-                        [class.right-panel-skill-row--ultimate]="slot.isUltimate"
-                        [class.right-panel-skill-row--ultimate-ready]="slot.isUltimate && slot.ready"
-                        [attr.data-skill-family]="slot.visualFamily"
-                        [attr.data-skill-tier]="slot.visualTier"
-                        [title]="slot.tooltip"
-                      >
-                        @if (!slot.isLocked) {
-                          <span class="right-panel-skill-row__icon">{{ slot.iconGlyph }}</span>
-                          <span class="right-panel-skill-row__name">{{ slot.label }}</span>
-                          @if (slot.isUltimate && slot.ready) {
-                            <span class="right-panel-skill-row__ready">READY</span>
-                          } @else if (slot.cooldownText) {
-                            <span class="right-panel-skill-row__cd">{{ slot.cooldownText }}</span>
-                          } @else {
-                            <span class="right-panel-skill-row__ready">Ready</span>
-                          }
-                          @if (slot.isUltimate) {
-                            <span class="right-panel-skill-row__gauge">
-                              <span [style.width.%]="slot.gaugePercent"></span>
-                            </span>
-                          }
-                        } @else if (slot.isUltimate) {
-                          <span class="right-panel-skill-row__name right-panel-skill-row__name--muted">{{ slot.label }}</span>
+                <p class="hud-ultimate-panel__desc">{{ ultimateDescriptionForHud }}</p>
+              </section>
+
+              @if (activeEffectPills.length > 0) {
+                <div class="hud-effects-row">
+                  @for (effect of activeEffectPills; track effect.id) {
+                    <span class="hud-effects-row__pill" [attr.data-tone]="effect.tone">{{ effect.label }}</span>
+                  }
+                </div>
+              }
+
+              <section class="status-details__block">
+                <h4>Skills</h4>
+                <div class="status-details__list status-details__list--skills">
+                  @if (bottomBarSkillSlots.length === 0 || bottomBarSkillSlots.every(s => s.isLocked)) {
+                    <p class="right-panel-empty">No skills active.</p>
+                  }
+                  @for (slot of bottomBarSkillSlots; track slot.skillId) {
+                    <div
+                      class="right-panel-skill-row"
+                      [class.right-panel-skill-row--locked]="slot.isLocked"
+                      [class.right-panel-skill-row--ultimate]="slot.isUltimate"
+                      [class.right-panel-skill-row--ultimate-ready]="slot.isUltimate && slot.ready"
+                      [attr.data-skill-family]="slot.visualFamily"
+                      [attr.data-skill-tier]="slot.visualTier"
+                      [title]="slot.tooltip"
+                    >
+                      @if (!slot.isLocked) {
+                        <span class="right-panel-skill-row__icon">{{ slot.iconGlyph }}</span>
+                        <span class="right-panel-skill-row__name">{{ slot.label }}</span>
+                        @if (slot.isUltimate && slot.ready) {
+                          <span class="right-panel-skill-row__ready">READY</span>
+                        } @else if (slot.cooldownText) {
+                          <span class="right-panel-skill-row__cd">{{ slot.cooldownText }}</span>
+                        } @else {
+                          <span class="right-panel-skill-row__ready">Ready</span>
                         }
+                        @if (slot.isUltimate) {
+                          <span class="right-panel-skill-row__gauge">
+                            <span [style.width.%]="slot.gaugePercent"></span>
+                          </span>
+                        }
+                      } @else if (slot.isUltimate) {
+                        <span class="right-panel-skill-row__name right-panel-skill-row__name--muted">{{ slot.label }}</span>
+                      }
+                    </div>
+                  }
+                </div>
+              </section>
+
+              <section class="hud-stats-panel">
+                <button type="button" class="hud-stats-panel__toggle" (click)="toggleStatsPanel()">
+                  STATS
+                  <span>{{ isStatsPanelExpanded ? "-" : "+" }}</span>
+                </button>
+                @if (isStatsPanelExpanded) {
+                  <div class="hud-stats-panel__rows">
+                    @for (row of effectiveStatRows; track row.label) {
+                      <div class="hud-stats-panel__row" [attr.data-tone]="row.tone">
+                        <span class="hud-stats-panel__label">{{ row.label }}</span>
+                        <strong class="hud-stats-panel__value">{{ row.value }}</strong>
                       </div>
                     }
                   </div>
-                </section>
+                }
+              </section>
 
-                <section class="status-details__block">
-                  <h4>Passives</h4>
-                  <div class="status-details__list status-details__list--passives">
-                    @if (hudPassiveSlots.length === 0) {
-                      <p class="right-panel-empty">No passives yet.</p>
-                    } @else {
-                      @for (slot of hudPassiveSlots; track slot.id) {
-                        <div class="right-panel-passive-row" [title]="slot.description">
-                          <span class="right-panel-passive-row__name">{{ slot.name }}</span>
-                          @if (slot.currentStacks > 1) {
-                            <span class="right-panel-passive-row__stack">x{{ slot.currentStacks }}</span>
-                          }
-                        </div>
-                      }
+              @if (activeCardPills.length > 0) {
+                <section class="hud-active-cards-panel">
+                  <h4>Active Cards</h4>
+                  <div class="hud-active-cards-panel__pills">
+                    @for (card of activeCardPills; track card.id) {
+                      <span class="hud-active-cards-panel__pill" [class.hud-active-cards-panel__pill--max]="card.isMaxStack">
+                        {{ card.label }}
+                      </span>
                     }
                   </div>
                 </section>
-              </div>
+              }
+
+              @if (hasLockedTargetPanel) {
+                <section class="target-info">
+                  <h4>{{ lockedTargetNameForHud }}</h4>
+                  <div class="target-info__hp">
+                    <div class="target-info__hp-track">
+                      <span
+                        class="target-info__hp-fill"
+                        [style.width.%]="lockedTargetHpPercentForHud"
+                        [attr.data-tone]="lockedTargetHpToneForHud"
+                      ></span>
+                    </div>
+                    <span class="target-info__hp-value">
+                      {{ lockedTargetHpCurrentForHud }} / {{ lockedTargetHpMaxForHud }}
+                    </span>
+                  </div>
+                  <div class="target-info__badges">
+                    <span class="target-info__badge" [attr.data-element]="lockedTargetElementClassForHud">{{ lockedTargetAttackElementLabelForHud }}</span>
+                    @if (lockedTargetWeaknessLabelForHud) {
+                      <span class="target-info__badge target-info__badge--weak">{{ lockedTargetWeaknessLabelForHud }}</span>
+                    }
+                    @if (lockedTargetResistanceLabelForHud) {
+                      <span class="target-info__badge target-info__badge--resist">{{ lockedTargetResistanceLabelForHud }}</span>
+                    }
+                  </div>
+                  <div class="target-info__stacks">
+                    @if (lockedTargetSunderStacksForHud > 0) {
+                      <span class="target-info__stack target-info__stack--sunder">&#9650;{{ lockedTargetSunderStacksForHud }}</span>
+                    }
+                    @if (lockedTargetCorrosionStacksForHud > 0) {
+                      <span class="target-info__stack target-info__stack--corrosion">&#10022;{{ lockedTargetCorrosionStacksForHud }}</span>
+                    }
+                    @if (lockedTargetFocusStacksForHud > 0) {
+                      <span class="target-info__stack target-info__stack--focus">&#9678;{{ lockedTargetFocusStacksForHud }}</span>
+                    }
+                  </div>
+                </section>
+              }
             </div>
           </div>
         </section>

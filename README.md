@@ -218,6 +218,13 @@ Four permanent Elemental Arenas, always accessible regardless of Account Level. 
     - Collapse Field: pull slide animation + post-slide white flash + amber radial burst centered on player
     - Storm Collapse: per-mob purple detonation rings + purple scaled damage numbers + screen tint flash for multi-hit detonations
     - Silver Tempest: teal player glow border while active + teal pierce trail rendering for Sylwen projectiles
+  - Arena HUD now includes:
+    - Collapsible `STATS` panel (collapsed by default) bound to snapshot `effectivePlayerStats` values
+    - Enhanced Ultimate panel with gauge fraction, amber `READY` pulse at full gauge, and character-specific ultimate description
+    - Silver Tempest active override on Ultimate panel: countdown drain bar + active label while buff is running
+    - Active Cards panel showing chosen passive cards with stack counts (`×N`) and teal border at max stacks
+    - Locked target info panel (on right-click lock) with target name, HP bar (green/amber/red), element/weakness/resistance badges, and Sunder/Corrosion/Focus stack chips
+    - Compact active-effects row showing only current effects: `ST` (Silver Tempest), `IMM` (immobilize present), `STN` (stun present)
 - **Mirai Kit (Backend):**
   - Passive `Sunder Brand`: every Mirai skill hit adds 1 stack on the target mob; each stack adds `+1` flat damage to subsequent Mirai skill damage against that mob; stacks reset on mob death.
   - `Rend Pulse`: square `r=1` around the player (8 surrounding tiles), applies Sunder Brand.

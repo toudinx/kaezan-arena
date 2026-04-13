@@ -134,6 +134,41 @@ type ApiCardOffer = {
   maxStacks?: unknown;
   currentStacks?: unknown;
 };
+type EffectivePlayerStatsDto = Readonly<{
+  baseHp: number;
+  maxHp: number;
+  currentHp: number;
+  baseShield: number;
+  maxShield: number;
+  currentShield: number;
+  baseAttack: number;
+  effectiveAttack: number;
+  effectiveDamagePercent: number;
+  effectiveCritChance: number;
+  effectiveCritDamage: number;
+  effectiveLifeLeech: number;
+  effectiveCdrPercent: number;
+  effectiveAttackSpeedPercent: number;
+  ultimateGaugeCurrent: number;
+  ultimateGaugeMax: number;
+  silverTempestActive: boolean;
+  silverTempestRemainingMs: number;
+}>;
+type EffectiveStatRow = Readonly<{
+  label: string;
+  value: string;
+  tone: "muted" | "boosted" | "amber" | "teal";
+}>;
+type ActiveEffectPill = Readonly<{
+  id: "silver_tempest" | "immobilize" | "stun";
+  label: string;
+  tone: "teal" | "amber";
+}>;
+type ActiveCardPill = Readonly<{
+  id: string;
+  label: string;
+  isMaxStack: boolean;
+}>;
 type StepCommand = NonNullable<StepBattleRequest["commands"]>[number];
 type FacingDirection = "up" | "up_right" | "right" | "down_right" | "down" | "down_left" | "left" | "up_left";
 
@@ -256,6 +291,8 @@ const ECONOMY_LOOT_PREVIEW_MAX_ENTRIES = 8;
 const SHIELD_LOW_THRESHOLD_PERCENT = 30;
 const SHIELD_BREAK_PULSE_DURATION_MS = 260;
 const LEVEL_UP_PULSE_DURATION_MS = 760;
+const BASE_CRIT_CHANCE_PERCENT = 20;
+const BASE_LIFE_LEECH_PERCENT = 30;
 const CRAFTED_EQUIPMENT_ITEM_IDS = new Set<string>([
   "wpn.primal_forged_blade",
   "arm.primal_forged_mail",
@@ -511,6 +548,8 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   pendingCardChoiceId: string | null = null;
   offeredCards: ArenaCardOffer[] = [];
   selectedCards: ArenaCardOffer[] = [];
+  effectivePlayerStats: EffectivePlayerStatsDto | null = null;
+  isStatsPanelExpanded = false;
   cardChoiceSource: CardChoiceSource = "unknown";
   pendingCardSelectionId: string | null = null;
   cardChoiceRequestInFlight = false;
@@ -579,6 +618,8 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   private replayCommandBatchIndex = 0;
   private replayCardChoices: RunRecordingChoice[] = [];
   private replayCardChoiceIndex = 0;
+  private silverTempestDurationBaselineMs = 5000;
+  private wasSilverTempestActive = false;
   private lastKnownViewportWidthCss = 0;
   private lastKnownViewportHeightCss = 0;
   private readyPulseSkillIds = new Set<string>();
@@ -882,6 +923,302 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
 
   get hudPassiveSlots(): ReadonlyArray<ArenaCardOffer> {
     return this.selectedCards.slice(0, 4);
+  }
+
+  get effectiveStatRows(): ReadonlyArray<EffectiveStatRow> {
+    const stats = this.effectivePlayerStats;
+    if (!stats) {
+      return [
+        { label: "HP", value: `${this.playerHpCurrent} / ${this.playerHpMax}`, tone: "muted" },
+        { label: "Shield", value: `${this.playerShieldCurrent} / ${this.playerShieldMax}`, tone: "muted" }
+      ];
+    }
+
+    const rows: EffectiveStatRow[] = [];
+    rows.push({
+      label: "HP",
+      value: `${this.clampNonNegative(stats.currentHp)} / ${Math.max(1, this.clampNonNegative(stats.maxHp))}`,
+      tone: stats.maxHp > stats.baseHp ? "boosted" : "muted"
+    });
+    rows.push({
+      label: "Shield",
+      value: `${this.clampNonNegative(stats.currentShield)} / ${this.clampNonNegative(stats.maxShield)}`,
+      tone: stats.maxShield > stats.baseShield ? "boosted" : "muted"
+    });
+    rows.push({
+      label: "Attack",
+      value: `${this.clampNonNegative(stats.effectiveAttack)}`,
+      tone: stats.effectiveAttack > stats.baseAttack ? "boosted" : "muted"
+    });
+
+    const damageBonusPercent = Math.max(0, this.normalizePercentValue(stats.effectiveDamagePercent));
+    if (damageBonusPercent > 0) {
+      rows.push({
+        label: "Dmg Bonus",
+        value: `+${Math.round(damageBonusPercent)}%`,
+        tone: "boosted"
+      });
+    }
+
+    const critChancePercent = Math.max(0, this.normalizePercentValue(stats.effectiveCritChance));
+    rows.push({
+      label: "Crit",
+      value: `${Math.round(critChancePercent)}%`,
+      tone: critChancePercent > BASE_CRIT_CHANCE_PERCENT ? "amber" : "muted"
+    });
+
+    const critDamagePercent = Math.max(0, this.normalizePercentValue(stats.effectiveCritDamage));
+    if (critDamagePercent > 0) {
+      rows.push({
+        label: "Crit Dmg",
+        value: `+${Math.round(critDamagePercent)}%`,
+        tone: "boosted"
+      });
+    }
+
+    const lifeLeechPercent = Math.max(0, this.normalizePercentValue(stats.effectiveLifeLeech));
+    rows.push({
+      label: "Life Leech",
+      value: `${Math.round(lifeLeechPercent)}%`,
+      tone: lifeLeechPercent > BASE_LIFE_LEECH_PERCENT ? "boosted" : "muted"
+    });
+
+    const cdrPercent = Math.max(0, this.normalizePercentValue(stats.effectiveCdrPercent));
+    rows.push({
+      label: "CDR",
+      value: `-${Math.round(cdrPercent)}%`,
+      tone: cdrPercent > 0 ? "teal" : "muted"
+    });
+
+    const attackSpeedPercent = Math.max(0, this.normalizePercentValue(stats.effectiveAttackSpeedPercent));
+    if (attackSpeedPercent > 0) {
+      rows.push({
+        label: "Atk Speed",
+        value: `+${Math.round(attackSpeedPercent)}%`,
+        tone: "boosted"
+      });
+    }
+
+    return rows;
+  }
+
+  get activeCardPills(): ReadonlyArray<ActiveCardPill> {
+    return this.selectedCards.map((card) => {
+      const stacks = Math.max(0, Math.floor(card.currentStacks ?? 0));
+      const maxStacks = Math.max(1, Math.floor(card.maxStacks ?? 1));
+      const stackLabel = stacks > 1 ? ` \u00D7${stacks}` : "";
+      return {
+        id: card.id,
+        label: `${card.name}${stackLabel}`,
+        isMaxStack: stacks >= maxStacks
+      };
+    });
+  }
+
+  get hasLockedTargetPanel(): boolean {
+    return this.lockedTargetActorForHud !== null;
+  }
+
+  get lockedTargetActorForHud(): ArenaActorState | null {
+    const lockedTargetId = this.scene?.lockedTargetEntityId ?? null;
+    if (!lockedTargetId) {
+      return null;
+    }
+
+    const actor = this.scene?.actorsById[lockedTargetId];
+    if (!actor || actor.kind !== "mob") {
+      return null;
+    }
+
+    return actor;
+  }
+
+  get lockedTargetNameForHud(): string {
+    const actor = this.lockedTargetActorForHud;
+    if (!actor || !actor.mobType) {
+      return "Unknown Target";
+    }
+
+    const species = mapMobTypeToSpecies(actor.mobType);
+    if (!species) {
+      return "Unknown Target";
+    }
+
+    const baseLabel = this.formatSpeciesLabel(species);
+    return actor.isElite === true ? `Elite ${baseLabel}` : baseLabel;
+  }
+
+  get lockedTargetHpCurrentForHud(): number {
+    return Math.max(0, this.lockedTargetActorForHud?.hp ?? 0);
+  }
+
+  get lockedTargetHpMaxForHud(): number {
+    return Math.max(1, this.lockedTargetActorForHud?.maxHp ?? 1);
+  }
+
+  get lockedTargetHpPercentForHud(): number {
+    return computeUnifiedVitalsPercent(this.lockedTargetHpCurrentForHud, this.lockedTargetHpMaxForHud);
+  }
+
+  get lockedTargetHpToneForHud(): "good" | "warn" | "danger" {
+    const percent = this.lockedTargetHpPercentForHud;
+    if (percent < 30) {
+      return "danger";
+    }
+
+    if (percent <= 60) {
+      return "warn";
+    }
+
+    return "good";
+  }
+
+  get lockedTargetAttackElementLabelForHud(): string {
+    const value = this.lockedTargetActorForHud?.attackElement ?? null;
+    if (!value) {
+      return "UNKNOWN";
+    }
+
+    return value.toUpperCase();
+  }
+
+  get lockedTargetElementClassForHud(): string {
+    return this.normalizeElementKey(this.lockedTargetActorForHud?.attackElement ?? null);
+  }
+
+  get lockedTargetWeaknessLabelForHud(): string | null {
+    const weak = this.lockedTargetActorForHud?.weakTo ?? null;
+    if (!weak) {
+      return null;
+    }
+
+    return `weak: ${weak.toUpperCase()}`;
+  }
+
+  get lockedTargetResistanceLabelForHud(): string | null {
+    const resist = this.lockedTargetActorForHud?.resistantTo ?? null;
+    if (!resist) {
+      return null;
+    }
+
+    return `resist: ${resist.toUpperCase()}`;
+  }
+
+  get lockedTargetSunderStacksForHud(): number {
+    return Math.max(0, this.lockedTargetActorForHud?.sunderBrandStacks ?? 0);
+  }
+
+  get lockedTargetCorrosionStacksForHud(): number {
+    return Math.max(0, this.lockedTargetActorForHud?.corrosionStacks ?? 0);
+  }
+
+  get lockedTargetFocusStacksForHud(): number {
+    return Math.max(0, this.lockedTargetActorForHud?.focusStacks ?? 0);
+  }
+
+  get ultimateGaugeCurrentForHud(): number {
+    const fromStats = this.effectivePlayerStats?.ultimateGaugeCurrent;
+    if (typeof fromStats === "number" && Number.isFinite(fromStats)) {
+      return Math.max(0, Math.floor(fromStats));
+    }
+
+    return Math.max(0, this.ui.ultimateGauge);
+  }
+
+  get ultimateGaugeMaxForHud(): number {
+    const fromStats = this.effectivePlayerStats?.ultimateGaugeMax;
+    if (typeof fromStats === "number" && Number.isFinite(fromStats)) {
+      return Math.max(1, Math.floor(fromStats));
+    }
+
+    return Math.max(1, this.ui.ultimateGaugeMax);
+  }
+
+  get ultimateGaugeReadyForHud(): boolean {
+    return this.ultimateGaugeCurrentForHud >= this.ultimateGaugeMaxForHud;
+  }
+
+  get ultimateGaugePercentForHud(): number {
+    if (this.silverTempestActiveForHud) {
+      return this.silverTempestDrainPercentForHud;
+    }
+
+    return computeUnifiedVitalsPercent(this.ultimateGaugeCurrentForHud, this.ultimateGaugeMaxForHud);
+  }
+
+  get ultimateGaugeFractionLabelForHud(): string {
+    return `${this.ultimateGaugeCurrentForHud} / ${this.ultimateGaugeMaxForHud}`;
+  }
+
+  get silverTempestActiveForHud(): boolean {
+    const fromStats = this.effectivePlayerStats?.silverTempestActive;
+    if (typeof fromStats === "boolean") {
+      return fromStats;
+    }
+
+    return this.scene?.silverTempestActive === true;
+  }
+
+  get silverTempestRemainingMsForHud(): number {
+    const fromStats = this.effectivePlayerStats?.silverTempestRemainingMs;
+    if (typeof fromStats === "number" && Number.isFinite(fromStats)) {
+      return Math.max(0, Math.floor(fromStats));
+    }
+
+    return Math.max(0, this.scene?.silverTempestRemainingMs ?? 0);
+  }
+
+  get silverTempestRemainingSecondsForHud(): number {
+    return Math.max(0, Math.ceil(this.silverTempestRemainingMsForHud / 1000));
+  }
+
+  get silverTempestDrainPercentForHud(): number {
+    const baseline = Math.max(1, this.silverTempestDurationBaselineMs);
+    const remaining = Math.max(0, this.silverTempestRemainingMsForHud);
+    return Math.max(0, Math.min(100, (remaining / baseline) * 100));
+  }
+
+  get ultimateDescriptionForHud(): string {
+    const characterId = this.selectedCharacterId || this.accountState?.activeCharacterId || DEFAULT_PLAYABLE_CHARACTER_ID;
+    if (characterId === "character:mirai") {
+      return "Collapse Field - pull all mobs + immobilize 5s";
+    }
+
+    if (characterId === "character:sylwen") {
+      return "Silver Tempest - max cadence + pierce 5s";
+    }
+
+    if (characterId === "character:velvet") {
+      return "Storm Collapse - detonate all Corrosion stacks";
+    }
+
+    return "Ultimate";
+  }
+
+  get activeEffectPills(): ReadonlyArray<ActiveEffectPill> {
+    const pills: ActiveEffectPill[] = [];
+    if (this.silverTempestActiveForHud) {
+      pills.push({
+        id: "silver_tempest",
+        label: `ST ${this.silverTempestRemainingSecondsForHud}s`,
+        tone: "teal"
+      });
+    }
+
+    const actors = Object.values(this.scene?.actorsById ?? {});
+    const hasImmobilize = actors.some((actor) =>
+      actor.kind === "mob" && actor.isImmobilized === true && (actor.immobilizeRemainingMs ?? 0) > 0);
+    const hasStun = actors.some((actor) =>
+      actor.kind === "mob" && actor.isStunned === true && (actor.stunRemainingMs ?? 0) > 0);
+
+    if (hasImmobilize) {
+      pills.push({ id: "immobilize", label: "IMM", tone: "amber" });
+    }
+    if (hasStun) {
+      pills.push({ id: "stun", label: "STN", tone: "amber" });
+    }
+
+    return pills;
   }
 
   get canReplayLastRun(): boolean {
@@ -2799,6 +3136,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         this.applyRunProgressFromSnapshot(response);
         this.applyScalingTelemetryFromSnapshot(response);
         this.applyCardChoiceStateFromSnapshot(response);
+        this.applyEffectivePlayerStatsFromSnapshot(response);
         this.applyUltimateFromSnapshot(response);
         this.applyZoneFromSnapshot(response);
         this.applyBossStateFromSnapshot(response);
@@ -3293,6 +3631,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.applyScalingTelemetryFromSnapshot(response);
     this.applyCardChoiceStateFromSnapshot(response);
     this.updateCardChoicePresentationFromEvents(response.events);
+    this.applyEffectivePlayerStatsFromSnapshot(response);
     this.applyUltimateFromSnapshot(response);
     this.applyZoneFromSnapshot(response);
     this.applyBossStateFromSnapshot(response);
@@ -4466,10 +4805,58 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.altarCooldownRemainingMs = remainingMs;
   }
 
+  toggleStatsPanel(): void {
+    this.isStatsPanelExpanded = !this.isStatsPanelExpanded;
+  }
+
+  private applyEffectivePlayerStatsFromSnapshot(snapshot: StartBattleResponse | StepBattleResponse): void {
+    const record = snapshot as Record<string, unknown>;
+    const statsRecord = this.readRecord(record["effectivePlayerStats"]);
+    if (!statsRecord) {
+      this.effectivePlayerStats = null;
+      this.wasSilverTempestActive = false;
+      this.silverTempestDurationBaselineMs = 5000;
+      return;
+    }
+
+    const mapped: EffectivePlayerStatsDto = {
+      baseHp: Math.max(0, Math.floor(this.readNumber(statsRecord["baseHp"]) ?? 0)),
+      maxHp: Math.max(1, Math.floor(this.readNumber(statsRecord["maxHp"]) ?? 1)),
+      currentHp: Math.max(0, Math.floor(this.readNumber(statsRecord["currentHp"]) ?? 0)),
+      baseShield: Math.max(0, Math.floor(this.readNumber(statsRecord["baseShield"]) ?? 0)),
+      maxShield: Math.max(0, Math.floor(this.readNumber(statsRecord["maxShield"]) ?? 0)),
+      currentShield: Math.max(0, Math.floor(this.readNumber(statsRecord["currentShield"]) ?? 0)),
+      baseAttack: Math.max(0, Math.floor(this.readNumber(statsRecord["baseAttack"]) ?? 0)),
+      effectiveAttack: Math.max(0, Math.floor(this.readNumber(statsRecord["effectiveAttack"]) ?? 0)),
+      effectiveDamagePercent: this.readNumber(statsRecord["effectiveDamagePercent"]) ?? 0,
+      effectiveCritChance: this.readNumber(statsRecord["effectiveCritChance"]) ?? 0,
+      effectiveCritDamage: this.readNumber(statsRecord["effectiveCritDamage"]) ?? 0,
+      effectiveLifeLeech: this.readNumber(statsRecord["effectiveLifeLeech"]) ?? 0,
+      effectiveCdrPercent: this.readNumber(statsRecord["effectiveCdrPercent"]) ?? 0,
+      effectiveAttackSpeedPercent: this.readNumber(statsRecord["effectiveAttackSpeedPercent"]) ?? 0,
+      ultimateGaugeCurrent: Math.max(0, Math.floor(this.readNumber(statsRecord["ultimateGaugeCurrent"]) ?? 0)),
+      ultimateGaugeMax: Math.max(1, Math.floor(this.readNumber(statsRecord["ultimateGaugeMax"]) ?? 1)),
+      silverTempestActive: this.readBoolean(statsRecord["silverTempestActive"]) === true,
+      silverTempestRemainingMs: Math.max(0, Math.floor(this.readNumber(statsRecord["silverTempestRemainingMs"]) ?? 0))
+    };
+
+    if (mapped.silverTempestActive) {
+      if (!this.wasSilverTempestActive) {
+        this.silverTempestDurationBaselineMs = Math.max(1, mapped.silverTempestRemainingMs);
+      } else {
+        this.silverTempestDurationBaselineMs = Math.max(this.silverTempestDurationBaselineMs, mapped.silverTempestRemainingMs);
+      }
+    } else {
+      this.silverTempestDurationBaselineMs = 5000;
+    }
+    this.wasSilverTempestActive = mapped.silverTempestActive;
+    this.effectivePlayerStats = mapped;
+  }
+
   private applyUltimateFromSnapshot(snapshot: StartBattleResponse | StepBattleResponse): void {
     const record = snapshot as Record<string, unknown>;
-    const rawGauge = this.readNumber(record["ultimateGauge"]);
-    const rawGaugeMax = this.readNumber(record["ultimateGaugeMax"]);
+    const rawGauge = this.readNumber(record["ultimateGauge"]) ?? this.effectivePlayerStats?.ultimateGaugeCurrent ?? this.ui.ultimateGauge;
+    const rawGaugeMax = this.readNumber(record["ultimateGaugeMax"]) ?? this.effectivePlayerStats?.ultimateGaugeMax ?? this.ui.ultimateGaugeMax;
     const rawReady = this.readBoolean(record["ultimateReady"]);
 
     const ultimateGaugeMax = Math.max(1, Math.floor(rawGaugeMax ?? this.ui.ultimateGaugeMax));
@@ -6217,6 +6604,31 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     return typeof value === "number" && Number.isFinite(value) ? value : null;
   }
 
+  private clampNonNegative(value: number): number {
+    if (!Number.isFinite(value)) {
+      return 0;
+    }
+
+    return Math.max(0, Math.floor(value));
+  }
+
+  private normalizePercentValue(value: number): number {
+    if (!Number.isFinite(value)) {
+      return 0;
+    }
+
+    return Math.abs(value) <= 1.0001 ? value * 100 : value;
+  }
+
+  private normalizeElementKey(value: string | null): string {
+    const normalized = (value ?? "").trim().toLowerCase();
+    if (normalized === "fire" || normalized === "ice" || normalized === "energy" || normalized === "earth" || normalized === "holy" || normalized === "shadow" || normalized === "physical") {
+      return normalized;
+    }
+
+    return "unknown";
+  }
+
   private readMobTierIndex(value: unknown): number {
     const parsed = this.readNumber(value);
     if (parsed === null || parsed < 1) return 1;
@@ -6668,23 +7080,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   }
 
   private mapMobArchetypeToSpecies(mobType: number): string | null {
-    if (mobType === 1) {
-      return "melee_brute";
-    }
-
-    if (mobType === 2) {
-      return "ranged_archer";
-    }
-
-    if (mobType === 3) {
-      return "melee_demon";
-    }
-
-    if (mobType === 4) {
-      return "ranged_shaman";
-    }
-
-    return null;
+    return mapMobTypeToSpecies(mobType);
   }
 
   formatSpeciesLabel(species: string): string {
