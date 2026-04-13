@@ -22,12 +22,59 @@ public sealed partial class InMemoryBattleStore
         state.PlayerGlobalCooldownRemainingMs = Math.Max(0, state.PlayerGlobalCooldownRemainingMs - StepDeltaMs);
     }
 
+    private static void TickSilverTempestDuration(StoredBattle state)
+    {
+        if (!state.SilverTempestActive && state.SilverTempestRemainingMs <= 0)
+        {
+            return;
+        }
+
+        state.SilverTempestRemainingMs = Math.Max(0, state.SilverTempestRemainingMs - StepDeltaMs);
+        if (state.SilverTempestRemainingMs > 0)
+        {
+            state.SilverTempestActive = true;
+            return;
+        }
+
+        state.SilverTempestActive = false;
+        state.SilverTempestRemainingMs = 0;
+    }
+
     private static void TickMobCombatCooldowns(StoredBattle state)
     {
         foreach (var slot in state.MobSlots.Values)
         {
             slot.AttackCooldownRemainingMs = Math.Max(0, slot.AttackCooldownRemainingMs - StepDeltaMs);
             slot.AbilityCooldownRemainingMs = Math.Max(0, slot.AbilityCooldownRemainingMs - StepDeltaMs);
+        }
+    }
+
+    private static void TickMobImmobilizeDurations(StoredBattle state)
+    {
+        foreach (var actor in state.Actors.Values)
+        {
+            if (actor.Kind != "mob")
+            {
+                continue;
+            }
+
+            if (actor.StunRemainingMs > 0)
+            {
+                actor.StunRemainingMs = Math.Max(0, actor.StunRemainingMs - StepDeltaMs);
+                if (actor.StunRemainingMs == 0)
+                {
+                    actor.IsStunned = false;
+                }
+            }
+
+            if (actor.ImmobilizeRemainingMs > 0)
+            {
+                actor.ImmobilizeRemainingMs = Math.Max(0, actor.ImmobilizeRemainingMs - StepDeltaMs);
+                if (actor.ImmobilizeRemainingMs == 0)
+                {
+                    actor.IsImmobilized = false;
+                }
+            }
         }
     }
 
@@ -52,6 +99,11 @@ public sealed partial class InMemoryBattleStore
             }
 
             if (liveMob.MobSlotIndex is not int slotIndex || !state.MobSlots.TryGetValue(slotIndex, out var slot))
+            {
+                continue;
+            }
+
+            if (liveMob.IsStunned || liveMob.IsImmobilized)
             {
                 continue;
             }
@@ -138,21 +190,81 @@ public sealed partial class InMemoryBattleStore
             var decal = state.Decals[index];
             decal.RemainingMs = Math.Max(0, decal.RemainingMs - StepDeltaMs);
 
-            if (decal.DecalKind == DecalKind.DamagingHazard &&
-                decal.DamagePerTick > 0 &&
-                player is not null &&
-                player.TileX == decal.TileX &&
-                player.TileY == decal.TileY)
+            if (decal.DecalKind == DecalKind.DamagingHazard && decal.DamagePerTick > 0)
             {
-                ApplyDamageToPlayer(
-                    state,
-                    events,
-                    player,
-                    decal.DamagePerTick,
-                    ArenaConfig.DefaultMobElement,
-                    attacker: null,
-                    isRangedAutoAttack: false,
-                    allowCriticalHits: false);
+                if (string.Equals(decal.EntityType, ArenaConfig.SkillIds.SylwenThornfall, StringComparison.Ordinal))
+                {
+                    if (player is not null)
+                    {
+                        var mobsOnTile = state.Actors.Values
+                            .Where(actor =>
+                                (actor.Kind == "mob" || actor.Kind == "boss") &&
+                                actor.Hp > 0 &&
+                                actor.TileX == decal.TileX &&
+                                actor.TileY == decal.TileY)
+                            .OrderBy(actor => actor.ActorId, StringComparer.Ordinal)
+                            .ToList();
+
+                        foreach (var mob in mobsOnTile)
+                        {
+                            var hpDamageApplied = ApplyDamageToMob(
+                                state,
+                                events,
+                                mob,
+                                decal.DamagePerTick,
+                                GetPlayerBaseElement(state),
+                                attacker: player,
+                                allowCriticalHits: false);
+                            ApplyPlayerLifeLeech(state, events, ComputeLifeLeechHeal(state, hpDamageApplied));
+                        }
+                    }
+                }
+                else if (string.Equals(decal.EntityType, ArenaConfig.SkillIds.VelvetUmbralPath, StringComparison.Ordinal))
+                {
+                    if (player is not null)
+                    {
+                        var mobsOnTile = state.Actors.Values
+                            .Where(actor =>
+                                (actor.Kind == "mob" || actor.Kind == "boss") &&
+                                actor.Hp > 0 &&
+                                actor.TileX == decal.TileX &&
+                                actor.TileY == decal.TileY)
+                            .OrderBy(actor => actor.ActorId, StringComparer.Ordinal)
+                            .ToList();
+
+                        foreach (var mob in mobsOnTile)
+                        {
+                            var hpDamageApplied = ApplyDamageToMob(
+                                state,
+                                events,
+                                mob,
+                                decal.DamagePerTick,
+                                GetPlayerBaseElement(state),
+                                attacker: player,
+                                onSuccessfulHit: hitMob =>
+                                {
+                                    ApplyVelvetCorrosion(hitMob);
+                                    events.Add(new CorrosionUpdatedEventDto(MobId: hitMob.ActorId, StackCount: hitMob.CorrosionStacks));
+                                },
+                                finalDamageMultiplierResolver: ResolveVelvetCorrosionDamageMultiplier);
+                            ApplyPlayerLifeLeech(state, events, ComputeLifeLeechHeal(state, hpDamageApplied));
+                        }
+                    }
+                }
+                else if (player is not null &&
+                         player.TileX == decal.TileX &&
+                         player.TileY == decal.TileY)
+                {
+                    ApplyDamageToPlayer(
+                        state,
+                        events,
+                        player,
+                        decal.DamagePerTick,
+                        ArenaConfig.DefaultMobElement,
+                        attacker: null,
+                        isRangedAutoAttack: false,
+                        allowCriticalHits: false);
+                }
             }
 
             if (decal.RemainingMs == 0)

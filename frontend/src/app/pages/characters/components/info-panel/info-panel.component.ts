@@ -21,6 +21,11 @@ export interface WeaponInfo {
   imageUrl?: string | null;
 }
 
+export interface FixedKitSkillPill {
+  slotLabel: string;
+  displayName: string;
+}
+
 @Component({
   selector: 'app-kaelis-info-panel',
   standalone: true,
@@ -43,7 +48,9 @@ export class KaelisInfoPanelComponent {
   @Input() primarySigilBonus?: SetBonusDisplay | null;
   @Input() sigilSlots: SigilSlotCardViewModel[] = [];
   @Input() equippedWeaponName?: string | null;
-  @Input() fixedKitNames: string[] = [];
+  @Input() passiveName = "";
+  @Input() passiveDescription = "";
+  @Input() fixedKitSkills: FixedKitSkillPill[] = [];
   @Input() isActiveCharacter = false;
   @Input() canManageInfusion = false;
 

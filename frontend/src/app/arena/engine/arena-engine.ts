@@ -44,6 +44,15 @@ const REWARD_CHOICE_CUE_DURATION_MS = 520;
 const REWARD_CHOSEN_CUE_DURATION_MS = 460;
 const MIN_MOB_TIER_INDEX = 1;
 const MAX_MOB_TIER_INDEX = 5;
+const COLLAPSE_FIELD_SLIDE_DURATION_MS = 180;
+const COLLAPSE_FIELD_FLASH_DURATION_MS = 60;
+const COLLAPSE_FIELD_BURST_DURATION_MS = 400;
+const HEADSHOT_FLASH_DURATION_MS = 200;
+const HEADSHOT_FLASH_FULL_WHITE_DURATION_MS = 80;
+const HEADSHOT_TEXT_DURATION_MS = 600;
+const STORM_COLLAPSE_RING_DURATION_MS = 300;
+const STORM_COLLAPSE_SCREEN_TINT_DURATION_MS = 400;
+const SILVER_TEMPEST_TEXT_DURATION_MS = 1200;
 
 export function resolveTierAuraFxId(tierIndex: number): string | null {
   const normalizedTier = Math.floor(Number.isFinite(tierIndex) ? tierIndex : MIN_MOB_TIER_INDEX);
@@ -113,6 +122,8 @@ export class ArenaEngine {
       groundTargetPos: null,
       hoveredMobEntityId: null,
       threatMobEntityId: null,
+      silverTempestActive: false,
+      silverTempestRemainingMs: 0,
       actorsById: {},
       actorVisualsById: {},
       skillsById: {},
@@ -126,6 +137,10 @@ export class ArenaEngine {
       attackFxInstances: [],
       projectileInstances: [],
       mobKnockbackSlidesByActorId: {},
+      actorFlashOverlays: [],
+      collapseFieldBursts: [],
+      stormCollapseRings: [],
+      screenTintOverlays: [],
       queuedDamageNumbers: [],
       nextDamageSpawnOrder: 0,
       damageNumbers: [],
@@ -138,6 +153,16 @@ export class ArenaEngine {
     const sortedActors = [...actorStates]
       .map((actor) => ({
         ...actor,
+        sunderBrandStacks: Math.max(0, actor.sunderBrandStacks ?? scene.actorsById[actor.actorId]?.sunderBrandStacks ?? 0),
+        corrosionStacks: Math.max(0, actor.corrosionStacks ?? scene.actorsById[actor.actorId]?.corrosionStacks ?? 0),
+        focusStacks: Math.max(0, actor.focusStacks ?? scene.actorsById[actor.actorId]?.focusStacks ?? 0),
+        isStunned: actor.isStunned ?? scene.actorsById[actor.actorId]?.isStunned ?? false,
+        stunRemainingMs: Math.max(0, actor.stunRemainingMs ?? scene.actorsById[actor.actorId]?.stunRemainingMs ?? 0),
+        isImmobilized: actor.isImmobilized ?? scene.actorsById[actor.actorId]?.isImmobilized ?? false,
+        immobilizeRemainingMs: Math.max(
+          0,
+          actor.immobilizeRemainingMs ?? scene.actorsById[actor.actorId]?.immobilizeRemainingMs ?? 0
+        ),
         tierIndex: actor.kind === "mob"
           ? this.normalizeMobTierIndex(this.readSnapshotMobTierIndex(actor))
           : MIN_MOB_TIER_INDEX
@@ -190,8 +215,14 @@ export class ArenaEngine {
     const spawnedFloatingTexts: FloatingTextInstance[] = [];
     const spawnedMomentCues: ArenaCombatMomentCue[] = [];
     const spawnedProjectiles: RangedProjectileInstance[] = [];
+    const actorFlashOverlays = [...nextScene.actorFlashOverlays];
+    const collapseFieldBursts = [...nextScene.collapseFieldBursts];
+    const stormCollapseRings = [...nextScene.stormCollapseRings];
+    const screenTintOverlays = [...nextScene.screenTintOverlays];
     const queuedDamageNumbers: QueuedDamageNumberInstance[] = [...nextScene.queuedDamageNumbers];
     const mobKnockbackSlidesByActorId = { ...(nextScene.mobKnockbackSlidesByActorId ?? {}) };
+    const collapseFieldDelayByActorId = this.resolveCollapseFieldSlideDelayByActorId(events);
+    const stormCollapseStacksByActorId = this.resolveStormCollapseStacksByActorId(events);
     const stackIndexByTile = new Map<string, number>();
     let spawnOrder = nextScene.nextDamageSpawnOrder;
     const playerActorId = this.resolvePlayerActorId(nextScene, scene);
@@ -258,6 +289,166 @@ export class ArenaEngine {
         continue;
       }
 
+      if (event.type === "sunder_brand_updated") {
+        const actor = nextScene.actorsById[event.mobId];
+        if (actor && actor.kind === "mob") {
+          actor.sunderBrandStacks = Math.max(0, event.stacks);
+        }
+        continue;
+      }
+
+      if (event.type === "corrosion_updated") {
+        const actor = nextScene.actorsById[event.mobId];
+        if (actor && actor.kind === "mob") {
+          actor.corrosionStacks = Math.max(0, event.stacks);
+        }
+        continue;
+      }
+
+      if (event.type === "focus_updated") {
+        const actor = nextScene.actorsById[event.mobId];
+        if (actor && actor.kind === "mob") {
+          actor.focusStacks = Math.max(0, event.focusStacks);
+        }
+        continue;
+      }
+
+      if (event.type === "focus_reset") {
+        const actor = nextScene.actorsById[event.mobId];
+        if (actor && actor.kind === "mob") {
+          actor.focusStacks = 0;
+        }
+        continue;
+      }
+
+      if (event.type === "stun_applied") {
+        const actor = nextScene.actorsById[event.mobId];
+        if (actor && actor.kind === "mob") {
+          actor.isStunned = true;
+          actor.stunRemainingMs = Math.max(0, event.durationMs);
+        }
+        continue;
+      }
+
+      if (event.type === "immobilize_applied") {
+        const actor = nextScene.actorsById[event.mobId];
+        if (actor && actor.kind === "mob") {
+          actor.isImmobilized = true;
+          actor.immobilizeRemainingMs = Math.max(0, event.durationMs);
+        }
+        continue;
+      }
+
+      if (event.type === "collapse_field_activated") {
+        collapseFieldBursts.push({
+          centerTile: event.playerPosition,
+          elapsedMs: 0,
+          durationMs: COLLAPSE_FIELD_BURST_DURATION_MS
+        });
+
+        for (const pullResult of event.pullResults) {
+          const actor = nextScene.actorsById[pullResult.mobId];
+          if (!actor || actor.kind !== "mob") {
+            continue;
+          }
+
+          const previousActor = scene.actorsById[pullResult.mobId] ?? actor;
+          mobKnockbackSlidesByActorId[pullResult.mobId] = {
+            actorId: pullResult.mobId,
+            fromPos: { x: previousActor.tileX, y: previousActor.tileY },
+            toPos: { x: pullResult.newPosition.x, y: pullResult.newPosition.y },
+            elapsedMs: 0,
+            durationMs: COLLAPSE_FIELD_SLIDE_DURATION_MS
+          };
+          actorFlashOverlays.push({
+            actorId: pullResult.mobId,
+            delayRemainingMs: COLLAPSE_FIELD_SLIDE_DURATION_MS,
+            elapsedMs: 0,
+            durationMs: COLLAPSE_FIELD_FLASH_DURATION_MS,
+            fullWhiteDurationMs: COLLAPSE_FIELD_FLASH_DURATION_MS
+          });
+        }
+        continue;
+      }
+
+      if (event.type === "storm_collapse_detonated") {
+        if (event.hits.length >= 3) {
+          screenTintOverlays.push({
+            colorHex: "#7F77DD",
+            maxOpacity: 0.15,
+            elapsedMs: 0,
+            durationMs: STORM_COLLAPSE_SCREEN_TINT_DURATION_MS
+          });
+        }
+
+        for (const hit of event.hits) {
+          const actor = nextScene.actorsById[hit.mobId];
+          if (actor && actor.kind === "mob") {
+            actor.corrosionStacks = 0;
+          }
+
+          if (hit.stacksConsumed <= 0) {
+            continue;
+          }
+
+          stormCollapseRings.push({
+            actorId: hit.mobId,
+            stacksConsumed: hit.stacksConsumed,
+            elapsedMs: 0,
+            durationMs: STORM_COLLAPSE_RING_DURATION_MS
+          });
+        }
+        continue;
+      }
+
+      if (event.type === "silver_tempest_activated") {
+        nextScene.silverTempestActive = event.durationMs > 0;
+        nextScene.silverTempestRemainingMs = Math.max(0, event.durationMs);
+
+        const playerActor = playerActorId
+          ? (nextScene.actorsById[playerActorId] ?? scene.actorsById[playerActorId])
+          : null;
+        if (playerActor) {
+          spawnedFloatingTexts.push(
+            this.createCombatCalloutText(
+              "SILVER TEMPEST",
+              playerActor.tileX,
+              playerActor.tileY,
+              "silver_tempest",
+              SILVER_TEMPEST_TEXT_DURATION_MS,
+              1
+            )
+          );
+        }
+        continue;
+      }
+
+      if (event.type === "headshot") {
+        const actor = nextScene.actorsById[event.mobId] ?? scene.actorsById[event.mobId];
+        if (!actor || actor.kind !== "mob") {
+          continue;
+        }
+
+        actorFlashOverlays.push({
+          actorId: event.mobId,
+          delayRemainingMs: 0,
+          elapsedMs: 0,
+          durationMs: HEADSHOT_FLASH_DURATION_MS,
+          fullWhiteDurationMs: HEADSHOT_FLASH_FULL_WHITE_DURATION_MS
+        });
+        spawnedFloatingTexts.push(
+          this.createCombatCalloutText(
+            "HEADSHOT",
+            actor.tileX,
+            actor.tileY,
+            "headshot",
+            HEADSHOT_TEXT_DURATION_MS,
+            1
+          )
+        );
+        continue;
+      }
+
       if (event.type === "damage_number") {
         if (event.damageAmount > 0) {
           actorsHitThisStep.add(event.targetEntityId);
@@ -283,9 +474,20 @@ export class ArenaEngine {
         }
 
         const entries = this.toDamageNumberInstances(event, playerActorId);
+        const stormStacks = stormCollapseStacksByActorId.get(event.targetEntityId) ?? 0;
+        if (stormStacks > 0) {
+          const stormScale = this.computeStormCollapseDamageScale(stormStacks);
+          for (const entry of entries) {
+            entry.styleVariant = "storm_collapse";
+            entry.styleScale = stormScale;
+          }
+        }
+
         const projectileArrivalDelayMs = this.consumePendingProjectileArrivalDelayMs(event, pendingProjectileImpacts);
-        if (projectileArrivalDelayMs > 0) {
-          this.queueDamageNumberEntries(entries, projectileArrivalDelayMs, queuedDamageNumbers);
+        const collapseDelayMs = collapseFieldDelayByActorId.get(event.targetEntityId) ?? 0;
+        const totalDelayMs = Math.max(projectileArrivalDelayMs, collapseDelayMs);
+        if (totalDelayMs > 0) {
+          this.queueDamageNumberEntries(entries, totalDelayMs, queuedDamageNumbers);
           continue;
         }
 
@@ -479,9 +681,15 @@ export class ArenaEngine {
     nextScene = {
       ...nextScene,
       threatMobEntityId,
+      silverTempestActive: nextScene.silverTempestActive,
+      silverTempestRemainingMs: nextScene.silverTempestRemainingMs,
       attackFxInstances: [...nextScene.attackFxInstances, ...spawnedAttackFx],
       projectileInstances: [...nextScene.projectileInstances, ...spawnedProjectiles],
       mobKnockbackSlidesByActorId,
+      actorFlashOverlays,
+      collapseFieldBursts,
+      stormCollapseRings,
+      screenTintOverlays,
       queuedDamageNumbers,
       nextDamageSpawnOrder: spawnOrder,
       damageNumbers: [...nextScene.damageNumbers, ...spawnedDamageNumbers],
@@ -576,7 +784,8 @@ export class ArenaEngine {
 
   update(scene: ArenaScene, deltaMs: number): ArenaScene {
     const safeDelta = Math.max(0, deltaMs);
-    const sceneWithVisuals = this.tickActorVisuals(scene, safeDelta);
+    const sceneWithTimers = this.tickStatusDurations(scene, safeDelta);
+    const sceneWithVisuals = this.tickActorVisuals(sceneWithTimers, safeDelta);
     const sceneWithKnockbackSlides = this.tickMobKnockbackSlides(sceneWithVisuals, safeDelta);
     const sceneWithAdjustedSprites = this.applyMobKnockbackSlidesToSprites(sceneWithKnockbackSlides);
     const sceneWithFx = tickFx(sceneWithAdjustedSprites, safeDelta);
@@ -585,7 +794,11 @@ export class ArenaEngine {
     const sceneWithDamageNumbers = this.tickDamageNumbers(sceneWithProjectiles, safeDelta);
     const sceneWithQueuedDamage = this.tickQueuedDamageNumbers(sceneWithDamageNumbers, safeDelta);
     const sceneWithFloatingTexts = this.tickFloatingTexts(sceneWithQueuedDamage, safeDelta);
-    return this.tickMomentCues(sceneWithFloatingTexts, safeDelta);
+    const sceneWithMomentCues = this.tickMomentCues(sceneWithFloatingTexts, safeDelta);
+    const sceneWithActorFlashes = this.tickActorFlashOverlays(sceneWithMomentCues, safeDelta);
+    const sceneWithCollapseBursts = this.tickCollapseFieldBursts(sceneWithActorFlashes, safeDelta);
+    const sceneWithStormRings = this.tickStormCollapseRings(sceneWithCollapseBursts, safeDelta);
+    return this.tickScreenTintOverlays(sceneWithStormRings, safeDelta);
   }
 
   tick(scene: ArenaScene, deltaMs: number): ArenaScene {
@@ -661,6 +874,58 @@ export class ArenaEngine {
     return {
       ...scene,
       sprites: adjustedSprites
+    };
+  }
+
+  private tickStatusDurations(scene: ArenaScene, deltaMs: number): ArenaScene {
+    if (deltaMs <= 0) {
+      return scene;
+    }
+
+    let actorsChanged = false;
+    const nextActorsById: ArenaActorMap = {};
+    const actors = Object.values(scene.actorsById);
+    for (const actor of actors) {
+      if (actor.kind !== "mob") {
+        nextActorsById[actor.actorId] = actor;
+        continue;
+      }
+
+      const nextStunRemainingMs = Math.max(0, (actor.stunRemainingMs ?? 0) - deltaMs);
+      const nextImmobilizeRemainingMs = Math.max(0, (actor.immobilizeRemainingMs ?? 0) - deltaMs);
+      const nextIsStunned = nextStunRemainingMs > 0 ? true : false;
+      const nextIsImmobilized = nextImmobilizeRemainingMs > 0 ? true : false;
+      const changed = (actor.stunRemainingMs ?? 0) !== nextStunRemainingMs ||
+        (actor.immobilizeRemainingMs ?? 0) !== nextImmobilizeRemainingMs ||
+        (actor.isStunned ?? false) !== nextIsStunned ||
+        (actor.isImmobilized ?? false) !== nextIsImmobilized;
+      if (!changed) {
+        nextActorsById[actor.actorId] = actor;
+        continue;
+      }
+
+      actorsChanged = true;
+      nextActorsById[actor.actorId] = {
+        ...actor,
+        isStunned: nextIsStunned,
+        stunRemainingMs: nextStunRemainingMs,
+        isImmobilized: nextIsImmobilized,
+        immobilizeRemainingMs: nextImmobilizeRemainingMs
+      };
+    }
+
+    const nextSilverTempestRemainingMs = Math.max(0, scene.silverTempestRemainingMs - deltaMs);
+    const silverTempestChanged = nextSilverTempestRemainingMs !== scene.silverTempestRemainingMs ||
+      scene.silverTempestActive !== (nextSilverTempestRemainingMs > 0);
+    if (!actorsChanged && !silverTempestChanged) {
+      return scene;
+    }
+
+    return {
+      ...scene,
+      actorsById: actorsChanged ? nextActorsById : scene.actorsById,
+      silverTempestActive: nextSilverTempestRemainingMs > 0,
+      silverTempestRemainingMs: nextSilverTempestRemainingMs
     };
   }
 
@@ -1435,6 +1700,129 @@ export class ArenaEngine {
       ...scene,
       momentCues: nextCues
     };
+  }
+
+  private tickActorFlashOverlays(scene: ArenaScene, deltaMs: number): ArenaScene {
+    if (scene.actorFlashOverlays.length === 0) {
+      return scene;
+    }
+
+    const nextOverlays = scene.actorFlashOverlays
+      .map((overlay) => {
+        const nextDelay = Math.max(0, overlay.delayRemainingMs - deltaMs);
+        const overflow = Math.max(0, deltaMs - overlay.delayRemainingMs);
+        const nextElapsed = nextDelay > 0
+          ? overlay.elapsedMs
+          : overlay.elapsedMs + overflow;
+        return {
+          ...overlay,
+          delayRemainingMs: nextDelay,
+          elapsedMs: nextElapsed
+        };
+      })
+      .filter((overlay) =>
+        scene.actorsById[overlay.actorId] !== undefined &&
+        overlay.elapsedMs < overlay.durationMs);
+
+    return {
+      ...scene,
+      actorFlashOverlays: nextOverlays
+    };
+  }
+
+  private tickCollapseFieldBursts(scene: ArenaScene, deltaMs: number): ArenaScene {
+    if (scene.collapseFieldBursts.length === 0) {
+      return scene;
+    }
+
+    const nextBursts = scene.collapseFieldBursts
+      .map((burst) => ({
+        ...burst,
+        elapsedMs: burst.elapsedMs + deltaMs
+      }))
+      .filter((burst) => burst.elapsedMs < burst.durationMs);
+
+    return {
+      ...scene,
+      collapseFieldBursts: nextBursts
+    };
+  }
+
+  private tickStormCollapseRings(scene: ArenaScene, deltaMs: number): ArenaScene {
+    if (scene.stormCollapseRings.length === 0) {
+      return scene;
+    }
+
+    const nextRings = scene.stormCollapseRings
+      .map((ring) => ({
+        ...ring,
+        elapsedMs: ring.elapsedMs + deltaMs
+      }))
+      .filter((ring) =>
+        scene.actorsById[ring.actorId] !== undefined &&
+        ring.elapsedMs < ring.durationMs);
+
+    return {
+      ...scene,
+      stormCollapseRings: nextRings
+    };
+  }
+
+  private tickScreenTintOverlays(scene: ArenaScene, deltaMs: number): ArenaScene {
+    if (scene.screenTintOverlays.length === 0) {
+      return scene;
+    }
+
+    const nextTints = scene.screenTintOverlays
+      .map((overlay) => ({
+        ...overlay,
+        elapsedMs: overlay.elapsedMs + deltaMs
+      }))
+      .filter((overlay) => overlay.elapsedMs < overlay.durationMs);
+
+    return {
+      ...scene,
+      screenTintOverlays: nextTints
+    };
+  }
+
+  private resolveCollapseFieldSlideDelayByActorId(
+    events: ReadonlyArray<ArenaBattleEvent>
+  ): Map<string, number> {
+    const delaysByActorId = new Map<string, number>();
+    const collapseEvent = events.find((event): event is Extract<ArenaBattleEvent, { type: "collapse_field_activated" }> =>
+      event.type === "collapse_field_activated");
+    if (!collapseEvent) {
+      return delaysByActorId;
+    }
+
+    for (const pullResult of collapseEvent.pullResults) {
+      delaysByActorId.set(pullResult.mobId, COLLAPSE_FIELD_SLIDE_DURATION_MS);
+    }
+
+    return delaysByActorId;
+  }
+
+  private resolveStormCollapseStacksByActorId(
+    events: ReadonlyArray<ArenaBattleEvent>
+  ): Map<string, number> {
+    const stacksByActorId = new Map<string, number>();
+    const stormEvent = events.find((event): event is Extract<ArenaBattleEvent, { type: "storm_collapse_detonated" }> =>
+      event.type === "storm_collapse_detonated");
+    if (!stormEvent) {
+      return stacksByActorId;
+    }
+
+    for (const hit of stormEvent.hits) {
+      stacksByActorId.set(hit.mobId, Math.max(0, hit.stacksConsumed));
+    }
+
+    return stacksByActorId;
+  }
+
+  private computeStormCollapseDamageScale(stacksConsumed: number): number {
+    const cappedStacks = Math.max(0, Math.min(10, Math.floor(stacksConsumed)));
+    return 1 + (cappedStacks / 10);
   }
 
   private normalizeElement(value: number | undefined): 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 {

@@ -13,7 +13,16 @@ public sealed partial class InMemoryBattleStore
             [ArenaConfig.VoidRicochetSkillId] = ArenaConfig.VoidRicochetCooldownTotalMs,
             [ArenaConfig.HealSkillId] = ArenaConfig.HealCooldownTotalMs,
             [ArenaConfig.GuardSkillId] = ArenaConfig.GuardCooldownTotalMs,
-            [ArenaConfig.AvalancheSkillId] = ArenaConfig.AvalancheCooldownTotalMs
+            [ArenaConfig.AvalancheSkillId] = ArenaConfig.AvalancheCooldownTotalMs,
+            [ArenaConfig.SkillIds.MiraiRendPulse] = ArenaConfig.SkillConfig.MiraiRendPulseCooldownMs,
+            [ArenaConfig.SkillIds.MiraiGraveFang] = ArenaConfig.SkillConfig.MiraiGraveFangCooldownMs,
+            [ArenaConfig.SkillIds.MiraiDreadSweep] = ArenaConfig.SkillConfig.MiraiDreadSweepCooldownMs,
+            [ArenaConfig.SkillIds.SylwenWhisperShot] = ArenaConfig.SkillConfig.SylwenWhisperShotCooldownMs,
+            [ArenaConfig.SkillIds.SylwenGalePierce] = ArenaConfig.SkillConfig.SylwenGalePierceCooldownMs,
+            [ArenaConfig.SkillIds.SylwenThornfall] = ArenaConfig.SkillConfig.SylwenThornfallCooldownMs,
+            [ArenaConfig.SkillIds.VelvetVoidChain] = ArenaConfig.SkillConfig.VelvetVoidChainCooldownMs,
+            [ArenaConfig.SkillIds.VelvetUmbralPath] = ArenaConfig.SkillConfig.VelvetUmbralPathCooldownMs,
+            [ArenaConfig.SkillIds.VelvetDeathStrike] = ArenaConfig.SkillConfig.VelvetDeathStrikeCooldownMs
         };
 
     private static Dictionary<string, StoredSkill> BuildInitialSkills(string playerClassId)

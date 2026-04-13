@@ -2,7 +2,7 @@ import type { ArenaSkillState } from "../../arena/engine/arena-engine.types";
 import { buildUltimateSlotViewModel, mapStatusSkillSlots, resolveSkillIdForHotkeyKey } from "./status-skills.helpers";
 
 describe("status-skills.helpers", () => {
-  it("maps Kina kit skills into slots 1 to 3 in snapshot order", () => {
+  it("maps melee kit skills into slots 1 to 3 in snapshot order", () => {
     const skills: ArenaSkillState[] = [
       { skillId: "exori", cooldownRemainingMs: 1200, cooldownTotalMs: 2000 },
       { skillId: "exori_min", cooldownRemainingMs: 0, cooldownTotalMs: 1200 },
@@ -34,7 +34,7 @@ describe("status-skills.helpers", () => {
     expect(slots[0].cooldownText).toContain("GCD");
   });
 
-  it("maps Sylwen kit skills into slots 1 to 3 in snapshot order", () => {
+  it("maps ranged kit skills into slots 1 to 3 in snapshot order", () => {
     const skills: ArenaSkillState[] = [
       { skillId: "sigil_bolt", cooldownRemainingMs: 0, cooldownTotalMs: 800 },
       { skillId: "shotgun", cooldownRemainingMs: 120, cooldownTotalMs: 800 },

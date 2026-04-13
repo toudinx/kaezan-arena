@@ -90,7 +90,7 @@ describe("ArenaPageComponent pre-run account loading", () => {
         characters: {
           char_active: {
             characterId: "char_active",
-            name: "Kina",
+            name: "Mirai",
             masteryLevel: 7,
             masteryXp: 1337,
             masteryXpForCurrentLevel: 97,

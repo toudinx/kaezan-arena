@@ -38,6 +38,12 @@ import type {
   SigilSlotState
 } from "../../api/account-api.service";
 import type { SigilSlotCardViewModel } from "./components/sigil-pentagon/sigil-pentagon.component";
+import {
+  PLAYABLE_CHARACTER_IDS,
+  PLAYABLE_CHARACTER_OVERVIEW_BY_ID,
+  isPlayableCharacterId
+} from "../../shared/characters/playable-characters";
+import type { FixedKitSkillPill } from "./components/info-panel/info-panel.component";
 
 type InfusionTab = "damage" | "resistance";
 
@@ -85,11 +91,14 @@ export class CharactersPageComponent implements OnInit {
       // Render uses store error state.
     }
 
-    const charactersMap = this.accountStore.state()?.characters ?? {};
-    const characters = Object.values(charactersMap);
-    if (characters.length > 0 && !this.selectedCharacterId()) {
-      const activeId = this.accountStore.state()?.activeCharacterId;
-      this.selectedCharacterId.set(activeId ?? characters[0].characterId);
+    const entries = this.rosterEntries;
+    if (entries.length > 0 && !this.selectedCharacterId()) {
+      const activeId = this.accountStore.state()?.activeCharacterId ?? null;
+      const firstAvailableId = entries[0]?.id ?? null;
+      const preferredId = entries.some((entry) => entry.id === activeId)
+        ? activeId
+        : firstAvailableId;
+      this.selectedCharacterId.set(preferredId);
     }
 
     const selectedCharacterId = this.selectedCharacterId();
@@ -100,25 +109,30 @@ export class CharactersPageComponent implements OnInit {
 
   get rosterEntries(): RosterEntry[] {
     const charactersMap = this.accountStore.state()?.characters ?? {};
-    return Object.values(charactersMap).map(c => {
-      const catalog = this.accountStore.catalogs().characterById[c.characterId];
-      const portrait = resolveCharacterPortraitVisual({
-        characterId: c.characterId,
-        displayName: catalog?.displayName ?? c.name,
-        context: "roster"
+    return PLAYABLE_CHARACTER_IDS
+      .map((characterId) => charactersMap[characterId])
+      .filter((character): character is CharacterState => !!character)
+      .map((character) => {
+        const catalog = this.accountStore.catalogs().characterById[character.characterId];
+        const overview = this.resolveOverviewByCharacterId(character.characterId);
+        const portrait = resolveCharacterPortraitVisual({
+          characterId: character.characterId,
+          displayName: catalog?.displayName ?? character.name,
+          context: "roster"
+        });
+
+        return {
+          id: character.characterId,
+          name: resolveCharacterDisplayName({
+            characterId: character.characterId,
+            preferredName: catalog?.displayName ?? character.name
+          }),
+          imageUrl: portrait.imageUrl,
+          portrait: { imageUrl: portrait.imageUrl, monogram: portrait.monogram, tone: portrait.tone },
+          kitBadge: overview.kitLabel,
+          masteryLevel: Math.max(1, character.masteryLevel ?? 1)
+        };
       });
-      return {
-        id: c.characterId,
-        name: resolveCharacterDisplayName({
-          characterId: c.characterId,
-          preferredName: catalog?.displayName ?? c.name
-        }),
-        imageUrl: portrait.imageUrl,
-        portrait: { imageUrl: portrait.imageUrl, monogram: portrait.monogram, tone: portrait.tone },
-        kitBadge: catalog?.subtitle ?? "Kit [WIP]",
-        masteryLevel: Math.max(1, c.masteryLevel ?? 1)
-      };
-    });
   }
 
   get activeCharacter(): CharacterState | null {
@@ -167,16 +181,40 @@ export class CharactersPageComponent implements OnInit {
   get activeCharacterSubtitle(): string {
     const char = this.activeCharacter;
     if (!char) return '';
-    return this.accountStore.catalogs().characterById[char.characterId]?.subtitle ?? '';
+    return this.resolveOverviewByCharacterId(char.characterId).kitLabel;
   }
 
-  get activeCharacterFixedKit(): string[] {
+  get activeCharacterPassiveName(): string {
+    const char = this.activeCharacter;
+    if (!char) {
+      return "";
+    }
+
+    return this.resolveOverviewByCharacterId(char.characterId).passiveName;
+  }
+
+  get activeCharacterPassiveDescription(): string {
+    const char = this.activeCharacter;
+    if (!char) {
+      return "";
+    }
+
+    return this.resolveOverviewByCharacterId(char.characterId).passiveDescription;
+  }
+
+  get activeCharacterFixedKitSkills(): FixedKitSkillPill[] {
     const char = this.activeCharacter;
     if (!char) {
       return [];
     }
 
-    return this.accountStore.catalogs().characterById[char.characterId]?.fixedWeaponNames ?? [];
+    const fixedSkillNames = this.accountStore.catalogs().characterById[char.characterId]?.fixedWeaponNames ?? [];
+    return [
+      { slotLabel: "Skill 1", displayName: fixedSkillNames[0] ?? "-" },
+      { slotLabel: "Skill 2", displayName: fixedSkillNames[1] ?? "-" },
+      { slotLabel: "Skill 3", displayName: fixedSkillNames[2] ?? "-" },
+      { slotLabel: "Ultimate", displayName: fixedSkillNames[3] ?? "Ultimate" }
+    ];
   }
 
   get isSelectedCharacterActive(): boolean {
@@ -799,6 +837,14 @@ export class CharactersPageComponent implements OnInit {
     }
 
     return usageByInstanceId;
+  }
+
+  private resolveOverviewByCharacterId(characterId: string) {
+    if (isPlayableCharacterId(characterId)) {
+      return PLAYABLE_CHARACTER_OVERVIEW_BY_ID[characterId];
+    }
+
+    return PLAYABLE_CHARACTER_OVERVIEW_BY_ID[PLAYABLE_CHARACTER_IDS[0]];
   }
 
   private async loadSigilState(characterId: string): Promise<void> {

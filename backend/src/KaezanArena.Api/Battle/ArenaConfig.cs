@@ -615,9 +615,12 @@ public static class ArenaConfig
     public const int KinaRangedReflectMultiplier = 2;
     public const string PlayerClassKina = "kina";
     public const string PlayerClassRangedPrototype = "ranged_prototype";
-    public const string CharacterSubtitleKina = "Melee Kit";
-    public const string CharacterSubtitleRangedPrototype = "Ranged Kit [WIP]";
-    public const string CharacterSubtitleLizard = "Melee Kit [WIP]";
+    public const string PlayerClassMirai = "mirai";
+    public const string PlayerClassSylwen = "sylwen";
+    public const string PlayerClassVelvet = "velvet";
+    public const string CharacterSubtitleMirai = "Melee AoE Kit";
+    public const string CharacterSubtitleSylwen = "Cadence Archer Kit";
+    public const string CharacterSubtitleVelvet = "Chaos Mage Kit";
     #endregion
 
     #region Run Progression
@@ -946,6 +949,132 @@ public static class ArenaConfig
         public const string Guard     = "weapon:guard";
     }
 
+    public static class SkillIds
+    {
+        public const string MiraiRendPulse = "skill:mirai_rend_pulse";
+        public const string MiraiGraveFang = "skill:mirai_grave_fang";
+        public const string MiraiDreadSweep = "skill:mirai_dread_sweep";
+        public const string MiraiCollapseField = "skill:mirai_collapse_field";
+        public const string SylwenWhisperShot = "skill:sylwen_whisper_shot";
+        public const string SylwenGalePierce = "skill:sylwen_gale_pierce";
+        public const string SylwenThornfall = "skill:sylwen_thornfall";
+        public const string SylwenSilverTempest = "skill:sylwen_silver_tempest";
+        public const string VelvetVoidChain = "skill:velvet_void_chain";
+        public const string VelvetUmbralPath = "skill:velvet_umbral_path";
+        public const string VelvetDeathStrike = "skill:velvet_death_strike";
+        public const string VelvetStormCollapse = "skill:velvet_storm_collapse";
+    }
+
+    public static class PassiveIds
+    {
+        public const string MiraiSunderBrand = "passive:mirai_sunder_brand";
+        public const string SylwenDeadeyeGrace = "passive:sylwen_deadeye_grace";
+        public const string VelvetArcaneDecay = "passive:velvet_arcane_decay";
+    }
+
+    public static class KitIds
+    {
+        public const string Mirai = "kit:mirai";
+        public const string Sylwen = "kit:sylwen";
+        public const string Velvet = "kit:velvet";
+    }
+
+    public record KitDefinition(
+        string KitId,
+        string PassiveId,
+        string Skill1Id,
+        string Skill2Id,
+        string Skill3Id,
+        string UltimateId
+    );
+
+    public static class Kits
+    {
+        public static readonly KitDefinition Mirai =
+            new(
+                KitIds.Mirai,
+                PassiveIds.MiraiSunderBrand,
+                SkillIds.MiraiRendPulse,
+                SkillIds.MiraiGraveFang,
+                SkillIds.MiraiDreadSweep,
+                SkillIds.MiraiCollapseField);
+
+        public static readonly KitDefinition Sylwen =
+            new(
+                KitIds.Sylwen,
+                PassiveIds.SylwenDeadeyeGrace,
+                SkillIds.SylwenWhisperShot,
+                SkillIds.SylwenGalePierce,
+                SkillIds.SylwenThornfall,
+                SkillIds.SylwenSilverTempest);
+
+        public static readonly KitDefinition Velvet =
+            new(
+                KitIds.Velvet,
+                PassiveIds.VelvetArcaneDecay,
+                SkillIds.VelvetVoidChain,
+                SkillIds.VelvetUmbralPath,
+                SkillIds.VelvetDeathStrike,
+                SkillIds.VelvetStormCollapse);
+    }
+
+    public static class SkillConfig
+    {
+        // Mirai
+        public const int MiraiRendPulseRadius = 1;
+        public const int MiraiCollapseFieldStopDistanceChebyshev = 1;
+        public const int MiraiRendPulseCooldownMs = 1000;
+        public const int MiraiRendPulseDamage = 8;
+        public const int MiraiGraveFangCooldownMs = 1400;
+        public const int MiraiGraveFangDamage = 12;
+        public const int MiraiDreadSweepCooldownMs = 2200;
+        public const int MiraiDreadSweepDamage = 7;
+        public const int MiraiCollapseFieldDamage = 10;
+        public const int MiraiCollapseFieldImmobilizeDurationMs = 5000;
+        public const int MiraiSunderBrandStacksPerHit = 1;
+        public const int MiraiSunderBrandFlatDamagePerStack = 1; // +1 flat dmg per stack on target
+
+        // Sylwen
+        public const int SylwenWhisperShotMaxRangeTilesChebyshev = AutoAttackRangedMaxRange;
+        public const int SylwenWhisperShotCooldownMs = 700;
+        public const int SylwenWhisperShotDamage = 6;
+        public const int SylwenDeadeyeGraceFocusStacksPerHit = 1;
+        public const int SylwenDeadeyeGraceConsecutiveHitsPerWhisperHit = 1;
+        public const int SylwenDeadeyeGraceFocusBonusPercentPerStack = 10;
+        public const int SylwenDeadeyeGraceHeadshotDamageBonusPercent = 100;
+        public const int SylwenGalePierceMaxRangeTilesChebyshev = AutoAttackRangedMaxRange;
+        public const int SylwenGalePierceCooldownMs = 1800;
+        public const int SylwenGalePierceDamage = 10;
+        public const int SylwenGalePierceKnockbackTiles = 1;
+        public const int SylwenThornfallCooldownMs = 2500;
+        public const int SylwenThornfallRadius = 1;
+        public const int SylwenThornfallDamagePerTick = 3;
+        public const int SylwenThornfallDurationMs = 3000;
+        public const int SylwenDeadeyeGraceHeadshotEveryNHits = 3;
+        public const int SylwenDeadeyeGraceStunDurationMs = 1000;
+        public const int SylwenSilverTempestDurationMs = 5000;
+
+        // Velvet
+        public const int VelvetCorrosionStacksPerHit = 1;
+        public const int VelvetVoidChainMaxRangeTilesChebyshev = AutoAttackRangedMaxRange;
+        public const int VelvetVoidChainCooldownMs = 1200;
+        public const int VelvetVoidChainDamage = 7;
+        public const int VelvetVoidChainJumpRangeChebyshev = 3;
+        public const int VelvetUmbralPathMaxRangeTilesChebyshev = AutoAttackRangedMaxRange;
+        public const int VelvetUmbralPathCooldownMs = 2000;
+        public const int VelvetUmbralPathImpactDamage = 9;
+        public const int VelvetUmbralPathSplashRadius = 1;
+        public const int VelvetUmbralPathTrailWidthRadius = 1; // r=1 each side = 3 tiles wide total
+        public const int VelvetUmbralPathTrailDurationMs = 3000;
+        public const int VelvetUmbralPathTrailDamagePerTick = 2;
+        public const int VelvetDeathStrikeMaxRangeTilesChebyshev = AutoAttackRangedMaxRange;
+        public const int VelvetDeathStrikeCooldownMs = 1600;
+        public const int VelvetDeathStrikeBaseDamage = 8;
+        public const int VelvetStormCollapseBaseDamage = 5; // per stack: totalDamage = BaseDamage * corrosionStacks
+        public const int VelvetStormCollapseMinimumStacksMultiplier = 1;
+        public const double VelvetCorrosionDamageAmpPerStack = 0.05; // +5% damage taken per stack
+    }
+
     /// <summary>
     /// Single source of truth for projectile tint colors used by ranged weapon visuals.
     /// Keys are stable IDs from <see cref="WeaponIds"/>.
@@ -967,13 +1096,9 @@ public static class ArenaConfig
     /// <summary>Stable character IDs. Values are the authoritative keys for display name lookup.</summary>
     public static class CharacterIds
     {
-        public const string Kina = "character:kina";
-        public const string RangedPrototype = "character:ranged_prototype";
-        public const string Lizard = "character:lizard";
-        /// <summary>Legacy character ID for Kaelis Dawn (persisted before stable ID migration). Maps to the Kina melee kit.</summary>
-        public const string KaelisDawn = "kaelis_01";
-        /// <summary>Legacy character ID for Kaelis Ember (persisted before stable ID migration). Maps to the Ranged Prototype kit.</summary>
-        public const string KaelisEmber = "kaelis_02";
+        public const string Mirai = "character:mirai";
+        public const string Sylwen = "character:sylwen";
+        public const string Velvet = "character:velvet";
     }
 
     /// <summary>
@@ -983,39 +1108,30 @@ public static class ArenaConfig
     public static readonly IReadOnlyDictionary<string, IReadOnlyList<string>> FixedWeaponKitByCharacterId =
         new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal)
         {
-            [CharacterIds.Kina] =
+            [CharacterIds.Mirai] =
             [
-                WeaponIds.ExoriMin,
-                WeaponIds.Exori,
-                WeaponIds.ExoriMas
+                SkillIds.MiraiRendPulse,
+                SkillIds.MiraiGraveFang,
+                SkillIds.MiraiDreadSweep,
+                SkillIds.MiraiCollapseField
             ],
-            [CharacterIds.RangedPrototype] =
+            [CharacterIds.Sylwen] =
             [
-                WeaponIds.SigilBolt,
-                WeaponIds.ShotgunId,
-                WeaponIds.VoidRicochetId
+                SkillIds.SylwenWhisperShot,
+                SkillIds.SylwenGalePierce,
+                SkillIds.SylwenThornfall,
+                SkillIds.SylwenSilverTempest
             ],
-            [CharacterIds.Lizard] =
+            [CharacterIds.Velvet] =
             [
-                WeaponIds.ExoriMin,
-                WeaponIds.Exori,
-                WeaponIds.ExoriMas
-            ],
-            [CharacterIds.KaelisDawn] =
-            [
-                WeaponIds.ExoriMin,
-                WeaponIds.Exori,
-                WeaponIds.ExoriMas
-            ],
-            [CharacterIds.KaelisEmber] =
-            [
-                WeaponIds.SigilBolt,
-                WeaponIds.ShotgunId,
-                WeaponIds.VoidRicochetId
+                SkillIds.VelvetVoidChain,
+                SkillIds.VelvetUmbralPath,
+                SkillIds.VelvetDeathStrike,
+                SkillIds.VelvetStormCollapse
             ]
         };
 
-    /// <summary>Returns fixed-kit weapon IDs for a character, defaulting to Kina when unknown.</summary>
+    /// <summary>Returns fixed-kit weapon IDs for a character, defaulting to Mirai when unknown.</summary>
     public static IReadOnlyList<string> GetFixedWeaponKitForCharacterId(string characterId)
     {
         if (FixedWeaponKitByCharacterId.TryGetValue(characterId, out var fixedKit))
@@ -1023,7 +1139,7 @@ public static class ArenaConfig
             return fixedKit;
         }
 
-        return FixedWeaponKitByCharacterId[CharacterIds.Kina];
+        return FixedWeaponKitByCharacterId[CharacterIds.Mirai];
     }
 
     /// <summary>Stable mob species ID strings. Values match the protocol species field used in snapshots.</summary>
@@ -1069,11 +1185,27 @@ public static class ArenaConfig
             [WeaponIds.Avalanche]       = "Avalanche",
             [WeaponIds.Heal]            = "Heal",
             [WeaponIds.Guard]           = "Guard",
-            [CharacterIds.Kina]            = "Kina",
-            [CharacterIds.RangedPrototype] = "Prototype",
-            [CharacterIds.Lizard]          = "Kaelis Vex",
-            [CharacterIds.KaelisDawn]      = "Kaelis Dawn",
-            [CharacterIds.KaelisEmber]     = "Kaelis Ember",
+            [CharacterIds.Mirai]           = "Mirai",
+            [CharacterIds.Sylwen]          = "Sylwen",
+            [CharacterIds.Velvet]          = "Velvet",
+            [SkillIds.MiraiRendPulse]      = "Rend Pulse",
+            [SkillIds.MiraiGraveFang]      = "Grave Fang",
+            [SkillIds.MiraiDreadSweep]     = "Dread Sweep",
+            [SkillIds.MiraiCollapseField]  = "Collapse Field",
+            [PassiveIds.MiraiSunderBrand]  = "Sunder Brand",
+            [SkillIds.SylwenWhisperShot]   = "Whisper Shot",
+            [SkillIds.SylwenGalePierce]    = "Gale Pierce",
+            [SkillIds.SylwenThornfall]     = "Thornfall",
+            [SkillIds.SylwenSilverTempest] = "Silver Tempest",
+            [PassiveIds.SylwenDeadeyeGrace] = "Deadeye Grace",
+            [SkillIds.VelvetVoidChain]     = "Void Chain",
+            [SkillIds.VelvetUmbralPath]    = "Umbral Path",
+            [SkillIds.VelvetDeathStrike]   = "Death Strike",
+            [SkillIds.VelvetStormCollapse] = "Storm Collapse",
+            [PassiveIds.VelvetArcaneDecay] = "Arcane Decay",
+            [KitIds.Mirai]                 = "Mirai Kit",
+            [KitIds.Sylwen]                = "Sylwen Kit",
+            [KitIds.Velvet]                = "Velvet Kit",
             [SpeciesIds.MeleeBrute]      = "Hollow Melee Brute",
             [SpeciesIds.RangedArcher]    = "Hollow Ranged Archer",
             [SpeciesIds.MeleeDemon]      = "Hollow Melee Demon",
@@ -1114,9 +1246,11 @@ public static class ArenaConfig
     /// <summary>Returns the display name for a simulation skill ID, or null if not found.</summary>
     public static string? GetSkillDisplayName(string skillId) =>
         SkillIdToWeaponId.TryGetValue(skillId, out var weaponId) &&
-        DisplayNames.TryGetValue(weaponId, out var name)
-            ? name
-            : null;
+        DisplayNames.TryGetValue(weaponId, out var mappedWeaponName)
+            ? mappedWeaponName
+            : DisplayNames.TryGetValue(skillId, out var directSkillName)
+                ? directSkillName
+                : null;
 
     // Maps stable WeaponIds back to simulation skill logic IDs.
     private static readonly IReadOnlyDictionary<string, string> WeaponIdToSkillId =

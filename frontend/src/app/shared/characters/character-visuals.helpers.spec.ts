@@ -2,21 +2,21 @@ import { resolveCharacterPortraitVisual } from "./character-visuals.helpers";
 
 describe("character-visuals.helpers", () => {
   it("maps known characters to deterministic portrait sprites and tones", () => {
-    const kina = resolveCharacterPortraitVisual({ characterId: "character:kina", displayName: "Kina" });
-    expect(kina.tone).toBe("amber");
-    expect(kina.imageUrl).toContain("knight_f_idle_anim_f0.png");
-    expect(kina.homepageImageUrl).toContain("knight_f_idle_anim_f0.png");
-    expect(kina.prerunImageUrl).toContain("knight_f_run_anim_f1.png");
-    expect(kina.kaelisImageUrl).toContain("knight_f_idle_anim_f0.png");
-    expect(kina.runImageUrl).toContain("knight_f_run_anim_f1.png");
-    expect(kina.hitImageUrl).toContain("knight_f_hit_anim_f0.png");
-    expect(kina.sigil).toBe("K");
-    expect(kina.skinId).toBe("1");
+    const mirai = resolveCharacterPortraitVisual({ characterId: "character:mirai", displayName: "Mirai" });
+    expect(mirai.tone).toBe("teal");
+    expect(mirai.imageUrl).toContain("lizard_m_idle_anim_f0.png");
+    expect(mirai.homepageImageUrl).toContain("lizard_m_idle_anim_f0.png");
+    expect(mirai.prerunImageUrl).toContain("lizard_m_run_anim_f1.png");
+    expect(mirai.kaelisImageUrl).toContain("lizard_m_idle_anim_f0.png");
+    expect(mirai.runImageUrl).toContain("lizard_m_run_anim_f1.png");
+    expect(mirai.hitImageUrl).toContain("lizard_m_hit_anim_f0.png");
+    expect(mirai.sigil).toBe("M");
+    expect(mirai.skinId).toBe("m");
   });
 
-  it("maps ranged prototype id to Sylwen visuals and supports context-specific portraits", () => {
+  it("maps Sylwen visuals and supports context-specific portraits", () => {
     const sylwenHome = resolveCharacterPortraitVisual({
-      characterId: "character:ranged_prototype",
+      characterId: "character:sylwen",
       displayName: "Sylwen",
       context: "homepage"
     });
@@ -27,18 +27,30 @@ describe("character-visuals.helpers", () => {
     expect(sylwenHome.sigil).toBe("S");
 
     const sylwenPreRun = resolveCharacterPortraitVisual({
-      characterId: "character:ranged_prototype",
+      characterId: "character:sylwen",
       displayName: "Sylwen",
       context: "prerun"
     });
-    expect(sylwenPreRun.imageUrl).toContain("sylwen_prerun_1.jpg");
+    expect(sylwenPreRun.imageUrl).toContain("sylwen_prerun_1.png");
 
     const sylwenRoster = resolveCharacterPortraitVisual({
-      characterId: "character:ranged_prototype",
+      characterId: "character:sylwen",
       displayName: "Sylwen",
       context: "roster"
     });
     expect(sylwenRoster.imageUrl).toContain("sylwen_gameplay_1_idle_f0.png");
+  });
+
+  it("maps Velvet visuals to the configured remapped asset set", () => {
+    const velvet = resolveCharacterPortraitVisual({
+      characterId: "character:velvet",
+      displayName: "Velvet"
+    });
+
+    expect(velvet.imageUrl).toContain("wizzard_f_idle_anim_f0.png");
+    expect(velvet.runImageUrl).toContain("wizzard_f_run_anim_f1.png");
+    expect(velvet.hitImageUrl).toContain("wizzard_f_hit_anim_f0.png");
+    expect(velvet.sigil).toBe("V");
   });
 
   it("returns slate fallback when character id has no mapping", () => {

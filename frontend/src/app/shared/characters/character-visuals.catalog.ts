@@ -40,34 +40,11 @@ export type CharacterResolvedVisualSpec = Readonly<{
 }>;
 
 const CHARACTER_VISUALS_BY_ID: Readonly<Record<string, CharacterVisualSpec>> = {
-  "character:kina": {
-    displayName: "Kina",
-    defaultSkinId: "1",
-    tone: "amber",
-    sigil: "K",
-    skins: {
-      "1": {
-        portraits: {
-          homepage: "/assets/packs/arena_v1_0x72_bdragon/sprites/knight_f_idle_anim_f0.png",
-          prerun: "/assets/packs/arena_v1_0x72_bdragon/sprites/knight_f_run_anim_f1.png",
-          kaelis: "/assets/packs/arena_v1_0x72_bdragon/sprites/knight_f_idle_anim_f0.png",
-          roster: "/assets/packs/arena_v1_0x72_bdragon/sprites/knight_f_idle_anim_f0.png"
-        },
-        gameplay: {
-          idle: "sprite.player.kina.idle",
-          run: "sprite.player.kina.run",
-          hit: "sprite.player.kina.hit"
-        },
-        runImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/knight_f_run_anim_f1.png",
-        hitImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/knight_f_hit_anim_f0.png"
-      }
-    }
-  },
-  "character:lizard": {
-    displayName: "Kaelis Vex",
+  "character:mirai": {
+    displayName: "Mirai",
     defaultSkinId: "m",
     tone: "teal",
-    sigil: "L",
+    sigil: "M",
     skins: {
       m: {
         portraits: {
@@ -83,26 +60,10 @@ const CHARACTER_VISUALS_BY_ID: Readonly<Record<string, CharacterVisualSpec>> = {
         },
         runImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/lizard_m_run_anim_f1.png",
         hitImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/lizard_m_hit_anim_f0.png"
-      },
-      f: {
-        portraits: {
-          homepage: "/assets/packs/arena_v1_0x72_bdragon/sprites/lizard_f_idle_anim_f0.png",
-          prerun: "/assets/packs/arena_v1_0x72_bdragon/sprites/lizard_f_run_anim_f1.png",
-          kaelis: "/assets/packs/arena_v1_0x72_bdragon/sprites/lizard_f_idle_anim_f0.png",
-          roster: "/assets/packs/arena_v1_0x72_bdragon/sprites/lizard_f_idle_anim_f0.png"
-        },
-        gameplay: {
-          idle: "sprite.player.lizard_f.idle",
-          run: "sprite.player.lizard_f.run",
-          hit: "sprite.player.lizard_f.hit"
-        },
-        runImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/lizard_f_run_anim_f1.png",
-        hitImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/lizard_f_idle_anim_f0.png"
       }
     }
   },
   "character:sylwen": {
-    aliases: ["character:ranged_prototype"],
     displayName: "Sylwen",
     defaultSkinId: "1",
     tone: "teal",
@@ -125,11 +86,11 @@ const CHARACTER_VISUALS_BY_ID: Readonly<Record<string, CharacterVisualSpec>> = {
       }
     }
   },
-  kaelis_01: {
-    displayName: "Kaelis Dawn",
+  "character:velvet": {
+    displayName: "Velvet",
     defaultSkinId: "1",
     tone: "violet",
-    sigil: "D",
+    sigil: "V",
     skins: {
       "1": {
         portraits: {
@@ -145,29 +106,6 @@ const CHARACTER_VISUALS_BY_ID: Readonly<Record<string, CharacterVisualSpec>> = {
         },
         runImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/wizzard_f_run_anim_f1.png",
         hitImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/wizzard_f_hit_anim_f0.png"
-      }
-    }
-  },
-  kaelis_02: {
-    displayName: "Kaelis Ember",
-    defaultSkinId: "1",
-    tone: "emerald",
-    sigil: "E",
-    skins: {
-      "1": {
-        portraits: {
-          homepage: "/assets/packs/arena_v1_0x72_bdragon/sprites/dwarf_f_idle_anim_f0.png",
-          prerun: "/assets/packs/arena_v1_0x72_bdragon/sprites/dwarf_f_run_anim_f1.png",
-          kaelis: "/assets/packs/arena_v1_0x72_bdragon/sprites/dwarf_f_idle_anim_f0.png",
-          roster: "/assets/packs/arena_v1_0x72_bdragon/sprites/dwarf_f_idle_anim_f0.png"
-        },
-        gameplay: {
-          idle: "sprite.player.kaelis_ember.idle",
-          run: "sprite.player.kaelis_ember.run",
-          hit: "sprite.player.kaelis_ember.hit"
-        },
-        runImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/dwarf_f_run_anim_f1.png",
-        hitImageUrl: "/assets/packs/arena_v1_0x72_bdragon/sprites/dwarf_f_hit_anim_f0.png"
       }
     }
   }
@@ -223,10 +161,6 @@ export function resolveCharacterDisplayName(input: Readonly<{
   }
 
   if (!preferredName) {
-    return characterSpec.displayName;
-  }
-
-  if (canonicalCharacterId === "character:sylwen" && /prototype/i.test(preferredName)) {
     return characterSpec.displayName;
   }
 

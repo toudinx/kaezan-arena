@@ -52,6 +52,13 @@ export interface ArenaActorState {
   attackElement?: string | null;
   weakTo?: string | null;
   resistantTo?: string | null;
+  sunderBrandStacks?: number;
+  corrosionStacks?: number;
+  focusStacks?: number;
+  isStunned?: boolean;
+  stunRemainingMs?: number;
+  isImmobilized?: boolean;
+  immobilizeRemainingMs?: number;
 }
 
 export type ArenaActorMap = Record<string, ArenaActorState>;
@@ -123,6 +130,8 @@ export interface DamageNumberInstance {
   durationMs: number;
   isWeaknessHit?: boolean;
   isResistanceHit?: boolean;
+  styleVariant?: "storm_collapse";
+  styleScale?: number;
 }
 
 export interface QueuedDamageNumberInstance {
@@ -154,7 +163,7 @@ export interface MobKnockbackSlideInstance {
 
 export interface FloatingTextInstance {
   kind: "crit_text" | "combat_callout";
-  tone?: "crit" | "elite" | "assist" | "shield_break" | "danger" | "reward";
+  tone?: "crit" | "elite" | "assist" | "shield_break" | "danger" | "reward" | "headshot" | "silver_tempest";
   text: string;
   tilePos: TilePos;
   startAtMs: number;
@@ -361,6 +370,77 @@ export interface ArenaMimicActivatedEvent {
   tileY: number;
 }
 
+export interface ArenaSunderBrandUpdatedEvent {
+  type: "sunder_brand_updated";
+  mobId: string;
+  stacks: number;
+}
+
+export interface ArenaCorrosionUpdatedEvent {
+  type: "corrosion_updated";
+  mobId: string;
+  stacks: number;
+}
+
+export interface ArenaFocusUpdatedEvent {
+  type: "focus_updated";
+  mobId: string;
+  focusStacks: number;
+  consecutiveHits: number;
+}
+
+export interface ArenaHeadshotEvent {
+  type: "headshot";
+  mobId: string;
+  damageDealt: number;
+}
+
+export interface ArenaFocusResetEvent {
+  type: "focus_reset";
+  mobId: string;
+  reason?: string;
+}
+
+export interface ArenaStunAppliedEvent {
+  type: "stun_applied";
+  mobId: string;
+  durationMs: number;
+}
+
+export interface ArenaImmobilizeAppliedEvent {
+  type: "immobilize_applied";
+  mobId: string;
+  durationMs: number;
+}
+
+export interface ArenaCollapseFieldPullResult {
+  mobId: string;
+  newPosition: TilePos;
+  damageDealt: number;
+}
+
+export interface ArenaCollapseFieldActivatedEvent {
+  type: "collapse_field_activated";
+  playerPosition: TilePos;
+  pullResults: ArenaCollapseFieldPullResult[];
+}
+
+export interface ArenaStormCollapseHit {
+  mobId: string;
+  stacksConsumed: number;
+  damageDealt: number;
+}
+
+export interface ArenaStormCollapseDetonatedEvent {
+  type: "storm_collapse_detonated";
+  hits: ArenaStormCollapseHit[];
+}
+
+export interface ArenaSilverTempestActivatedEvent {
+  type: "silver_tempest_activated";
+  durationMs: number;
+}
+
 export type ArenaBattleEvent =
   | ArenaFxSpawnEvent
   | ArenaDamageNumberEvent
@@ -377,7 +457,45 @@ export type ArenaBattleEvent =
   | ArenaCardChosenEvent
   | ArenaRangedProjectileFiredEvent
   | ArenaMobKnockedBackEvent
-  | ArenaMimicActivatedEvent;
+  | ArenaMimicActivatedEvent
+  | ArenaSunderBrandUpdatedEvent
+  | ArenaCorrosionUpdatedEvent
+  | ArenaFocusUpdatedEvent
+  | ArenaHeadshotEvent
+  | ArenaFocusResetEvent
+  | ArenaStunAppliedEvent
+  | ArenaImmobilizeAppliedEvent
+  | ArenaCollapseFieldActivatedEvent
+  | ArenaStormCollapseDetonatedEvent
+  | ArenaSilverTempestActivatedEvent;
+
+export interface ActorFlashOverlay {
+  actorId: string;
+  delayRemainingMs: number;
+  elapsedMs: number;
+  durationMs: number;
+  fullWhiteDurationMs: number;
+}
+
+export interface RadialBurstOverlay {
+  centerTile: TilePos;
+  elapsedMs: number;
+  durationMs: number;
+}
+
+export interface StormCollapseRingOverlay {
+  actorId: string;
+  stacksConsumed: number;
+  elapsedMs: number;
+  durationMs: number;
+}
+
+export interface ScreenTintOverlay {
+  colorHex: string;
+  maxOpacity: number;
+  elapsedMs: number;
+  durationMs: number;
+}
 
 export interface ApplyBattleStepResult {
   scene: ArenaScene;
@@ -403,10 +521,16 @@ export interface ArenaScene {
   rangedConfig?: ArenaRangedConfig;
   hoveredMobEntityId?: string | null;
   threatMobEntityId?: string | null;
+  silverTempestActive: boolean;
+  silverTempestRemainingMs: number;
   fxInstances: FxInstance[];
   attackFxInstances: AttackFxInstance[];
   projectileInstances: RangedProjectileInstance[];
   mobKnockbackSlidesByActorId?: Record<string, MobKnockbackSlideInstance>;
+  actorFlashOverlays: ActorFlashOverlay[];
+  collapseFieldBursts: RadialBurstOverlay[];
+  stormCollapseRings: StormCollapseRingOverlay[];
+  screenTintOverlays: ScreenTintOverlay[];
   queuedDamageNumbers: QueuedDamageNumberInstance[];
   nextDamageSpawnOrder: number;
   damageNumbers: DamageNumberInstance[];

@@ -55,25 +55,17 @@ public static class AccountCatalog
     public static IReadOnlyList<CharacterCatalogDefinition> CharacterDefinitions { get; } =
     [
         BuildCharacterDefinition(
-            ArenaConfig.CharacterIds.Kina,
-            ArenaConfig.CharacterSubtitleKina,
+            ArenaConfig.CharacterIds.Mirai,
+            ArenaConfig.CharacterSubtitleMirai,
             isProvisional: false),
         BuildCharacterDefinition(
-            ArenaConfig.CharacterIds.RangedPrototype,
-            ArenaConfig.CharacterSubtitleRangedPrototype,
-            isProvisional: true),
-        BuildCharacterDefinition(
-            ArenaConfig.CharacterIds.Lizard,
-            ArenaConfig.CharacterSubtitleLizard,
-            isProvisional: true),
-        BuildCharacterDefinition(
-            ArenaConfig.CharacterIds.KaelisDawn,
-            ArenaConfig.CharacterSubtitleKina,
+            ArenaConfig.CharacterIds.Sylwen,
+            ArenaConfig.CharacterSubtitleSylwen,
             isProvisional: false),
         BuildCharacterDefinition(
-            ArenaConfig.CharacterIds.KaelisEmber,
-            ArenaConfig.CharacterSubtitleRangedPrototype,
-            isProvisional: true)
+            ArenaConfig.CharacterIds.Velvet,
+            ArenaConfig.CharacterSubtitleVelvet,
+            isProvisional: false)
     ];
 
     public static IReadOnlyList<ItemDefinition> ItemDefinitions { get; } =

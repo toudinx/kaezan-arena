@@ -29,7 +29,7 @@ describe("ArenaEngine combat fx mapping", () => {
     const scene = engine.createTestScene(7, 7, 32);
     const actors: ArenaActorState[] = [
       {
-        actorId: "character:ranged_prototype",
+        actorId: "character:sylwen",
         kind: "player",
         tileX: 3,
         tileY: 3,
@@ -39,7 +39,7 @@ describe("ArenaEngine combat fx mapping", () => {
     ];
 
     const applied = engine.applyActorStates(scene, actors);
-    const playerSprite = applied.sprites.find((entry) => entry.actorId === "character:ranged_prototype");
+    const playerSprite = applied.sprites.find((entry) => entry.actorId === "character:sylwen");
     expect(playerSprite?.semanticId).toBe("sprite.player.sylwen.1.idle");
   });
 

@@ -82,6 +82,7 @@ import {
   RunResultLogger,
   type RunResultFinalizeMetrics
 } from "../../shared/run-results/run-result-logger";
+import { DEFAULT_PLAYABLE_CHARACTER_ID } from "../../shared/characters/playable-characters";
 import { ReplayIoService } from "../../shared/replay/replay-io.service";
 import {
   type DamageConsoleEntry,
@@ -1901,7 +1902,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     const playerId =
       this.selectedCharacterId ||
       this.accountState?.activeCharacterId ||
-      "player_demo";
+      DEFAULT_PLAYABLE_CHARACTER_ID;
     const recording: RunRecording = {
       runId: this.currentBattleId.trim().length > 0 ? this.currentBattleId.trim() : `run-${Date.now()}`,
       battleSeed: this.currentSeed,
@@ -1950,7 +1951,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     const playerId =
       this.selectedCharacterId ||
       this.accountState?.activeCharacterId ||
-      "player_demo";
+      DEFAULT_PLAYABLE_CHARACTER_ID;
     const runId = `imported-${Date.now()}`;
     const recording: RunRecording = {
       runId,
@@ -2760,7 +2761,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       const playerId =
         this.selectedCharacterId ||
         this.accountState?.activeCharacterId ||
-        "player_demo";
+        DEFAULT_PLAYABLE_CHARACTER_ID;
       const request: StartBattleRequest & { seedOverride?: number | null } = {
         arenaId: this.selectedArenaId ?? undefined,
         playerId,
@@ -4009,6 +4010,198 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
           actorId,
           fromTile: { x: fromX, y: fromY },
           toTile: { x: toX, y: toY }
+        });
+        continue;
+      }
+
+      if (eventType === "sunder_brand_updated") {
+        const mobId = this.readString(value["mobId"]);
+        const stacks = this.readNumber(value["stacks"]) ?? this.readNumber(value["stackCount"]);
+        if (!mobId || stacks === null) {
+          continue;
+        }
+
+        mapped.push({
+          type: "sunder_brand_updated",
+          mobId,
+          stacks: Math.max(0, stacks)
+        });
+        continue;
+      }
+
+      if (eventType === "corrosion_updated") {
+        const mobId = this.readString(value["mobId"]);
+        const stacks = this.readNumber(value["stacks"]) ?? this.readNumber(value["stackCount"]);
+        if (!mobId || stacks === null) {
+          continue;
+        }
+
+        mapped.push({
+          type: "corrosion_updated",
+          mobId,
+          stacks: Math.max(0, stacks)
+        });
+        continue;
+      }
+
+      if (eventType === "focus_updated") {
+        const mobId = this.readString(value["mobId"]);
+        const focusStacks = this.readNumber(value["focusStacks"]);
+        const consecutiveHits = this.readNumber(value["consecutiveHits"]) ??
+          this.readNumber(value["deadeyeConsecutiveHits"]);
+        if (!mobId || focusStacks === null || consecutiveHits === null) {
+          continue;
+        }
+
+        mapped.push({
+          type: "focus_updated",
+          mobId,
+          focusStacks: Math.max(0, focusStacks),
+          consecutiveHits: Math.max(0, consecutiveHits)
+        });
+        continue;
+      }
+
+      if (eventType === "headshot") {
+        const mobId = this.readString(value["mobId"]);
+        const damageDealt = this.readNumber(value["damageDealt"]);
+        if (!mobId || damageDealt === null) {
+          continue;
+        }
+
+        mapped.push({
+          type: "headshot",
+          mobId,
+          damageDealt: Math.max(0, damageDealt)
+        });
+        continue;
+      }
+
+      if (eventType === "focus_reset") {
+        const mobId = this.readString(value["mobId"]);
+        const reason = this.readString(value["reason"]);
+        if (!mobId) {
+          continue;
+        }
+
+        mapped.push({
+          type: "focus_reset",
+          mobId,
+          reason: reason ?? undefined
+        });
+        continue;
+      }
+
+      if (eventType === "stun_applied") {
+        const mobId = this.readString(value["mobId"]);
+        const durationMs = this.readNumber(value["durationMs"]);
+        if (!mobId || durationMs === null) {
+          continue;
+        }
+
+        mapped.push({
+          type: "stun_applied",
+          mobId,
+          durationMs: Math.max(0, durationMs)
+        });
+        continue;
+      }
+
+      if (eventType === "immobilize_applied") {
+        const mobId = this.readString(value["mobId"]);
+        const durationMs = this.readNumber(value["durationMs"]);
+        if (!mobId || durationMs === null) {
+          continue;
+        }
+
+        mapped.push({
+          type: "immobilize_applied",
+          mobId,
+          durationMs: Math.max(0, durationMs)
+        });
+        continue;
+      }
+
+      if (eventType === "collapse_field_activated") {
+        const playerPositionRecord = this.readRecord(value["playerPosition"]);
+        const playerX = this.readNumber(playerPositionRecord?.["x"]);
+        const playerY = this.readNumber(playerPositionRecord?.["y"]);
+        const rawPullResults = Array.isArray(value["pullResults"])
+          ? value["pullResults"]
+          : Array.isArray(value["mobs"])
+            ? value["mobs"]
+            : [];
+        if (playerX === null || playerY === null) {
+          continue;
+        }
+
+        const pullResults: Array<{ mobId: string; newPosition: { x: number; y: number }; damageDealt: number }> = [];
+        for (const entry of rawPullResults) {
+          const record = this.readRecord(entry);
+          const mobId = this.readString(record?.["mobId"]);
+          const positionRecord = this.readRecord(record?.["newPosition"]) ?? this.readRecord(record?.["position"]);
+          const tileX = this.readNumber(positionRecord?.["x"]);
+          const tileY = this.readNumber(positionRecord?.["y"]);
+          const damageDealt = this.readNumber(record?.["damageDealt"]) ?? 0;
+          if (!mobId || tileX === null || tileY === null) {
+            continue;
+          }
+
+          pullResults.push({
+            mobId,
+            newPosition: { x: tileX, y: tileY },
+            damageDealt: Math.max(0, damageDealt)
+          });
+        }
+
+        mapped.push({
+          type: "collapse_field_activated",
+          playerPosition: { x: playerX, y: playerY },
+          pullResults
+        });
+        continue;
+      }
+
+      if (eventType === "storm_collapse_detonated") {
+        const rawHits = Array.isArray(value["hits"])
+          ? value["hits"]
+          : Array.isArray(value["mobs"])
+            ? value["mobs"]
+            : [];
+        const hits: Array<{ mobId: string; stacksConsumed: number; damageDealt: number }> = [];
+        for (const entry of rawHits) {
+          const record = this.readRecord(entry);
+          const mobId = this.readString(record?.["mobId"]);
+          const stacksConsumed = this.readNumber(record?.["stacksConsumed"]) ??
+            this.readNumber(record?.["corrosionStacksBeforeDetonation"]);
+          const damageDealt = this.readNumber(record?.["damageDealt"]);
+          if (!mobId || stacksConsumed === null || damageDealt === null) {
+            continue;
+          }
+
+          hits.push({
+            mobId,
+            stacksConsumed: Math.max(0, stacksConsumed),
+            damageDealt: Math.max(0, damageDealt)
+          });
+        }
+
+        mapped.push({
+          type: "storm_collapse_detonated",
+          hits
+        });
+        continue;
+      }
+
+      if (eventType === "silver_tempest_activated") {
+        const durationMs = this.readNumber(value["durationMs"]);
+        if (durationMs === null) {
+          continue;
+        }
+
+        mapped.push({
+          type: "silver_tempest_activated",
+          durationMs: Math.max(0, durationMs)
         });
         continue;
       }

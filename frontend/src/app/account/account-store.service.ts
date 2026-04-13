@@ -19,6 +19,12 @@ import {
   type SigilLoadoutMutationResponse
 } from "../api/account-api.service";
 import { AccountSessionService } from "./account-session.service";
+import {
+  DEFAULT_PLAYABLE_CHARACTER_ID,
+  PLAYABLE_CHARACTER_IDS,
+  isPlayableCharacterId,
+  normalizeCharacterIdForPlayableRoster
+} from "../shared/characters/playable-characters";
 
 export type AccountCatalogs = Readonly<{
   characterCatalog: ReadonlyArray<CharacterCatalogEntry>;
@@ -61,22 +67,11 @@ export class AccountStore {
   readonly accountId = computed(() => this.session.accountId());
   readonly activeCharacterId = computed(() => {
     const state = this.stateSignal();
-    const preferred = this.session.activeCharacterId();
-
-    if (state && preferred && state.characters[preferred]) {
-      return preferred;
-    }
-
-    if (state && state.activeCharacterId && state.characters[state.activeCharacterId]) {
-      return state.activeCharacterId;
-    }
-
     if (state) {
-      const fallback = Object.values(state.characters)[0]?.characterId ?? null;
-      return fallback;
+      return this.resolvePreferredCharacterId(state);
     }
 
-    return preferred;
+    return normalizeCharacterIdForPlayableRoster(this.session.activeCharacterId()) ?? DEFAULT_PLAYABLE_CHARACTER_ID;
   });
 
   readonly activeCharacter = computed<CharacterState | null>(() => {
@@ -450,25 +445,44 @@ export class AccountStore {
   }
 
   private normalizeAccountState(account: AccountState): AccountState {
-    const activeCharacterId = this.resolvePreferredCharacterId(account);
-    if (activeCharacterId === account.activeCharacterId) {
+    const normalizedCharacters = this.normalizePlayableCharacters(account.characters);
+    const normalizedAccount = {
+      ...account,
+      characters: normalizedCharacters
+    };
+    const activeCharacterId = this.resolvePreferredCharacterId(normalizedAccount);
+    if (
+      activeCharacterId === account.activeCharacterId &&
+      Object.keys(normalizedCharacters).length === Object.keys(account.characters).length
+    ) {
       return account;
     }
 
     return {
-      ...account,
+      ...normalizedAccount,
       activeCharacterId
     };
   }
 
   private resolvePreferredCharacterId(account: AccountState): string {
-    if (account.activeCharacterId && account.characters[account.activeCharacterId]) {
-      return account.activeCharacterId;
+    const normalizedActiveId = normalizeCharacterIdForPlayableRoster(account.activeCharacterId);
+    if (normalizedActiveId && account.characters[normalizedActiveId]) {
+      return normalizedActiveId;
     }
 
-    const sessionCharacterId = this.session.activeCharacterId();
+    const sessionCharacterId = normalizeCharacterIdForPlayableRoster(this.session.activeCharacterId());
     if (sessionCharacterId && account.characters[sessionCharacterId]) {
       return sessionCharacterId;
+    }
+
+    if (account.characters[DEFAULT_PLAYABLE_CHARACTER_ID]) {
+      return DEFAULT_PLAYABLE_CHARACTER_ID;
+    }
+
+    for (const characterId of PLAYABLE_CHARACTER_IDS) {
+      if (account.characters[characterId]) {
+        return characterId;
+      }
     }
 
     const sorted = Object.values(account.characters).sort((left, right) => {
@@ -476,7 +490,25 @@ export class AccountStore {
       return byName !== 0 ? byName : left.characterId.localeCompare(right.characterId);
     });
 
-    return sorted[0]?.characterId ?? "";
+    return sorted[0]?.characterId ?? DEFAULT_PLAYABLE_CHARACTER_ID;
+  }
+
+  private normalizePlayableCharacters(
+    characters: Readonly<Record<string, CharacterState>>
+  ): Record<string, CharacterState> {
+    const playableCharacters: Record<string, CharacterState> = {};
+    for (const characterId of PLAYABLE_CHARACTER_IDS) {
+      const character = characters[characterId];
+      if (character) {
+        playableCharacters[characterId] = character;
+      }
+    }
+
+    if (Object.keys(playableCharacters).length > 0) {
+      return playableCharacters;
+    }
+
+    return { ...characters };
   }
 
   private syncSessionFromAccount(account: AccountState): void {
@@ -495,8 +527,16 @@ export class AccountStore {
     speciesCatalog: ReadonlyArray<BestiarySpecies>,
     bestiaryRankThresholds: ReadonlyArray<number> = [0, 10, 30, 60, 100]
   ): AccountCatalogs {
+    const filteredCharacterCatalog = characterCatalog
+      .filter((character) => isPlayableCharacterId(character.characterId))
+      .sort((left, right) => {
+        const leftIndex = PLAYABLE_CHARACTER_IDS.indexOf(left.characterId as (typeof PLAYABLE_CHARACTER_IDS)[number]);
+        const rightIndex = PLAYABLE_CHARACTER_IDS.indexOf(right.characterId as (typeof PLAYABLE_CHARACTER_IDS)[number]);
+        return leftIndex - rightIndex;
+      });
+
     const characterById: Record<string, CharacterCatalogEntry> = {};
-    for (const character of characterCatalog) {
+    for (const character of filteredCharacterCatalog) {
       characterById[character.characterId] = character;
     }
 
@@ -516,7 +556,7 @@ export class AccountStore {
     }
 
     return {
-      characterCatalog,
+      characterCatalog: filteredCharacterCatalog,
       itemCatalog,
       equipmentCatalog,
       speciesCatalog,

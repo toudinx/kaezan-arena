@@ -1350,7 +1350,7 @@ public sealed class InMemoryBattleStoreDeterminismTests
     public void Shotgun_AssistCast_HitsAllMobsInCone_LeavesOutsideMobsUntouched_AndAppliesPrimaryDirectionKnockback()
     {
         var store = new InMemoryBattleStore();
-        var start = store.StartBattle("arena-shotgun-cone-aoe", ArenaConfig.CharacterIds.RangedPrototype, 1337);
+        var start = store.StartBattle("arena-shotgun-cone-aoe", "character:ranged_prototype", 1337);
         Assert.Contains(start.Skills, skill => string.Equals(skill.SkillId, ArenaConfig.ShotgunSkillId, StringComparison.Ordinal));
         Assert.DoesNotContain(start.Skills, skill => string.Equals(skill.SkillId, ArenaConfig.ExoriSkillId, StringComparison.Ordinal));
 
@@ -1479,7 +1479,7 @@ public sealed class InMemoryBattleStoreDeterminismTests
     public void Shotgun_NoTarget_DoesNotConsumeCooldownOrGlobalCooldown()
     {
         var store = new InMemoryBattleStore();
-        var start = store.StartBattle("arena-shotgun-no-target", ArenaConfig.CharacterIds.RangedPrototype, 1337);
+        var start = store.StartBattle("arena-shotgun-no-target", "character:ranged_prototype", 1337);
         Assert.Contains(start.Skills, skill => string.Equals(skill.SkillId, ArenaConfig.ShotgunSkillId, StringComparison.Ordinal));
 
         RemoveAllMobs(store, start.BattleId);
@@ -1524,7 +1524,7 @@ public sealed class InMemoryBattleStoreDeterminismTests
     public void Shotgun_DoesNotFireForKina()
     {
         var store = new InMemoryBattleStore();
-        var start = store.StartBattle("arena-shotgun-kina", ArenaConfig.CharacterIds.Kina, 1337);
+        var start = store.StartBattle("arena-shotgun-kina", ArenaConfig.CharacterIds.Mirai, 1337);
         Assert.DoesNotContain(start.Skills, skill => string.Equals(skill.SkillId, ArenaConfig.ShotgunSkillId, StringComparison.Ordinal));
 
         var currentTick = start.Tick;
@@ -1637,7 +1637,7 @@ public sealed class InMemoryBattleStoreDeterminismTests
     public void VoidRicochet_AssistCast_HitsMobsAcrossSegments_AndEmitsOneProjectilePerSegment()
     {
         var store = new InMemoryBattleStore();
-        var start = store.StartBattle("arena-void-ricochet-segments", ArenaConfig.CharacterIds.RangedPrototype, 1337);
+        var start = store.StartBattle("arena-void-ricochet-segments", "character:ranged_prototype", 1337);
         Assert.Contains(start.Skills, skill => string.Equals(skill.SkillId, ArenaConfig.VoidRicochetSkillId, StringComparison.Ordinal));
 
         SpawnAllMobSlotsViaReflection(store, start.BattleId);
@@ -1773,7 +1773,7 @@ public sealed class InMemoryBattleStoreDeterminismTests
     public void VoidRicochet_DoesNotFireForKina()
     {
         var store = new InMemoryBattleStore();
-        var start = store.StartBattle("arena-void-ricochet-kina", ArenaConfig.CharacterIds.Kina, 1337);
+        var start = store.StartBattle("arena-void-ricochet-kina", ArenaConfig.CharacterIds.Mirai, 1337);
         Assert.DoesNotContain(start.Skills, skill => string.Equals(skill.SkillId, ArenaConfig.VoidRicochetSkillId, StringComparison.Ordinal));
 
         var currentTick = start.Tick;

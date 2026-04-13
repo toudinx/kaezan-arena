@@ -1753,17 +1753,49 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
         }
     }
 
+    private static readonly IReadOnlySet<string> LegacyCharacterIds = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "character:kina",
+        "character:ranged_prototype",
+        "character:lizard",
+        "kaelis_01",
+        "kaelis_02"
+    };
+
+    private static readonly IReadOnlyList<string> PlayableCharacterIds =
+    [
+        ArenaConfig.CharacterIds.Mirai,
+        ArenaConfig.CharacterIds.Sylwen,
+        ArenaConfig.CharacterIds.Velvet
+    ];
+
     private static bool NeedsMigration(AccountState state)
     {
         const string legacySpeciesId = "ranged_dragon";
-        return state.Characters.Values.Any(character =>
-            character.BestiaryKillsBySpecies.ContainsKey(legacySpeciesId) ||
-            character.PrimalCoreBySpecies.ContainsKey(legacySpeciesId));
+        if (state.Characters.Values.Any(character =>
+                character.BestiaryKillsBySpecies.ContainsKey(legacySpeciesId) ||
+                character.PrimalCoreBySpecies.ContainsKey(legacySpeciesId)))
+        {
+            return true;
+        }
+
+        if (LegacyCharacterIds.Contains(state.ActiveCharacterId))
+        {
+            return true;
+        }
+
+        if (state.Characters.Keys.Any(id => LegacyCharacterIds.Contains(id)))
+        {
+            return true;
+        }
+
+        return false;
     }
 
     private static AccountState NormalizeLoadedAccountState(AccountState state)
     {
         state = MigrateRangedDragonToShaman(state);
+        state = MigrateLegacyCharacters(state);
         var changed = false;
 
         var accountXpAtCap = ResolveTotalAccountXpRequiredToReachLevel(ArenaConfig.ZoneConfig.AccountLevelCap);
@@ -1880,6 +1912,53 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
         }
 
         return state with { Characters = characters };
+    }
+
+    private static AccountState MigrateLegacyCharacters(AccountState state)
+    {
+        var anyChanged = false;
+
+        // Remove non-playable character entries.
+        var characters = new Dictionary<string, CharacterState>(state.Characters, StringComparer.Ordinal);
+        foreach (var legacyId in LegacyCharacterIds)
+        {
+            if (characters.Remove(legacyId))
+            {
+                anyChanged = true;
+            }
+        }
+
+        // Seed any missing playable characters with fresh state.
+        var seeded = CreateSeededAccount(state.AccountId);
+        foreach (var playableId in PlayableCharacterIds)
+        {
+            if (!characters.ContainsKey(playableId) &&
+                seeded.Characters.TryGetValue(playableId, out var seededCharacter))
+            {
+                characters[playableId] = seededCharacter;
+                anyChanged = true;
+            }
+        }
+
+        // Remap legacy activeCharacterId to Mirai.
+        var activeCharacterId = state.ActiveCharacterId;
+        if (LegacyCharacterIds.Contains(activeCharacterId) ||
+            !characters.ContainsKey(activeCharacterId))
+        {
+            activeCharacterId = ArenaConfig.CharacterIds.Mirai;
+            anyChanged = true;
+        }
+
+        if (!anyChanged)
+        {
+            return state;
+        }
+
+        return state with
+        {
+            ActiveCharacterId = activeCharacterId,
+            Characters = characters
+        };
     }
 
     private static SigilInstance NormalizeSigilInstance(string instanceId, SigilInstance sigil)
@@ -2205,48 +2284,41 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
 
     private static AccountState CreateSeededAccount(string accountId)
     {
-        var kaelisOneId = ArenaConfig.CharacterIds.Kina;
-        var kaelisTwoId = ArenaConfig.CharacterIds.RangedPrototype;
-        var lizardId = ArenaConfig.CharacterIds.Lizard;
-        var kaelisOne = new CharacterState(
-            CharacterId: kaelisOneId,
-            Name: ArenaConfig.DisplayNames[kaelisOneId],
+        var miraiId = ArenaConfig.CharacterIds.Mirai;
+        var sylwenId = ArenaConfig.CharacterIds.Sylwen;
+        var velvetId = ArenaConfig.CharacterIds.Velvet;
+
+        var mirai = new CharacterState(
+            CharacterId: miraiId,
+            Name: ArenaConfig.DisplayNames[miraiId],
             MasteryLevel: 6,
             MasteryXp: 1840,
             Inventory: new CharacterInventory(
                 MaterialStacks: new Dictionary<string, long>(StringComparer.Ordinal),
-                EquipmentInstances: new Dictionary<string, OwnedEquipmentInstance>(StringComparer.Ordinal)
-                {
-                    [$"{accountId}.{kaelisOneId}.wpn_01"] = new OwnedEquipmentInstance($"{accountId}.{kaelisOneId}.wpn_01", "wpn.iron_blade", IsLocked: false),
-                    [$"{accountId}.{kaelisOneId}.wpn_02"] = new OwnedEquipmentInstance($"{accountId}.{kaelisOneId}.wpn_02", "wpn.hunter_bow", IsLocked: false)
-                }),
+                EquipmentInstances: new Dictionary<string, OwnedEquipmentInstance>(StringComparer.Ordinal)),
             Equipment: new EquipmentState(
-                WeaponInstanceId: $"{accountId}.{kaelisOneId}.wpn_01"),
+                WeaponInstanceId: null),
             BestiaryKillsBySpecies: new Dictionary<string, int>(StringComparer.Ordinal),
             PrimalCoreBySpecies: new Dictionary<string, int>(StringComparer.Ordinal),
             UnlockedSigilSlots: ArenaConfig.MasteryConfig.InitialUnlockedSigilSlots);
 
-        var kaelisTwo = new CharacterState(
-            CharacterId: kaelisTwoId,
-            Name: ArenaConfig.DisplayNames[kaelisTwoId],
-            MasteryLevel: 4,
-            MasteryXp: 820,
+        var sylwen = new CharacterState(
+            CharacterId: sylwenId,
+            Name: ArenaConfig.DisplayNames[sylwenId],
+            MasteryLevel: 1,
+            MasteryXp: 0,
             Inventory: new CharacterInventory(
                 MaterialStacks: new Dictionary<string, long>(StringComparer.Ordinal),
-                EquipmentInstances: new Dictionary<string, OwnedEquipmentInstance>(StringComparer.Ordinal)
-                {
-                    [$"{accountId}.{kaelisTwoId}.wpn_01"] = new OwnedEquipmentInstance($"{accountId}.{kaelisTwoId}.wpn_01", "wpn.ember_staff", IsLocked: false),
-                    [$"{accountId}.{kaelisTwoId}.wpn_02"] = new OwnedEquipmentInstance($"{accountId}.{kaelisTwoId}.wpn_02", "wpn.iron_blade", IsLocked: false)
-                }),
+                EquipmentInstances: new Dictionary<string, OwnedEquipmentInstance>(StringComparer.Ordinal)),
             Equipment: new EquipmentState(
-                WeaponInstanceId: $"{accountId}.{kaelisTwoId}.wpn_01"),
+                WeaponInstanceId: null),
             BestiaryKillsBySpecies: new Dictionary<string, int>(StringComparer.Ordinal),
             PrimalCoreBySpecies: new Dictionary<string, int>(StringComparer.Ordinal),
             UnlockedSigilSlots: ArenaConfig.MasteryConfig.InitialUnlockedSigilSlots);
 
-        var lizard = new CharacterState(
-            CharacterId: lizardId,
-            Name: ArenaConfig.DisplayNames[lizardId],
+        var velvet = new CharacterState(
+            CharacterId: velvetId,
+            Name: ArenaConfig.DisplayNames[velvetId],
             MasteryLevel: 1,
             MasteryXp: 0,
             Inventory: new CharacterInventory(
@@ -2263,10 +2335,10 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
             accountId.Contains("refine_legendary_cap", StringComparison.Ordinal);
         if (startsWithRefineReadyResources)
         {
-            var equipmentInstances = new Dictionary<string, OwnedEquipmentInstance>(kaelisOne.Inventory.EquipmentInstances, StringComparer.Ordinal);
+            var equipmentInstances = new Dictionary<string, OwnedEquipmentInstance>(mirai.Inventory.EquipmentInstances, StringComparer.Ordinal);
             if (accountId.Contains("refine_ready", StringComparison.Ordinal))
             {
-                var refineCommonInstanceId = $"{accountId}.{kaelisOneId}.crafted_refine_common";
+                var refineCommonInstanceId = $"{accountId}.{miraiId}.crafted_refine_common";
                 equipmentInstances[refineCommonInstanceId] = new OwnedEquipmentInstance(
                     InstanceId: refineCommonInstanceId,
                     DefinitionId: "wpn.primal_forged_blade",
@@ -2278,7 +2350,7 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
 
             if (accountId.Contains("refine_legendary_cap", StringComparison.Ordinal))
             {
-                var refineLegendaryInstanceId = $"{accountId}.{kaelisOneId}.crafted_refine_legendary";
+                var refineLegendaryInstanceId = $"{accountId}.{miraiId}.crafted_refine_legendary";
                 equipmentInstances[refineLegendaryInstanceId] = new OwnedEquipmentInstance(
                     InstanceId: refineLegendaryInstanceId,
                     DefinitionId: "wpn.primal_forged_blade",
@@ -2288,9 +2360,9 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
                     Rarity: "legendary");
             }
 
-            kaelisOne = kaelisOne with
+            mirai = mirai with
             {
-                Inventory = kaelisOne.Inventory with
+                Inventory = mirai.Inventory with
                 {
                     EquipmentInstances = equipmentInstances
                 }
@@ -2313,13 +2385,13 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
         var initialBestiaryBySpecies = startsWithAnyCraftingResources
             ? new Dictionary<string, int>(StringComparer.Ordinal)
             {
-                [ArenaConfig.SpeciesIds.MeleeBrute] =initialSpeciesProgress
+                [ArenaConfig.SpeciesIds.MeleeBrute] = initialSpeciesProgress
             }
             : new Dictionary<string, int>(StringComparer.Ordinal);
         var initialPrimalCoreBySpecies = startsWithAnyCraftingResources
             ? new Dictionary<string, int>(StringComparer.Ordinal)
             {
-                [ArenaConfig.SpeciesIds.MeleeBrute] =startsWithAscendantCapProgress
+                [ArenaConfig.SpeciesIds.MeleeBrute] = startsWithAscendantCapProgress
                     ? 2500
                     : startsWithRefineReadyResources
                         ? 2000
@@ -2336,7 +2408,7 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
 
         return new AccountState(
             AccountId: accountId,
-            ActiveCharacterId: kaelisOneId,
+            ActiveCharacterId: miraiId,
             Version: 1,
             EchoFragmentsBalance: initialEchoFragments,
             KaerosBalance: 0L,
@@ -2344,13 +2416,13 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
             AccountXp: 0L,
             Characters: new Dictionary<string, CharacterState>(StringComparer.Ordinal)
             {
-                [kaelisOneId] = kaelisOne with
+                [miraiId] = mirai with
                 {
                     BestiaryKillsBySpecies = initialBestiaryBySpecies,
                     PrimalCoreBySpecies = initialPrimalCoreBySpecies
                 },
-                [kaelisTwoId] = kaelisTwo,
-                [lizardId] = lizard
+                [sylwenId] = sylwen,
+                [velvetId] = velvet
             })
         {
             SigilInventory = BuildSeedSigilInventory()

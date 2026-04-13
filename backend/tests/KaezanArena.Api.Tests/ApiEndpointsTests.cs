@@ -77,15 +77,15 @@ public sealed class ApiEndpointsTests : IClassFixture<ApiTestWebApplicationFacto
         Assert.NotNull(payload.Account);
         Assert.Equal("dev_account", payload.Account.AccountId);
         Assert.True(payload.Account.Characters.Count >= 2);
-        Assert.True(payload.Account.Characters.ContainsKey(ArenaConfig.CharacterIds.Kina));
-        Assert.True(payload.Account.Characters.ContainsKey(ArenaConfig.CharacterIds.RangedPrototype));
+        Assert.True(payload.Account.Characters.ContainsKey(ArenaConfig.CharacterIds.Mirai));
+        Assert.True(payload.Account.Characters.ContainsKey(ArenaConfig.CharacterIds.Sylwen));
         Assert.Contains(
             payload.CharacterCatalog,
             definition =>
-                string.Equals(definition.CharacterId, ArenaConfig.CharacterIds.RangedPrototype, StringComparison.Ordinal) &&
-                string.Equals(definition.DisplayName, ArenaConfig.DisplayNames[ArenaConfig.CharacterIds.RangedPrototype], StringComparison.Ordinal) &&
+                string.Equals(definition.CharacterId, ArenaConfig.CharacterIds.Sylwen, StringComparison.Ordinal) &&
+                string.Equals(definition.DisplayName, ArenaConfig.DisplayNames[ArenaConfig.CharacterIds.Sylwen], StringComparison.Ordinal) &&
                 definition.FixedWeaponNames.SequenceEqual(
-                    ArenaConfig.GetFixedWeaponKitForCharacterId(ArenaConfig.CharacterIds.RangedPrototype)
+                    ArenaConfig.GetFixedWeaponKitForCharacterId(ArenaConfig.CharacterIds.Sylwen)
                         .Select(weaponId => ArenaConfig.DisplayNames[weaponId])));
         Assert.True(payload.ItemCatalog.Count >= 1);
         Assert.True(payload.EquipmentCatalog.Count >= 1);
@@ -4629,7 +4629,7 @@ public sealed class ApiEndpointsTests : IClassFixture<ApiTestWebApplicationFacto
     [Fact]
     public async Task PostBattleStep_SigilBoltFiresForRangedPrototype_ProjectileIsBeyondMeleeRange()
     {
-        var playerId = ArenaConfig.CharacterIds.RangedPrototype;
+        var playerId = "character:ranged_prototype";
         var start = await StartBattleAsync("arena-sigil-bolt-ranged-prototype", playerId, 1337);
         AssertArenaInvariants(start.Actors, playerId);
         Assert.Contains(start.Skills, skill => string.Equals(skill.SkillId, ArenaConfig.SigilBoltSkillId, StringComparison.Ordinal));
@@ -4700,7 +4700,7 @@ public sealed class ApiEndpointsTests : IClassFixture<ApiTestWebApplicationFacto
     [Fact]
     public async Task PostBattleStep_SigilBoltDoesNotFireForKina()
     {
-        var playerId = ArenaConfig.CharacterIds.Kina;
+        var playerId = ArenaConfig.CharacterIds.Mirai;
         var start = await StartBattleAsync("arena-sigil-bolt-kina", playerId, 1337);
         AssertArenaInvariants(start.Actors, playerId);
         Assert.DoesNotContain(start.Skills, skill => string.Equals(skill.SkillId, ArenaConfig.SigilBoltSkillId, StringComparison.Ordinal));

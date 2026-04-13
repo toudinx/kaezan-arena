@@ -114,7 +114,7 @@ Bestiary now lives as a Kaelis tab (`/kaelis/:id?tab=bestiary`) and always uses 
 The Kaelis page is a dark-themed parent experience with a persistent left selector rail and internal tabs:
 
 - **Tabs:** `Overview`, `Loadout`, and `Bestiary` are subviews under Kaelis.
-- **LEFT — Kaelis selector rail:** Stable ordered roster, 4-item viewport, and up/down controls.
+- **LEFT — Kaelis selector rail:** Fixed 3-character roster in this order: `Mirai`, `Sylwen`, `Velvet`.
 - **Overview/Loadout tabs:** Keep portrait/identity and Kaelis detail blocks (stats, loadout, actions).
 - **Bestiary tab:** Renders the bestiary system as a Kaelis-scoped subview instead of a separate top-level page.
 
@@ -192,15 +192,54 @@ Four permanent Elemental Arenas, always accessible regardless of Account Level. 
   - Progress is exposed via `AscendantTierProgressDto` in every `CharacterStateDto` response
   - Bestiary page shows per-tier Ascendant progress below the species list
   - Characters page Loadout tab shows Ascendant unlock state inline in each Sigil slot card
-- Each character has a **fixed 3-slot weapon kit** + **1 Ultimate slot**
-  - Kina kit: Exori Min + Exori + Exori Mas (fixed, unchanged)
-  - Ranged prototype kit: Sigil Bolt + Shotgun + Void Ricochet (fixed)
-  - Characters page exposes both selectable characters: `Kina` and provisional `Prototype` (`Ranged Kit [WIP]`)
+- Each playable character has a **fixed 3-slot kit** + **1 Ultimate slot**
+  - Frontend roster now has exactly 3 playable entries in fixed order: `Mirai`, `Sylwen`, `Velvet`
+  - Mirai kit: Rend Pulse + Grave Fang + Dread Sweep (Ultimate: Collapse Field)
+  - Sylwen kit: Whisper Shot + Gale Pierce + Thornfall (Ultimate: Silver Tempest)
+  - Velvet kit: Void Chain + Umbral Path + Death Strike (Ultimate: Storm Collapse)
   - Selecting the active character on Characters page carries into Arena start (`playerId`) and activates that character kit
+  - Frontend active-character fallback defaults to `character:mirai`
+  - Legacy active IDs (`kaelis_01`, `kaelis_02`, and deprecated non-playable `character:*` IDs) are migrated to `character:mirai` on first load
+  - Character art is remapped by ID only (no file moves/renames): `character:mirai` uses the former Kaelis Vex art, `character:sylwen` is unchanged, and `character:velvet` uses the former Kaelis Dawn art
   - Ultimate gauge starts at **0** each run and auto-fires when full
-  - Assist order is class-kit-driven and potency-first for fixed-kit skills, then Ultimate auto-fire if ready
-    - Kina: ExoriMas -> Exori -> ExoriMin
-    - Prototype: Void Ricochet -> Shotgun -> Sigil Bolt
+  - Assist order is kit-driven per active character; Ultimate is the last slot in each character's priority list and fires automatically when the gauge is full and all other skills are on cooldown
+    - Mirai: Dread Sweep → Grave Fang → Rend Pulse → Collapse Field (Ultimate)
+    - Sylwen: Thornfall → Gale Pierce → Whisper Shot → Silver Tempest (Ultimate)
+    - Velvet: Umbral Path → Death Strike → Void Chain → Storm Collapse (Ultimate)
+  - Silver Tempest active: GCD is bypassed for all Sylwen skill evaluations in the assist loop (per-skill cooldown still applies)
+  - Focus (FocusStacks + DeadeyeConsecutiveHits) resets on both target switch and locked target death; a `focus_reset` event (mob ID) is emitted on both paths
+  - `sunder_brand_updated` event (mob ID + stack count) is emitted after every Mirai skill hit that applies Sunder Brand
+  - `corrosion_updated` event (mob ID + stack count) is emitted after every Velvet skill hit that applies Corrosion
+  - Frontend kit-mechanic FX are fully wired:
+    - Stack indicators above mobs: Sunder Brand (amber `▲N`) and Corrosion (purple `✦N`)
+    - Focus indicator below locked target: teal pip row (caps at `6+`)
+    - Headshot: white flash + `HEADSHOT` floating text
+    - Crowd control: rotating dashed stun ring (amber) and pulsing immobilize tile border (teal)
+    - Collapse Field: pull slide animation + post-slide white flash + amber radial burst centered on player
+    - Storm Collapse: per-mob purple detonation rings + purple scaled damage numbers + screen tint flash for multi-hit detonations
+    - Silver Tempest: teal player glow border while active + teal pierce trail rendering for Sylwen projectiles
+- **Mirai Kit (Backend):**
+  - Passive `Sunder Brand`: every Mirai skill hit adds 1 stack on the target mob; each stack adds `+1` flat damage to subsequent Mirai skill damage against that mob; stacks reset on mob death.
+  - `Rend Pulse`: square `r=1` around the player (8 surrounding tiles), applies Sunder Brand.
+  - `Grave Fang`: frontal 3-tile cone based on current facing (diagonal facings use adaptive 3-tile cone), applies Sunder Brand.
+  - `Dread Sweep`: deep directional cone using forward-vs-lateral Chebyshev logic toward arena edge, applies Sunder Brand.
+  - Ultimate `Collapse Field`: pulls all mobs toward the player, then deals `10` damage with Sunder Brand bonus and immobilizes mobs for `5000ms` (5s).
+- **Sylwen Kit (Backend):**
+  - Passive `Deadeye Grace`: Whisper Shot builds `FocusStacks` and `DeadeyeConsecutiveHits` on hit; Focus grants flat Whisper Shot bonus damage; every 3rd hit is a Headshot (2x damage + `1000ms` stun).
+  - `Whisper Shot`: full-range projectile with locked-target-first selection; during Silver Tempest it pierces through all mobs on the projectile line.
+  - `Gale Pierce`: full-range directional line shot that pierces all mobs in line and pushes each hit mob back by 1 tile when the destination is walkable.
+  - `Thornfall`: sustained ground-zone AoE that reuses Avalanche targeting (cluster-based cast tile), applying periodic damage over `3000ms`.
+  - Ultimate `Silver Tempest`: activates a `5000ms` self-buff that removes Sylwen GCD and enables projectile pierce for Sylwen projectiles while active.
+- **Velvet Kit (Backend):**
+  - Passive `Arcane Decay`: every Velvet skill hit adds `+1` `CorrosionStacks` on the target mob; Velvet damage is amplified by `+5%` per corrosion stack with no time decay.
+  - `Void Chain`: chain projectile that starts on locked/nearest target, then keeps jumping to the nearest not-yet-hit mob within Chebyshev range `3`.
+  - `Umbral Path`: projectile impact with `r=1` splash plus a persistent 3-tile-wide trail that deals periodic damage and applies Corrosion each tick.
+  - `Death Strike`: single-target projectile whose final damage is amplified by existing Corrosion stacks on the target.
+  - Ultimate `Storm Collapse`: detonates Corrosion on all living mobs at once, dealing `baseDamage * stacks` (minimum `1x` base damage when stacks are `0`), then resets Corrosion to `0`.
+- Per-mob passive/CC state is tracked on `StoredActor`: `SunderBrandStacks`, `CorrosionStacks`, `FocusStacks`, `DeadeyeConsecutiveHits`, `IsStunned`/`StunRemainingMs`, and `IsImmobilized`/`ImmobilizeRemainingMs`.
+- Tick behavior for crowd control:
+  - Stunned mobs skip movement and auto-attacks.
+  - Immobilized mobs skip movement but can still auto-attack.
 - Ultimate applies a flat AoE burst (radius 2) around the player when charged
 - Heal and Guard removed from kit - survivability comes from passive cards only
 - **Left-click** a POI (chest, altar) to interact
@@ -215,19 +254,25 @@ Four permanent Elemental Arenas, always accessible regardless of Account Level. 
   - LOS obstacle checks are intentionally stubbed now and will activate when destructible obstacles are implemented
   - Active ranged weapons today: Sigil Bolt (single target), Shotgun (dragon-wave cone AoE + knockback), and Void Ricochet (bounce + pierce segments)
   - Void Ricochet projectiles are emitted per segment and rendered sequentially segment-by-segment on the frontend
-  - Kina remains unchanged and never casts Sigil Bolt, Shotgun, or Void Ricochet
 
 ## Stable ID System
 
 All weapon, character, and species IDs are defined as named constants in `backend/src/KaezanArena.Api/Battle/ArenaConfig.cs`:
 
 - `ArenaConfig.WeaponIds` - stable weapon/skill IDs (e.g. `WeaponIds.ExoriMin = "weapon:exori_min"`)
-- `ArenaConfig.CharacterIds` - stable character IDs (e.g. `CharacterIds.Kina = "character:kina"`); also includes legacy IDs `KaelisDawn = "kaelis_01"` and `KaelisEmber = "kaelis_02"` for accounts persisted before the stable ID migration
+- `ArenaConfig.SkillIds` - hero skill IDs for fixed kits (Mirai, Sylwen, Velvet)
+- `ArenaConfig.PassiveIds` - hero passive IDs for fixed kits
+- `ArenaConfig.KitIds` - fixed-kit IDs (e.g. `kit:mirai`, `kit:sylwen`, `kit:velvet`)
+- `ArenaConfig.CharacterIds` - stable character IDs (e.g. `CharacterIds.Mirai = "character:mirai"`); also includes legacy IDs `KaelisDawn = "kaelis_01"` and `KaelisEmber = "kaelis_02"` for accounts persisted before the stable ID migration
 - `ArenaConfig.SpeciesIds` - mob species ID strings used in snapshots and the account bestiary
 
 `ArenaConfig.DisplayNames` is the **single source of truth** for all entity display names, keyed by the stable IDs above. No display name strings should appear anywhere else in the codebase.
 
 The `SkillStateDto` carries a `displayName` field (populated server-side) so Angular components never need their own name mappings.
+
+`ArenaConfig.KitDefinition` defines the fixed-kit shape (`KitId`, `PassiveId`, `Skill1Id`, `Skill2Id`, `Skill3Id`, `UltimateId`), and `ArenaConfig.Kits` now contains `Mirai`, `Sylwen`, and `Velvet` kit definitions.
+
+`ArenaConfig.SkillConfig` centralizes numeric constants for Mirai/Sylwen/Velvet skill cooldowns, damage values, durations, and passive scaling.
 
 ## Code Style
 
@@ -245,6 +290,3 @@ node tools/assets/propose-asset-pack.mjs
 ```
 
 Details (manual spritesheet config + merge flow): `docs/ASSET_MAPPER.md`.
-
-
-

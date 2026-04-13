@@ -32,6 +32,10 @@ export class KaelisRosterStripComponent {
 
   @ViewChild('viewport') viewport?: ElementRef<HTMLDivElement>;
 
+  get showScrollControls(): boolean {
+    return this.entries.length > 3;
+  }
+
   scrollLeft(): void {
     this.scrollBy(-140);
     this.previous.emit();

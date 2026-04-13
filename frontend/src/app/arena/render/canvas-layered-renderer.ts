@@ -39,6 +39,12 @@ const CRIT_TEXT_PALETTE = {
   fill: "#fde047",
   outline: "rgba(15, 23, 42, 0.95)"
 } as const;
+const SUNDER_BRAND_COLOR_HEX = "#EF9F27";
+const CORROSION_COLOR_HEX = "#7F77DD";
+const FOCUS_COLOR_HEX = "#1D9E75";
+const STUN_COLOR_HEX = "#EF9F27";
+const IMMOBILIZE_COLOR_HEX = "#1D9E75";
+const SILVER_TEMPEST_TRAIL_COLOR_HEX = "#1D9E75";
 export class CanvasLayeredRenderer {
   private readonly pipeline: RenderLayer[] = ["ground", "groundFx", "actors", "hitFx", "ui"];
   private readonly warnedMissingAssetIds = new Set<string>();
@@ -116,6 +122,7 @@ export class CanvasLayeredRenderer {
             this.drawDecal(scene, viewport, loaded, decal);
           }
 
+          this.drawImmobilizeGroundBorders(scene, viewport);
           await this.drawMobTierAuraGroundFx(scene, viewport, imageCache, imageLoader);
         }
 
@@ -142,6 +149,7 @@ export class CanvasLayeredRenderer {
               continue;
             }
 
+            this.drawSilverTempestProjectileTrail(scene, viewport, projectile);
             this.projectileAnimator.draw(
               this.context,
               scene,
@@ -159,14 +167,22 @@ export class CanvasLayeredRenderer {
         this.drawPoiMarkers(scene, viewport);
         this.drawAimDirectionGuides(scene, viewport);
         this.drawGroundTargetReticle(scene, viewport);
+        this.drawSilverTempestPlayerGlow(scene, viewport);
+        this.drawCollapseFieldBursts(scene, viewport);
+        this.drawStormCollapseRings(scene, viewport);
         this.drawMobReadabilityMarkers(scene, viewport);
+        this.drawStunRings(scene, viewport);
         this.drawThreatTargetMarker(scene, viewport);
         this.drawLockedTargetMarker(scene, viewport);
         this.drawLowHealthDangerOverlay(scene, viewport);
         this.drawRecentHitFlashes(scene, viewport);
+        this.drawActorFlashOverlays(scene, viewport);
+        this.drawMobStackIndicators(scene, viewport);
+        this.drawFocusIndicator(scene, viewport);
         this.drawMomentCues(scene, viewport);
         this.drawDamageNumbers(scene, viewport);
         this.drawFloatingTexts(scene, viewport);
+        this.drawStormCollapseScreenTints(scene, viewport);
       }
     }
   }
@@ -235,16 +251,12 @@ export class CanvasLayeredRenderer {
   ): Promise<void> {
     const ringElapsedMs = this.nowMs();
     const ringSizePx = scene.tileSize * 1.8;
-    const ringOffsetX = (scene.tileSize - ringSizePx) / 2;
-    const ringOffsetY = (scene.tileSize - ringSizePx) / 2;
     const sprites = scene.sprites.filter((sprite) => sprite.layer === "actors");
-    console.log("[TierAura] Processing sprites:", sprites.length);
     for (const sprite of sprites) {
       const actorStateFromMap = (scene.actorsById as unknown as {
         get?: (actorId: string) => ArenaScene["actorsById"][string] | undefined;
       }).get?.(sprite.actorId);
       const actorState = actorStateFromMap ?? scene.actorsById[sprite.actorId];
-      console.log("[TierAura] actorId:", sprite.actorId, "actorState:", actorState?.kind, "tierIndex:", actorState?.tierIndex);
       if (actorState?.kind !== "mob") {
         continue;
       }
@@ -255,7 +267,6 @@ export class CanvasLayeredRenderer {
       }
 
       const loaded = await this.getAsset(imageCache, tierAuraFxId, imageLoader);
-      console.log("[TierAura] fxId:", tierAuraFxId, "loaded:", !!loaded);
       if (!loaded) {
         if (!this.warnedTierAuraAssetIds.has(tierAuraFxId)) {
           this.warnedTierAuraAssetIds.add(tierAuraFxId);
@@ -687,6 +698,32 @@ export class CanvasLayeredRenderer {
     return `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${Math.max(0, Math.min(1, alpha))})`;
   }
 
+  private hexToRgba(hexColor: string, alpha: number): string {
+    const normalized = hexColor.trim();
+    const hex = normalized.startsWith("#") ? normalized.slice(1) : normalized;
+    if (hex.length !== 6) {
+      return `rgba(248, 250, 252, ${Math.max(0, Math.min(1, alpha))})`;
+    }
+
+    const r = Number.parseInt(hex.slice(0, 2), 16);
+    const g = Number.parseInt(hex.slice(2, 4), 16);
+    const b = Number.parseInt(hex.slice(4, 6), 16);
+    if (Number.isNaN(r) || Number.isNaN(g) || Number.isNaN(b)) {
+      return `rgba(248, 250, 252, ${Math.max(0, Math.min(1, alpha))})`;
+    }
+
+    return `rgba(${r}, ${g}, ${b}, ${Math.max(0, Math.min(1, alpha))})`;
+  }
+
+  private isSylwenProjectileWeaponId(weaponId: string): boolean {
+    const normalized = weaponId.trim().toLowerCase();
+    if (normalized.length === 0) {
+      return false;
+    }
+
+    return normalized.includes("sylwen");
+  }
+
   private drawEliteSpriteAura(scene: ArenaScene, viewport: RenderViewport, tileX: number, tileY: number): void {
     const centerX = viewport.originX + (tileX + 0.5) * scene.tileSize;
     const centerY = viewport.originY + (tileY + 0.5) * scene.tileSize;
@@ -751,6 +788,356 @@ export class CanvasLayeredRenderer {
     }
   }
 
+  private drawImmobilizeGroundBorders(scene: ArenaScene, viewport: RenderViewport): void {
+    const nowMs = this.nowMs();
+    const phase = (nowMs % 800) / 800;
+    const opacity = 0.4 + (0.6 * (0.5 + (Math.sin(phase * Math.PI * 2) * 0.5)));
+
+    for (const actor of Object.values(scene.actorsById)) {
+      if (actor.kind !== "mob" || actor.isImmobilized !== true || (actor.immobilizeRemainingMs ?? 0) <= 0) {
+        continue;
+      }
+
+      const x = viewport.originX + actor.tileX * scene.tileSize + 1;
+      const y = viewport.originY + actor.tileY * scene.tileSize + 1;
+      const size = Math.max(2, scene.tileSize - 2);
+
+      this.context.save();
+      this.context.strokeStyle = this.hexToRgba(IMMOBILIZE_COLOR_HEX, opacity);
+      this.context.lineWidth = 2;
+      this.context.strokeRect(x, y, size, size);
+      this.context.restore();
+    }
+  }
+
+  private drawSilverTempestProjectileTrail(
+    scene: ArenaScene,
+    viewport: RenderViewport,
+    projectile: ArenaScene["projectileInstances"][number]
+  ): void {
+    if (!scene.silverTempestActive) {
+      return;
+    }
+
+    if (!projectile.pierces || !this.isSylwenProjectileWeaponId(projectile.weaponId)) {
+      return;
+    }
+
+    const fadeLife = Math.max(0, Math.min(1, projectile.elapsedMs / 200));
+    const alpha = Math.max(0, (1 - fadeLife) * 0.85);
+    if (alpha <= 0) {
+      return;
+    }
+
+    const startX = viewport.originX + (projectile.fromPos.x + 0.5) * scene.tileSize;
+    const startY = viewport.originY + (projectile.fromPos.y + 0.5) * scene.tileSize;
+    const endX = viewport.originX + (projectile.visualEndPos.x + 0.5) * scene.tileSize;
+    const endY = viewport.originY + (projectile.visualEndPos.y + 0.5) * scene.tileSize;
+
+    this.context.save();
+    this.context.strokeStyle = this.hexToRgba(SILVER_TEMPEST_TRAIL_COLOR_HEX, alpha);
+    this.context.lineWidth = Math.max(1, scene.tileSize * 0.032);
+    this.context.lineCap = "round";
+    this.context.beginPath();
+    this.context.moveTo(startX, startY);
+    this.context.lineTo(endX, endY);
+    this.context.stroke();
+    this.context.restore();
+  }
+
+  private drawStormCollapseScreenTints(scene: ArenaScene, viewport: RenderViewport): void {
+    if (scene.screenTintOverlays.length === 0) {
+      return;
+    }
+
+    const width = scene.columns * scene.tileSize;
+    const height = scene.rows * scene.tileSize;
+    for (const overlay of scene.screenTintOverlays) {
+      const life = Math.max(0, Math.min(1, overlay.elapsedMs / overlay.durationMs));
+      const alpha = Math.max(0, overlay.maxOpacity * (1 - life));
+      if (alpha <= 0) {
+        continue;
+      }
+
+      this.context.save();
+      this.context.fillStyle = this.hexToRgba(overlay.colorHex, alpha);
+      this.context.fillRect(viewport.originX, viewport.originY, width, height);
+      this.context.restore();
+    }
+  }
+
+  private drawSilverTempestPlayerGlow(scene: ArenaScene, viewport: RenderViewport): void {
+    if (!scene.silverTempestActive || scene.silverTempestRemainingMs <= 0) {
+      return;
+    }
+
+    const player = Object.values(scene.actorsById).find((actor) => actor.kind === "player");
+    if (!player) {
+      return;
+    }
+
+    const nowMs = this.nowMs();
+    const pulse = 0.65 + (0.35 * (0.5 + (Math.sin(nowMs / 140) * 0.5)));
+    const spriteSize = scene.tileSize * 0.88;
+    const x = viewport.originX + player.tileX * scene.tileSize + (scene.tileSize - spriteSize) / 2;
+    const y = viewport.originY + player.tileY * scene.tileSize + (scene.tileSize - spriteSize) / 2;
+
+    this.context.save();
+    this.context.strokeStyle = this.hexToRgba(FOCUS_COLOR_HEX, pulse);
+    this.context.lineWidth = Math.max(2, scene.tileSize * 0.04);
+    this.context.shadowColor = this.hexToRgba(FOCUS_COLOR_HEX, Math.max(0.25, pulse * 0.6));
+    this.context.shadowBlur = Math.max(4, scene.tileSize * 0.18);
+    this.context.strokeRect(x, y, spriteSize, spriteSize);
+    this.context.restore();
+  }
+
+  private drawCollapseFieldBursts(scene: ArenaScene, viewport: RenderViewport): void {
+    if (scene.collapseFieldBursts.length === 0) {
+      return;
+    }
+
+    const maxDistance = Math.max(scene.columns, scene.rows) * scene.tileSize * 0.85;
+    for (const burst of scene.collapseFieldBursts) {
+      const life = Math.max(0, Math.min(1, burst.elapsedMs / burst.durationMs));
+      const alpha = Math.max(0, 1 - life);
+      const centerX = viewport.originX + (burst.centerTile.x + 0.5) * scene.tileSize;
+      const centerY = viewport.originY + (burst.centerTile.y + 0.5) * scene.tileSize;
+      const length = scene.tileSize * 0.5 + (maxDistance * life);
+
+      this.context.save();
+      this.context.strokeStyle = this.hexToRgba(SUNDER_BRAND_COLOR_HEX, alpha * 0.9);
+      this.context.lineWidth = Math.max(1.4, scene.tileSize * 0.03);
+      for (let index = 0; index < 8; index += 1) {
+        const angle = (Math.PI * 2 * index) / 8;
+        const startDistance = scene.tileSize * 0.2;
+        const startX = centerX + Math.cos(angle) * startDistance;
+        const startY = centerY + Math.sin(angle) * startDistance;
+        const endX = centerX + Math.cos(angle) * length;
+        const endY = centerY + Math.sin(angle) * length;
+        this.context.beginPath();
+        this.context.moveTo(startX, startY);
+        this.context.lineTo(endX, endY);
+        this.context.stroke();
+      }
+      this.context.restore();
+    }
+  }
+
+  private drawStormCollapseRings(scene: ArenaScene, viewport: RenderViewport): void {
+    if (scene.stormCollapseRings.length === 0) {
+      return;
+    }
+
+    for (const ring of scene.stormCollapseRings) {
+      const actor = scene.actorsById[ring.actorId];
+      if (!actor || actor.kind !== "mob") {
+        continue;
+      }
+
+      const life = Math.max(0, Math.min(1, ring.elapsedMs / ring.durationMs));
+      const alpha = Math.max(0, 1 - life);
+      const radius = scene.tileSize * life;
+      const centerX = viewport.originX + (actor.tileX + 0.5) * scene.tileSize;
+      const centerY = viewport.originY + (actor.tileY + 0.5) * scene.tileSize;
+
+      this.context.save();
+      this.context.strokeStyle = this.hexToRgba(CORROSION_COLOR_HEX, alpha);
+      this.context.lineWidth = Math.max(1.5, scene.tileSize * 0.04);
+      this.context.beginPath();
+      this.context.arc(centerX, centerY, radius, 0, Math.PI * 2);
+      this.context.stroke();
+      this.context.restore();
+    }
+  }
+
+  private drawStunRings(scene: ArenaScene, viewport: RenderViewport): void {
+    const nowMs = this.nowMs();
+    for (const mob of Object.values(scene.actorsById)) {
+      if (mob.kind !== "mob" || mob.isStunned !== true || (mob.stunRemainingMs ?? 0) <= 0) {
+        continue;
+      }
+
+      const centerX = viewport.originX + (mob.tileX + 0.5) * scene.tileSize;
+      const centerY = viewport.originY + (mob.tileY + 0.5) * scene.tileSize;
+      const radius = (scene.tileSize / 2) + 4;
+
+      this.context.save();
+      this.context.strokeStyle = this.hexToRgba(STUN_COLOR_HEX, 0.95);
+      this.context.lineWidth = 1.5;
+      this.context.setLineDash([4, 4]);
+      this.context.lineDashOffset = -(nowMs / 36);
+      this.context.beginPath();
+      this.context.arc(centerX, centerY, radius, 0, Math.PI * 2);
+      this.context.stroke();
+      this.context.setLineDash([]);
+      this.context.restore();
+    }
+  }
+
+  private drawActorFlashOverlays(scene: ArenaScene, viewport: RenderViewport): void {
+    if (scene.actorFlashOverlays.length === 0) {
+      return;
+    }
+
+    for (const overlay of scene.actorFlashOverlays) {
+      if (overlay.delayRemainingMs > 0) {
+        continue;
+      }
+
+      const actor = scene.actorsById[overlay.actorId];
+      if (!actor) {
+        continue;
+      }
+
+      const elapsedMs = Math.max(0, overlay.elapsedMs);
+      const fullWhiteDurationMs = Math.max(0, overlay.fullWhiteDurationMs);
+      const fadeDurationMs = Math.max(1, overlay.durationMs - fullWhiteDurationMs);
+      const alpha = elapsedMs <= fullWhiteDurationMs
+        ? 1
+        : Math.max(0, 1 - ((elapsedMs - fullWhiteDurationMs) / fadeDurationMs));
+      if (alpha <= 0) {
+        continue;
+      }
+
+      const spriteSize = actor.kind === "boss"
+        ? scene.tileSize * 1.5
+        : scene.tileSize * 0.88;
+      const x = viewport.originX + actor.tileX * scene.tileSize + (scene.tileSize - spriteSize) / 2;
+      const y = viewport.originY + actor.tileY * scene.tileSize + (scene.tileSize - spriteSize) / 2;
+
+      this.context.save();
+      this.context.fillStyle = this.hexToRgba("#ffffff", alpha);
+      this.context.fillRect(x, y, spriteSize, spriteSize);
+      this.context.restore();
+    }
+  }
+
+  private drawMobStackIndicators(scene: ArenaScene, viewport: RenderViewport): void {
+    const pillHeight = 14;
+    const gapBetweenPills = 2;
+    for (const mob of Object.values(scene.actorsById)) {
+      if (mob.kind !== "mob") {
+        continue;
+      }
+
+      const sunderStacks = Math.max(0, mob.sunderBrandStacks ?? 0);
+      const corrosionStacks = Math.max(0, mob.corrosionStacks ?? 0);
+      if (sunderStacks <= 0 && corrosionStacks <= 0) {
+        continue;
+      }
+
+      const spriteSize = scene.tileSize * 0.88;
+      const spriteTop = viewport.originY + mob.tileY * scene.tileSize + (scene.tileSize - spriteSize) / 2;
+      const centerX = viewport.originX + (mob.tileX + 0.5) * scene.tileSize;
+      const firstRowCenterY = spriteTop - 4 - (pillHeight / 2);
+
+      if (corrosionStacks > 0) {
+        this.drawStatusPill(centerX, firstRowCenterY, `✦${corrosionStacks}`, CORROSION_COLOR_HEX, pillHeight);
+      }
+
+      if (sunderStacks > 0) {
+        const sunderY = corrosionStacks > 0
+          ? firstRowCenterY - pillHeight - gapBetweenPills
+          : firstRowCenterY;
+        this.drawStatusPill(centerX, sunderY, `▲${sunderStacks}`, SUNDER_BRAND_COLOR_HEX, pillHeight);
+      }
+    }
+  }
+
+  private drawFocusIndicator(scene: ArenaScene, viewport: RenderViewport): void {
+    const lockedTargetId = scene.lockedTargetEntityId;
+    if (!lockedTargetId) {
+      return;
+    }
+
+    const locked = scene.actorsById[lockedTargetId];
+    if (!locked || locked.kind !== "mob") {
+      return;
+    }
+
+    const focusStacks = Math.max(0, locked.focusStacks ?? 0);
+    if (focusStacks <= 0) {
+      return;
+    }
+
+    const displayPips = Math.min(6, focusStacks);
+    const pipDiameter = 5;
+    const pipRadius = pipDiameter / 2;
+    const pipGap = 3;
+    const rowWidth = (displayPips * pipDiameter) + ((displayPips - 1) * pipGap);
+    const spriteSize = scene.tileSize * 0.88;
+    const spriteBottom = viewport.originY + locked.tileY * scene.tileSize + (scene.tileSize - spriteSize) / 2 + spriteSize;
+    const centerY = spriteBottom + 4 + pipRadius;
+    const centerX = viewport.originX + (locked.tileX + 0.5) * scene.tileSize;
+    const startX = centerX - (rowWidth / 2) + pipRadius;
+
+    this.context.save();
+    this.context.fillStyle = this.hexToRgba(FOCUS_COLOR_HEX, 0.95);
+    for (let index = 0; index < displayPips; index += 1) {
+      const pipX = startX + index * (pipDiameter + pipGap);
+      this.context.beginPath();
+      this.context.arc(pipX, centerY, pipRadius, 0, Math.PI * 2);
+      this.context.fill();
+    }
+
+    if (focusStacks > 6) {
+      const labelX = centerX + (rowWidth / 2) + 10;
+      this.context.font = "bold 10px Arial";
+      this.context.textAlign = "center";
+      this.context.textBaseline = "middle";
+      this.context.fillText("6+", labelX, centerY);
+    }
+    this.context.restore();
+  }
+
+  private drawStatusPill(
+    centerX: number,
+    centerY: number,
+    text: string,
+    fillHex: string,
+    height: number
+  ): void {
+    const paddingX = 5;
+    this.context.save();
+    this.context.font = "bold 10px Arial";
+    this.context.textAlign = "center";
+    this.context.textBaseline = "middle";
+    const textWidth = this.context.measureText(text).width;
+    const width = Math.max(16, textWidth + (paddingX * 2));
+    const x = centerX - (width / 2);
+    const y = centerY - (height / 2);
+    const radius = Math.max(3, height * 0.32);
+
+    this.fillRoundedRect(x, y, width, height, radius, this.hexToRgba(fillHex, 0.95));
+    this.context.fillStyle = "#f8fafc";
+    this.context.fillText(text, centerX, centerY + 0.2);
+    this.context.restore();
+  }
+
+  private fillRoundedRect(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    radius: number,
+    fillStyle: string
+  ): void {
+    const safeRadius = Math.max(0, Math.min(radius, width / 2, height / 2));
+    this.context.beginPath();
+    this.context.moveTo(x + safeRadius, y);
+    this.context.lineTo(x + width - safeRadius, y);
+    this.context.quadraticCurveTo(x + width, y, x + width, y + safeRadius);
+    this.context.lineTo(x + width, y + height - safeRadius);
+    this.context.quadraticCurveTo(x + width, y + height, x + width - safeRadius, y + height);
+    this.context.lineTo(x + safeRadius, y + height);
+    this.context.quadraticCurveTo(x, y + height, x, y + height - safeRadius);
+    this.context.lineTo(x, y + safeRadius);
+    this.context.quadraticCurveTo(x, y, x + safeRadius, y);
+    this.context.closePath();
+    this.context.fillStyle = fillStyle;
+    this.context.fill();
+  }
+
   private drawDamageNumbers(scene: ArenaScene, viewport: RenderViewport): void {
     for (const entry of scene.damageNumbers) {
       const life = Math.max(0, Math.min(1, entry.elapsedMs / entry.durationMs));
@@ -790,8 +1177,19 @@ export class CanvasLayeredRenderer {
         ? viewport.originY + entry.tilePos.y * scene.tileSize - scene.tileSize * 0.28
         : viewport.originY + entry.tilePos.y * scene.tileSize - scene.tileSize * 0.12;
       let toneScale = 1;
+      let forcedFontSizePx: number | null = null;
       if (entry.kind === "combat_callout") {
-        if (entry.tone === "shield_break") {
+        if (entry.tone === "headshot") {
+          riseOffset = life * 24;
+          baseY = viewport.originY + entry.tilePos.y * scene.tileSize - scene.tileSize * 0.24;
+          forcedFontSizePx = 13;
+          toneScale = 1;
+        } else if (entry.tone === "silver_tempest") {
+          riseOffset = life * 10;
+          baseY = viewport.originY + entry.tilePos.y * scene.tileSize - scene.tileSize * 0.3;
+          forcedFontSizePx = 12;
+          toneScale = 1;
+        } else if (entry.tone === "shield_break") {
           toneScale = 1.12;
           riseOffset *= 0.86;
         } else if (entry.tone === "danger") {
@@ -809,7 +1207,8 @@ export class CanvasLayeredRenderer {
         ? Math.max(13, Math.min(19, scene.tileSize * 0.34))
         : Math.max(16, Math.min(24, scene.tileSize * 0.42));
       const entryScale = Math.max(0.6, entry.fontScale ?? 1);
-      const fontSizePx = Math.round(baseFontPx * entryScale * toneScale * (1 + (1 - life) * 0.08));
+      const computedFontSizePx = Math.round(baseFontPx * entryScale * toneScale * (1 + (1 - life) * 0.08));
+      const fontSizePx = forcedFontSizePx ?? computedFontSizePx;
       const palette = this.resolveFloatingTextPalette(entry);
 
       this.context.save();
@@ -896,6 +1295,14 @@ export class CanvasLayeredRenderer {
       return { fill: "#fde68a", outline: "rgba(120, 53, 15, 0.95)" };
     }
 
+    if (entry.tone === "headshot") {
+      return { fill: FOCUS_COLOR_HEX, outline: "rgba(10, 77, 58, 0.95)" };
+    }
+
+    if (entry.tone === "silver_tempest") {
+      return { fill: FOCUS_COLOR_HEX, outline: "rgba(8, 47, 73, 0.95)" };
+    }
+
     return CRIT_TEXT_PALETTE;
   }
 
@@ -913,6 +1320,12 @@ export class CanvasLayeredRenderer {
     entry: ArenaScene["damageNumbers"][number],
     life: number
   ): number {
+    if (entry.styleVariant === "storm_collapse") {
+      const scale = Math.max(1, entry.styleScale ?? 1);
+      const sized = 12 + ((scale - 1) * 8);
+      return Math.max(12, Math.min(20, Math.round(sized)));
+    }
+
     const critMultiplier = entry.isCrit ? 1.25 : 1;
     const critPopScale = entry.isCrit ? 1 + (1 - life) * 0.06 : 1;
     return Math.round(baseFontSizePx * critMultiplier * critPopScale);
@@ -932,6 +1345,10 @@ export class CanvasLayeredRenderer {
   }
 
   private resolveDamageNumberFillColor(entry: ArenaScene["damageNumbers"][number]): string {
+    if (entry.styleVariant === "storm_collapse") {
+      return CORROSION_COLOR_HEX;
+    }
+
     if (entry.isHeal) {
       return FLOATING_NUMBER_PALETTE.healNeonGreen;
     }

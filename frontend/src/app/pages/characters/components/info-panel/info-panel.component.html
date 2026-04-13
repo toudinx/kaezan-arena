@@ -45,12 +45,19 @@
       </div>
     </div>
     <div class="loadout-row">
+      <div class="loadout-header">Passive</div>
+      <div class="loadout-stats accent">
+        <strong>{{ passiveName || "Passive" }}</strong>
+        <span>{{ passiveDescription || "No passive description." }}</span>
+      </div>
+    </div>
+    <div class="loadout-row">
       <div class="loadout-header">Fixed Kit</div>
       <div class="kit-pills">
-        @for (weaponName of fixedKitNames; track weaponName) {
-          <span class="kit-pill">{{ weaponName }}</span>
+        @for (skill of fixedKitSkills; track skill.slotLabel) {
+          <span class="kit-pill">{{ skill.slotLabel }}: {{ skill.displayName }}</span>
         }
-        @if (!fixedKitNames.length) {
+        @if (!fixedKitSkills.length) {
           <span class="muted">No fixed kit configured.</span>
         }
       </div>
