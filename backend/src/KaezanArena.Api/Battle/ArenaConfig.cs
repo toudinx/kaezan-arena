@@ -19,7 +19,7 @@ public static class ArenaConfig
     public const int PlayerBaseHp = 120;
     public const int PlayerMoveCooldownMs = 300;
     public const int PlayerAutoAttackCooldownMs = 800;
-    public const int PlayerGlobalCooldownMs = 400;
+    public const int PlayerGlobalCooldownMs = 800;
     #endregion  
 
     #region Player Combat
@@ -426,9 +426,9 @@ public static class ArenaConfig
 
         public static readonly IReadOnlyList<BossDef> Bosses =
         [
-            new("boss:big_demon",   "The Demon Lord",  400, 5,  800,  12, 2, 3000, "fx.boss.demon.slam",        ElementType.Fire,   ElementType.Ice,      [1, 2]),
-            new("boss:big_zombie",  "Plague Titan",    500, 4, 1000,  10, 2, 3500, "fx.boss.zombie.plague_aoe", ElementType.Earth,  ElementType.Fire,     [3, 4]),
-            new("boss:necromancer", "The Ascendant",   350, 3, 1200,  15, 4, 2800, "fx.boss.necro.barrage",     ElementType.Energy, ElementType.Physical, [5]),
+            new("boss:big_demon",   "The Demon Lord",  400, 5, 1600,  12, 2, 3000, "fx.boss.demon.slam",        ElementType.Fire,   ElementType.Ice,      [1, 2]),
+            new("boss:big_zombie",  "Plague Titan",    500, 4, 2000,  10, 2, 3500, "fx.boss.zombie.plague_aoe", ElementType.Earth,  ElementType.Fire,     [3, 4]),
+            new("boss:necromancer", "The Ascendant",   350, 3, 2400,  15, 4, 2800, "fx.boss.necro.barrage",     ElementType.Energy, ElementType.Physical, [5]),
         ];
 
         public static BossDef? TryResolveBossForZone(int zoneIndex)
@@ -787,7 +787,7 @@ public static class ArenaConfig
     public const int MeleeBruteMoveCooldownMs = 500;
     public const int MeleeBruteAutoAttackRangeTiles = 1;
     public const int MeleeBruteAutoAttackDamage = 2;
-    public const int MeleeBruteAutoAttackCooldownMs = 1000;
+    public const int MeleeBruteAutoAttackCooldownMs = 2000;
     public const int MeleeBruteAbilityDamage = 5;
     public const int MeleeBruteAbilityRangeTiles = 1;
     public const int MeleeBruteAbilityCooldownMs = 2500;
@@ -795,7 +795,7 @@ public static class ArenaConfig
     public const int RangedArcherMoveCooldownMs = 500;
     public const int RangedArcherAutoAttackRangeTiles = 4;
     public const int RangedArcherAutoAttackDamage = 1;
-    public const int RangedArcherAutoAttackCooldownMs = 1250;
+    public const int RangedArcherAutoAttackCooldownMs = 2500;
     public const int RangedArcherAbilityDamage = 3;
     public const int RangedArcherAbilityRangeTiles = 4;
     public const int RangedArcherAbilityCooldownMs = 2800;
@@ -803,7 +803,7 @@ public static class ArenaConfig
     public const int MeleeDemonMoveCooldownMs = 500;
     public const int MeleeDemonAutoAttackRangeTiles = 1;
     public const int MeleeDemonAutoAttackDamage = 2;
-    public const int MeleeDemonAutoAttackCooldownMs = 1000;
+    public const int MeleeDemonAutoAttackCooldownMs = 2000;
     public const int MeleeDemonAbilityDamage = 6;
     public const int MeleeDemonAbilityRangeTiles = 4;
     public const int MeleeDemonAbilityCooldownMs = 3000;
@@ -811,7 +811,7 @@ public static class ArenaConfig
     public const int RangedShamanMoveCooldownMs = 500;
     public const int RangedShamanAutoAttackRangeTiles = 4;
     public const int RangedShamanAutoAttackDamage = 1;
-    public const int RangedShamanAutoAttackCooldownMs = 1250;
+    public const int RangedShamanAutoAttackCooldownMs = 2500;
     public const int RangedShamanAbilityDamage = 4;
     public const int RangedShamanAbilityRangeTiles = 2;
     public const int RangedShamanAbilityCooldownMs = 3600;
@@ -819,7 +819,7 @@ public static class ArenaConfig
     public const int MeleeSkeletonMoveCooldownMs = 350;
     public const int MeleeSkeletonAutoAttackRangeTiles = 1;
     public const int MeleeSkeletonAutoAttackDamage = 1;
-    public const int MeleeSkeletonAutoAttackCooldownMs = 800;
+    public const int MeleeSkeletonAutoAttackCooldownMs = 1600;
     public const int MeleeSkeletonAbilityDamage = 3;
     public const int MeleeSkeletonAbilityRangeTiles = 1;
     public const int MeleeSkeletonAbilityCooldownMs = 99999;
@@ -827,7 +827,7 @@ public static class ArenaConfig
     public const int MeleeWogolMoveCooldownMs = 400;
     public const int MeleeWogolAutoAttackRangeTiles = 1;
     public const int MeleeWogolAutoAttackDamage = 3;
-    public const int MeleeWogolAutoAttackCooldownMs = 900;
+    public const int MeleeWogolAutoAttackCooldownMs = 1800;
     public const int MeleeWogolAbilityDamage = 5;
     public const int MeleeWogolAbilityRangeTiles = 1;
     public const int MeleeWogolAbilityCooldownMs = 2800;
@@ -835,7 +835,7 @@ public static class ArenaConfig
     public const int MeleeWarriorMoveCooldownMs = 380;
     public const int MeleeWarriorAutoAttackRangeTiles = 1;
     public const int MeleeWarriorAutoAttackDamage = 4;
-    public const int MeleeWarriorAutoAttackCooldownMs = 800;
+    public const int MeleeWarriorAutoAttackCooldownMs = 1600;
     public const int MeleeWarriorAbilityDamage = 6;
     public const int MeleeWarriorAbilityRangeTiles = 1;
     public const int MeleeWarriorAbilityCooldownMs = 2500;
@@ -843,7 +843,7 @@ public static class ArenaConfig
     public const int MeleeZombieMoveCooldownMs = 550;
     public const int MeleeZombieAutoAttackRangeTiles = 1;
     public const int MeleeZombieAutoAttackDamage = 2;
-    public const int MeleeZombieAutoAttackCooldownMs = 1100;
+    public const int MeleeZombieAutoAttackCooldownMs = 2200;
     public const int MeleeZombieAbilityDamage = 0;
     public const int MeleeZombieAbilityRangeTiles = 0;
     public const int MeleeZombieAbilityCooldownMs = 4000;
@@ -852,7 +852,7 @@ public static class ArenaConfig
     public const int MeleeTinyZombieMoveCooldownMs = 320;
     public const int MeleeTinyZombieAutoAttackRangeTiles = 1;
     public const int MeleeTinyZombieAutoAttackDamage = 1;
-    public const int MeleeTinyZombieAutoAttackCooldownMs = 700;
+    public const int MeleeTinyZombieAutoAttackCooldownMs = 1400;
     public const int MeleeTinyZombieAbilityDamage = 0;
     public const int MeleeTinyZombieAbilityRangeTiles = 0;
     public const int MeleeTinyZombieAbilityCooldownMs = 99999;
@@ -860,7 +860,7 @@ public static class ArenaConfig
     public const int RangedImpMoveCooldownMs = 380;
     public const int RangedImpAutoAttackRangeTiles = 4;
     public const int RangedImpAutoAttackDamage = 2;
-    public const int RangedImpAutoAttackCooldownMs = 800;
+    public const int RangedImpAutoAttackCooldownMs = 1600;
     public const int RangedImpAbilityDamage = 2;
     public const int RangedImpAbilityRangeTiles = 4;
     public const int RangedImpAbilityCooldownMs = 2200;
@@ -868,7 +868,7 @@ public static class ArenaConfig
     public const int RangedSwampyMoveCooldownMs = 600;
     public const int RangedSwampyAutoAttackRangeTiles = 3;
     public const int RangedSwampyAutoAttackDamage = 2;
-    public const int RangedSwampyAutoAttackCooldownMs = 1400;
+    public const int RangedSwampyAutoAttackCooldownMs = 2800;
     public const int RangedSwampyAbilityDamage = 3;
     public const int RangedSwampyAbilityRangeTiles = 3;
     public const int RangedSwampyAbilityCooldownMs = 3500;
@@ -878,7 +878,7 @@ public static class ArenaConfig
     public const int RangedMuddyMoveCooldownMs = 480;
     public const int RangedMuddyAutoAttackRangeTiles = 2;
     public const int RangedMuddyAutoAttackDamage = 2;
-    public const int RangedMuddyAutoAttackCooldownMs = 1000;
+    public const int RangedMuddyAutoAttackCooldownMs = 2000;
     public const int RangedMuddyAbilityDamage = 3;
     public const int RangedMuddyAbilityRangeTiles = 2;
     public const int RangedMuddyAbilityCooldownMs = 2800;
@@ -888,7 +888,7 @@ public static class ArenaConfig
     public const int MeleeSlugMoveCooldownMs = 700;
     public const int MeleeSlugAutoAttackRangeTiles = 1;
     public const int MeleeSlugAutoAttackDamage = 3;
-    public const int MeleeSlugAutoAttackCooldownMs = 1500;
+    public const int MeleeSlugAutoAttackCooldownMs = 3000;
     public const int MeleeSlugAbilityDamage = 0;
     public const int MeleeSlugAbilityRangeTiles = 0;
     public const int MeleeSlugAbilityCooldownMs = 99999;
@@ -896,7 +896,7 @@ public static class ArenaConfig
     public const int EliteMaskedOrcMoveCooldownMs = 450;
     public const int EliteMaskedOrcAutoAttackRangeTiles = 1;
     public const int EliteMaskedOrcAutoAttackDamage = 3;
-    public const int EliteMaskedOrcAutoAttackCooldownMs = 900;
+    public const int EliteMaskedOrcAutoAttackCooldownMs = 1800;
     public const int EliteMaskedOrcAbilityDamage = 0;
     public const int EliteMaskedOrcAbilityRangeTiles = 0;
     public const int EliteMaskedOrcAbilityCooldownMs = 99999;
@@ -904,7 +904,7 @@ public static class ArenaConfig
     public const int ElitePumpkinDudeMoveCooldownMs = 500;
     public const int ElitePumpkinDudeAutoAttackRangeTiles = 1;
     public const int ElitePumpkinDudeAutoAttackDamage = 3;
-    public const int ElitePumpkinDudeAutoAttackCooldownMs = 1000;
+    public const int ElitePumpkinDudeAutoAttackCooldownMs = 2000;
     public const int ElitePumpkinDudeAbilityDamage = 0;
     public const int ElitePumpkinDudeAbilityRangeTiles = 0;
     public const int ElitePumpkinDudeAbilityCooldownMs = 99999;
@@ -912,7 +912,7 @@ public static class ArenaConfig
     public const int EliteDocMoveCooldownMs = 500;
     public const int EliteDocAutoAttackRangeTiles = 1;
     public const int EliteDocAutoAttackDamage = 2;
-    public const int EliteDocAutoAttackCooldownMs = 1100;
+    public const int EliteDocAutoAttackCooldownMs = 2200;
     public const int EliteDocAbilityDamage = 0;
     public const int EliteDocAbilityRangeTiles = 0;
     public const int EliteDocAbilityCooldownMs = 99999;
@@ -920,7 +920,7 @@ public static class ArenaConfig
     public const int EliteIceZombieMoveCooldownMs = 500;
     public const int EliteIceZombieAutoAttackRangeTiles = 1;
     public const int EliteIceZombieAutoAttackDamage = 2;
-    public const int EliteIceZombieAutoAttackCooldownMs = 1000;
+    public const int EliteIceZombieAutoAttackCooldownMs = 2000;
     public const int EliteIceZombieAbilityDamage = 0;
     public const int EliteIceZombieAbilityRangeTiles = 0;
     public const int EliteIceZombieAbilityCooldownMs = 99999;
@@ -938,6 +938,7 @@ public static class ArenaConfig
     /// <summary>Stable weapon (skill) IDs. Values are the authoritative keys for display name lookup.</summary>
     public static class WeaponIds
     {
+        public const string AutoAttackRanged = "auto_attack_ranged";
         public const string ExoriMin  = "weapon:exori_min";
         public const string Exori     = "weapon:exori";
         public const string ExoriMas  = "weapon:exori_mas";
@@ -1023,11 +1024,11 @@ public static class ArenaConfig
         // Mirai
         public const int MiraiRendPulseRadius = 1;
         public const int MiraiCollapseFieldStopDistanceChebyshev = 1;
-        public const int MiraiRendPulseCooldownMs = 1000;
+        public const int MiraiRendPulseCooldownMs = 2500;
         public const int MiraiRendPulseDamage = 8;
-        public const int MiraiGraveFangCooldownMs = 1400;
+        public const int MiraiGraveFangCooldownMs = 2800;
         public const int MiraiGraveFangDamage = 12;
-        public const int MiraiDreadSweepCooldownMs = 2200;
+        public const int MiraiDreadSweepCooldownMs = 4400;
         public const int MiraiDreadSweepDamage = 7;
         public const int MiraiCollapseFieldDamage = 10;
         public const int MiraiCollapseFieldImmobilizeDurationMs = 5000;
@@ -1036,39 +1037,41 @@ public static class ArenaConfig
 
         // Sylwen
         public const int SylwenWhisperShotMaxRangeTilesChebyshev = AutoAttackRangedMaxRange;
-        public const int SylwenWhisperShotCooldownMs = 700;
+        public const int SylwenWhisperShotCooldownMs = 2000;
         public const int SylwenWhisperShotDamage = 6;
         public const int SylwenDeadeyeGraceFocusStacksPerHit = 1;
         public const int SylwenDeadeyeGraceConsecutiveHitsPerWhisperHit = 1;
         public const int SylwenDeadeyeGraceFocusBonusPercentPerStack = 10;
         public const int SylwenDeadeyeGraceHeadshotDamageBonusPercent = 100;
         public const int SylwenGalePierceMaxRangeTilesChebyshev = AutoAttackRangedMaxRange;
-        public const int SylwenGalePierceCooldownMs = 1800;
+        public const int SylwenGalePierceCooldownMs = 3600;
         public const int SylwenGalePierceDamage = 10;
         public const int SylwenGalePierceKnockbackTiles = 1;
-        public const int SylwenThornfallCooldownMs = 2500;
+        public const int SylwenThornfallCooldownMs = 5000;
         public const int SylwenThornfallRadius = 1;
         public const int SylwenThornfallDamagePerTick = 3;
-        public const int SylwenThornfallDurationMs = 3000;
+        public const int SylwenThornfallDurationMs = 5000;
         public const int SylwenDeadeyeGraceHeadshotEveryNHits = 3;
         public const int SylwenDeadeyeGraceStunDurationMs = 1000;
         public const int SylwenSilverTempestDurationMs = 5000;
+        public const int SylwenSilverTempestWhisperShotDelayMs = 80;
+        public const int SylwenSilverTempestWhisperShotCount = 2;
 
         // Velvet
         public const int VelvetCorrosionStacksPerHit = 1;
         public const int VelvetVoidChainMaxRangeTilesChebyshev = AutoAttackRangedMaxRange;
-        public const int VelvetVoidChainCooldownMs = 1200;
+        public const int VelvetVoidChainCooldownMs = 2400;
         public const int VelvetVoidChainDamage = 7;
         public const int VelvetVoidChainJumpRangeChebyshev = 3;
         public const int VelvetUmbralPathMaxRangeTilesChebyshev = AutoAttackRangedMaxRange;
-        public const int VelvetUmbralPathCooldownMs = 2000;
+        public const int VelvetUmbralPathCooldownMs = 4000;
         public const int VelvetUmbralPathImpactDamage = 9;
         public const int VelvetUmbralPathSplashRadius = 1;
         public const int VelvetUmbralPathTrailWidthRadius = 1; // r=1 each side = 3 tiles wide total
         public const int VelvetUmbralPathTrailDurationMs = 3000;
         public const int VelvetUmbralPathTrailDamagePerTick = 2;
         public const int VelvetDeathStrikeMaxRangeTilesChebyshev = AutoAttackRangedMaxRange;
-        public const int VelvetDeathStrikeCooldownMs = 1600;
+        public const int VelvetDeathStrikeCooldownMs = 3200;
         public const int VelvetDeathStrikeBaseDamage = 8;
         public const int VelvetStormCollapseBaseDamage = 5; // per stack: totalDamage = BaseDamage * corrosionStacks
         public const int VelvetStormCollapseMinimumStacksMultiplier = 1;
@@ -1082,6 +1085,7 @@ public static class ArenaConfig
     public static readonly IReadOnlyDictionary<string, string> RangedProjectileColorByWeaponId =
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
+            [WeaponIds.AutoAttackRanged] = "#22d3ee",
             [WeaponIds.ExoriMin] = "#7dd3fc",
             [WeaponIds.Exori] = "#ff9f2d",
             [WeaponIds.ExoriMas] = "#a78bfa",
@@ -1099,6 +1103,7 @@ public static class ArenaConfig
         public const string Mirai = "character:mirai";
         public const string Sylwen = "character:sylwen";
         public const string Velvet = "character:velvet";
+        public const string RangedPrototype = "character:ranged_prototype";
     }
 
     /// <summary>
@@ -1176,6 +1181,7 @@ public static class ArenaConfig
     public static readonly IReadOnlyDictionary<string, string> DisplayNames =
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
+            [WeaponIds.AutoAttackRanged] = "Ranged Attack",
             [WeaponIds.ExoriMin]        = "Exori Min",
             [WeaponIds.Exori]           = "Exori",
             [WeaponIds.ExoriMas]        = "Exori Mas",
@@ -1188,6 +1194,7 @@ public static class ArenaConfig
             [CharacterIds.Mirai]           = "Mirai",
             [CharacterIds.Sylwen]          = "Sylwen",
             [CharacterIds.Velvet]          = "Velvet",
+            [CharacterIds.RangedPrototype] = "Ranged Prototype",
             [SkillIds.MiraiRendPulse]      = "Rend Pulse",
             [SkillIds.MiraiGraveFang]      = "Grave Fang",
             [SkillIds.MiraiDreadSweep]     = "Dread Sweep",

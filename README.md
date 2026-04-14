@@ -158,7 +158,13 @@ Four permanent Elemental Arenas, always accessible regardless of Account Level. 
 ## Current Gameplay
 
 - Player is fixed at the center tile (3,3) - no WASD movement
-- All weapons fire automatically via the assist system - no manual casting
+- Auto-attack type is resolved per `ActiveCharacterId` in `ApplyPlayerAutoAttack`:
+  - `Mirai` uses melee auto-attack only (Chebyshev range `<= 1`)
+  - `Sylwen` and `Velvet` use ranged auto-attack up to full arena range (`7` tiles)
+- Q/W/E/R trigger immediate manual `cast_skill` commands for active character kit slots (Skill 1/2/3/Ultimate)
+- Manual casts follow normal cooldown and GCD checks; if a skill is on cooldown the keypress is ignored
+- `R` manual cast is routed through backend `TryFireUltimate` for the active character ultimate; it fires only when `UltimateGauge >= ArenaConfig.UltimateConfig.GaugeMax`, otherwise it silently skips (no error)
+- Assist continues firing other skills normally after a manual cast
 - Account progression now includes Account Level + Account XP (Lv. 1-100), earned from runs and kills
 - Zone selection happens before each run (Zone 1-5), with unlock gates at Account Lv. 1/21/41/61/81
 - Zone multipliers scale mob HP and outgoing damage on top of normal run scaling
@@ -206,7 +212,16 @@ Four permanent Elemental Arenas, always accessible regardless of Account Level. 
     - Mirai: Dread Sweep → Grave Fang → Rend Pulse → Collapse Field (Ultimate)
     - Sylwen: Thornfall → Gale Pierce → Whisper Shot → Silver Tempest (Ultimate)
     - Velvet: Umbral Path → Death Strike → Void Chain → Storm Collapse (Ultimate)
-  - Silver Tempest active: GCD is bypassed for all Sylwen skill evaluations in the assist loop (per-skill cooldown still applies)
+  - Manual cast hotkey slot mapping (from backend character catalog fixed kit order):
+    - `Q` = Skill 1
+    - `W` = Skill 2
+    - `E` = Skill 3
+    - `R` = Ultimate
+  - Per-character slot mapping:
+    - Mirai: `Q` Rend Pulse, `W` Grave Fang, `E` Dread Sweep, `R` Collapse Field
+    - Sylwen: `Q` Whisper Shot, `W` Gale Pierce, `E` Thornfall, `R` Silver Tempest
+    - Velvet: `Q` Void Chain, `W` Umbral Path, `E` Death Strike, `R` Storm Collapse
+  - Silver Tempest active: GCD is bypassed for all Sylwen skill evaluations in the assist loop (per-skill cooldown still applies), and Whisper Shot fires 2 projectiles per cast with an 80 ms delay between shots
   - Focus (FocusStacks + DeadeyeConsecutiveHits) resets on both target switch and locked target death; a `focus_reset` event (mob ID) is emitted on both paths
   - `sunder_brand_updated` event (mob ID + stack count) is emitted after every Mirai skill hit that applies Sunder Brand
   - `corrosion_updated` event (mob ID + stack count) is emitted after every Velvet skill hit that applies Corrosion
@@ -214,10 +229,21 @@ Four permanent Elemental Arenas, always accessible regardless of Account Level. 
     - Stack indicators above mobs: Sunder Brand (amber `▲N`) and Corrosion (purple `✦N`)
     - Focus indicator below locked target: teal pip row (caps at `6+`)
     - Headshot: white flash + `HEADSHOT` floating text
+    - Rend Pulse (Mirai): exactly the 8 adjacent tiles around player center are flashed (Chebyshev `r=1`, center tile excluded)
     - Crowd control: rotating dashed stun ring (amber) and pulsing immobilize tile border (teal)
     - Collapse Field: pull slide animation + post-slide white flash + amber radial burst centered on player
-    - Storm Collapse: per-mob purple detonation rings + purple scaled damage numbers + screen tint flash for multi-hit detonations
+    - Void Chain: aggressive chain-lightning pass with 5px main arcs + secondary 2px parallel arcs, 700ms visibility, 36px hit pulses, inner hit flashes, and short border shimmer flashes per jump
+    - Umbral Path: 14px heavy projectile (60% fill, 3px border) with 160ms travel, impact ring + 6-ray splash, and a stronger trail overlay (45%→75% pulsing fill, 2px solid perimeter, persistent centerline)
+    - Death Strike: heavy 12px projectile with element-color border, 8-line radial impact burst (24px lines), and an added expanding impact fill circle
+    - Storm Collapse: per-mob expanding detonation rings in staggered cascade (`30ms` steps), purple `×N` stack text, purple scaled damage numbers, and a final arena-wide ring when `>= 3` mobs detonate (no full-screen flash)
     - Silver Tempest: teal player glow border while active + teal pierce trail rendering for Sylwen projectiles
+    - Sylwen skill-specific FX: Whisper Shot now renders as a large directional arrow (`tileSize * 0.8`, 220ms travel) with two ghost trailing copies and a 6-line impact star + flash; Gale Pierce now renders as a concave sweeping wave arc (`tileSize * 0.9` width, 350ms travel) with wake trail, X-slash hit marks, and end-of-path ring/radiating lines; Thornfall uses a 5-tile cross zone (center + N/S/E/W) with element-color perimeter outline only (no tile fill) plus sprite rain
+    - Character-aware ranged auto-attack FX: Sylwen `auto_attack_ranged` now renders `weapon_arrow` sprite oriented to travel direction (`tileSize * 0.6`, 150ms) with a small 4-line hit burst; Velvet `auto_attack_ranged` now renders a rotating arcane orb (inner orb + dashed ring, 180ms) with an expanding hit ring
+    - Mob melee auto-attack readability: player-hit impacts now render `skull` sprite on the player tile (hitFx layer, 400ms fade)
+  - Thornfall correctly dispatches to its own handler (`BuildThornfallCrossTiles` + decal registration) through an explicit Thornfall dispatch branch with no fallthrough; when no valid target exists the cast is skipped
+  - Grave Fang adapts to all 8 facing directions with fan logic derived from the locked/nearest target position, producing correct 3-tile fans for cardinal and diagonal facings alike
+  - Skill name floating text is restored above the player on every assist cast for all characters (white, 11 px, rises 20 px, 800 ms duration with fade starting at 500 ms); a new cast replaces any previous text still visible; display names come from `AssistCastEventDto.DisplayName` populated server-side via `ArenaConfig.DisplayNames`
+  - **BALANCE-1 — Combat pacing:** All player skill cooldowns and mob auto-attack cooldowns have been doubled; Global Cooldown increased from 400 ms to 800 ms. Affected constants (all in `ArenaConfig.cs`): `PlayerGlobalCooldownMs`; all nine `SkillConfig.*CooldownMs` values (Mirai: Rend Pulse, Grave Fang, Dread Sweep; Sylwen: Whisper Shot, Gale Pierce, Thornfall; Velvet: Void Chain, Umbral Path, Death Strike); all mob AA cooldown constants (Melee Brute, Ranged Archer, Melee Demon, Ranged Shaman, Melee Skeleton, Melee Wogol, Melee Warrior, Melee Zombie, Tiny Zombie, Ranged Imp, Ranged Swampy, Ranged Muddy, Melee Slug, Elite Masked Orc, Elite Pumpkin Dude, Elite Doc, Frost Revenant); and boss `AutoAttackCooldownMs` inline values for Demon Lord (800 → 1600), Plague Titan (1000 → 2000), and The Ascendant (1200 → 2400). Ultimate gauge-based skills are unchanged.
   - Arena HUD now includes:
     - Collapsible `STATS` panel (collapsed by default) bound to snapshot `effectivePlayerStats` values
     - Enhanced Ultimate panel with gauge fraction, amber `READY` pulse at full gauge, and character-specific ultimate description
@@ -225,22 +251,23 @@ Four permanent Elemental Arenas, always accessible regardless of Account Level. 
     - Active Cards panel showing chosen passive cards with stack counts (`×N`) and teal border at max stacks
     - Locked target info panel (on right-click lock) with target name, HP bar (green/amber/red), element/weakness/resistance badges, and Sunder/Corrosion/Focus stack chips
     - Compact active-effects row showing only current effects: `ST` (Silver Tempest), `IMM` (immobilize present), `STN` (stun present)
+    - Helper panel dynamic kit rows (`Q/W/E/R`) with backend display names and live cooldown bars from snapshot skill state
 - **Mirai Kit (Backend):**
   - Passive `Sunder Brand`: every Mirai skill hit adds 1 stack on the target mob; each stack adds `+1` flat damage to subsequent Mirai skill damage against that mob; stacks reset on mob death.
   - `Rend Pulse`: square `r=1` around the player (8 surrounding tiles), applies Sunder Brand.
   - `Grave Fang`: frontal 3-tile cone based on current facing (diagonal facings use adaptive 3-tile cone), applies Sunder Brand.
-  - `Dread Sweep`: deep directional cone using forward-vs-lateral Chebyshev logic toward arena edge, applies Sunder Brand.
+  - `Dread Sweep`: deep strict 45° forward cone toward the facing direction (dot/cross-product gating), capped to approximately 12 tiles on the 7x7 arena, applies Sunder Brand.
   - Ultimate `Collapse Field`: pulls all mobs toward the player, then deals `10` damage with Sunder Brand bonus and immobilizes mobs for `5000ms` (5s).
 - **Sylwen Kit (Backend):**
   - Passive `Deadeye Grace`: Whisper Shot builds `FocusStacks` and `DeadeyeConsecutiveHits` on hit; Focus grants flat Whisper Shot bonus damage; every 3rd hit is a Headshot (2x damage + `1000ms` stun).
-  - `Whisper Shot`: full-range projectile with locked-target-first selection; during Silver Tempest it pierces through all mobs on the projectile line.
+  - `Whisper Shot`: full-range projectile with locked-target-first selection; during Silver Tempest it pierces through all mobs on the projectile line and fires a second delayed follow-up shot (`80ms`) so Deadeye Grace Focus/Headshot counters can increment independently per projectile hit.
   - `Gale Pierce`: full-range directional line shot that pierces all mobs in line and pushes each hit mob back by 1 tile when the destination is walkable.
-  - `Thornfall`: sustained ground-zone AoE that reuses Avalanche targeting (cluster-based cast tile), applying periodic damage over `3000ms`.
-  - Ultimate `Silver Tempest`: activates a `5000ms` self-buff that removes Sylwen GCD and enables projectile pierce for Sylwen projectiles while active.
+  - `Thornfall`: sustained ranged ground-zone that places a 5-tile cross centered on the locked/nearest target position (center + north/south/east/west), applying periodic damage over `5000ms` with no melee range requirement.
+  - Ultimate `Silver Tempest`: activates a `5000ms` self-buff that removes Sylwen GCD, enables projectile pierce for Sylwen projectiles while active, and enables the Whisper Shot double-shot cadence (`2` shots, `80ms` delay).
 - **Velvet Kit (Backend):**
   - Passive `Arcane Decay`: every Velvet skill hit adds `+1` `CorrosionStacks` on the target mob; Velvet damage is amplified by `+5%` per corrosion stack with no time decay.
   - `Void Chain`: chain projectile that starts on locked/nearest target, then keeps jumping to the nearest not-yet-hit mob within Chebyshev range `3`.
-  - `Umbral Path`: projectile impact with `r=1` splash plus a persistent 3-tile-wide trail that deals periodic damage and applies Corrosion each tick.
+  - `Umbral Path`: pierces from player to arena edge in the exact player-to-target direction (cardinal or diagonal), applies `r=1` splash damage across the full path, and leaves a persistent 3-tile-wide trail that deals periodic damage and applies Corrosion each tick.
   - `Death Strike`: single-target projectile whose final damage is amplified by existing Corrosion stacks on the target.
   - Ultimate `Storm Collapse`: detonates Corrosion on all living mobs at once, dealing `baseDamage * stacks` (minimum `1x` base damage when stacks are `0`), then resets Corrosion to `0`.
 - Per-mob passive/CC state is tracked on `StoredActor`: `SunderBrandStacks`, `CorrosionStacks`, `FocusStacks`, `DeadeyeConsecutiveHits`, `IsStunned`/`StunRemainingMs`, and `IsImmobilized`/`ImmobilizeRemainingMs`.
@@ -261,6 +288,21 @@ Four permanent Elemental Arenas, always accessible regardless of Account Level. 
   - LOS obstacle checks are intentionally stubbed now and will activate when destructible obstacles are implemented
   - Active ranged weapons today: Sigil Bolt (single target), Shotgun (dragon-wave cone AoE + knockback), and Void Ricochet (bounce + pierce segments)
   - Void Ricochet projectiles are emitted per segment and rendered sequentially segment-by-segment on the frontend
+
+## Frontend FX Sprites
+
+The following `anim_strip_rows` FX assets are registered in `frontend/src/assets/packs/arena_v1_0x72_bdragon/asset-pack.json`:
+
+- `fx.skill.thornfall_arrow` -> `fx/rpg_effect_all_free/Part 9/448.png` (`64x64`, `rowCount: 10`, `row: 0`)
+- `fx.skill.umbral_flame` -> `fx/rpg_effect_all_free/Part 10/467.png` (`64x64`, `rowCount: 10`, `row: 1`)
+- `fx.skill.death_strike_crystal` -> `fx/rpg_effect_all_free/Part 13/623.png` (`64x64`, `rowCount: 10`, `row: 1`)
+
+These are used by frontend combat FX as follows:
+
+- Thornfall cross tiles: sprite arrow rain (`448`) on `groundFx`, with only cross-perimeter outline overlay (tile fill removed).
+- Umbral Path trail: sprite flame trail (`467`) on `groundFx`, while keeping perimeter stroke and centerline overlay.
+- Death Strike impact: sprite crystal burst (`623`) on `hitFx`, layered on top of the existing radial burst + expanding impact circle.
+- Sprite row selection for `448` / `467` / `623` now follows active weapon element (fire/ice/earth/energy/physical).
 
 ## Stable ID System
 

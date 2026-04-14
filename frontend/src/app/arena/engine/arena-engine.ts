@@ -25,7 +25,7 @@ import {
   TileEntity,
   TilePos
 } from "./arena-engine.types";
-import { computeDirectionAngleRad, normalizeCombatFxKind } from "./attack-fx.helpers";
+import { COMBAT_FX_MELEE_SWING, computeDirectionAngleRad, normalizeCombatFxKind } from "./attack-fx.helpers";
 import { planSquareAreaFx, spawnAreaFx, spawnFx, spawnFxPlan, tickFx } from "./fx-spawner";
 import { resolveBossSpriteSemanticId, resolveMobSpriteSemanticId } from "./mob-visuals";
 import { resolvePlayerSpriteSemanticId } from "./player-visuals";
@@ -50,9 +50,63 @@ const COLLAPSE_FIELD_BURST_DURATION_MS = 400;
 const HEADSHOT_FLASH_DURATION_MS = 200;
 const HEADSHOT_FLASH_FULL_WHITE_DURATION_MS = 80;
 const HEADSHOT_TEXT_DURATION_MS = 600;
-const STORM_COLLAPSE_RING_DURATION_MS = 300;
-const STORM_COLLAPSE_SCREEN_TINT_DURATION_MS = 400;
+const STORM_COLLAPSE_RING_DURATION_MS = 350;
+const STORM_COLLAPSE_RING_STAGGER_MS = 30;
+const STORM_COLLAPSE_RING_START_RADIUS_PX = 8;
+const STORM_COLLAPSE_RING_END_RADIUS_PX = 32;
+const STORM_COLLAPSE_RING_STROKE_WIDTH_PX = 2;
+const STORM_COLLAPSE_STACK_TEXT_DURATION_MS = 400;
+const STORM_COLLAPSE_ARENA_RING_EXTRA_DELAY_MS = 50;
+const STORM_COLLAPSE_ARENA_RING_DURATION_MS = 500;
+const STORM_COLLAPSE_ARENA_RING_STROKE_WIDTH_PX = 1;
+const STORM_COLLAPSE_ARENA_RING_MAX_OPACITY = 0.2;
 const SILVER_TEMPEST_TEXT_DURATION_MS = 1200;
+const REND_PULSE_TILE_FLASH_DURATION_MS = 120;
+const MIRAI_DREAD_SWEEP_SKILL_ID = "skill:mirai_dread_sweep";
+const MIRAI_GRAVE_FANG_SKILL_ID = "skill:mirai_grave_fang";
+const SYLWEN_WHISPER_SHOT_PROJECTILE_DURATION_MS = 220;
+const SYLWEN_GALE_PIERCE_PROJECTILE_DURATION_MS = 350;
+const SYLWEN_WHISPER_SHOT_HIT_BURST_DURATION_MS = 250;
+const SYLWEN_GALE_PIERCE_HIT_SLASH_DURATION_MS = 350;
+const SYLWEN_GALE_PIERCE_END_RING_DURATION_MS = 300;
+const SYLWEN_GALE_PIERCE_END_RING_MAX_RADIUS_TILE_MULTIPLIER = 0.6;
+const SYLWEN_THORNFALL_DURATION_MS = 5000;
+const SYLWEN_THORNFALL_SKILL_ID = "skill:sylwen_thornfall";
+const SYLWEN_WHISPER_SHOT_SKILL_ID = "skill:sylwen_whisper_shot";
+const SYLWEN_GALE_PIERCE_SKILL_ID = "skill:sylwen_gale_pierce";
+const VELVET_VOID_CHAIN_SKILL_ID = "skill:velvet_void_chain";
+const VELVET_UMBRAL_PATH_SKILL_ID = "skill:velvet_umbral_path";
+const VELVET_DEATH_STRIKE_SKILL_ID = "skill:velvet_death_strike";
+const VELVET_STORM_COLLAPSE_SKILL_ID = "skill:velvet_storm_collapse";
+const AUTO_ATTACK_RANGED_WEAPON_ID = "auto_attack_ranged";
+const AUTO_ATTACK_RANGED_PROJECTILE_DURATION_SYLWEN_MS = 150;
+const AUTO_ATTACK_RANGED_PROJECTILE_DURATION_VELVET_MS = 180;
+const AUTO_ATTACK_RANGED_HIT_BURST_DURATION_MS = 150;
+const AUTO_ATTACK_RANGED_ORB_HIT_RING_DURATION_MS = 200;
+const MOB_MELEE_SKULL_IMPACT_DURATION_MS = 400;
+const CHARACTER_ID_SYLWEN = "character:sylwen";
+const CHARACTER_ID_VELVET = "character:velvet";
+const VELVET_VOID_CHAIN_ARC_DURATION_MS = 700;
+const VELVET_VOID_CHAIN_BORDER_SHIMMER_DURATION_MS = 200;
+const VELVET_VOID_CHAIN_HIT_PULSE_DURATION_MS = 400;
+const VELVET_VOID_CHAIN_HIT_PULSE_START_RADIUS_PX = 0;
+const VELVET_VOID_CHAIN_HIT_PULSE_END_RADIUS_PX = 36;
+const VELVET_VOID_CHAIN_HIT_PULSE_LINE_WIDTH_PX = 3;
+const VELVET_UMBRAL_PATH_PROJECTILE_DURATION_MS = 160;
+const VELVET_UMBRAL_PATH_IMPACT_DURATION_MS = 350;
+const VELVET_UMBRAL_PATH_TRAIL_DURATION_MS = 3000;
+const VELVET_UMBRAL_PATH_TRAIL_FADE_OUT_MS = 500;
+const VELVET_DEATH_STRIKE_PROJECTILE_DURATION_MS = 180;
+const VELVET_DEATH_STRIKE_BURST_DURATION_MS = 350;
+const DEFAULT_PHYSICAL_PROJECTILE_COLOR_HEX = "#D3D1C7";
+const FX_SPRITE_FRAMES_PER_ROW = 10;
+const ELEMENT_FX_ROW_START_BY_ACTIVE_ELEMENT: Readonly<Record<string, number>> = {
+  fire: 9 * FX_SPRITE_FRAMES_PER_ROW,
+  ice: 2 * FX_SPRITE_FRAMES_PER_ROW,
+  earth: 3 * FX_SPRITE_FRAMES_PER_ROW,
+  energy: 4 * FX_SPRITE_FRAMES_PER_ROW,
+  physical: 6 * FX_SPRITE_FRAMES_PER_ROW
+};
 
 export function resolveTierAuraFxId(tierIndex: number): string | null {
   const normalizedTier = Math.floor(Number.isFinite(tierIndex) ? tierIndex : MIN_MOB_TIER_INDEX);
@@ -116,6 +170,7 @@ export class ArenaEngine {
       columns,
       rows,
       tileSize,
+      activeCharacterId: null,
       playerTile,
       effectiveTargetEntityId: null,
       lockedTargetEntityId: null,
@@ -140,7 +195,20 @@ export class ArenaEngine {
       actorFlashOverlays: [],
       collapseFieldBursts: [],
       stormCollapseRings: [],
+      stormCollapseStackTexts: [],
+      stormCollapseArenaRings: [],
       screenTintOverlays: [],
+      rendPulseTileFlashes: [],
+      sylwenHitOverlays: [],
+      skullImpactOverlays: [],
+      sylwenDissipateRings: [],
+      thornfallCrossZones: [],
+      velvetVoidChainArcs: [],
+      velvetVoidChainBorderShimmers: [],
+      velvetVoidChainHitPulses: [],
+      velvetUmbralPathTrails: [],
+      velvetUmbralPathImpacts: [],
+      velvetDeathStrikeBursts: [],
       queuedDamageNumbers: [],
       nextDamageSpawnOrder: 0,
       damageNumbers: [],
@@ -193,6 +261,7 @@ export class ArenaEngine {
 
     return {
       ...scene,
+      activeCharacterId: player?.actorId ?? scene.activeCharacterId ?? null,
       playerTile: player ? { x: player.tileX, y: player.tileY } : scene.playerTile,
       actorsById: this.toActorMap(sortedActors),
       actorVisualsById,
@@ -218,7 +287,20 @@ export class ArenaEngine {
     const actorFlashOverlays = [...nextScene.actorFlashOverlays];
     const collapseFieldBursts = [...nextScene.collapseFieldBursts];
     const stormCollapseRings = [...nextScene.stormCollapseRings];
+    const stormCollapseStackTexts = [...nextScene.stormCollapseStackTexts];
+    const stormCollapseArenaRings = [...nextScene.stormCollapseArenaRings];
     const screenTintOverlays = [...nextScene.screenTintOverlays];
+    const rendPulseTileFlashes = [...nextScene.rendPulseTileFlashes];
+    const sylwenHitOverlays = [...nextScene.sylwenHitOverlays];
+    const skullImpactOverlays = [...(nextScene.skullImpactOverlays ?? [])];
+    const sylwenDissipateRings = [...nextScene.sylwenDissipateRings];
+    const thornfallCrossZones = [...nextScene.thornfallCrossZones];
+    const velvetVoidChainArcs = [...nextScene.velvetVoidChainArcs];
+    const velvetVoidChainBorderShimmers = [...(nextScene.velvetVoidChainBorderShimmers ?? [])];
+    const velvetVoidChainHitPulses = [...nextScene.velvetVoidChainHitPulses];
+    const velvetUmbralPathTrails = [...nextScene.velvetUmbralPathTrails];
+    const velvetUmbralPathImpacts = [...(nextScene.velvetUmbralPathImpacts ?? [])];
+    const velvetDeathStrikeBursts = [...nextScene.velvetDeathStrikeBursts];
     const queuedDamageNumbers: QueuedDamageNumberInstance[] = [...nextScene.queuedDamageNumbers];
     const mobKnockbackSlidesByActorId = { ...(nextScene.mobKnockbackSlidesByActorId ?? {}) };
     const collapseFieldDelayByActorId = this.resolveCollapseFieldSlideDelayByActorId(events);
@@ -237,6 +319,9 @@ export class ArenaEngine {
       delayMs: number;
     }> = [];
     let chainedProjectileStartDelayMs = 0;
+    const galeEndRingsByPath = new Set<string>();
+    let pendingUmbralPathImpactTile: TilePos | null = null;
+    const stormCollapseDamageDelayByActorId = this.resolveStormCollapseDamageDelayByActorId(events);
 
     for (const event of events) {
       if (event.type === "fx_spawn") {
@@ -252,10 +337,55 @@ export class ArenaEngine {
 
       if (event.type === "attack_fx") {
         spawnedAttackFx.push(this.toAttackFxInstance(event));
+        if (this.isMobMeleeHitOnPlayer(event, nextScene, scene, playerActorId)) {
+          skullImpactOverlays.push({
+            tilePos: { x: event.toTileX, y: event.toTileY },
+            elapsedMs: 0,
+            durationMs: MOB_MELEE_SKULL_IMPACT_DURATION_MS
+          });
+        }
         continue;
       }
 
       if (event.type === "ranged_projectile_fired") {
+        if (this.isSylwenThornfallSkillId(event.weaponId)) {
+          continue;
+        }
+
+        if (this.isVelvetVoidChainSkillId(event.weaponId)) {
+          const colorHex = this.resolveProjectileColorHex(nextScene.rangedConfig, event.weaponId, nextScene);
+          velvetVoidChainArcs.push({
+            fromPos: { x: event.fromTile.x, y: event.fromTile.y },
+            toPos: { x: event.toTile.x, y: event.toTile.y },
+            colorHex,
+            elapsedMs: 0,
+            durationMs: VELVET_VOID_CHAIN_ARC_DURATION_MS
+          });
+          velvetVoidChainHitPulses.push({
+            tilePos: { x: event.toTile.x, y: event.toTile.y },
+            colorHex,
+            elapsedMs: 0,
+            durationMs: VELVET_VOID_CHAIN_HIT_PULSE_DURATION_MS,
+            startRadiusPx: VELVET_VOID_CHAIN_HIT_PULSE_START_RADIUS_PX,
+            endRadiusPx: VELVET_VOID_CHAIN_HIT_PULSE_END_RADIUS_PX,
+            lineWidthPx: VELVET_VOID_CHAIN_HIT_PULSE_LINE_WIDTH_PX
+          });
+          const shimmer = this.resolveNearestBorderShimmer(
+            { x: event.toTile.x, y: event.toTile.y },
+            nextScene.columns,
+            nextScene.rows
+          );
+          if (shimmer) {
+            velvetVoidChainBorderShimmers.push({
+              ...shimmer,
+              colorHex,
+              elapsedMs: 0,
+              durationMs: VELVET_VOID_CHAIN_BORDER_SHIMMER_DURATION_MS
+            });
+          }
+          continue;
+        }
+
         const shouldChainProjectile = this.shouldChainProjectileSegments(event);
         if (!shouldChainProjectile) {
           chainedProjectileStartDelayMs = 0;
@@ -266,12 +396,101 @@ export class ArenaEngine {
           : 0;
         const projectile = this.toRangedProjectileInstance(event, nextScene, projectileStartDelayMs);
         spawnedProjectiles.push(projectile);
+        if (this.isVelvetUmbralPathSkillId(event.weaponId)) {
+          pendingUmbralPathImpactTile = { x: event.toTile.x, y: event.toTile.y };
+        }
+        const impactDelayMs = projectileStartDelayMs + projectile.impactDurationMs;
         pendingProjectileImpacts.push({
           targetActorId: event.targetActorId ?? null,
           tileX: event.toTile.x,
           tileY: event.toTile.y,
-          delayMs: projectileStartDelayMs + projectile.impactDurationMs
+          delayMs: impactDelayMs
         });
+
+        if (this.isSylwenWhisperShotSkillId(event.weaponId)) {
+          sylwenHitOverlays.push({
+            kind: "whisper_star",
+            tilePos: { x: event.toTile.x, y: event.toTile.y },
+            colorHex: projectile.colorHex,
+            delayRemainingMs: impactDelayMs,
+            elapsedMs: 0,
+            durationMs: SYLWEN_WHISPER_SHOT_HIT_BURST_DURATION_MS
+          });
+        }
+
+        if (this.isAutoAttackRangedWeaponId(event.weaponId)) {
+          if (this.isVelvetActiveCharacter(nextScene)) {
+            sylwenHitOverlays.push({
+              kind: "auto_attack_orb_ring",
+              tilePos: { x: event.toTile.x, y: event.toTile.y },
+              colorHex: projectile.colorHex,
+              delayRemainingMs: impactDelayMs,
+              elapsedMs: 0,
+              durationMs: AUTO_ATTACK_RANGED_ORB_HIT_RING_DURATION_MS
+            });
+          } else {
+            sylwenHitOverlays.push({
+              kind: "auto_attack_burst",
+              tilePos: { x: event.toTile.x, y: event.toTile.y },
+              colorHex: projectile.colorHex,
+              delayRemainingMs: impactDelayMs,
+              elapsedMs: 0,
+              durationMs: AUTO_ATTACK_RANGED_HIT_BURST_DURATION_MS
+            });
+          }
+        }
+
+        if (this.isSylwenGalePierceSkillId(event.weaponId)) {
+          sylwenHitOverlays.push({
+            kind: "gale_slash",
+            tilePos: { x: event.toTile.x, y: event.toTile.y },
+            colorHex: projectile.colorHex,
+            delayRemainingMs: impactDelayMs,
+            elapsedMs: 0,
+            durationMs: SYLWEN_GALE_PIERCE_HIT_SLASH_DURATION_MS
+          });
+
+          const galeEndKey = `${projectileStartDelayMs}:${projectile.fromPos.x}:${projectile.fromPos.y}:${projectile.visualEndPos.x}:${projectile.visualEndPos.y}`;
+          if (!galeEndRingsByPath.has(galeEndKey)) {
+            galeEndRingsByPath.add(galeEndKey);
+            sylwenDissipateRings.push({
+              tilePos: { x: projectile.visualEndPos.x, y: projectile.visualEndPos.y },
+              colorHex: projectile.colorHex,
+              delayRemainingMs: projectileStartDelayMs + projectile.totalDurationMs,
+              elapsedMs: 0,
+              durationMs: SYLWEN_GALE_PIERCE_END_RING_DURATION_MS,
+              maxRadiusPx: nextScene.tileSize * SYLWEN_GALE_PIERCE_END_RING_MAX_RADIUS_TILE_MULTIPLIER
+            });
+          }
+        }
+
+        if (this.isVelvetDeathStrikeSkillId(event.weaponId)) {
+          velvetDeathStrikeBursts.push({
+            tilePos: { x: event.toTile.x, y: event.toTile.y },
+            colorHex: projectile.colorHex,
+            delayRemainingMs: impactDelayMs,
+            elapsedMs: 0,
+            durationMs: VELVET_DEATH_STRIKE_BURST_DURATION_MS
+          });
+          nextScene = spawnFx(nextScene, {
+            fxId: "fx.skill.death_strike_crystal",
+            tilePos: { x: event.toTile.x, y: event.toTile.y },
+            durationMs: VELVET_DEATH_STRIKE_BURST_DURATION_MS,
+            layer: "hitFx",
+            startFrame: this.resolveElementFxStartFrame(nextScene)
+          });
+        }
+
+        if (this.isVelvetUmbralPathSkillId(event.weaponId)) {
+          velvetUmbralPathImpacts.push({
+            tilePos: { x: event.toTile.x, y: event.toTile.y },
+            colorHex: projectile.colorHex,
+            delayRemainingMs: impactDelayMs,
+            elapsedMs: 0,
+            durationMs: VELVET_UMBRAL_PATH_IMPACT_DURATION_MS
+          });
+        }
+
         if (shouldChainProjectile) {
           chainedProjectileStartDelayMs += projectile.impactDurationMs;
         }
@@ -372,30 +591,60 @@ export class ArenaEngine {
       }
 
       if (event.type === "storm_collapse_detonated") {
-        if (event.hits.length >= 3) {
-          screenTintOverlays.push({
-            colorHex: "#7F77DD",
-            maxOpacity: 0.15,
-            elapsedMs: 0,
-            durationMs: STORM_COLLAPSE_SCREEN_TINT_DURATION_MS
-          });
-        }
-
-        for (const hit of event.hits) {
+        const detonationColorHex = this.resolveProjectileColorHex(nextScene.rangedConfig, VELVET_STORM_COLLAPSE_SKILL_ID, nextScene);
+        for (let index = 0; index < event.hits.length; index += 1) {
+          const hit = event.hits[index];
+          const delayRemainingMs = index * STORM_COLLAPSE_RING_STAGGER_MS;
           const actor = nextScene.actorsById[hit.mobId];
+          const previousActor = scene.actorsById[hit.mobId];
+          const ringTilePos: TilePos = actor && actor.kind === "mob"
+            ? { x: actor.tileX, y: actor.tileY }
+            : previousActor && previousActor.kind === "mob"
+              ? { x: previousActor.tileX, y: previousActor.tileY }
+              : { x: 3, y: 3 };
+
           if (actor && actor.kind === "mob") {
             actor.corrosionStacks = 0;
           }
 
-          if (hit.stacksConsumed <= 0) {
-            continue;
-          }
-
           stormCollapseRings.push({
             actorId: hit.mobId,
+            tilePos: ringTilePos,
             stacksConsumed: hit.stacksConsumed,
+            colorHex: detonationColorHex,
+            delayRemainingMs,
             elapsedMs: 0,
-            durationMs: STORM_COLLAPSE_RING_DURATION_MS
+            durationMs: STORM_COLLAPSE_RING_DURATION_MS,
+            startRadiusPx: STORM_COLLAPSE_RING_START_RADIUS_PX,
+            endRadiusPx: STORM_COLLAPSE_RING_END_RADIUS_PX,
+            strokeWidthPx: STORM_COLLAPSE_RING_STROKE_WIDTH_PX
+          });
+
+          if (hit.stacksConsumed > 0) {
+            stormCollapseStackTexts.push({
+              actorId: hit.mobId,
+              tilePos: ringTilePos,
+              stacksConsumed: hit.stacksConsumed,
+              delayRemainingMs,
+              elapsedMs: 0,
+              durationMs: STORM_COLLAPSE_STACK_TEXT_DURATION_MS
+            });
+          }
+        }
+
+        if (event.hits.length >= 3) {
+          const playerTile = nextScene.playerTile;
+          const arenaHalfWidth = Math.max(nextScene.columns, nextScene.rows) * nextScene.tileSize * 0.5;
+          stormCollapseArenaRings.push({
+            centerTile: { x: playerTile.x, y: playerTile.y },
+            colorHex: detonationColorHex,
+            delayRemainingMs: (event.hits.length * STORM_COLLAPSE_RING_STAGGER_MS) + STORM_COLLAPSE_ARENA_RING_EXTRA_DELAY_MS,
+            elapsedMs: 0,
+            durationMs: STORM_COLLAPSE_ARENA_RING_DURATION_MS,
+            startRadiusPx: 0,
+            endRadiusPx: arenaHalfWidth,
+            strokeWidthPx: STORM_COLLAPSE_ARENA_RING_STROKE_WIDTH_PX,
+            maxOpacity: STORM_COLLAPSE_ARENA_RING_MAX_OPACITY
           });
         }
         continue;
@@ -419,6 +668,37 @@ export class ArenaEngine {
               1
             )
           );
+        }
+        continue;
+      }
+
+      if (event.type === "thornfall_placed") {
+        const sourceTiles = (event.crossTiles ?? event.fanTiles ?? []);
+        const crossTiles = sourceTiles
+          .map((tile) => ({
+            x: Math.round(tile.x),
+            y: Math.round(tile.y)
+          }))
+          .filter((tile, index, array) => array.findIndex((entry) => entry.x === tile.x && entry.y === tile.y) === index);
+        if (crossTiles.length === 0) {
+          continue;
+        }
+
+        thornfallCrossZones.push({
+          centerTile: crossTiles[0],
+          crossTiles,
+          colorHex: this.resolveProjectileColorHex(nextScene.rangedConfig, SYLWEN_THORNFALL_SKILL_ID, nextScene),
+          elapsedMs: 0,
+          durationMs: SYLWEN_THORNFALL_DURATION_MS
+        });
+        for (const tile of crossTiles) {
+          nextScene = spawnFx(nextScene, {
+            fxId: "fx.skill.thornfall_arrow",
+            tilePos: { x: tile.x, y: tile.y },
+            durationMs: SYLWEN_THORNFALL_DURATION_MS,
+            layer: "groundFx",
+            startFrame: this.resolveElementFxStartFrame(nextScene)
+          });
         }
         continue;
       }
@@ -485,7 +765,8 @@ export class ArenaEngine {
 
         const projectileArrivalDelayMs = this.consumePendingProjectileArrivalDelayMs(event, pendingProjectileImpacts);
         const collapseDelayMs = collapseFieldDelayByActorId.get(event.targetEntityId) ?? 0;
-        const totalDelayMs = Math.max(projectileArrivalDelayMs, collapseDelayMs);
+        const stormCollapseDelayMs = stormCollapseDamageDelayByActorId.get(event.targetEntityId) ?? 0;
+        const totalDelayMs = Math.max(projectileArrivalDelayMs, collapseDelayMs, stormCollapseDelayMs);
         if (totalDelayMs > 0) {
           this.queueDamageNumberEntries(entries, totalDelayMs, queuedDamageNumbers);
           continue;
@@ -530,30 +811,88 @@ export class ArenaEngine {
           continue;
         }
 
-        const calloutProfile = this.resolveAssistCastCalloutProfile(event.skillId);
-        if (!calloutProfile) {
-          continue;
-        }
-
         const playerActor = nextScene.actorsById[playerActorId] ?? scene.actorsById[playerActorId];
         if (!playerActor) {
           continue;
         }
 
-        const label = this.resolveAssistCastLabel(event.skillId, nextScene);
+        if (this.isMiraiRendPulseSkillId(event.skillId)) {
+          const rendPulseTiles = this.buildMiraiRendPulseTiles(nextScene.columns, nextScene.rows);
+          const colorHex = this.resolveProjectileColorHex(nextScene.rangedConfig, event.skillId, nextScene);
+          for (const tilePos of rendPulseTiles) {
+            rendPulseTileFlashes.push({
+              tilePos,
+              colorHex,
+              elapsedMs: 0,
+              durationMs: REND_PULSE_TILE_FLASH_DURATION_MS
+            });
+          }
+        }
+
+        if (this.isMiraiDreadSweepSkillId(event.skillId) || this.isMiraiGraveFangSkillId(event.skillId)) {
+          const hitTiles = this.normalizeAssistCastHitTiles(event.hitTiles, nextScene.columns, nextScene.rows);
+          if (hitTiles.length > 0) {
+            const colorHex = this.resolveProjectileColorHex(nextScene.rangedConfig, event.skillId, nextScene);
+            for (const tilePos of hitTiles) {
+              rendPulseTileFlashes.push({
+                tilePos,
+                colorHex,
+                elapsedMs: 0,
+                durationMs: REND_PULSE_TILE_FLASH_DURATION_MS
+              });
+            }
+          }
+        }
+
+        if (this.isVelvetUmbralPathSkillId(event.skillId)) {
+          const targetTile = pendingUmbralPathImpactTile ??
+            this.resolveVelvetUmbralPathTargetTile(nextScene, { x: playerActor.tileX, y: playerActor.tileY });
+          pendingUmbralPathImpactTile = null;
+          if (targetTile) {
+            const trailTiles = this.buildUmbralPathTrailTiles(
+              { x: playerActor.tileX, y: playerActor.tileY },
+              targetTile,
+              nextScene.columns,
+              nextScene.rows);
+            if (trailTiles.length > 0) {
+              const centerLineTiles = this.buildLineTiles(
+                { x: playerActor.tileX, y: playerActor.tileY },
+                targetTile,
+                nextScene.columns,
+                nextScene.rows
+              );
+              velvetUmbralPathTrails.push({
+                tiles: trailTiles,
+                centerLineTiles,
+                colorHex: this.resolveProjectileColorHex(nextScene.rangedConfig, event.skillId, nextScene),
+                elapsedMs: 0,
+                durationMs: VELVET_UMBRAL_PATH_TRAIL_DURATION_MS,
+                fadeOutMs: VELVET_UMBRAL_PATH_TRAIL_FADE_OUT_MS
+              });
+              for (const tile of trailTiles) {
+                nextScene = spawnFx(nextScene, {
+                  fxId: "fx.skill.umbral_flame",
+                  tilePos: { x: tile.x, y: tile.y },
+                  durationMs: VELVET_UMBRAL_PATH_TRAIL_DURATION_MS,
+                  layer: "groundFx",
+                  startFrame: this.resolveElementFxStartFrame(nextScene)
+                });
+              }
+            }
+          }
+        }
+
+        // Skill-name floating text: replaces any previous cast text still visible.
+        const skillLabel = (event.displayName?.trim() || this.resolveAssistCastLabel(event.skillId, nextScene));
+        nextScene = { ...nextScene, floatingTexts: nextScene.floatingTexts.filter(t => t.kind !== "skill_name") };
+        spawnedFloatingTexts.push(this.createSkillNameText(skillLabel, playerActor.tileX, playerActor.tileY));
+
+        const calloutProfile = this.resolveAssistCastCalloutProfile(event.skillId);
+        const cueDurationMs = calloutProfile?.cueDurationMs ?? ASSIST_CUE_DURATION_MS;
         spawnedMomentCues.push(
-          this.createMomentCue("assist_cast", playerActor.tileX, playerActor.tileY, calloutProfile.cueDurationMs)
+          this.createMomentCue("assist_cast", playerActor.tileX, playerActor.tileY, cueDurationMs)
         );
-        spawnedFloatingTexts.push(
-          this.createCombatCalloutText(
-            label,
-            playerActor.tileX,
-            playerActor.tileY,
-            "assist",
-            calloutProfile.cueDurationMs,
-            calloutProfile.fontScale
-          )
-        );
+
         continue;
       }
 
@@ -689,7 +1028,20 @@ export class ArenaEngine {
       actorFlashOverlays,
       collapseFieldBursts,
       stormCollapseRings,
+      stormCollapseStackTexts,
+      stormCollapseArenaRings,
       screenTintOverlays,
+      rendPulseTileFlashes,
+      sylwenHitOverlays,
+      skullImpactOverlays,
+      sylwenDissipateRings,
+      thornfallCrossZones,
+      velvetVoidChainArcs,
+      velvetVoidChainBorderShimmers,
+      velvetVoidChainHitPulses,
+      velvetUmbralPathTrails,
+      velvetUmbralPathImpacts,
+      velvetDeathStrikeBursts,
       queuedDamageNumbers,
       nextDamageSpawnOrder: spawnOrder,
       damageNumbers: [...nextScene.damageNumbers, ...spawnedDamageNumbers],
@@ -789,7 +1141,18 @@ export class ArenaEngine {
     const sceneWithKnockbackSlides = this.tickMobKnockbackSlides(sceneWithVisuals, safeDelta);
     const sceneWithAdjustedSprites = this.applyMobKnockbackSlidesToSprites(sceneWithKnockbackSlides);
     const sceneWithFx = tickFx(sceneWithAdjustedSprites, safeDelta);
-    const sceneWithAttackFx = this.tickAttackFx(sceneWithFx, safeDelta);
+    const sceneWithRendPulseFlashes = this.tickRendPulseTileFlashes(sceneWithFx, safeDelta);
+    const sceneWithThornfallZones = this.tickThornfallCrossZones(sceneWithRendPulseFlashes, safeDelta);
+    const sceneWithVelvetUmbralTrails = this.tickVelvetUmbralPathTrails(sceneWithThornfallZones, safeDelta);
+    const sceneWithVelvetVoidChainArcs = this.tickVelvetVoidChainArcs(sceneWithVelvetUmbralTrails, safeDelta);
+    const sceneWithVelvetVoidChainShimmers = this.tickVelvetVoidChainBorderShimmers(sceneWithVelvetVoidChainArcs, safeDelta);
+    const sceneWithVelvetVoidChainHitPulses = this.tickVelvetVoidChainHitPulses(sceneWithVelvetVoidChainShimmers, safeDelta);
+    const sceneWithVelvetUmbralImpacts = this.tickVelvetUmbralPathImpacts(sceneWithVelvetVoidChainHitPulses, safeDelta);
+    const sceneWithVelvetDeathStrikeBursts = this.tickVelvetDeathStrikeBursts(sceneWithVelvetUmbralImpacts, safeDelta);
+    const sceneWithSkullImpacts = this.tickSkullImpactOverlays(sceneWithVelvetDeathStrikeBursts, safeDelta);
+    const sceneWithSylwenHitOverlays = this.tickSylwenHitOverlays(sceneWithSkullImpacts, safeDelta);
+    const sceneWithSylwenDissipateRings = this.tickSylwenDissipateRings(sceneWithSylwenHitOverlays, safeDelta);
+    const sceneWithAttackFx = this.tickAttackFx(sceneWithSylwenDissipateRings, safeDelta);
     const sceneWithProjectiles = this.tickProjectiles(sceneWithAttackFx, safeDelta);
     const sceneWithDamageNumbers = this.tickDamageNumbers(sceneWithProjectiles, safeDelta);
     const sceneWithQueuedDamage = this.tickQueuedDamageNumbers(sceneWithDamageNumbers, safeDelta);
@@ -798,7 +1161,9 @@ export class ArenaEngine {
     const sceneWithActorFlashes = this.tickActorFlashOverlays(sceneWithMomentCues, safeDelta);
     const sceneWithCollapseBursts = this.tickCollapseFieldBursts(sceneWithActorFlashes, safeDelta);
     const sceneWithStormRings = this.tickStormCollapseRings(sceneWithCollapseBursts, safeDelta);
-    return this.tickScreenTintOverlays(sceneWithStormRings, safeDelta);
+    const sceneWithStormStackTexts = this.tickStormCollapseStackTexts(sceneWithStormRings, safeDelta);
+    const sceneWithStormArenaRings = this.tickStormCollapseArenaRings(sceneWithStormStackTexts, safeDelta);
+    return this.tickScreenTintOverlays(sceneWithStormArenaRings, safeDelta);
   }
 
   tick(scene: ArenaScene, deltaMs: number): ArenaScene {
@@ -1347,6 +1712,17 @@ export class ArenaEngine {
     };
   }
 
+  private createSkillNameText(text: string, tileX: number, tileY: number): FloatingTextInstance {
+    return {
+      kind: "skill_name",
+      text,
+      tilePos: { x: tileX, y: tileY },
+      startAtMs: 0,
+      elapsedMs: 0,
+      durationMs: 800
+    };
+  }
+
   private resolveAssistCastCalloutProfile(skillId: string): AssistCastCalloutProfile | null {
     return ASSIST_CAST_CALLOUT_PROFILES[skillId] ?? null;
   }
@@ -1389,6 +1765,49 @@ export class ArenaEngine {
     };
   }
 
+  private isMobMeleeHitOnPlayer(
+    event: Extract<ArenaBattleEvent, { type: "attack_fx" }>,
+    scene: ArenaScene,
+    previousScene: ArenaScene,
+    playerActorId: string | null
+  ): boolean {
+    if (event.fxKind !== COMBAT_FX_MELEE_SWING || !playerActorId) {
+      return false;
+    }
+
+    const playerActor = scene.actorsById[playerActorId] ?? previousScene.actorsById[playerActorId];
+    if (!playerActor || playerActor.kind !== "player") {
+      return false;
+    }
+
+    if (event.toTileX !== playerActor.tileX || event.toTileY !== playerActor.tileY) {
+      return false;
+    }
+
+    const sourceActor = this.findActorAtTile(event.fromTileX, event.fromTileY, scene, previousScene);
+    if (!sourceActor || sourceActor.kind !== "mob") {
+      return false;
+    }
+
+    const distance = this.computeChebyshevDistance(event.fromTileX, event.fromTileY, event.toTileX, event.toTileY);
+    return distance <= 1;
+  }
+
+  private findActorAtTile(
+    tileX: number,
+    tileY: number,
+    scene: ArenaScene,
+    previousScene: ArenaScene
+  ): ArenaActorState | null {
+    const fromCurrent = Object.values(scene.actorsById).find((actor) => actor.tileX === tileX && actor.tileY === tileY);
+    if (fromCurrent) {
+      return fromCurrent;
+    }
+
+    const fromPrevious = Object.values(previousScene.actorsById).find((actor) => actor.tileX === tileX && actor.tileY === tileY);
+    return fromPrevious ?? null;
+  }
+
   private toFloatingTextInstance(event: Extract<ArenaBattleEvent, { type: "crit_text" }>): FloatingTextInstance {
     return {
       kind: "crit_text",
@@ -1405,16 +1824,41 @@ export class ArenaEngine {
     scene: ArenaScene,
     startDelayMs = 0
   ): RangedProjectileInstance {
-    const fromPos: TilePos = { x: event.fromTile.x, y: event.fromTile.y };
+    const baseFromPos: TilePos = { x: event.fromTile.x, y: event.fromTile.y };
     const impactPos: TilePos = { x: event.toTile.x, y: event.toTile.y };
+    const fromPos = this.applySilverTempestFollowUpWhisperOffset(baseFromPos, impactPos, event, scene);
     const visualEndPos = event.pierces
-      ? this.computePierceVisualEndTile(fromPos, impactPos, scene.columns, scene.rows)
+      ? this.computePierceVisualEndTile(baseFromPos, impactPos, scene.columns, scene.rows)
       : impactPos;
-    const speedTilesPerSecond = this.normalizeProjectileSpeedTilesPerSecond(scene.rangedConfig?.rangedProjectileSpeedTiles);
-    const impactDistance = this.computeTileDistance(fromPos, impactPos);
-    const totalDistance = this.computeTileDistance(fromPos, visualEndPos);
-    const impactDurationMs = Math.max(1, Math.round((impactDistance / speedTilesPerSecond) * 1000));
-    const totalDurationMs = Math.max(impactDurationMs, Math.round((totalDistance / speedTilesPerSecond) * 1000));
+    const visualStyle = this.resolveProjectileVisualStyle(event.weaponId);
+    let impactDurationMs: number;
+    let totalDurationMs: number;
+    if (visualStyle === "auto_attack_ranged") {
+      const autoAttackDurationMs = this.resolveAutoAttackRangedDurationMs(scene);
+      impactDurationMs = autoAttackDurationMs;
+      totalDurationMs = autoAttackDurationMs;
+    } else if (visualStyle === "sylwen_whisper_shot") {
+      impactDurationMs = SYLWEN_WHISPER_SHOT_PROJECTILE_DURATION_MS;
+      totalDurationMs = SYLWEN_WHISPER_SHOT_PROJECTILE_DURATION_MS;
+    } else if (visualStyle === "sylwen_gale_pierce") {
+      totalDurationMs = SYLWEN_GALE_PIERCE_PROJECTILE_DURATION_MS;
+      const impactDistance = this.computeTileDistance(fromPos, impactPos);
+      const totalDistance = Math.max(0.001, this.computeTileDistance(fromPos, visualEndPos));
+      const impactRatio = Math.max(0, Math.min(1, impactDistance / totalDistance));
+      impactDurationMs = Math.max(1, Math.round(totalDurationMs * impactRatio));
+    } else if (visualStyle === "velvet_death_strike") {
+      impactDurationMs = VELVET_DEATH_STRIKE_PROJECTILE_DURATION_MS;
+      totalDurationMs = VELVET_DEATH_STRIKE_PROJECTILE_DURATION_MS;
+    } else if (visualStyle === "velvet_umbral_path") {
+      impactDurationMs = VELVET_UMBRAL_PATH_PROJECTILE_DURATION_MS;
+      totalDurationMs = VELVET_UMBRAL_PATH_PROJECTILE_DURATION_MS;
+    } else {
+      const speedTilesPerSecond = this.normalizeProjectileSpeedTilesPerSecond(scene.rangedConfig?.rangedProjectileSpeedTiles);
+      const impactDistance = this.computeTileDistance(baseFromPos, impactPos);
+      const totalDistance = this.computeTileDistance(baseFromPos, visualEndPos);
+      impactDurationMs = Math.max(1, Math.round((impactDistance / speedTilesPerSecond) * 1000));
+      totalDurationMs = Math.max(impactDurationMs, Math.round((totalDistance / speedTilesPerSecond) * 1000));
+    }
 
     return {
       weaponId: event.weaponId,
@@ -1423,11 +1867,39 @@ export class ArenaEngine {
       visualEndPos,
       targetActorId: event.targetActorId ?? null,
       pierces: event.pierces,
-      colorHex: this.resolveProjectileColorHex(scene.rangedConfig, event.weaponId),
+      colorHex: this.resolveProjectileColorHex(scene.rangedConfig, event.weaponId, scene),
+      visualStyle,
       startDelayRemainingMs: Math.max(0, Math.round(startDelayMs)),
       elapsedMs: 0,
       impactDurationMs,
       totalDurationMs
+    };
+  }
+
+  private applySilverTempestFollowUpWhisperOffset(
+    baseFromPos: TilePos,
+    impactPos: TilePos,
+    event: Extract<ArenaBattleEvent, { type: "ranged_projectile_fired" }>,
+    scene: ArenaScene
+  ): TilePos {
+    if (!event.isSilverTempestFollowUp || !this.isSylwenWhisperShotSkillId(event.weaponId)) {
+      return baseFromPos;
+    }
+
+    const directionX = impactPos.x - baseFromPos.x;
+    const directionY = impactPos.y - baseFromPos.y;
+    const length = Math.hypot(directionX, directionY);
+    if (length <= 0.0001) {
+      return baseFromPos;
+    }
+
+    const offsetPx = 4;
+    const offsetTiles = offsetPx / Math.max(1, scene.tileSize);
+    const perpendicularX = -directionY / length;
+    const perpendicularY = directionX / length;
+    return {
+      x: baseFromPos.x + (perpendicularX * offsetTiles),
+      y: baseFromPos.y + (perpendicularY * offsetTiles)
     };
   }
 
@@ -1437,13 +1909,400 @@ export class ArenaEngine {
     return event.pierces && !event.targetActorId;
   }
 
-  private resolveProjectileColorHex(rangedConfig: ArenaRangedConfig | undefined, weaponId: string): string {
+  private resolveProjectileColorHex(
+    rangedConfig: ArenaRangedConfig | undefined,
+    weaponId: string,
+    scene?: ArenaScene
+  ): string {
+    if (this.isAutoAttackRangedWeaponId(weaponId)) {
+      const autoAttackElementColor = this.resolveAutoAttackRangedElementColorHex(scene);
+      if (autoAttackElementColor) {
+        return autoAttackElementColor;
+      }
+    }
+
     const mappedColor = rangedConfig?.projectileColorByWeaponId?.[weaponId];
     if (typeof mappedColor === "string" && mappedColor.trim().length > 0) {
       return mappedColor;
     }
 
-    return "#f8fafc";
+    return DEFAULT_PHYSICAL_PROJECTILE_COLOR_HEX;
+  }
+
+  private resolveAutoAttackRangedDurationMs(scene: ArenaScene): number {
+    if (this.isVelvetActiveCharacter(scene)) {
+      return AUTO_ATTACK_RANGED_PROJECTILE_DURATION_VELVET_MS;
+    }
+
+    if (this.isSylwenActiveCharacter(scene)) {
+      return AUTO_ATTACK_RANGED_PROJECTILE_DURATION_SYLWEN_MS;
+    }
+
+    return AUTO_ATTACK_RANGED_PROJECTILE_DURATION_SYLWEN_MS;
+  }
+
+  private isSylwenActiveCharacter(scene: ArenaScene): boolean {
+    const activeCharacterId = this.resolveActiveCharacterId(scene);
+    return activeCharacterId === CHARACTER_ID_SYLWEN || activeCharacterId.includes("sylwen");
+  }
+
+  private isVelvetActiveCharacter(scene: ArenaScene): boolean {
+    const activeCharacterId = this.resolveActiveCharacterId(scene);
+    return activeCharacterId === CHARACTER_ID_VELVET || activeCharacterId.includes("velvet");
+  }
+
+  private resolveActiveCharacterId(scene: ArenaScene): string {
+    const explicit = scene.activeCharacterId?.trim().toLowerCase();
+    if (explicit) {
+      return explicit;
+    }
+
+    const playerActorId = Object.values(scene.actorsById).find((actor) => actor.kind === "player")?.actorId;
+    return playerActorId?.trim().toLowerCase() ?? "";
+  }
+
+  private resolveElementFxStartFrame(scene: ArenaScene): number {
+    const baseFrame = this.resolveElementFxBaseStartFrame(scene);
+    return baseFrame + Math.floor(Math.random() * FX_SPRITE_FRAMES_PER_ROW);
+  }
+
+  private resolveElementFxBaseStartFrame(scene: ArenaScene): number {
+    const activeElement = this.resolveActivePlayerElement(scene);
+    return ELEMENT_FX_ROW_START_BY_ACTIVE_ELEMENT[activeElement] ?? ELEMENT_FX_ROW_START_BY_ACTIVE_ELEMENT["physical"];
+  }
+
+  private resolveActivePlayerElement(scene: ArenaScene): string {
+    const player = Object.values(scene.actorsById).find((actor) => actor.kind === "player");
+    const activeElement = player?.attackElement?.trim().toLowerCase();
+    if (!activeElement) {
+      return "physical";
+    }
+
+    if (activeElement === "fire" || activeElement === "ice" || activeElement === "earth" || activeElement === "energy") {
+      return activeElement;
+    }
+
+    return "physical";
+  }
+
+  private resolveAutoAttackRangedElementColorHex(scene?: ArenaScene): string | null {
+    if (!scene) {
+      return null;
+    }
+
+    const player = Object.values(scene.actorsById).find((actor) => actor.kind === "player");
+    const attackElement = player?.attackElement?.trim().toLowerCase();
+    switch (attackElement) {
+      case "fire":
+        return "#ff9f2d";
+      case "ice":
+        return "#7dd3fc";
+      case "energy":
+        return "#a78bfa";
+      case "earth":
+        return "#166534";
+      case "holy":
+        return "#fde68a";
+      case "shadow":
+        return "#4c1d95";
+      case "physical":
+        return "#ffffff";
+      default:
+        return null;
+    }
+  }
+
+  private isMiraiRendPulseSkillId(skillId: string): boolean {
+    const normalized = skillId.trim().toLowerCase();
+    return normalized === "skill:mirai_rend_pulse" || normalized === "mirai_rend_pulse";
+  }
+
+  private isMiraiDreadSweepSkillId(skillId: string): boolean {
+    const normalized = skillId.trim().toLowerCase();
+    return normalized === MIRAI_DREAD_SWEEP_SKILL_ID ||
+      normalized === "mirai_dread_sweep" ||
+      normalized.includes("mirai_dread_sweep");
+  }
+
+  private isMiraiGraveFangSkillId(skillId: string): boolean {
+    const normalized = skillId.trim().toLowerCase();
+    return normalized === MIRAI_GRAVE_FANG_SKILL_ID ||
+      normalized === "mirai_grave_fang" ||
+      normalized.includes("mirai_grave_fang");
+  }
+
+  private isSylwenWhisperShotSkillId(skillId: string): boolean {
+    const normalized = skillId.trim().toLowerCase();
+    return normalized === SYLWEN_WHISPER_SHOT_SKILL_ID ||
+      normalized === "sylwen_whisper_shot" ||
+      normalized.includes("sylwen_whisper_shot");
+  }
+
+  private isAutoAttackRangedWeaponId(weaponId: string): boolean {
+    const normalized = weaponId.trim().toLowerCase();
+    return normalized === AUTO_ATTACK_RANGED_WEAPON_ID;
+  }
+
+  private isSylwenGalePierceSkillId(skillId: string): boolean {
+    const normalized = skillId.trim().toLowerCase();
+    return normalized === SYLWEN_GALE_PIERCE_SKILL_ID ||
+      normalized === "sylwen_gale_pierce" ||
+      normalized.includes("sylwen_gale_pierce");
+  }
+
+  private isSylwenThornfallSkillId(skillId: string): boolean {
+    const normalized = skillId.trim().toLowerCase();
+    return normalized === SYLWEN_THORNFALL_SKILL_ID ||
+      normalized === "sylwen_thornfall" ||
+      normalized.includes("sylwen_thornfall");
+  }
+
+  private isVelvetVoidChainSkillId(skillId: string): boolean {
+    const normalized = skillId.trim().toLowerCase();
+    return normalized === VELVET_VOID_CHAIN_SKILL_ID ||
+      normalized === "velvet_void_chain" ||
+      normalized.includes("velvet_void_chain");
+  }
+
+  private isVelvetUmbralPathSkillId(skillId: string): boolean {
+    const normalized = skillId.trim().toLowerCase();
+    return normalized === VELVET_UMBRAL_PATH_SKILL_ID ||
+      normalized === "velvet_umbral_path" ||
+      normalized.includes("velvet_umbral_path");
+  }
+
+  private isVelvetDeathStrikeSkillId(skillId: string): boolean {
+    const normalized = skillId.trim().toLowerCase();
+    return normalized === VELVET_DEATH_STRIKE_SKILL_ID ||
+      normalized === "velvet_death_strike" ||
+      normalized.includes("velvet_death_strike");
+  }
+
+  private resolveProjectileVisualStyle(weaponId: string): RangedProjectileInstance["visualStyle"] {
+    if (this.isAutoAttackRangedWeaponId(weaponId)) {
+      return "auto_attack_ranged";
+    }
+
+    if (this.isSylwenWhisperShotSkillId(weaponId)) {
+      return "sylwen_whisper_shot";
+    }
+
+    if (this.isSylwenGalePierceSkillId(weaponId)) {
+      return "sylwen_gale_pierce";
+    }
+
+    if (this.isVelvetUmbralPathSkillId(weaponId)) {
+      return "velvet_umbral_path";
+    }
+
+    if (this.isVelvetDeathStrikeSkillId(weaponId)) {
+      return "velvet_death_strike";
+    }
+
+    return "default";
+  }
+
+  private resolveVelvetUmbralPathTargetTile(scene: ArenaScene, playerTile: TilePos): TilePos | null {
+    const lockedTarget = scene.lockedTargetEntityId ? scene.actorsById[scene.lockedTargetEntityId] : null;
+    if (lockedTarget && lockedTarget.kind === "mob" && lockedTarget.hp > 0) {
+      return { x: lockedTarget.tileX, y: lockedTarget.tileY };
+    }
+
+    const focusedTarget = scene.effectiveTargetEntityId ? scene.actorsById[scene.effectiveTargetEntityId] : null;
+    if (focusedTarget && focusedTarget.kind === "mob" && focusedTarget.hp > 0) {
+      return { x: focusedTarget.tileX, y: focusedTarget.tileY };
+    }
+
+    const nearestMob = Object.values(scene.actorsById)
+      .filter((actor) => actor.kind === "mob" && actor.hp > 0)
+      .sort((left, right) => {
+        const leftDistance = this.computeChebyshevDistance(playerTile.x, playerTile.y, left.tileX, left.tileY);
+        const rightDistance = this.computeChebyshevDistance(playerTile.x, playerTile.y, right.tileX, right.tileY);
+        if (leftDistance !== rightDistance) {
+          return leftDistance - rightDistance;
+        }
+
+        return left.actorId.localeCompare(right.actorId);
+      })[0];
+    if (!nearestMob) {
+      return null;
+    }
+
+    return { x: nearestMob.tileX, y: nearestMob.tileY };
+  }
+
+  private buildUmbralPathTrailTiles(
+    playerTile: TilePos,
+    targetTile: TilePos,
+    columns: number,
+    rows: number
+  ): TilePos[] {
+    const lineTiles = this.buildLineTiles(playerTile, targetTile, columns, rows);
+    if (lineTiles.length === 0) {
+      return [];
+    }
+
+    const tileByKey = new Map<string, TilePos>();
+    const addTile = (x: number, y: number): void => {
+      if (x < 0 || y < 0 || x >= columns || y >= rows) {
+        return;
+      }
+
+      const key = `${x}:${y}`;
+      if (!tileByKey.has(key)) {
+        tileByKey.set(key, { x, y });
+      }
+    };
+
+    for (let index = 0; index < lineTiles.length; index += 1) {
+      const current = lineTiles[index];
+      const previous = index > 0 ? lineTiles[index - 1] : null;
+      const next = index < lineTiles.length - 1 ? lineTiles[index + 1] : null;
+      const directionX = next
+        ? Math.sign(next.x - current.x)
+        : previous
+          ? Math.sign(current.x - previous.x)
+          : Math.sign(targetTile.x - playerTile.x);
+      const directionY = next
+        ? Math.sign(next.y - current.y)
+        : previous
+          ? Math.sign(current.y - previous.y)
+          : Math.sign(targetTile.y - playerTile.y);
+
+      addTile(current.x, current.y);
+      const perpendicularOffsets = this.getUmbralTrailPerpendicularOffsets(directionX, directionY);
+      for (const offset of perpendicularOffsets) {
+        addTile(current.x + offset.dx, current.y + offset.dy);
+      }
+    }
+
+    return [...tileByKey.values()];
+  }
+
+  private buildLineTiles(
+    fromTile: TilePos,
+    toTile: TilePos,
+    columns: number,
+    rows: number
+  ): TilePos[] {
+    let x0 = Math.round(fromTile.x);
+    let y0 = Math.round(fromTile.y);
+    const x1 = Math.round(toTile.x);
+    const y1 = Math.round(toTile.y);
+    const tiles: TilePos[] = [];
+
+    const dx = Math.abs(x1 - x0);
+    const sx = x0 < x1 ? 1 : -1;
+    const dy = -Math.abs(y1 - y0);
+    const sy = y0 < y1 ? 1 : -1;
+    let err = dx + dy;
+    while (true) {
+      if (x0 >= 0 && y0 >= 0 && x0 < columns && y0 < rows) {
+        tiles.push({ x: x0, y: y0 });
+      }
+
+      if (x0 === x1 && y0 === y1) {
+        break;
+      }
+
+      const e2 = 2 * err;
+      if (e2 >= dy) {
+        err += dy;
+        x0 += sx;
+      }
+
+      if (e2 <= dx) {
+        err += dx;
+        y0 += sy;
+      }
+    }
+
+    return tiles;
+  }
+
+  private getUmbralTrailPerpendicularOffsets(
+    directionX: number,
+    directionY: number
+  ): ReadonlyArray<Readonly<{ dx: number; dy: number }>> {
+    if (directionX === 0 && directionY === 0) {
+      return [];
+    }
+
+    if (directionX === 0) {
+      return [{ dx: -1, dy: 0 }, { dx: 1, dy: 0 }];
+    }
+
+    if (directionY === 0) {
+      return [{ dx: 0, dy: -1 }, { dx: 0, dy: 1 }];
+    }
+
+    return [{ dx: directionX, dy: 0 }, { dx: 0, dy: directionY }];
+  }
+
+  private resolveNearestBorderShimmer(
+    tilePos: TilePos,
+    columns: number,
+    rows: number
+  ): { edge: "top" | "right" | "bottom" | "left"; tileIndex: number } | null {
+    if (columns <= 0 || rows <= 0) {
+      return null;
+    }
+
+    const clampedX = Math.max(0, Math.min(columns - 1, Math.round(tilePos.x)));
+    const clampedY = Math.max(0, Math.min(rows - 1, Math.round(tilePos.y)));
+    const distances = [
+      { edge: "top" as const, distance: clampedY, tileIndex: clampedX },
+      { edge: "right" as const, distance: (columns - 1) - clampedX, tileIndex: clampedY },
+      { edge: "bottom" as const, distance: (rows - 1) - clampedY, tileIndex: clampedX },
+      { edge: "left" as const, distance: clampedX, tileIndex: clampedY }
+    ];
+    const nearest = distances.reduce((best, current) =>
+      current.distance < best.distance ? current : best);
+
+    return {
+      edge: nearest.edge,
+      tileIndex: nearest.tileIndex
+    };
+  }
+
+  private computeChebyshevDistance(fromX: number, fromY: number, toX: number, toY: number): number {
+    return Math.max(Math.abs(fromX - toX), Math.abs(fromY - toY));
+  }
+
+  private buildMiraiRendPulseTiles(columns: number, rows: number): TilePos[] {
+    const adjacentOffsets: ReadonlyArray<Readonly<{ dx: number; dy: number }>> = [
+      { dx: -1, dy: -1 }, { dx: 0, dy: -1 }, { dx: 1, dy: -1 },
+      { dx: -1, dy: 0 }, { dx: 1, dy: 0 },
+      { dx: -1, dy: 1 }, { dx: 0, dy: 1 }, { dx: 1, dy: 1 }
+    ];
+    const playerTile = { x: 3, y: 3 };
+    const maxX = Math.max(0, columns - 1);
+    const maxY = Math.max(0, rows - 1);
+
+    return adjacentOffsets
+      .map((offset) => ({
+        x: playerTile.x + offset.dx,
+        y: playerTile.y + offset.dy
+      }))
+      .filter((tile) => tile.x >= 0 && tile.y >= 0 && tile.x <= maxX && tile.y <= maxY);
+  }
+
+  private normalizeAssistCastHitTiles(
+    hitTiles: ReadonlyArray<TilePos> | undefined,
+    columns: number,
+    rows: number
+  ): TilePos[] {
+    if (!Array.isArray(hitTiles) || hitTiles.length === 0) {
+      return [];
+    }
+
+    const clampedTiles = hitTiles
+      .map((tile) => ({
+        x: Math.max(0, Math.min(columns - 1, Math.round(tile.x))),
+        y: Math.max(0, Math.min(rows - 1, Math.round(tile.y)))
+      }))
+      .filter((tile, index, array) => array.findIndex((entry) => entry.x === tile.x && entry.y === tile.y) === index);
+    return clampedTiles;
   }
 
   private normalizeProjectileSpeedTilesPerSecond(value: number | undefined): number {
@@ -1754,10 +2613,15 @@ export class ArenaEngine {
     }
 
     const nextRings = scene.stormCollapseRings
-      .map((ring) => ({
-        ...ring,
-        elapsedMs: ring.elapsedMs + deltaMs
-      }))
+      .map((ring) => {
+        const nextDelay = Math.max(0, ring.delayRemainingMs - deltaMs);
+        const overflowMs = Math.max(0, deltaMs - ring.delayRemainingMs);
+        return {
+          ...ring,
+          delayRemainingMs: nextDelay,
+          elapsedMs: nextDelay > 0 ? ring.elapsedMs : ring.elapsedMs + overflowMs
+        };
+      })
       .filter((ring) =>
         scene.actorsById[ring.actorId] !== undefined &&
         ring.elapsedMs < ring.durationMs);
@@ -1765,6 +2629,54 @@ export class ArenaEngine {
     return {
       ...scene,
       stormCollapseRings: nextRings
+    };
+  }
+
+  private tickStormCollapseStackTexts(scene: ArenaScene, deltaMs: number): ArenaScene {
+    if (scene.stormCollapseStackTexts.length === 0) {
+      return scene;
+    }
+
+    const nextTexts = scene.stormCollapseStackTexts
+      .map((text) => {
+        const nextDelay = Math.max(0, text.delayRemainingMs - deltaMs);
+        const overflowMs = Math.max(0, deltaMs - text.delayRemainingMs);
+        return {
+          ...text,
+          delayRemainingMs: nextDelay,
+          elapsedMs: nextDelay > 0 ? text.elapsedMs : text.elapsedMs + overflowMs
+        };
+      })
+      .filter((text) =>
+        scene.actorsById[text.actorId] !== undefined &&
+        text.elapsedMs < text.durationMs);
+
+    return {
+      ...scene,
+      stormCollapseStackTexts: nextTexts
+    };
+  }
+
+  private tickStormCollapseArenaRings(scene: ArenaScene, deltaMs: number): ArenaScene {
+    if (scene.stormCollapseArenaRings.length === 0) {
+      return scene;
+    }
+
+    const nextRings = scene.stormCollapseArenaRings
+      .map((ring) => {
+        const nextDelay = Math.max(0, ring.delayRemainingMs - deltaMs);
+        const overflowMs = Math.max(0, deltaMs - ring.delayRemainingMs);
+        return {
+          ...ring,
+          delayRemainingMs: nextDelay,
+          elapsedMs: nextDelay > 0 ? ring.elapsedMs : ring.elapsedMs + overflowMs
+        };
+      })
+      .filter((ring) => ring.elapsedMs < ring.durationMs);
+
+    return {
+      ...scene,
+      stormCollapseArenaRings: nextRings
     };
   }
 
@@ -1783,6 +2695,227 @@ export class ArenaEngine {
     return {
       ...scene,
       screenTintOverlays: nextTints
+    };
+  }
+
+  private tickRendPulseTileFlashes(scene: ArenaScene, deltaMs: number): ArenaScene {
+    if (scene.rendPulseTileFlashes.length === 0) {
+      return scene;
+    }
+
+    const nextFlashes = scene.rendPulseTileFlashes
+      .map((overlay) => ({
+        ...overlay,
+        elapsedMs: overlay.elapsedMs + deltaMs
+      }))
+      .filter((overlay) => overlay.elapsedMs < overlay.durationMs);
+
+    return {
+      ...scene,
+      rendPulseTileFlashes: nextFlashes
+    };
+  }
+
+  private tickThornfallCrossZones(scene: ArenaScene, deltaMs: number): ArenaScene {
+    if (scene.thornfallCrossZones.length === 0) {
+      return scene;
+    }
+
+    const nextZones = scene.thornfallCrossZones
+      .map((zone) => ({
+        ...zone,
+        elapsedMs: zone.elapsedMs + deltaMs
+      }))
+      .filter((zone) => zone.elapsedMs < zone.durationMs);
+
+    return {
+      ...scene,
+      thornfallCrossZones: nextZones
+    };
+  }
+
+  private tickVelvetVoidChainArcs(scene: ArenaScene, deltaMs: number): ArenaScene {
+    if (scene.velvetVoidChainArcs.length === 0) {
+      return scene;
+    }
+
+    const nextArcs = scene.velvetVoidChainArcs
+      .map((arc) => ({
+        ...arc,
+        elapsedMs: arc.elapsedMs + deltaMs
+      }))
+      .filter((arc) => arc.elapsedMs < arc.durationMs);
+
+    return {
+      ...scene,
+      velvetVoidChainArcs: nextArcs
+    };
+  }
+
+  private tickVelvetVoidChainBorderShimmers(scene: ArenaScene, deltaMs: number): ArenaScene {
+    const activeShimmers = scene.velvetVoidChainBorderShimmers ?? [];
+    if (activeShimmers.length === 0) {
+      return scene;
+    }
+
+    const nextShimmers = activeShimmers
+      .map((shimmer) => ({
+        ...shimmer,
+        elapsedMs: shimmer.elapsedMs + deltaMs
+      }))
+      .filter((shimmer) => shimmer.elapsedMs < shimmer.durationMs);
+
+    return {
+      ...scene,
+      velvetVoidChainBorderShimmers: nextShimmers
+    };
+  }
+
+  private tickVelvetVoidChainHitPulses(scene: ArenaScene, deltaMs: number): ArenaScene {
+    if (scene.velvetVoidChainHitPulses.length === 0) {
+      return scene;
+    }
+
+    const nextPulses = scene.velvetVoidChainHitPulses
+      .map((pulse) => ({
+        ...pulse,
+        elapsedMs: pulse.elapsedMs + deltaMs
+      }))
+      .filter((pulse) => pulse.elapsedMs < pulse.durationMs);
+
+    return {
+      ...scene,
+      velvetVoidChainHitPulses: nextPulses
+    };
+  }
+
+  private tickVelvetUmbralPathTrails(scene: ArenaScene, deltaMs: number): ArenaScene {
+    if (scene.velvetUmbralPathTrails.length === 0) {
+      return scene;
+    }
+
+    const nextTrails = scene.velvetUmbralPathTrails
+      .map((trail) => ({
+        ...trail,
+        elapsedMs: trail.elapsedMs + deltaMs
+      }))
+      .filter((trail) => trail.elapsedMs < trail.durationMs);
+
+    return {
+      ...scene,
+      velvetUmbralPathTrails: nextTrails
+    };
+  }
+
+  private tickVelvetUmbralPathImpacts(scene: ArenaScene, deltaMs: number): ArenaScene {
+    const activeImpacts = scene.velvetUmbralPathImpacts ?? [];
+    if (activeImpacts.length === 0) {
+      return scene;
+    }
+
+    const nextImpacts = activeImpacts
+      .map((impact) => {
+        const nextDelay = Math.max(0, impact.delayRemainingMs - deltaMs);
+        const overflowMs = Math.max(0, deltaMs - impact.delayRemainingMs);
+        return {
+          ...impact,
+          delayRemainingMs: nextDelay,
+          elapsedMs: nextDelay > 0 ? impact.elapsedMs : impact.elapsedMs + overflowMs
+        };
+      })
+      .filter((impact) => impact.elapsedMs < impact.durationMs);
+
+    return {
+      ...scene,
+      velvetUmbralPathImpacts: nextImpacts
+    };
+  }
+
+  private tickVelvetDeathStrikeBursts(scene: ArenaScene, deltaMs: number): ArenaScene {
+    if (scene.velvetDeathStrikeBursts.length === 0) {
+      return scene;
+    }
+
+    const nextBursts = scene.velvetDeathStrikeBursts
+      .map((burst) => {
+        const nextDelay = Math.max(0, burst.delayRemainingMs - deltaMs);
+        const overflowMs = Math.max(0, deltaMs - burst.delayRemainingMs);
+        return {
+          ...burst,
+          delayRemainingMs: nextDelay,
+          elapsedMs: nextDelay > 0 ? burst.elapsedMs : burst.elapsedMs + overflowMs
+        };
+      })
+      .filter((burst) => burst.elapsedMs < burst.durationMs);
+
+    return {
+      ...scene,
+      velvetDeathStrikeBursts: nextBursts
+    };
+  }
+
+  private tickSkullImpactOverlays(scene: ArenaScene, deltaMs: number): ArenaScene {
+    const activeOverlays = scene.skullImpactOverlays ?? [];
+    if (activeOverlays.length === 0) {
+      return scene;
+    }
+
+    const nextOverlays = activeOverlays
+      .map((overlay) => ({
+        ...overlay,
+        elapsedMs: overlay.elapsedMs + deltaMs
+      }))
+      .filter((overlay) => overlay.elapsedMs < overlay.durationMs);
+
+    return {
+      ...scene,
+      skullImpactOverlays: nextOverlays
+    };
+  }
+
+  private tickSylwenHitOverlays(scene: ArenaScene, deltaMs: number): ArenaScene {
+    if (scene.sylwenHitOverlays.length === 0) {
+      return scene;
+    }
+
+    const nextOverlays = scene.sylwenHitOverlays
+      .map((overlay) => {
+        const nextDelay = Math.max(0, overlay.delayRemainingMs - deltaMs);
+        const overflowMs = Math.max(0, deltaMs - overlay.delayRemainingMs);
+        return {
+          ...overlay,
+          delayRemainingMs: nextDelay,
+          elapsedMs: nextDelay > 0 ? overlay.elapsedMs : overlay.elapsedMs + overflowMs
+        };
+      })
+      .filter((overlay) => overlay.elapsedMs < overlay.durationMs);
+
+    return {
+      ...scene,
+      sylwenHitOverlays: nextOverlays
+    };
+  }
+
+  private tickSylwenDissipateRings(scene: ArenaScene, deltaMs: number): ArenaScene {
+    if (scene.sylwenDissipateRings.length === 0) {
+      return scene;
+    }
+
+    const nextRings = scene.sylwenDissipateRings
+      .map((ring) => {
+        const nextDelay = Math.max(0, ring.delayRemainingMs - deltaMs);
+        const overflowMs = Math.max(0, deltaMs - ring.delayRemainingMs);
+        return {
+          ...ring,
+          delayRemainingMs: nextDelay,
+          elapsedMs: nextDelay > 0 ? ring.elapsedMs : ring.elapsedMs + overflowMs
+        };
+      })
+      .filter((ring) => ring.elapsedMs < ring.durationMs);
+
+    return {
+      ...scene,
+      sylwenDissipateRings: nextRings
     };
   }
 
@@ -1818,6 +2951,24 @@ export class ArenaEngine {
     }
 
     return stacksByActorId;
+  }
+
+  private resolveStormCollapseDamageDelayByActorId(
+    events: ReadonlyArray<ArenaBattleEvent>
+  ): Map<string, number> {
+    const delaysByActorId = new Map<string, number>();
+    const stormEvent = events.find((event): event is Extract<ArenaBattleEvent, { type: "storm_collapse_detonated" }> =>
+      event.type === "storm_collapse_detonated");
+    if (!stormEvent) {
+      return delaysByActorId;
+    }
+
+    for (let index = 0; index < stormEvent.hits.length; index += 1) {
+      const hit = stormEvent.hits[index];
+      delaysByActorId.set(hit.mobId, index * STORM_COLLAPSE_RING_STAGGER_MS);
+    }
+
+    return delaysByActorId;
   }
 
   private computeStormCollapseDamageScale(stacksConsumed: number): number {

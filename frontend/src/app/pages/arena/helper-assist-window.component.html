@@ -11,71 +11,31 @@
     <span>Enabled</span>
   </label>
 
-  <label class="helper-window__row">
-    <input
-      type="checkbox"
-      [checked]="autoHealEnabled"
-      (change)="onAutoHealEnabledChanged($event)"
-      [disabled]="!isRunStarted || !assistEnabled"
-    />
-    <span>Auto Heal</span>
-    <span class="helper-window__value">{{ healAtHpPercent }}%</span>
-  </label>
-  <input
-    type="range"
-    min="1"
-    max="99"
-    step="1"
-    [value]="healAtHpPercent"
-    (input)="onHealThresholdInput($event)"
-    [disabled]="!isRunStarted || !assistEnabled || !autoHealEnabled"
-  />
-
-  <label class="helper-window__row">
-    <input
-      type="checkbox"
-      [checked]="autoGuardEnabled"
-      (change)="onAutoGuardEnabledChanged($event)"
-      [disabled]="!isRunStarted || !assistEnabled"
-    />
-    <span>Auto Guard</span>
-    <span class="helper-window__value">{{ guardAtHpPercent }}%</span>
-  </label>
-  <input
-    type="range"
-    min="1"
-    max="99"
-    step="1"
-    [value]="guardAtHpPercent"
-    (input)="onGuardThresholdInput($event)"
-    [disabled]="!isRunStarted || !assistEnabled || !autoGuardEnabled"
-  />
-
-  <label class="helper-window__row">
-    <input
-      type="checkbox"
-      [checked]="autoOffenseEnabled"
-      (change)="onAutoOffenseEnabledChanged($event)"
-      [disabled]="!isRunStarted || !assistEnabled"
-    />
-    <span>Auto Offense</span>
-  </label>
-
   <div class="helper-window__skills">
-    @for (row of skillRows; track trackSkillRowById($index, row)) {
-      <label
-        [attr.data-skill-family]="row.family"
-        [attr.data-skill-tier]="row.tier"
+    @for (row of manualSkillRows; track trackManualSkillRowByHotkey($index, row)) {
+      <article
+        class="helper-window__skill-row"
+        [class.helper-window__skill-row--ready]="row.isReady"
       >
-        <input
-          type="checkbox"
-          [checked]="autoSkills[row.skillId]"
-          (change)="onAutoSkillChanged(row.skillId, $event)"
-          [disabled]="!isRunStarted || !assistEnabled || !autoOffenseEnabled"
-        />
-        <span class="helper-window__skill-icon">{{ row.iconGlyph }}</span>
-        <span>{{ row.label }}</span>
-      </label>
+        <span class="helper-window__hotkey">{{ row.hotkey }}</span>
+        <div class="helper-window__skill-content">
+          <div class="helper-window__skill-meta">
+            <span class="helper-window__skill-name">{{ row.displayName }}</span>
+            <span class="helper-window__cooldown-label">{{ row.cooldownRemainingLabel }}</span>
+          </div>
+          <div
+            class="helper-window__cooldown-track"
+            role="progressbar"
+            [attr.aria-valuemin]="0"
+            [attr.aria-valuemax]="100"
+            [attr.aria-valuenow]="row.cooldownRemainingPercent"
+          >
+            <span class="helper-window__cooldown-fill" [style.width.%]="row.cooldownRemainingPercent"></span>
+          </div>
+        </div>
+      </article>
+    } @empty {
+      <p class="helper-window__empty">No active kit data.</p>
     }
   </div>
 </section>

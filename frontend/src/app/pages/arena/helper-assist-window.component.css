@@ -1,7 +1,7 @@
 .helper-window {
   display: flex;
   flex-direction: column;
-  gap: 0.42rem;
+  gap: 0.5rem;
   color: #e2e8f0;
   font-size: 0.73rem;
 }
@@ -40,55 +40,98 @@
   height: 14px;
 }
 
-.helper-window__value {
-  margin-left: auto;
-  color: #cbd5e1;
-}
-
-.helper-window input[type="range"] {
-  width: 100%;
-  margin: -0.22rem 0 0.22rem;
-}
-
 .helper-window__skills {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.32rem 0.55rem;
-  margin-top: 0.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.38rem;
+  margin-top: 0.18rem;
 }
 
-.helper-window__skills label {
+.helper-window__skill-row {
   display: flex;
   align-items: center;
-  gap: 0.32rem;
-  padding: 0.18rem 0.24rem;
+  gap: 0.4rem;
+  padding: 0.28rem 0.34rem;
   border: 1px solid #1e293b;
-  border-radius: 0.35rem;
+  border-radius: 0.42rem;
   background: rgba(12, 18, 30, 0.65);
+  transition: border-color 120ms ease, box-shadow 120ms ease, background-color 120ms ease;
 }
 
-.helper-window__skills label[data-skill-family="exori"] {
-  border-color: rgba(249, 115, 22, 0.35);
-  background: rgba(249, 115, 22, 0.08);
+.helper-window__skill-row--ready {
+  border-color: rgba(16, 185, 129, 0.58);
+  background: rgba(4, 47, 46, 0.72);
+  box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.2) inset;
 }
 
-.helper-window__skills label[data-skill-family="ranged"] {
-  border-color: rgba(56, 189, 248, 0.35);
-  background: rgba(56, 189, 248, 0.08);
-}
-
-.helper-window__skills label[data-skill-family="rune"] {
-  border-color: rgba(96, 165, 250, 0.35);
-  background: rgba(96, 165, 250, 0.08);
-}
-
-.helper-window__skill-icon {
-  font-size: 0.56rem;
+.helper-window__hotkey {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.32rem;
+  height: 1.32rem;
+  border-radius: 0.28rem;
+  border: 1px solid #334155;
+  background: rgba(15, 23, 42, 0.9);
+  color: #bae6fd;
+  font-size: 0.64rem;
   font-weight: 700;
-  letter-spacing: 0.04em;
-  color: #e2e8f0;
+  letter-spacing: 0.08em;
 }
 
-.helper-window__skills label[data-skill-tier="mas"] .helper-window__skill-icon {
-  text-shadow: 0 0 8px rgba(168, 85, 247, 0.45);
+.helper-window__skill-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.18rem;
+}
+
+.helper-window__skill-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+}
+
+.helper-window__skill-name {
+  color: #e2e8f0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.helper-window__cooldown-label {
+  color: #94a3b8;
+  font-size: 0.66rem;
+}
+
+.helper-window__skill-row--ready .helper-window__cooldown-label {
+  color: #86efac;
+}
+
+.helper-window__cooldown-track {
+  height: 0.34rem;
+  border-radius: 999px;
+  overflow: hidden;
+  border: 1px solid #1e293b;
+  background: rgba(2, 6, 23, 0.76);
+}
+
+.helper-window__cooldown-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #1d4ed8 0%, #0ea5e9 100%);
+  transition: width 90ms linear;
+}
+
+.helper-window__skill-row--ready .helper-window__cooldown-fill {
+  background: linear-gradient(90deg, #14532d 0%, #16a34a 100%);
+}
+
+.helper-window__empty {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 0.7rem;
 }

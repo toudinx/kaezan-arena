@@ -40,6 +40,28 @@ public sealed partial class InMemoryBattleStore
         state.SilverTempestRemainingMs = 0;
     }
 
+    private static void TickPendingWhisperShotHits(StoredBattle state, List<BattleEventDto> events)
+    {
+        if (state.PendingWhisperShotHits.Count == 0)
+        {
+            return;
+        }
+
+        for (var index = state.PendingWhisperShotHits.Count - 1; index >= 0; index -= 1)
+        {
+            var pendingHit = state.PendingWhisperShotHits[index];
+            var nextDelay = Math.Max(0, pendingHit.DelayRemainingMs - StepDeltaMs);
+            if (nextDelay > 0)
+            {
+                state.PendingWhisperShotHits[index] = pendingHit with { DelayRemainingMs = nextDelay };
+                continue;
+            }
+
+            state.PendingWhisperShotHits.RemoveAt(index);
+            _ = TryResolveDeferredSylwenWhisperShotHit(state, events, pendingHit);
+        }
+    }
+
     private static void TickMobCombatCooldowns(StoredBattle state)
     {
         foreach (var slot in state.MobSlots.Values)
@@ -204,6 +226,10 @@ public sealed partial class InMemoryBattleStore
                                 actor.TileY == decal.TileY)
                             .OrderBy(actor => actor.ActorId, StringComparer.Ordinal)
                             .ToList();
+
+                        System.Console.WriteLine(
+                            $"[ThornfallTick] Tick={state.Tick} Tile=({decal.TileX},{decal.TileY}) " +
+                            $"MobsOnTile={mobsOnTile.Count} RemainingMs={decal.RemainingMs}");
 
                         foreach (var mob in mobsOnTile)
                         {

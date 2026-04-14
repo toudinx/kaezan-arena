@@ -95,6 +95,16 @@ const SKILL_META: readonly SkillMeta[] = [
     aliases: ["weapon:avalanche"]
   },
   {
+    canonicalId: "sylwen_thornfall",
+    label: "Thornfall",
+    iconGlyph: "TF",
+    accentColor: "#22d3ee",
+    family: "ranged",
+    tier: "heavy",
+    description: "Range: Cross - 5 tiles centered on target (N/S/E/W + center). Places a cross-shaped zone of sustained arrow rain centered on the target mob. All mobs within the zone take damage each tick for the duration.",
+    aliases: ["skill:sylwen_thornfall", "thornfall"]
+  },
+  {
     canonicalId: "heal",
     label: "Heal",
     iconGlyph: "HL",

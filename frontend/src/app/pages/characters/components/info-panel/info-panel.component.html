@@ -55,7 +55,7 @@
       <div class="loadout-header">Fixed Kit</div>
       <div class="kit-pills">
         @for (skill of fixedKitSkills; track skill.slotLabel) {
-          <span class="kit-pill">{{ skill.slotLabel }}: {{ skill.displayName }}</span>
+          <span class="kit-pill" [title]="skill.description || ''">{{ skill.slotLabel }}: {{ skill.displayName }}</span>
         }
         @if (!fixedKitSkills.length) {
           <span class="muted">No fixed kit configured.</span>

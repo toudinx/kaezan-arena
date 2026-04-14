@@ -147,10 +147,102 @@ export interface RangedProjectileInstance {
   targetActorId?: string | null;
   pierces: boolean;
   colorHex: string;
+  visualStyle?: RangedProjectileVisualStyle;
   startDelayRemainingMs?: number;
   elapsedMs: number;
   impactDurationMs: number;
   totalDurationMs: number;
+}
+
+export type RangedProjectileVisualStyle =
+  | "default"
+  | "auto_attack_ranged"
+  | "sylwen_whisper_shot"
+  | "sylwen_gale_pierce"
+  | "velvet_umbral_path"
+  | "velvet_death_strike";
+
+export interface SylwenHitOverlay {
+  kind: "whisper_star" | "gale_slash" | "auto_attack_burst" | "auto_attack_orb_ring";
+  tilePos: TilePos;
+  colorHex: string;
+  delayRemainingMs: number;
+  elapsedMs: number;
+  durationMs: number;
+}
+
+export interface SkullImpactOverlay {
+  tilePos: TilePos;
+  elapsedMs: number;
+  durationMs: number;
+}
+
+export interface SylwenDissipateRingOverlay {
+  tilePos: TilePos;
+  colorHex: string;
+  delayRemainingMs: number;
+  elapsedMs: number;
+  durationMs: number;
+  maxRadiusPx: number;
+}
+
+export interface ThornfallCrossZoneOverlay {
+  centerTile: TilePos;
+  crossTiles: TilePos[];
+  colorHex: string;
+  elapsedMs: number;
+  durationMs: number;
+}
+
+export interface VelvetVoidChainArcOverlay {
+  fromPos: TilePos;
+  toPos: TilePos;
+  colorHex: string;
+  elapsedMs: number;
+  durationMs: number;
+}
+
+export interface VelvetVoidChainBorderShimmerOverlay {
+  edge: "top" | "right" | "bottom" | "left";
+  tileIndex: number;
+  colorHex: string;
+  elapsedMs: number;
+  durationMs: number;
+}
+
+export interface VelvetVoidChainHitPulseOverlay {
+  tilePos: TilePos;
+  colorHex: string;
+  elapsedMs: number;
+  durationMs: number;
+  startRadiusPx: number;
+  endRadiusPx: number;
+  lineWidthPx: number;
+}
+
+export interface VelvetUmbralPathTrailOverlay {
+  tiles: TilePos[];
+  centerLineTiles?: TilePos[];
+  colorHex: string;
+  elapsedMs: number;
+  durationMs: number;
+  fadeOutMs: number;
+}
+
+export interface VelvetUmbralPathImpactOverlay {
+  tilePos: TilePos;
+  colorHex: string;
+  delayRemainingMs: number;
+  elapsedMs: number;
+  durationMs: number;
+}
+
+export interface VelvetDeathStrikeBurstOverlay {
+  tilePos: TilePos;
+  colorHex: string;
+  delayRemainingMs: number;
+  elapsedMs: number;
+  durationMs: number;
 }
 
 export interface MobKnockbackSlideInstance {
@@ -162,7 +254,7 @@ export interface MobKnockbackSlideInstance {
 }
 
 export interface FloatingTextInstance {
-  kind: "crit_text" | "combat_callout";
+  kind: "crit_text" | "combat_callout" | "skill_name";
   tone?: "crit" | "elite" | "assist" | "shield_break" | "danger" | "reward" | "headshot" | "silver_tempest";
   text: string;
   tilePos: TilePos;
@@ -298,6 +390,8 @@ export interface ArenaRangedProjectileFiredEvent {
   toTile: TilePos;
   targetActorId?: string | null;
   pierces: boolean;
+  isChainJump?: boolean;
+  isSilverTempestFollowUp?: boolean;
 }
 
 export interface ArenaMobKnockedBackEvent {
@@ -328,6 +422,8 @@ export interface ArenaAssistCastEvent {
   type: "assist_cast";
   skillId: string;
   reason: string;
+  displayName?: string;
+  hitTiles?: TilePos[];
 }
 
 export interface ArenaEliteSpawnedEvent {
@@ -441,6 +537,12 @@ export interface ArenaSilverTempestActivatedEvent {
   durationMs: number;
 }
 
+export interface ArenaThornfallPlacedEvent {
+  type: "thornfall_placed";
+  fanTiles?: TilePos[];
+  crossTiles?: TilePos[];
+}
+
 export type ArenaBattleEvent =
   | ArenaFxSpawnEvent
   | ArenaDamageNumberEvent
@@ -467,7 +569,8 @@ export type ArenaBattleEvent =
   | ArenaImmobilizeAppliedEvent
   | ArenaCollapseFieldActivatedEvent
   | ArenaStormCollapseDetonatedEvent
-  | ArenaSilverTempestActivatedEvent;
+  | ArenaSilverTempestActivatedEvent
+  | ArenaThornfallPlacedEvent;
 
 export interface ActorFlashOverlay {
   actorId: string;
@@ -485,14 +588,48 @@ export interface RadialBurstOverlay {
 
 export interface StormCollapseRingOverlay {
   actorId: string;
+  tilePos: TilePos;
   stacksConsumed: number;
+  colorHex: string;
+  delayRemainingMs: number;
   elapsedMs: number;
   durationMs: number;
+  startRadiusPx: number;
+  endRadiusPx: number;
+  strokeWidthPx: number;
+}
+
+export interface StormCollapseStackTextOverlay {
+  actorId: string;
+  tilePos: TilePos;
+  stacksConsumed: number;
+  delayRemainingMs: number;
+  elapsedMs: number;
+  durationMs: number;
+}
+
+export interface StormCollapseArenaRingOverlay {
+  centerTile: TilePos;
+  colorHex: string;
+  delayRemainingMs: number;
+  elapsedMs: number;
+  durationMs: number;
+  startRadiusPx: number;
+  endRadiusPx: number;
+  strokeWidthPx: number;
+  maxOpacity: number;
 }
 
 export interface ScreenTintOverlay {
   colorHex: string;
   maxOpacity: number;
+  elapsedMs: number;
+  durationMs: number;
+}
+
+export interface RendPulseTileFlashOverlay {
+  tilePos: TilePos;
+  colorHex: string;
   elapsedMs: number;
   durationMs: number;
 }
@@ -506,6 +643,7 @@ export interface ArenaScene {
   columns: number;
   rows: number;
   tileSize: number;
+  activeCharacterId?: string | null;
   playerTile: TilePos;
   effectiveTargetEntityId: string | null;
   lockedTargetEntityId: string | null;
@@ -530,7 +668,20 @@ export interface ArenaScene {
   actorFlashOverlays: ActorFlashOverlay[];
   collapseFieldBursts: RadialBurstOverlay[];
   stormCollapseRings: StormCollapseRingOverlay[];
+  stormCollapseStackTexts: StormCollapseStackTextOverlay[];
+  stormCollapseArenaRings: StormCollapseArenaRingOverlay[];
   screenTintOverlays: ScreenTintOverlay[];
+  rendPulseTileFlashes: RendPulseTileFlashOverlay[];
+  sylwenHitOverlays: SylwenHitOverlay[];
+  skullImpactOverlays?: SkullImpactOverlay[];
+  sylwenDissipateRings: SylwenDissipateRingOverlay[];
+  thornfallCrossZones: ThornfallCrossZoneOverlay[];
+  velvetVoidChainArcs: VelvetVoidChainArcOverlay[];
+  velvetVoidChainBorderShimmers?: VelvetVoidChainBorderShimmerOverlay[];
+  velvetVoidChainHitPulses: VelvetVoidChainHitPulseOverlay[];
+  velvetUmbralPathTrails: VelvetUmbralPathTrailOverlay[];
+  velvetUmbralPathImpacts?: VelvetUmbralPathImpactOverlay[];
+  velvetDeathStrikeBursts: VelvetDeathStrikeBurstOverlay[];
   queuedDamageNumbers: QueuedDamageNumberInstance[];
   nextDamageSpawnOrder: number;
   damageNumbers: DamageNumberInstance[];

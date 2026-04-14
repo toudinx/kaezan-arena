@@ -944,6 +944,44 @@
       "rowCount": 9,
       "frameCount": 10
     },
+    "fx.skill.thornfall_arrow": {
+      "type": "anim_strip_rows",
+      "src": "fx/rpg_effect_all_free/Part 9/448.png",
+      "frameWidth": 64,
+      "frameHeight": 64,
+      "row": 0,
+      "fps": 12,
+      "rowCount": 10,
+      "frameCount": 0
+    },
+    "fx.skill.umbral_flame": {
+      "type": "anim_strip_rows",
+      "src": "fx/rpg_effect_all_free/Part 10/467.png",
+      "frameWidth": 64,
+      "frameHeight": 64,
+      "row": 1,
+      "fps": 12,
+      "rowCount": 10,
+      "frameCount": 0
+    },
+    "fx.skill.death_strike_crystal": {
+      "type": "anim_strip_rows",
+      "src": "fx/rpg_effect_all_free/Part 13/623.png",
+      "frameWidth": 64,
+      "frameHeight": 64,
+      "row": 1,
+      "fps": 12,
+      "rowCount": 10,
+      "frameCount": 0
+    },
+    "fx.projectile.arrow": {
+      "type": "image",
+      "path": "raw/0x72_DungeonTilesetII_v1.7/frames/weapon_arrow.png"
+    },
+    "fx.projectile.skull": {
+      "type": "image",
+      "path": "raw/0x72_DungeonTilesetII_v1.7/frames/skull.png"
+    },
     "fx.hit.small": {
       "type": "alias",
       "assetId": "fx.hit.base"
@@ -1037,7 +1075,12 @@
       "mobBruteCleave": "fx.mob.brute.cleave",
       "mobArcherPowerShot": "fx.mob.archer.power_shot",
       "mobDemonBeam": "fx.mob.demon.beam",
-      "mobShamanStormPulse": "fx.mob.shaman.storm_pulse"
+      "mobShamanStormPulse": "fx.mob.shaman.storm_pulse",
+      "thornfallArrow": "fx.skill.thornfall_arrow",
+      "umbralFlame": "fx.skill.umbral_flame",
+      "deathStrikeCrystal": "fx.skill.death_strike_crystal",
+      "projectileArrow": "fx.projectile.arrow",
+      "projectileSkull": "fx.projectile.skull"
     },
     "tiles": {
       "defaultFloor": "tile.floor.default",

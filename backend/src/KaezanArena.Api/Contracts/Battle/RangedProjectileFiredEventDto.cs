@@ -6,4 +6,5 @@ public sealed record RangedProjectileFiredEventDto(
     TilePos ToTile,
     string? TargetActorId,
     bool Pierces,
-    bool IsChainJump = false) : BattleEventDto;
+    bool IsChainJump = false,
+    bool IsSilverTempestFollowUp = false) : BattleEventDto;

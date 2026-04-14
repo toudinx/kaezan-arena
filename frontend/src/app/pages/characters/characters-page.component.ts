@@ -43,6 +43,7 @@ import {
   PLAYABLE_CHARACTER_OVERVIEW_BY_ID,
   isPlayableCharacterId
 } from "../../shared/characters/playable-characters";
+import { resolveSkillPresentation } from "../../shared/skills/skill-presentation.helpers";
 import type { FixedKitSkillPill } from "./components/info-panel/info-panel.component";
 
 type InfusionTab = "damage" | "resistance";
@@ -208,13 +209,30 @@ export class CharactersPageComponent implements OnInit {
       return [];
     }
 
-    const fixedSkillNames = this.accountStore.catalogs().characterById[char.characterId]?.fixedWeaponNames ?? [];
-    return [
-      { slotLabel: "Skill 1", displayName: fixedSkillNames[0] ?? "-" },
-      { slotLabel: "Skill 2", displayName: fixedSkillNames[1] ?? "-" },
-      { slotLabel: "Skill 3", displayName: fixedSkillNames[2] ?? "-" },
-      { slotLabel: "Ultimate", displayName: fixedSkillNames[3] ?? "Ultimate" }
-    ];
+    const characterCatalog = this.accountStore.catalogs().characterById[char.characterId];
+    const fixedSkillNames = characterCatalog?.fixedWeaponNames ?? [];
+    const fixedSkillIds = characterCatalog?.fixedWeaponIds ?? [];
+    const slots = [
+      { slotLabel: "Skill 1", fallbackDisplayName: "-" },
+      { slotLabel: "Skill 2", fallbackDisplayName: "-" },
+      { slotLabel: "Skill 3", fallbackDisplayName: "-" },
+      { slotLabel: "Ultimate", fallbackDisplayName: "Ultimate" }
+    ] as const;
+
+    return slots.map((slot, index) => {
+      const displayName = fixedSkillNames[index] ?? slot.fallbackDisplayName;
+      const presentation = resolveSkillPresentation({
+        skillId: fixedSkillIds[index] ?? null,
+        displayName
+      });
+      const description = presentation.description.trim();
+
+      return {
+        slotLabel: slot.slotLabel,
+        displayName,
+        description: description.length > 0 ? description : undefined
+      };
+    });
   }
 
   get isSelectedCharacterActive(): boolean {

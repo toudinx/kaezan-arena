@@ -24,6 +24,7 @@ export interface WeaponInfo {
 export interface FixedKitSkillPill {
   slotLabel: string;
   displayName: string;
+  description?: string;
 }
 
 @Component({

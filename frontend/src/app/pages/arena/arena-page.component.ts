@@ -77,7 +77,7 @@ import {
   mapStatusSkillSlots
 } from "./status-skills.helpers";
 import { DockLayoutService, type DockModuleId, type DockModuleState } from "./dock-layout.service";
-import { HelperAssistWindowComponent, type AssistSkillToggleChangedEvent } from "./helper-assist-window.component";
+import { HelperAssistWindowComponent, type ManualKitSkillRow } from "./helper-assist-window.component";
 import {
   RunResultLogger,
   type RunResultFinalizeMetrics
@@ -171,9 +171,14 @@ type ActiveCardPill = Readonly<{
 }>;
 type StepCommand = NonNullable<StepBattleRequest["commands"]>[number];
 type FacingDirection = "up" | "up_right" | "right" | "down_right" | "down" | "down_left" | "left" | "up_left";
+type ManualCastHotkey = "q" | "w" | "e" | "r";
 
 type AssistOffenseMode = "cooldown_spam" | "smart";
 type AssistSkillId = "exori" | "exori_min" | "exori_mas" | "avalanche";
+type ActiveCharacterKit = Readonly<{
+  skillIds: ReadonlyArray<string>;
+  skillDisplayNames: ReadonlyArray<string>;
+}>;
 type LeftTopTabId = "events" | "combat" | "economy";
 type ToolsTabId = "helper" | "bestiary";
 type NarrativeEventType =
@@ -637,20 +642,19 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   private currentCardChoiceLevelContext: CardChoiceLevelContext | null = null;
   assistConfig: ArenaAssistConfig = this.buildDefaultAssistConfig();
   readonly hotkeyGroups: ReadonlyArray<Readonly<{ title: string; entries: ReadonlyArray<string> }>> = [
-    { title: "Facing", entries: ["Arrow keys set facing"] },
+    {
+      title: "Skills",
+      entries: [
+        "Q cast Skill 1",
+        "W cast Skill 2",
+        "E cast Skill 3",
+        "R cast Ultimate"
+      ]
+    },
     { title: "Targeting", entries: ["Left click ground target", "Right click lock target"] },
     {
       title: "UI",
-      entries: [
-        "T toggle AUTO ON/OFF",
-        "Esc toggle Pause modal",
-        "H open Helper tool tab",
-        "B open Bestiary tool tab",
-        "K focus Status panel",
-        "D open Combat analyzer",
-        "L open Economy analyzer",
-        "X open Events feed"
-      ]
+      entries: ["Esc toggle Pause modal"]
     }
   ];
   readonly arenaWindowIds = ARENA_UI_WINDOW_IDS;
@@ -1444,6 +1448,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.activeZoneIndex = this.selectedZoneIndex;
     const initTheme = this.ARENA_TILES[this.selectedArenaId ?? ''] ?? { floorId: 'tile.floor.default', wallId: 'tile.wall.stone' };
     this.scene = this.engine.createTestScene(7, 7, 48, initTheme.floorId, initTheme.wallId);
+    this.syncSceneActiveCharacterId();
     this.activeFxCount = 0;
     await this.loadAccountState();
 
@@ -1495,6 +1500,8 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         this.preloader.preloadAsset("fx.skill.exori"),
         this.preloader.preloadAsset("fx.skill.exori_min"),
         this.preloader.preloadAsset("fx.skill.exori_mas"),
+        this.preloader.preloadAsset("fx.projectile.arrow"),
+        this.preloader.preloadAsset("fx.projectile.skull"),
         this.preloader.preloadAsset("fx.tier.brave"),
         this.preloader.preloadAsset("fx.tier.awakened"),
         this.preloader.preloadAsset("fx.tier.exalted"),
@@ -1578,88 +1585,48 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     }
 
     const normalizedKey = event.key.toLowerCase();
-    if (normalizedKey === "l") {
-      event.preventDefault();
-      if (event.repeat) {
+    switch (normalizedKey) {
+      case "q":
+      case "w":
+      case "e":
+      case "r": {
+        event.preventDefault();
+        if (event.repeat) {
+          return;
+        }
+
+        const skillId = this.resolveManualCastSkillId(normalizedKey as ManualCastHotkey);
+        if (skillId) {
+          this.sendManualCastCommand(skillId);
+        }
         return;
       }
-
-      this.focusLootConsole();
-      return;
-    }
-
-    if (normalizedKey === "t") {
-      event.preventDefault();
-      if (event.repeat) {
+      default:
         return;
-      }
-
-      this.toggleAutoAssist();
-      return;
     }
-
-    if (normalizedKey === "d") {
-      if (!event.repeat) {
-        this.focusDamageConsole();
-      }
-    }
-
-    if (normalizedKey === "x") {
-      if (!event.repeat) {
-        this.focusExpConsole();
-      }
-      return;
-    }
-
-    if (normalizedKey === "h") {
-      event.preventDefault();
-      if (event.repeat) {
-        return;
-      }
-
-      this.setToolsTab("helper");
-      this.focusToolsPanel();
-      return;
-    }
-
-    if (normalizedKey === "b") {
-      event.preventDefault();
-      if (event.repeat) {
-        return;
-      }
-
-      this.setToolsTab("bestiary");
-      this.focusToolsPanel();
-      return;
-    }
-
-    if (normalizedKey === "k") {
-      event.preventDefault();
-      if (event.repeat) {
-        return;
-      }
-
-      this.focusStatusPanel();
-      this.focusRightInfoPane();
-      return;
-    }
-
-    if (event.repeat) {
-      return;
-    }
-
-    const facingDirection = this.toFacingDirectionFromArrowKey(event.key);
-    if (facingDirection) {
-      event.preventDefault();
-      this.setFacing(facingDirection);
-      return;
-    }
-
   }
 
   @HostListener("window:resize")
   onWindowResize(): void {
     this.uiLayoutService.clampAllToViewport();
+  }
+
+  private resolveManualCastSkillId(key: ManualCastHotkey): string | null {
+    const slotIndex = { q: 0, w: 1, e: 2, r: 3 }[key];
+    const kit = this.activeCharacterKit;
+    if (!kit || !kit.skillIds[slotIndex]) {
+      return null;
+    }
+
+    return kit.skillIds[slotIndex];
+  }
+
+  private sendManualCastCommand(skillId: string): void {
+    if (!this.canIssueBattleCommand()) {
+      return;
+    }
+
+    void this.stepBattleSafe(1, [{ type: "cast_skill", skillId }]);
   }
 
   onUiWindowBringToFront(id: string): void {
@@ -1751,14 +1718,6 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
 
   onAssistAutoOffenseEnabledToggle(enabled: boolean): void {
     this.updateAssistConfig({ autoOffenseEnabled: enabled });
-  }
-
-  onAssistAutoSkillToggle(event: AssistSkillToggleChangedEvent): void {
-    const nextAutoSkills = {
-      ...this.assistConfig.autoSkills,
-      [event.skillId]: event.enabled
-    };
-    this.updateAssistConfig({ autoSkills: nextAutoSkills });
   }
 
   setToolsTab(tabId: ToolsTabId): void {
@@ -2174,6 +2133,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     const arenaTheme = this.ARENA_TILES[this.selectedArenaId ?? '']
       ?? { floorId: 'tile.floor.default', wallId: 'tile.wall.stone' };
     this.scene = this.engine.createTestScene(7, 7, 48, arenaTheme.floorId, arenaTheme.wallId);
+    this.syncSceneActiveCharacterId();
 
     if (!this.canvasReady) {
       this.bootPhase = "measuring_canvas";
@@ -2479,6 +2439,48 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     return state.characters[this.selectedCharacterId] ?? null;
   }
 
+  get helperManualSkillRows(): ReadonlyArray<ManualKitSkillRow> {
+    const kit = this.activeCharacterKit;
+    const hotkeys = ["Q", "W", "E", "R"] as const;
+    const skillsById = new Map<string, ArenaSkillState>();
+    for (const skill of this.ui.skills) {
+      skillsById.set(skill.skillId, skill);
+    }
+
+    return hotkeys.map((hotkey, index) => {
+      const skillId = kit?.skillIds[index] ?? "";
+      const state = skillId ? skillsById.get(skillId) : undefined;
+      const cooldownRemainingMs = Math.max(0, state?.cooldownRemainingMs ?? 0);
+      const cooldownTotalMs = Math.max(0, state?.cooldownTotalMs ?? 0);
+      const cooldownRemainingFraction = computeCooldownFraction(cooldownRemainingMs, cooldownTotalMs);
+      const cooldownRemainingPercent = Math.round(cooldownRemainingFraction * 100);
+      const snapshotDisplayName = state?.displayName?.trim() ?? "";
+      const kitDisplayName = kit?.skillDisplayNames[index]?.trim() ?? "";
+      const displayName = snapshotDisplayName.length > 0
+        ? snapshotDisplayName
+        : kitDisplayName.length > 0
+          ? kitDisplayName
+          : `Skill ${index + 1}`;
+      const isReady = skillId.length > 0 && cooldownRemainingMs === 0;
+
+      return {
+        hotkey,
+        skillId,
+        displayName,
+        cooldownRemainingMs,
+        cooldownTotalMs,
+        cooldownRemainingFraction,
+        cooldownRemainingPercent,
+        cooldownRemainingLabel: skillId.length === 0
+          ? "--"
+          : cooldownRemainingMs > 0
+            ? formatCooldownSeconds(cooldownRemainingMs)
+            : "READY",
+        isReady
+      };
+    });
+  }
+
   get selectedCharacterMaterials(): Array<{ itemId: string; quantity: number }> {
     const character = this.selectedCharacter;
     if (!character) {
@@ -2510,6 +2512,30 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         kills: Math.max(0, killsBySpecies[species] ?? 0),
         primalCore: Math.max(0, primalCoreBySpecies[species] ?? 0)
       }));
+  }
+
+  private get activeCharacterKit(): ActiveCharacterKit | null {
+    const characterId =
+      this.selectedCharacterId ||
+      this.accountState?.activeCharacterId ||
+      DEFAULT_PLAYABLE_CHARACTER_ID;
+    const catalogEntry = this.accountStore.catalogs().characterById[characterId];
+    if (!catalogEntry) {
+      return null;
+    }
+
+    const skillIds = (catalogEntry.fixedWeaponIds ?? [])
+      .map((skillId) => skillId.trim())
+      .filter((skillId) => skillId.length > 0);
+    if (skillIds.length < 4) {
+      return null;
+    }
+
+    const skillDisplayNames = (catalogEntry.fixedWeaponNames ?? []).map((name) => name.trim());
+    return {
+      skillIds: skillIds.slice(0, 4),
+      skillDisplayNames: skillDisplayNames.slice(0, 4)
+    };
   }
 
   formatLootEntry(dropEvent: DropEvent): string {
@@ -2896,15 +2922,10 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.updateAssistConfig({ autoSkills: nextAutoSkills });
   }
 
-  private setFacing(dir: FacingDirection): void {
-    if (!this.canIssueBattleCommand()) {
-      return;
-    }
-
-    this.enqueueSetFacing(dir);
-  }
-
-  private async stepBattleSafe(liveStepCount = 1): Promise<void> {
+  private async stepBattleSafe(
+    liveStepCount = 1,
+    immediateCommands: ReadonlyArray<StepCommand> | null = null
+  ): Promise<void> {
     if (
       this.battleRequestInFlight ||
       this.cardChoiceRequestInFlight ||
@@ -2929,8 +2950,19 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     }
 
     const requestTick = this.currentBattleTick;
-    const { commands: commandsToSend, stepCount: replayStepCount } = this.resolveCommandsForNextStepRequest();
-    const effectiveStepCount = this.isReplayInProgress ? replayStepCount : liveStepCount;
+    const commandOverride = immediateCommands ? this.cloneStepCommands(immediateCommands) : null;
+    const replayStepPlan = commandOverride ? { commands: [] as StepCommand[], stepCount: 1 } : this.resolveCommandsForNextStepRequest();
+    const commandsToSend = commandOverride ?? replayStepPlan.commands;
+    const effectiveStepCount = this.isReplayInProgress
+      ? replayStepPlan.stepCount
+      : commandOverride
+        ? 1
+        : liveStepCount;
+    const requestStepCount = commandOverride
+      ? 1
+      : effectiveStepCount > 1
+        ? effectiveStepCount
+        : undefined;
     if (!this.isReplayInProgress) {
       this.appendStepBatchToRecording(requestTick, commandsToSend, effectiveStepCount);
     }
@@ -2943,7 +2975,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       const response = await this.battleApi.stepBattle({
         battleId: this.currentBattleId,
         clientTick: this.currentBattleTick,
-        stepCount: effectiveStepCount > 1 ? effectiveStepCount : undefined,
+        stepCount: requestStepCount,
         commands: commandsToSend
       });
       const battleIdForLoot = response.battleId ?? this.currentBattleId;
@@ -3647,6 +3679,28 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     }
 
     this.scene = this.engine.applyActorStates(this.scene, this.toEngineActors(actors));
+    this.syncSceneActiveCharacterId();
+  }
+
+  private syncSceneActiveCharacterId(): void {
+    if (!this.scene) {
+      return;
+    }
+
+    const preferredCharacterId = (
+      this.selectedCharacterId ||
+      this.accountState?.activeCharacterId ||
+      this.scene.activeCharacterId ||
+      ""
+    ).trim();
+    if (preferredCharacterId.length === 0 || this.scene.activeCharacterId === preferredCharacterId) {
+      return;
+    }
+
+    this.scene = {
+      ...this.scene,
+      activeCharacterId: preferredCharacterId
+    };
   }
 
   private applySkillStates(skills: StartBattleResponse["skills"]): void {
@@ -4208,10 +4262,28 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
           continue;
         }
 
+        const displayName = this.readString(value["displayName"]);
+        const rawHitTiles = Array.isArray(value["hitTiles"])
+          ? value["hitTiles"]
+          : [];
+        const hitTiles: Array<{ x: number; y: number }> = [];
+        for (const entry of rawHitTiles) {
+          const tileRecord = this.readRecord(entry);
+          const tileX = this.readNumber(tileRecord?.["x"]);
+          const tileY = this.readNumber(tileRecord?.["y"]);
+          if (tileX === null || tileY === null) {
+            continue;
+          }
+
+          hitTiles.push({ x: tileX, y: tileY });
+        }
+
         mapped.push({
           type: "assist_cast",
           skillId,
-          reason
+          reason,
+          displayName: displayName ?? undefined,
+          hitTiles: hitTiles.length > 0 ? hitTiles : undefined
         });
         continue;
       }
@@ -4310,6 +4382,8 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         const toY = this.readNumber(toTile?.["y"]);
         const targetActorId = this.readString(value["targetActorId"]);
         const pierces = this.readBoolean(value["pierces"]);
+        const isChainJump = this.readBoolean(value["isChainJump"]);
+        const isSilverTempestFollowUp = this.readBoolean(value["isSilverTempestFollowUp"]);
         if (
           !weaponId ||
           fromX === null ||
@@ -4327,7 +4401,9 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
           fromTile: { x: fromX, y: fromY },
           toTile: { x: toX, y: toY },
           targetActorId: targetActorId ?? undefined,
-          pierces
+          pierces,
+          isChainJump: isChainJump ?? undefined,
+          isSilverTempestFollowUp: isSilverTempestFollowUp ?? undefined
         });
         continue;
       }
@@ -4541,6 +4617,36 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         mapped.push({
           type: "silver_tempest_activated",
           durationMs: Math.max(0, durationMs)
+        });
+        continue;
+      }
+
+      if (eventType === "thornfall_placed") {
+        const rawCrossTiles = Array.isArray(value["crossTiles"])
+          ? value["crossTiles"]
+          : Array.isArray(value["fanTiles"])
+            ? value["fanTiles"]
+          : [];
+        const crossTiles: Array<{ x: number; y: number }> = [];
+        for (const entry of rawCrossTiles) {
+          const tileRecord = this.readRecord(entry);
+          const tileX = this.readNumber(tileRecord?.["x"]);
+          const tileY = this.readNumber(tileRecord?.["y"]);
+          if (tileX === null || tileY === null) {
+            continue;
+          }
+
+          crossTiles.push({ x: tileX, y: tileY });
+        }
+
+        if (crossTiles.length === 0) {
+          continue;
+        }
+
+        mapped.push({
+          type: "thornfall_placed",
+          fanTiles: crossTiles,
+          crossTiles
         });
         continue;
       }
@@ -6051,13 +6157,6 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     };
   }
 
-  private enqueueSetFacing(dir: FacingDirection): void {
-    this.enqueueCommand({
-      type: "set_facing",
-      dir
-    });
-  }
-
   private enqueueInteractPoi(poiId: string): void {
     this.enqueueCommand({
       type: "interact_poi",
@@ -6873,27 +6972,6 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
 
     return null;
   }
-
-  private toFacingDirectionFromArrowKey(key: string): FacingDirection | null {
-    if (key === "ArrowUp") {
-      return "up";
-    }
-
-    if (key === "ArrowDown") {
-      return "down";
-    }
-
-    if (key === "ArrowLeft") {
-      return "left";
-    }
-
-    if (key === "ArrowRight") {
-      return "right";
-    }
-
-    return null;
-  }
-
 
   private isArenaWindowId(value: string): value is ArenaUiWindowId {
     return value === ARENA_UI_WINDOW_IDS.lootFeed ||

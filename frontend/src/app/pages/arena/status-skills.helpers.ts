@@ -83,7 +83,7 @@ export function mapStatusSkillSlots(
       cooldownTotalMs: totalMs,
       cooldownFraction: computeCooldownFraction(remainingMs, totalMs),
       cooldownText,
-      tooltip: buildSkillTooltip(presentation.label, cooldownText, isLocked, false),
+      tooltip: buildSkillTooltip(presentation.label, presentation.description, cooldownText, isLocked, false),
       blockedByGlobalCooldown: blockedByGcd,
       disabled: isLocked || remainingMs > 0 || blockedByGcd,
       isLocked,
@@ -103,7 +103,7 @@ export function buildUltimateSlotViewModel(
   const safeGauge = Math.max(0, Math.min(Math.round(gauge), safeGaugeMax));
   const gaugePercent = Math.round((safeGauge / safeGaugeMax) * 100);
   const cooldownText = ready ? "READY" : `${gaugePercent}%`;
-  const tooltip = buildSkillTooltip("ULTIMATE", cooldownText, false, true, ready, gaugePercent);
+  const tooltip = buildSkillTooltip("ULTIMATE", "", cooldownText, false, true, ready, gaugePercent);
 
   return {
     keyLabel: "4",
@@ -166,6 +166,7 @@ function buildStatusSkillBindings(skillStates: ReadonlyArray<ArenaSkillState>): 
 
 function buildSkillTooltip(
   label: string,
+  description: string,
   cooldownText: string,
   isLocked: boolean,
   isUltimate: boolean,
@@ -183,8 +184,15 @@ function buildSkillTooltip(
     return `Ultimate charge: ${gaugePercent}%`;
   }
 
+  const normalizedDescription = description.trim();
   if (cooldownText.length > 0) {
-    return `${label} - ${cooldownText}`;
+    return normalizedDescription.length > 0
+      ? `${label} - ${normalizedDescription} (${cooldownText})`
+      : `${label} - ${cooldownText}`;
+  }
+
+  if (normalizedDescription.length > 0) {
+    return `${label} - ${normalizedDescription}`;
   }
 
   return `${label} - Ready`;

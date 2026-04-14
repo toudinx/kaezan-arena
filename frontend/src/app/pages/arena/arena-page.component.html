@@ -250,19 +250,8 @@
                 <app-helper-assist-window
                   [isRunStarted]="isRunStarted"
                   [assistEnabled]="assistConfig.enabled"
-                  [autoHealEnabled]="assistConfig.autoHealEnabled"
-                  [healAtHpPercent]="assistConfig.healAtHpPercent"
-                  [autoGuardEnabled]="assistConfig.autoGuardEnabled"
-                  [guardAtHpPercent]="assistConfig.guardAtHpPercent"
-                  [autoOffenseEnabled]="assistConfig.autoOffenseEnabled"
-                  [autoSkills]="assistConfig.autoSkills"
+                  [manualSkillRows]="helperManualSkillRows"
                   (assistEnabledChanged)="onAssistEnabledToggle($event)"
-                  (autoHealEnabledChanged)="onAssistAutoHealEnabledToggle($event)"
-                  (healThresholdChanged)="onAssistHealThresholdChange($event)"
-                  (autoGuardEnabledChanged)="onAssistAutoGuardEnabledToggle($event)"
-                  (guardThresholdChanged)="onAssistGuardThresholdChange($event)"
-                  (autoOffenseEnabledChanged)="onAssistAutoOffenseEnabledToggle($event)"
-                  (autoSkillEnabledChanged)="onAssistAutoSkillToggle($event)"
                 ></app-helper-assist-window>
               </div>
             } @else {

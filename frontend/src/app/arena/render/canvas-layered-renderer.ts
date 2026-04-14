@@ -45,6 +45,7 @@ const FOCUS_COLOR_HEX = "#1D9E75";
 const STUN_COLOR_HEX = "#EF9F27";
 const IMMOBILIZE_COLOR_HEX = "#1D9E75";
 const SILVER_TEMPEST_TRAIL_COLOR_HEX = "#1D9E75";
+const SYLWEN_THORNFALL_FADE_OUT_MS = 500;
 export class CanvasLayeredRenderer {
   private readonly pipeline: RenderLayer[] = ["ground", "groundFx", "actors", "hitFx", "ui"];
   private readonly warnedMissingAssetIds = new Set<string>();
@@ -122,6 +123,9 @@ export class CanvasLayeredRenderer {
             this.drawDecal(scene, viewport, loaded, decal);
           }
 
+          this.drawVelvetUmbralPathTrails(scene, viewport);
+          this.drawThornfallCrossZones(scene, viewport);
+          this.drawRendPulseTileFlashes(scene, viewport);
           this.drawImmobilizeGroundBorders(scene, viewport);
           await this.drawMobTierAuraGroundFx(scene, viewport, imageCache, imageLoader);
         }
@@ -140,6 +144,12 @@ export class CanvasLayeredRenderer {
         }
 
         if (layer === "hitFx") {
+          this.drawVelvetVoidChainArcs(scene, viewport);
+          this.drawVelvetVoidChainBorderShimmers(scene, viewport);
+          this.drawVelvetVoidChainHitPulses(scene, viewport);
+          const projectileArrowAsset = await this.getAsset(imageCache, "fx.projectile.arrow", imageLoader);
+          const skullImpactAsset = await this.getAsset(imageCache, "fx.projectile.skull", imageLoader);
+
           for (const attackFx of scene.attackFxInstances) {
             this.drawAttackFx(scene, viewport, attackFx);
           }
@@ -155,9 +165,16 @@ export class CanvasLayeredRenderer {
               scene,
               viewport.originX,
               viewport.originY,
-              projectile
+              projectile,
+              { projectileArrowSprite: projectileArrowAsset?.image ?? null }
             );
           }
+
+          this.drawVelvetUmbralPathImpacts(scene, viewport);
+          this.drawVelvetDeathStrikeBursts(scene, viewport);
+          this.drawSylwenHitOverlays(scene, viewport);
+          this.drawSkullImpactOverlays(scene, viewport, skullImpactAsset?.image ?? null);
+          this.drawSylwenDissipateRings(scene, viewport);
         }
 
         continue;
@@ -170,6 +187,8 @@ export class CanvasLayeredRenderer {
         this.drawSilverTempestPlayerGlow(scene, viewport);
         this.drawCollapseFieldBursts(scene, viewport);
         this.drawStormCollapseRings(scene, viewport);
+        this.drawStormCollapseStackTexts(scene, viewport);
+        this.drawStormCollapseArenaRings(scene, viewport);
         this.drawMobReadabilityMarkers(scene, viewport);
         this.drawStunRings(scene, viewport);
         this.drawThreatTargetMarker(scene, viewport);
@@ -182,7 +201,6 @@ export class CanvasLayeredRenderer {
         this.drawMomentCues(scene, viewport);
         this.drawDamageNumbers(scene, viewport);
         this.drawFloatingTexts(scene, viewport);
-        this.drawStormCollapseScreenTints(scene, viewport);
       }
     }
   }
@@ -334,6 +352,602 @@ export class CanvasLayeredRenderer {
     this.context.globalAlpha = computeDecalFadeAlpha(decal.remainingMs, decal.totalMs);
     this.drawResolvedAsset(loaded, x, y, size, size);
     this.context.restore();
+  }
+
+  private drawRendPulseTileFlashes(scene: ArenaScene, viewport: RenderViewport): void {
+    if (scene.rendPulseTileFlashes.length === 0) {
+      return;
+    }
+
+    for (const flash of scene.rendPulseTileFlashes) {
+      const life = Math.max(0, Math.min(1, flash.elapsedMs / flash.durationMs));
+      const alpha = Math.max(0, 0.6 * (1 - life));
+      if (alpha <= 0) {
+        continue;
+      }
+
+      const x = viewport.originX + flash.tilePos.x * scene.tileSize;
+      const y = viewport.originY + flash.tilePos.y * scene.tileSize;
+      this.context.save();
+      this.context.fillStyle = this.hexToRgba(flash.colorHex, alpha);
+      this.context.fillRect(x, y, scene.tileSize, scene.tileSize);
+      this.context.restore();
+    }
+  }
+
+  private drawThornfallCrossZones(scene: ArenaScene, viewport: RenderViewport): void {
+    if (scene.thornfallCrossZones.length === 0) {
+      return;
+    }
+
+    for (const zone of scene.thornfallCrossZones) {
+      const fadeStartMs = Math.max(0, zone.durationMs - SYLWEN_THORNFALL_FADE_OUT_MS);
+      const fadeMultiplier = zone.elapsedMs < fadeStartMs
+        ? 1
+        : Math.max(0, 1 - ((zone.elapsedMs - fadeStartMs) / Math.max(1, SYLWEN_THORNFALL_FADE_OUT_MS)));
+      if (fadeMultiplier <= 0) {
+        continue;
+      }
+
+      this.context.save();
+      this.context.strokeStyle = this.hexToRgba(zone.colorHex, 0.7 * fadeMultiplier);
+      this.context.lineWidth = 1.5;
+      this.context.setLineDash([scene.tileSize * 0.08, scene.tileSize * 0.06]);
+      this.context.beginPath();
+      this.traceTileSetPerimeterPath(scene, viewport, zone.crossTiles);
+      this.context.stroke();
+      this.context.setLineDash([]);
+      this.context.restore();
+    }
+  }
+
+  private drawVelvetUmbralPathTrails(scene: ArenaScene, viewport: RenderViewport): void {
+    if (scene.velvetUmbralPathTrails.length === 0) {
+      return;
+    }
+
+    for (const trail of scene.velvetUmbralPathTrails) {
+      const fadeStartMs = Math.max(0, trail.durationMs - trail.fadeOutMs);
+      const fadeMultiplier = trail.elapsedMs < fadeStartMs
+        ? 1
+        : Math.max(0, 1 - ((trail.elapsedMs - fadeStartMs) / Math.max(1, trail.fadeOutMs)));
+      if (fadeMultiplier <= 0) {
+        continue;
+      }
+
+      this.context.save();
+      this.context.strokeStyle = this.hexToRgba(trail.colorHex, 0.9 * fadeMultiplier);
+      this.context.lineWidth = 2;
+      this.drawTileSetPerimeter(scene, viewport, trail.tiles);
+
+      const centerLineTiles = trail.centerLineTiles ?? [];
+      if (centerLineTiles.length > 1) {
+        this.context.strokeStyle = this.hexToRgba(trail.colorHex, 0.6 * fadeMultiplier);
+        this.context.lineWidth = 1.5;
+        this.context.lineCap = "round";
+        this.context.beginPath();
+        for (let index = 0; index < centerLineTiles.length; index += 1) {
+          const tile = centerLineTiles[index];
+          const lineX = viewport.originX + (tile.x + 0.5) * scene.tileSize;
+          const lineY = viewport.originY + (tile.y + 0.5) * scene.tileSize;
+          if (index === 0) {
+            this.context.moveTo(lineX, lineY);
+          } else {
+            this.context.lineTo(lineX, lineY);
+          }
+        }
+        this.context.stroke();
+      }
+      this.context.restore();
+    }
+  }
+
+  private drawTileSetPerimeter(scene: ArenaScene, viewport: RenderViewport, tiles: ReadonlyArray<{ x: number; y: number }>): void {
+    if (tiles.length === 0) {
+      return;
+    }
+
+    const tileSet = new Set<string>();
+    for (const tile of tiles) {
+      tileSet.add(`${tile.x}:${tile.y}`);
+    }
+
+    for (const tile of tiles) {
+      const tileX = tile.x;
+      const tileY = tile.y;
+      const x = viewport.originX + tileX * scene.tileSize;
+      const y = viewport.originY + tileY * scene.tileSize;
+      const x2 = x + scene.tileSize;
+      const y2 = y + scene.tileSize;
+
+      if (!tileSet.has(`${tileX}:${tileY - 1}`)) {
+        this.context.beginPath();
+        this.context.moveTo(x, y);
+        this.context.lineTo(x2, y);
+        this.context.stroke();
+      }
+
+      if (!tileSet.has(`${tileX + 1}:${tileY}`)) {
+        this.context.beginPath();
+        this.context.moveTo(x2, y);
+        this.context.lineTo(x2, y2);
+        this.context.stroke();
+      }
+
+      if (!tileSet.has(`${tileX}:${tileY + 1}`)) {
+        this.context.beginPath();
+        this.context.moveTo(x, y2);
+        this.context.lineTo(x2, y2);
+        this.context.stroke();
+      }
+
+      if (!tileSet.has(`${tileX - 1}:${tileY}`)) {
+        this.context.beginPath();
+        this.context.moveTo(x, y);
+        this.context.lineTo(x, y2);
+        this.context.stroke();
+      }
+    }
+  }
+
+  private traceTileSetPerimeterPath(
+    scene: ArenaScene,
+    viewport: RenderViewport,
+    tiles: ReadonlyArray<{ x: number; y: number }>
+  ): void {
+    if (tiles.length === 0) {
+      return;
+    }
+
+    type Edge = {
+      startX: number;
+      startY: number;
+      endX: number;
+      endY: number;
+    };
+
+    const tileSet = new Set<string>();
+    for (const tile of tiles) {
+      tileSet.add(`${tile.x}:${tile.y}`);
+    }
+
+    const edges: Edge[] = [];
+    for (const tile of tiles) {
+      const tileX = tile.x;
+      const tileY = tile.y;
+      if (!tileSet.has(`${tileX}:${tileY - 1}`)) {
+        edges.push({ startX: tileX, startY: tileY, endX: tileX + 1, endY: tileY });
+      }
+
+      if (!tileSet.has(`${tileX + 1}:${tileY}`)) {
+        edges.push({ startX: tileX + 1, startY: tileY, endX: tileX + 1, endY: tileY + 1 });
+      }
+
+      if (!tileSet.has(`${tileX}:${tileY + 1}`)) {
+        edges.push({ startX: tileX + 1, startY: tileY + 1, endX: tileX, endY: tileY + 1 });
+      }
+
+      if (!tileSet.has(`${tileX - 1}:${tileY}`)) {
+        edges.push({ startX: tileX, startY: tileY + 1, endX: tileX, endY: tileY });
+      }
+    }
+
+    const edgesByStart = new Map<string, number[]>();
+    for (let index = 0; index < edges.length; index += 1) {
+      const edge = edges[index];
+      const key = `${edge.startX}:${edge.startY}`;
+      const list = edgesByStart.get(key);
+      if (list) {
+        list.push(index);
+      } else {
+        edgesByStart.set(key, [index]);
+      }
+    }
+
+    const usedEdgeIndexes = new Set<number>();
+    for (let edgeIndex = 0; edgeIndex < edges.length; edgeIndex += 1) {
+      if (usedEdgeIndexes.has(edgeIndex)) {
+        continue;
+      }
+
+      const firstEdge = edges[edgeIndex];
+      usedEdgeIndexes.add(edgeIndex);
+
+      this.context.moveTo(
+        viewport.originX + firstEdge.startX * scene.tileSize,
+        viewport.originY + firstEdge.startY * scene.tileSize
+      );
+      this.context.lineTo(
+        viewport.originX + firstEdge.endX * scene.tileSize,
+        viewport.originY + firstEdge.endY * scene.tileSize
+      );
+
+      const firstKey = `${firstEdge.startX}:${firstEdge.startY}`;
+      let nextKey = `${firstEdge.endX}:${firstEdge.endY}`;
+      while (nextKey !== firstKey) {
+        const outgoing = edgesByStart.get(nextKey) ?? [];
+        const nextEdgeIndex = outgoing.find((candidateIndex) => !usedEdgeIndexes.has(candidateIndex));
+        if (nextEdgeIndex === undefined) {
+          break;
+        }
+
+        usedEdgeIndexes.add(nextEdgeIndex);
+        const nextEdge = edges[nextEdgeIndex];
+        this.context.lineTo(
+          viewport.originX + nextEdge.endX * scene.tileSize,
+          viewport.originY + nextEdge.endY * scene.tileSize
+        );
+        nextKey = `${nextEdge.endX}:${nextEdge.endY}`;
+      }
+      this.context.closePath();
+    }
+  }
+
+  private drawVelvetVoidChainArcs(scene: ArenaScene, viewport: RenderViewport): void {
+    if (scene.velvetVoidChainArcs.length === 0) {
+      return;
+    }
+
+    for (const arc of scene.velvetVoidChainArcs) {
+      const life = Math.max(0, Math.min(1, arc.elapsedMs / arc.durationMs));
+      const alpha = Math.max(0, 1 - life);
+      if (alpha <= 0) {
+        continue;
+      }
+
+      const sourceX = viewport.originX + (arc.fromPos.x + 0.5) * scene.tileSize;
+      const sourceY = viewport.originY + (arc.fromPos.y + 0.5) * scene.tileSize;
+      const targetX = viewport.originX + (arc.toPos.x + 0.5) * scene.tileSize;
+      const targetY = viewport.originY + (arc.toPos.y + 0.5) * scene.tileSize;
+      const deltaX = targetX - sourceX;
+      const deltaY = targetY - sourceY;
+      const distance = Math.max(0.001, Math.hypot(deltaX, deltaY));
+      const normalX = -deltaY / distance;
+      const normalY = deltaX / distance;
+      const mid = {
+        x: (sourceX + targetX) / 2,
+        y: (sourceY + targetY) / 2
+      };
+      const perp = {
+        x: -(targetY - sourceY) * 0.35,
+        y: (targetX - sourceX) * 0.35
+      };
+      const control = { x: mid.x + perp.x, y: mid.y + perp.y };
+
+      this.context.save();
+      this.context.strokeStyle = this.hexToRgba(arc.colorHex, alpha);
+      this.context.lineWidth = 5;
+      this.context.beginPath();
+      this.context.moveTo(sourceX, sourceY);
+      this.context.quadraticCurveTo(control.x, control.y, targetX, targetY);
+      this.context.stroke();
+
+      this.context.strokeStyle = this.hexToRgba(arc.colorHex, alpha * 0.4);
+      this.context.lineWidth = 2;
+      this.context.beginPath();
+      this.context.moveTo(sourceX + (normalX * 3), sourceY + (normalY * 3));
+      this.context.quadraticCurveTo(control.x + (normalX * 3), control.y + (normalY * 3), targetX + (normalX * 3), targetY + (normalY * 3));
+      this.context.stroke();
+      this.context.restore();
+    }
+  }
+
+  private drawVelvetVoidChainBorderShimmers(scene: ArenaScene, viewport: RenderViewport): void {
+    const shimmers = scene.velvetVoidChainBorderShimmers ?? [];
+    if (shimmers.length === 0) {
+      return;
+    }
+
+    for (const shimmer of shimmers) {
+      const life = Math.max(0, Math.min(1, shimmer.elapsedMs / shimmer.durationMs));
+      const alpha = Math.max(0, 0.2 * (1 - life));
+      if (alpha <= 0) {
+        continue;
+      }
+
+      this.context.save();
+      this.context.strokeStyle = this.hexToRgba(shimmer.colorHex, alpha);
+      this.context.lineWidth = 1.25;
+      this.context.beginPath();
+      if (shimmer.edge === "top") {
+        const y = viewport.originY + 0.5;
+        const x1 = viewport.originX + (shimmer.tileIndex * scene.tileSize);
+        const x2 = x1 + scene.tileSize;
+        this.context.moveTo(x1, y);
+        this.context.lineTo(x2, y);
+      } else if (shimmer.edge === "bottom") {
+        const y = viewport.originY + (scene.rows * scene.tileSize) - 0.5;
+        const x1 = viewport.originX + (shimmer.tileIndex * scene.tileSize);
+        const x2 = x1 + scene.tileSize;
+        this.context.moveTo(x1, y);
+        this.context.lineTo(x2, y);
+      } else if (shimmer.edge === "left") {
+        const x = viewport.originX + 0.5;
+        const y1 = viewport.originY + (shimmer.tileIndex * scene.tileSize);
+        const y2 = y1 + scene.tileSize;
+        this.context.moveTo(x, y1);
+        this.context.lineTo(x, y2);
+      } else {
+        const x = viewport.originX + (scene.columns * scene.tileSize) - 0.5;
+        const y1 = viewport.originY + (shimmer.tileIndex * scene.tileSize);
+        const y2 = y1 + scene.tileSize;
+        this.context.moveTo(x, y1);
+        this.context.lineTo(x, y2);
+      }
+      this.context.stroke();
+      this.context.restore();
+    }
+  }
+
+  private drawVelvetVoidChainHitPulses(scene: ArenaScene, viewport: RenderViewport): void {
+    if (scene.velvetVoidChainHitPulses.length === 0) {
+      return;
+    }
+
+    for (const pulse of scene.velvetVoidChainHitPulses) {
+      const life = Math.max(0, Math.min(1, pulse.elapsedMs / pulse.durationMs));
+      const alpha = Math.max(0, 1 - life);
+      if (alpha <= 0) {
+        continue;
+      }
+
+      const radius = pulse.startRadiusPx + ((pulse.endRadiusPx - pulse.startRadiusPx) * life);
+      const centerX = viewport.originX + (pulse.tilePos.x + 0.5) * scene.tileSize;
+      const centerY = viewport.originY + (pulse.tilePos.y + 0.5) * scene.tileSize;
+
+      this.context.save();
+      const innerFlashLife = Math.max(0, Math.min(1, pulse.elapsedMs / 150));
+      if (innerFlashLife < 1) {
+        this.context.fillStyle = this.hexToRgba(pulse.colorHex, 0.4 * (1 - innerFlashLife));
+        this.context.beginPath();
+        this.context.arc(centerX, centerY, 12, 0, Math.PI * 2);
+        this.context.fill();
+      }
+      this.context.strokeStyle = this.hexToRgba(pulse.colorHex, alpha);
+      this.context.lineWidth = pulse.lineWidthPx;
+      this.context.beginPath();
+      this.context.arc(centerX, centerY, radius, 0, Math.PI * 2);
+      this.context.stroke();
+      this.context.restore();
+    }
+  }
+
+  private drawVelvetUmbralPathImpacts(scene: ArenaScene, viewport: RenderViewport): void {
+    const impacts = scene.velvetUmbralPathImpacts ?? [];
+    if (impacts.length === 0) {
+      return;
+    }
+
+    for (const impact of impacts) {
+      if (impact.delayRemainingMs > 0) {
+        continue;
+      }
+
+      const life = Math.max(0, Math.min(1, impact.elapsedMs / impact.durationMs));
+      const alpha = Math.max(0, 1 - life);
+      if (alpha <= 0) {
+        continue;
+      }
+
+      const centerX = viewport.originX + (impact.tilePos.x + 0.5) * scene.tileSize;
+      const centerY = viewport.originY + (impact.tilePos.y + 0.5) * scene.tileSize;
+      const radius = 40 * life;
+      this.context.save();
+      this.context.strokeStyle = this.hexToRgba(impact.colorHex, alpha);
+      this.context.lineWidth = 3;
+      this.context.beginPath();
+      this.context.arc(centerX, centerY, radius, 0, Math.PI * 2);
+      this.context.stroke();
+
+      this.context.lineCap = "round";
+      this.context.lineWidth = 2;
+      for (let index = 0; index < 6; index += 1) {
+        const angle = (Math.PI * 2 * index) / 6;
+        const endX = centerX + (Math.cos(angle) * 20);
+        const endY = centerY + (Math.sin(angle) * 20);
+        this.context.beginPath();
+        this.context.moveTo(centerX, centerY);
+        this.context.lineTo(endX, endY);
+        this.context.stroke();
+      }
+      this.context.restore();
+    }
+  }
+
+  private drawVelvetDeathStrikeBursts(scene: ArenaScene, viewport: RenderViewport): void {
+    if (scene.velvetDeathStrikeBursts.length === 0) {
+      return;
+    }
+
+    for (const burst of scene.velvetDeathStrikeBursts) {
+      if (burst.delayRemainingMs > 0) {
+        continue;
+      }
+
+      const life = Math.max(0, Math.min(1, burst.elapsedMs / burst.durationMs));
+      const alpha = Math.max(0, 1 - life);
+      if (alpha <= 0) {
+        continue;
+      }
+
+      const centerX = viewport.originX + (burst.tilePos.x + 0.5) * scene.tileSize;
+      const centerY = viewport.originY + (burst.tilePos.y + 0.5) * scene.tileSize;
+
+      this.context.save();
+      const impactPulseDurationMs = 250;
+      const impactPulseLife = Math.max(0, Math.min(1, burst.elapsedMs / impactPulseDurationMs));
+      if (impactPulseLife < 1) {
+        const impactPulseAlpha = 0.2 * (1 - impactPulseLife);
+        this.context.fillStyle = this.hexToRgba(burst.colorHex, impactPulseAlpha);
+        this.context.beginPath();
+        this.context.arc(centerX, centerY, 20 * impactPulseLife, 0, Math.PI * 2);
+        this.context.fill();
+      }
+
+      this.context.strokeStyle = this.hexToRgba(burst.colorHex, alpha);
+      this.context.lineWidth = 2.5;
+      this.context.lineCap = "round";
+      for (let index = 0; index < 8; index += 1) {
+        const angle = (Math.PI * 2 * index) / 8;
+        const endX = centerX + Math.cos(angle) * 24;
+        const endY = centerY + Math.sin(angle) * 24;
+        this.context.beginPath();
+        this.context.moveTo(centerX, centerY);
+        this.context.lineTo(endX, endY);
+        this.context.stroke();
+      }
+      this.context.restore();
+    }
+  }
+
+  private drawSylwenHitOverlays(scene: ArenaScene, viewport: RenderViewport): void {
+    if (scene.sylwenHitOverlays.length === 0) {
+      return;
+    }
+
+    for (const overlay of scene.sylwenHitOverlays) {
+      if (overlay.delayRemainingMs > 0) {
+        continue;
+      }
+
+      const life = Math.max(0, Math.min(1, overlay.elapsedMs / overlay.durationMs));
+      const alpha = Math.max(0, 1 - life);
+      if (alpha <= 0) {
+        continue;
+      }
+
+      const centerX = viewport.originX + (overlay.tilePos.x + 0.5) * scene.tileSize;
+      const centerY = viewport.originY + (overlay.tilePos.y + 0.5) * scene.tileSize;
+      this.context.save();
+      this.context.strokeStyle = this.hexToRgba(overlay.colorHex, alpha);
+      this.context.lineCap = "round";
+      if (overlay.kind === "whisper_star") {
+        const flashLife = Math.max(0, Math.min(1, overlay.elapsedMs / 150));
+        if (flashLife < 1) {
+          this.context.fillStyle = this.hexToRgba(overlay.colorHex, 0.5 * (1 - flashLife));
+          this.context.beginPath();
+          this.context.arc(centerX, centerY, scene.tileSize * 0.15, 0, Math.PI * 2);
+          this.context.fill();
+        }
+
+        this.context.lineWidth = 2;
+        for (let index = 0; index < 6; index += 1) {
+          const angle = (Math.PI * 2 * index) / 6;
+          const endX = centerX + (Math.cos(angle) * scene.tileSize * 0.2);
+          const endY = centerY + (Math.sin(angle) * scene.tileSize * 0.2);
+          this.context.beginPath();
+          this.context.moveTo(centerX, centerY);
+          this.context.lineTo(endX, endY);
+          this.context.stroke();
+        }
+      } else if (overlay.kind === "gale_slash") {
+        const slashHalfLength = scene.tileSize * 0.4;
+        this.context.lineWidth = 3;
+        this.context.beginPath();
+        this.context.moveTo(centerX - slashHalfLength, centerY - slashHalfLength);
+        this.context.lineTo(centerX + slashHalfLength, centerY + slashHalfLength);
+        this.context.stroke();
+        this.context.beginPath();
+        this.context.moveTo(centerX - slashHalfLength, centerY + slashHalfLength);
+        this.context.lineTo(centerX + slashHalfLength, centerY - slashHalfLength);
+        this.context.stroke();
+      } else if (overlay.kind === "auto_attack_burst") {
+        this.context.lineWidth = Math.max(1, scene.tileSize * (1.25 / 48));
+        for (let index = 0; index < 4; index += 1) {
+          const angle = (Math.PI * 2 * index) / 4;
+          const endX = centerX + (Math.cos(angle) * scene.tileSize * 0.12);
+          const endY = centerY + (Math.sin(angle) * scene.tileSize * 0.12);
+          this.context.beginPath();
+          this.context.moveTo(centerX, centerY);
+          this.context.lineTo(endX, endY);
+          this.context.stroke();
+        }
+      } else if (overlay.kind === "auto_attack_orb_ring") {
+        const radius = scene.tileSize * 0.3 * life;
+        this.context.lineWidth = Math.max(1, scene.tileSize * (2 / 48));
+        this.context.beginPath();
+        this.context.arc(centerX, centerY, radius, 0, Math.PI * 2);
+        this.context.stroke();
+      }
+
+      this.context.restore();
+    }
+  }
+
+  private drawSkullImpactOverlays(
+    scene: ArenaScene,
+    viewport: RenderViewport,
+    skullSprite: HTMLImageElement | null
+  ): void {
+    if (!skullSprite || (scene.skullImpactOverlays?.length ?? 0) === 0) {
+      return;
+    }
+
+    const overlays = scene.skullImpactOverlays ?? [];
+    for (const overlay of overlays) {
+      const life = Math.max(0, Math.min(1, overlay.elapsedMs / overlay.durationMs));
+      const alpha = Math.max(0, 1 - life);
+      if (alpha <= 0) {
+        continue;
+      }
+
+      const centerX = viewport.originX + (overlay.tilePos.x + 0.5) * scene.tileSize;
+      const centerY = viewport.originY + (overlay.tilePos.y + 0.5) * scene.tileSize;
+      const scale = (scene.tileSize * 0.5) / Math.max(1, skullSprite.height);
+      const width = skullSprite.width * scale;
+      const height = skullSprite.height * scale;
+
+      this.context.save();
+      this.context.globalAlpha = alpha;
+      this.context.drawImage(skullSprite, centerX - (width / 2), centerY - (height / 2), width, height);
+      this.context.restore();
+    }
+  }
+
+  private drawSylwenDissipateRings(scene: ArenaScene, viewport: RenderViewport): void {
+    if (scene.sylwenDissipateRings.length === 0) {
+      return;
+    }
+
+    for (const ring of scene.sylwenDissipateRings) {
+      if (ring.delayRemainingMs > 0) {
+        continue;
+      }
+
+      const life = Math.max(0, Math.min(1, ring.elapsedMs / ring.durationMs));
+      const alpha = Math.max(0, 0.5 * (1 - life));
+      if (alpha <= 0) {
+        continue;
+      }
+
+      const radius = ring.maxRadiusPx * life;
+      const centerX = viewport.originX + (ring.tilePos.x + 0.5) * scene.tileSize;
+      const centerY = viewport.originY + (ring.tilePos.y + 0.5) * scene.tileSize;
+      this.context.save();
+      this.context.strokeStyle = this.hexToRgba(ring.colorHex, Math.max(0, 1 - life));
+      this.context.lineWidth = 2;
+      this.context.beginPath();
+      this.context.arc(centerX, centerY, radius, 0, Math.PI * 2);
+      this.context.stroke();
+
+      const lineAlpha = Math.max(0, 1 - life);
+      if (lineAlpha > 0) {
+        this.context.strokeStyle = this.hexToRgba(ring.colorHex, lineAlpha);
+        this.context.lineWidth = 2;
+        this.context.lineCap = "round";
+        const lineLength = scene.tileSize * 0.25;
+        for (let index = 0; index < 4; index += 1) {
+          const angle = (Math.PI * 2 * index) / 4;
+          const endX = centerX + (Math.cos(angle) * lineLength);
+          const endY = centerY + (Math.sin(angle) * lineLength);
+          this.context.beginPath();
+          this.context.moveTo(centerX, centerY);
+          this.context.lineTo(endX, endY);
+          this.context.stroke();
+        }
+      }
+      this.context.restore();
+    }
   }
 
   private drawRangedProjectileFx(scene: ArenaScene, viewport: RenderViewport, attackFx: ArenaScene["attackFxInstances"][number]): void {
@@ -625,10 +1239,16 @@ export class CanvasLayeredRenderer {
       const explicitRow = typeof resolved.row === "number" && Number.isFinite(resolved.row)
         ? Math.floor(resolved.row)
         : null;
-      const rowIndex = explicitRow === null
-        ? Math.min(rowCount, Math.max(1, element))
-        : Math.max(1, Math.min(rowCount, explicitRow + 1));
-      const frameIndex = this.getAnimFrameIndex(elapsedMs, resolved.fps ?? 12, frameCount, startFrame);
+      const baseOffset = Math.max(0, Math.floor(startFrame));
+      const rowOffset = Math.floor(baseOffset / frameCount);
+      const frameStartOffset = baseOffset % frameCount;
+      const baseRow = explicitRow === null
+        ? Math.min(rowCount - 1, Math.max(0, element - 1))
+        : rowOffset === 0
+          ? Math.max(0, Math.min(rowCount - 1, explicitRow))
+          : 0;
+      const rowIndex = ((baseRow + rowOffset) % rowCount) + 1;
+      const frameIndex = this.getAnimFrameIndex(elapsedMs, resolved.fps ?? 12, frameCount, frameStartOffset);
       const sx = Math.min(image.width - frameWidth, frameIndex * frameWidth);
       const sy = Math.min(image.height - frameHeight, (rowIndex - 1) * frameHeight);
 
@@ -845,27 +1465,6 @@ export class CanvasLayeredRenderer {
     this.context.restore();
   }
 
-  private drawStormCollapseScreenTints(scene: ArenaScene, viewport: RenderViewport): void {
-    if (scene.screenTintOverlays.length === 0) {
-      return;
-    }
-
-    const width = scene.columns * scene.tileSize;
-    const height = scene.rows * scene.tileSize;
-    for (const overlay of scene.screenTintOverlays) {
-      const life = Math.max(0, Math.min(1, overlay.elapsedMs / overlay.durationMs));
-      const alpha = Math.max(0, overlay.maxOpacity * (1 - life));
-      if (alpha <= 0) {
-        continue;
-      }
-
-      this.context.save();
-      this.context.fillStyle = this.hexToRgba(overlay.colorHex, alpha);
-      this.context.fillRect(viewport.originX, viewport.originY, width, height);
-      this.context.restore();
-    }
-  }
-
   private drawSilverTempestPlayerGlow(scene: ArenaScene, viewport: RenderViewport): void {
     if (!scene.silverTempestActive || scene.silverTempestRemainingMs <= 0) {
       return;
@@ -929,20 +1528,81 @@ export class CanvasLayeredRenderer {
     }
 
     for (const ring of scene.stormCollapseRings) {
-      const actor = scene.actorsById[ring.actorId];
-      if (!actor || actor.kind !== "mob") {
+      if (ring.delayRemainingMs > 0) {
         continue;
       }
 
       const life = Math.max(0, Math.min(1, ring.elapsedMs / ring.durationMs));
       const alpha = Math.max(0, 1 - life);
-      const radius = scene.tileSize * life;
-      const centerX = viewport.originX + (actor.tileX + 0.5) * scene.tileSize;
-      const centerY = viewport.originY + (actor.tileY + 0.5) * scene.tileSize;
+      if (alpha <= 0) {
+        continue;
+      }
+
+      const centerX = viewport.originX + (ring.tilePos.x + 0.5) * scene.tileSize;
+      const centerY = viewport.originY + (ring.tilePos.y + 0.5) * scene.tileSize;
+      const radius = ring.startRadiusPx + ((ring.endRadiusPx - ring.startRadiusPx) * life);
 
       this.context.save();
-      this.context.strokeStyle = this.hexToRgba(CORROSION_COLOR_HEX, alpha);
-      this.context.lineWidth = Math.max(1.5, scene.tileSize * 0.04);
+      this.context.strokeStyle = this.hexToRgba(ring.colorHex, alpha);
+      this.context.lineWidth = ring.strokeWidthPx;
+      this.context.beginPath();
+      this.context.arc(centerX, centerY, radius, 0, Math.PI * 2);
+      this.context.stroke();
+      this.context.restore();
+    }
+  }
+
+  private drawStormCollapseStackTexts(scene: ArenaScene, viewport: RenderViewport): void {
+    if (scene.stormCollapseStackTexts.length === 0) {
+      return;
+    }
+
+    for (const overlay of scene.stormCollapseStackTexts) {
+      if (overlay.delayRemainingMs > 0 || overlay.stacksConsumed <= 0) {
+        continue;
+      }
+
+      const life = Math.max(0, Math.min(1, overlay.elapsedMs / overlay.durationMs));
+      const alpha = Math.max(0, 1 - life);
+      if (alpha <= 0) {
+        continue;
+      }
+
+      const centerX = viewport.originX + (overlay.tilePos.x + 0.5) * scene.tileSize;
+      const centerY = viewport.originY + (overlay.tilePos.y + 0.5) * scene.tileSize;
+
+      this.context.save();
+      this.context.font = "bold 11px monospace";
+      this.context.textAlign = "center";
+      this.context.textBaseline = "middle";
+      this.context.fillStyle = this.hexToRgba(CORROSION_COLOR_HEX, alpha);
+      this.context.fillText(`\u00d7${overlay.stacksConsumed}`, centerX, centerY);
+      this.context.restore();
+    }
+  }
+
+  private drawStormCollapseArenaRings(scene: ArenaScene, viewport: RenderViewport): void {
+    if (scene.stormCollapseArenaRings.length === 0) {
+      return;
+    }
+
+    for (const overlay of scene.stormCollapseArenaRings) {
+      if (overlay.delayRemainingMs > 0) {
+        continue;
+      }
+
+      const life = Math.max(0, Math.min(1, overlay.elapsedMs / overlay.durationMs));
+      const alpha = Math.max(0, overlay.maxOpacity * (1 - life));
+      if (alpha <= 0) {
+        continue;
+      }
+
+      const radius = overlay.startRadiusPx + ((overlay.endRadiusPx - overlay.startRadiusPx) * life);
+      const centerX = viewport.originX + (overlay.centerTile.x + 0.5) * scene.tileSize;
+      const centerY = viewport.originY + (overlay.centerTile.y + 0.5) * scene.tileSize;
+      this.context.save();
+      this.context.strokeStyle = this.hexToRgba(overlay.colorHex, alpha);
+      this.context.lineWidth = overlay.strokeWidthPx;
       this.context.beginPath();
       this.context.arc(centerX, centerY, radius, 0, Math.PI * 2);
       this.context.stroke();
@@ -1166,7 +1826,30 @@ export class CanvasLayeredRenderer {
 
   private drawFloatingTexts(scene: ArenaScene, viewport: RenderViewport): void {
     for (const entry of scene.floatingTexts) {
-      if (entry.kind !== "crit_text" && entry.kind !== "combat_callout") {
+      if (entry.kind !== "crit_text" && entry.kind !== "combat_callout" && entry.kind !== "skill_name") {
+        continue;
+      }
+
+      if (entry.kind === "skill_name") {
+        const life = Math.max(0, Math.min(1, entry.elapsedMs / entry.durationMs));
+        // Fade starts at 500ms out of 800ms total (life fraction 0.625).
+        const FADE_START_LIFE = 500 / 800;
+        const alpha = life < FADE_START_LIFE ? 1.0 : 1.0 - (life - FADE_START_LIFE) / (1 - FADE_START_LIFE);
+        const riseOffset = life * 20;
+        const x = viewport.originX + (entry.tilePos.x + 0.5) * scene.tileSize;
+        const y = viewport.originY + entry.tilePos.y * scene.tileSize - scene.tileSize * 0.32 - riseOffset;
+        this.context.save();
+        this.context.globalAlpha = Math.max(0, alpha);
+        this.context.textAlign = "center";
+        this.context.textBaseline = "middle";
+        this.context.font = `11px Arial`;
+        this.context.fillStyle = "#FFFFFF";
+        this.context.strokeStyle = "rgba(10, 10, 10, 0.7)";
+        this.context.lineWidth = 2;
+        this.context.lineJoin = "round";
+        this.context.strokeText(entry.text, x, y);
+        this.context.fillText(entry.text, x, y);
+        this.context.restore();
         continue;
       }
 

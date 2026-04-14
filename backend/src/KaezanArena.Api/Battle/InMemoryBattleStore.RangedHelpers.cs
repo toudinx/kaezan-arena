@@ -244,62 +244,121 @@ public sealed partial class InMemoryBattleStore
             hitActorIds.Add(target.ActorId);
         }
 
+        var projectileCount = state.SilverTempestActive
+            ? Math.Max(1, ArenaConfig.SkillConfig.SylwenSilverTempestWhisperShotCount)
+            : 1;
+        var projectileDelayMs = Math.Max(0, ArenaConfig.SkillConfig.SylwenSilverTempestWhisperShotDelayMs);
         var hitAnyTarget = false;
         foreach (var hitActorId in hitActorIds.Distinct(StringComparer.Ordinal))
         {
-            if (!state.Actors.TryGetValue(hitActorId, out var liveTarget) || liveTarget.Hp <= 0)
+            var hitApplied = TryApplySylwenWhisperShotHit(
+                state,
+                events,
+                hitActorId,
+                fromTile,
+                ArenaConfig.SkillConfig.SylwenWhisperShotDamage,
+                projectilePierces: state.SilverTempestActive,
+                isSilverTempestFollowUp: false);
+            if (!hitApplied)
             {
                 continue;
             }
 
-            var canApplyDeadeyeGrace = string.Equals(liveTarget.Kind, "mob", StringComparison.Ordinal);
-            if (canApplyDeadeyeGrace)
-            {
-                ApplySylwenDeadeyeGraceOnWhisperHit(liveTarget);
-            }
-
-            var totalDamage = ArenaConfig.SkillConfig.SylwenWhisperShotDamage;
-            if (canApplyDeadeyeGrace)
-            {
-                totalDamage += ResolveSylwenFocusBonusDamage(liveTarget);
-            }
-
-            var isHeadshot = canApplyDeadeyeGrace && IsHeadshot(liveTarget);
-            if (isHeadshot)
-            {
-                totalDamage = ApplyPercentIncrease(
-                    totalDamage,
-                    ArenaConfig.SkillConfig.SylwenDeadeyeGraceHeadshotDamageBonusPercent);
-            }
-
-            var hpDamageApplied = ApplyRangedDamageToMob(
-                state,
-                liveTarget,
-                totalDamage,
-                ArenaConfig.SkillIds.SylwenWhisperShot,
-                events,
-                emitProjectileEvent: true,
-                projectilePierces: state.SilverTempestActive,
-                projectileFromTile: fromTile);
             hitAnyTarget = true;
 
-            if (!isHeadshot)
+            for (var shotIndex = 1; shotIndex < projectileCount; shotIndex += 1)
             {
-                continue;
+                state.PendingWhisperShotHits.Add(new PendingHit(
+                    TargetActorId: hitActorId,
+                    DamageBase: ArenaConfig.SkillConfig.SylwenWhisperShotDamage,
+                    DelayRemainingMs: shotIndex * projectileDelayMs));
             }
-
-            if (liveTarget.Hp > 0)
-            {
-                liveTarget.IsStunned = true;
-                liveTarget.StunRemainingMs = ArenaConfig.SkillConfig.SylwenDeadeyeGraceStunDurationMs;
-            }
-
-            events.Add(new HeadshotEventDto(
-                MobId: liveTarget.ActorId,
-                DamageDealt: hpDamageApplied));
         }
 
         return hitAnyTarget;
+    }
+
+    private static bool TryResolveDeferredSylwenWhisperShotHit(
+        StoredBattle state,
+        List<BattleEventDto> events,
+        PendingHit pendingHit)
+    {
+        var player = GetPlayerActor(state);
+        if (player is null)
+        {
+            return false;
+        }
+
+        return TryApplySylwenWhisperShotHit(
+            state,
+            events,
+            pendingHit.TargetActorId,
+            new TilePos(player.TileX, player.TileY),
+            pendingHit.DamageBase,
+            projectilePierces: true,
+            isSilverTempestFollowUp: true);
+    }
+
+    private static bool TryApplySylwenWhisperShotHit(
+        StoredBattle state,
+        List<BattleEventDto> events,
+        string targetActorId,
+        TilePos fromTile,
+        int damageBase,
+        bool projectilePierces,
+        bool isSilverTempestFollowUp)
+    {
+        if (!state.Actors.TryGetValue(targetActorId, out var liveTarget) || liveTarget.Hp <= 0)
+        {
+            return false;
+        }
+
+        var canApplyDeadeyeGrace = string.Equals(liveTarget.Kind, "mob", StringComparison.Ordinal);
+        if (canApplyDeadeyeGrace)
+        {
+            ApplySylwenDeadeyeGraceOnWhisperHit(liveTarget);
+        }
+
+        var totalDamage = Math.Max(0, damageBase);
+        if (canApplyDeadeyeGrace)
+        {
+            totalDamage += ResolveSylwenFocusBonusDamage(liveTarget);
+        }
+
+        var isHeadshot = canApplyDeadeyeGrace && IsHeadshot(liveTarget);
+        if (isHeadshot)
+        {
+            totalDamage = ApplyPercentIncrease(
+                totalDamage,
+                ArenaConfig.SkillConfig.SylwenDeadeyeGraceHeadshotDamageBonusPercent);
+        }
+
+        var hpDamageApplied = ApplyRangedDamageToMob(
+            state,
+            liveTarget,
+            totalDamage,
+            ArenaConfig.SkillIds.SylwenWhisperShot,
+            events,
+            emitProjectileEvent: true,
+            projectilePierces: projectilePierces,
+            projectileFromTile: fromTile,
+            isSilverTempestFollowUp: isSilverTempestFollowUp);
+
+        if (!isHeadshot)
+        {
+            return true;
+        }
+
+        if (liveTarget.Hp > 0)
+        {
+            liveTarget.IsStunned = true;
+            liveTarget.StunRemainingMs = ArenaConfig.SkillConfig.SylwenDeadeyeGraceStunDurationMs;
+        }
+
+        events.Add(new HeadshotEventDto(
+            MobId: liveTarget.ActorId,
+            DamageDealt: hpDamageApplied));
+        return true;
     }
 
     private static bool TryExecuteSylwenGalePierce(
@@ -458,31 +517,30 @@ public sealed partial class InMemoryBattleStore
         List<BattleEventDto> events,
         StoredActor player)
     {
-        var target = ResolveRangedTarget(
-            state,
-            ArenaConfig.SkillConfig.VelvetUmbralPathMaxRangeTilesChebyshev,
-            requireLOS: false);
+        var target = ResolveAssistTarget(state);
         if (target is null)
         {
             return false;
         }
 
         var fromTile = new TilePos(player.TileX, player.TileY);
-        var targetTile = new TilePos(target.TileX, target.TileY);
-        var lineTiles = BuildLineTilesBresenham(fromTile, targetTile, includeSource: false).ToList();
-        if (lineTiles.Count == 0)
+        var stepX = Math.Sign(target.TileX - player.TileX);
+        var stepY = Math.Sign(target.TileY - player.TileY);
+        if (stepX == 0 && stepY == 0)
         {
-            lineTiles.Add(targetTile);
+            return false;
         }
 
-        var impactTarget = ResolveFirstLivingEnemyOnLine(state, lineTiles);
-        var impactTile = impactTarget is null
-            ? targetTile
-            : new TilePos(impactTarget.TileX, impactTarget.TileY);
-        var traversalLineTiles = TrimPathToImpact(lineTiles, impactTile);
+        state.PlayerFacingDirection = ResolveFacingDirectionFromStep(stepX, stepY, state.PlayerFacingDirection);
+        var piercePath = BuildPiercePath(fromTile, stepX, stepY);
+        if (piercePath.Count == 0)
+        {
+            return false;
+        }
+
         var trailTiles = BuildVelvetUmbralPathTrailTiles(
             fromTile,
-            traversalLineTiles,
+            piercePath,
             ArenaConfig.SkillConfig.VelvetUmbralPathTrailWidthRadius);
         AddDamagingHazardDecalZone(
             state,
@@ -494,40 +552,33 @@ public sealed partial class InMemoryBattleStore
         events.Add(new RangedProjectileFiredEventDto(
             WeaponId: ArenaConfig.SkillIds.VelvetUmbralPath,
             FromTile: fromTile,
-            ToTile: impactTile,
-            TargetActorId: impactTarget?.ActorId,
-            Pierces: false));
+            ToTile: piercePath[piercePath.Count - 1],
+            TargetActorId: null,
+            Pierces: true));
 
-        if (impactTarget is null || impactTarget.Hp <= 0)
+        var splashTiles = new List<(int TileX, int TileY)>();
+        var seenSplashTiles = new HashSet<(int TileX, int TileY)>();
+        foreach (var tile in piercePath)
         {
-            return true;
+            var aroundTile = BuildSquareTiles(
+                    tile.X,
+                    tile.Y,
+                    ArenaConfig.SkillConfig.VelvetUmbralPathSplashRadius,
+                    includeCenter: true)
+                .Where(splashTile => IsInBounds(splashTile.TileX, splashTile.TileY));
+
+            foreach (var splashTile in aroundTile)
+            {
+                if (!seenSplashTiles.Add((splashTile.TileX, splashTile.TileY)))
+                {
+                    continue;
+                }
+
+                splashTiles.Add((splashTile.TileX, splashTile.TileY));
+            }
         }
 
-        _ = ApplyRangedDamageToMob(
-            state,
-            impactTarget,
-            ArenaConfig.SkillConfig.VelvetUmbralPathImpactDamage,
-            ArenaConfig.SkillIds.VelvetUmbralPath,
-            events,
-            emitProjectileEvent: false,
-            projectilePierces: false,
-            projectileFromTile: fromTile,
-            onSuccessfulHit: hitMob =>
-            {
-                ApplyVelvetCorrosion(hitMob);
-                events.Add(new CorrosionUpdatedEventDto(MobId: hitMob.ActorId, StackCount: hitMob.CorrosionStacks));
-            },
-            finalDamageMultiplierResolver: ResolveVelvetCorrosionDamageMultiplier);
-
-        var splashTiles = BuildSquareTiles(
-                impactTile.X,
-                impactTile.Y,
-                ArenaConfig.SkillConfig.VelvetUmbralPathSplashRadius,
-                includeCenter: false)
-            .Where(tile => IsInBounds(tile.TileX, tile.TileY))
-            .ToList();
         var splashTargets = ResolveMobIdsOnTiles(state, splashTiles)
-            .Where(actorId => !string.Equals(actorId, impactTarget.ActorId, StringComparison.Ordinal))
             .ToList();
         foreach (var actorId in splashTargets)
         {
@@ -543,8 +594,8 @@ public sealed partial class InMemoryBattleStore
                 ArenaConfig.SkillIds.VelvetUmbralPath,
                 events,
                 emitProjectileEvent: false,
-                projectilePierces: false,
-                projectileFromTile: impactTile,
+                projectilePierces: true,
+                projectileFromTile: fromTile,
                 onSuccessfulHit: hitMob =>
                 {
                     ApplyVelvetCorrosion(hitMob);
@@ -556,41 +607,40 @@ public sealed partial class InMemoryBattleStore
         return true;
     }
 
-    private static IReadOnlyList<TilePos> TrimPathToImpact(IReadOnlyList<TilePos> pathTiles, TilePos impactTile)
+    private static string ResolveFacingDirectionFromStep(int stepX, int stepY, string currentFacingDirection)
     {
-        var trimmedPath = new List<TilePos>(pathTiles.Count);
-        foreach (var tile in pathTiles)
+        return (stepX, stepY) switch
         {
-            trimmedPath.Add(tile);
-            if (tile.X == impactTile.X && tile.Y == impactTile.Y)
-            {
-                break;
-            }
-        }
-
-        return trimmedPath;
+            (0, -1) => ArenaConfig.FacingUp,
+            (1, -1) => ArenaConfig.FacingUpRight,
+            (1, 0) => ArenaConfig.FacingRight,
+            (1, 1) => ArenaConfig.FacingDownRight,
+            (0, 1) => ArenaConfig.FacingDown,
+            (-1, 1) => ArenaConfig.FacingDownLeft,
+            (-1, 0) => ArenaConfig.FacingLeft,
+            (-1, -1) => ArenaConfig.FacingUpLeft,
+            _ => currentFacingDirection
+        };
     }
 
-    private static StoredActor? ResolveFirstLivingEnemyOnLine(StoredBattle state, IReadOnlyList<TilePos> lineTiles)
+    private static IReadOnlyList<TilePos> BuildPiercePath(TilePos start, int stepX, int stepY)
     {
-        foreach (var tile in lineTiles)
+        if (stepX == 0 && stepY == 0)
         {
-            var target = state.Actors.Values
-                .Where(actor =>
-                    (string.Equals(actor.Kind, "mob", StringComparison.Ordinal) ||
-                     string.Equals(actor.Kind, "boss", StringComparison.Ordinal)) &&
-                    actor.Hp > 0 &&
-                    actor.TileX == tile.X &&
-                    actor.TileY == tile.Y)
-                .OrderBy(actor => actor.ActorId, StringComparer.Ordinal)
-                .FirstOrDefault();
-            if (target is not null)
-            {
-                return target;
-            }
+            return [];
         }
 
-        return null;
+        var path = new List<TilePos>();
+        var currentX = start.X + stepX;
+        var currentY = start.Y + stepY;
+        while (IsInBounds(currentX, currentY))
+        {
+            path.Add(new TilePos(currentX, currentY));
+            currentX += stepX;
+            currentY += stepY;
+        }
+
+        return path;
     }
 
     private static IReadOnlyList<TilePos> BuildVelvetUmbralPathTrailTiles(
@@ -829,7 +879,9 @@ public sealed partial class InMemoryBattleStore
         TilePos? projectileFromTile = null,
         Action<StoredActor>? onSuccessfulHit = null,
         Func<StoredActor, double>? finalDamageMultiplierResolver = null,
-        bool isChainJump = false)
+        bool isChainJump = false,
+        bool isSilverTempestFollowUp = false,
+        bool applyLifeLeech = true)
     {
         var player = GetPlayerActor(state);
         if (player is null || target.Hp <= 0)
@@ -845,7 +897,8 @@ public sealed partial class InMemoryBattleStore
                 ToTile: new TilePos(target.TileX, target.TileY),
                 TargetActorId: target.ActorId,
                 Pierces: projectilePierces,
-                IsChainJump: isChainJump));
+                IsChainJump: isChainJump,
+                IsSilverTempestFollowUp: isSilverTempestFollowUp));
         }
 
         // Shared ranged damage path intentionally reuses the existing melee damage pipeline.
@@ -860,7 +913,11 @@ public sealed partial class InMemoryBattleStore
             onSuccessfulHit: onSuccessfulHit,
             finalDamageMultiplierResolver: finalDamageMultiplierResolver);
 
-        ApplyPlayerLifeLeech(state, events, ComputeLifeLeechHeal(state, hpDamageApplied));
+        if (applyLifeLeech)
+        {
+            ApplyPlayerLifeLeech(state, events, ComputeLifeLeechHeal(state, hpDamageApplied));
+        }
+
         return hpDamageApplied;
     }
 
@@ -1086,7 +1143,7 @@ public sealed partial class InMemoryBattleStore
         }
 
         ApplyPlayerCooldownsForCast(state, skill);
-        events.Add(new AssistCastEventDto(ArenaConfig.ShotgunSkillId, ArenaConfig.AssistReasonAutoOffense));
+        events.Add(new AssistCastEventDto(ArenaConfig.ShotgunSkillId, ArenaConfig.AssistReasonAutoOffense, ArenaConfig.GetSkillDisplayName(ArenaConfig.ShotgunSkillId) ?? ArenaConfig.ShotgunSkillId));
         return true;
     }
 
@@ -1166,7 +1223,7 @@ public sealed partial class InMemoryBattleStore
         }
 
         ApplyPlayerCooldownsForCast(state, skill);
-        events.Add(new AssistCastEventDto(ArenaConfig.VoidRicochetSkillId, ArenaConfig.AssistReasonAutoOffense));
+        events.Add(new AssistCastEventDto(ArenaConfig.VoidRicochetSkillId, ArenaConfig.AssistReasonAutoOffense, ArenaConfig.GetSkillDisplayName(ArenaConfig.VoidRicochetSkillId) ?? ArenaConfig.VoidRicochetSkillId));
         return true;
     }
 
@@ -1199,7 +1256,7 @@ public sealed partial class InMemoryBattleStore
             events);
 
         ApplyPlayerCooldownsForCast(state, skill);
-        events.Add(new AssistCastEventDto(ArenaConfig.SigilBoltSkillId, ArenaConfig.AssistReasonAutoOffense));
+        events.Add(new AssistCastEventDto(ArenaConfig.SigilBoltSkillId, ArenaConfig.AssistReasonAutoOffense, ArenaConfig.GetSkillDisplayName(ArenaConfig.SigilBoltSkillId) ?? ArenaConfig.SigilBoltSkillId));
         return true;
     }
 }
