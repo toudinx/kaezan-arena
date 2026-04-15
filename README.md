@@ -158,9 +158,10 @@ Four permanent Elemental Arenas, always accessible regardless of Account Level. 
 ## Current Gameplay
 
 - Player is fixed at the center tile (3,3) - no WASD movement
-- Auto-attack type is resolved per `ActiveCharacterId` in `ApplyPlayerAutoAttack`:
-  - `Mirai` uses melee auto-attack only (Chebyshev range `<= 1`)
-  - `Sylwen` and `Velvet` use ranged auto-attack up to full arena range (`7` tiles)
+- Signature Auto Attack: each character automatically fires their signature attack every player attack cycle (uses the player auto-attack cooldown slot, not GCD, and is excluded from the Assist skill cast pool)
+  - `Velvet` -> `Void Chain`
+  - `Sylwen` -> `Whisper Shot`
+  - `Mirai` -> `Grave Fang`
 - Q/W/E/R trigger immediate manual `cast_skill` commands for active character kit slots (Skill 1/2/3/Ultimate)
 - Manual casts follow normal cooldown and GCD checks; if a skill is on cooldown the keypress is ignored
 - `R` manual cast is routed through backend `TryFireUltimate` for the active character ultimate; it fires only when `UltimateGauge >= ArenaConfig.UltimateConfig.GaugeMax`, otherwise it silently skips (no error)
@@ -209,9 +210,9 @@ Four permanent Elemental Arenas, always accessible regardless of Account Level. 
   - Character art is remapped by ID only (no file moves/renames): `character:mirai` uses the former Kaelis Vex art, `character:sylwen` is unchanged, and `character:velvet` uses the former Kaelis Dawn art
   - Ultimate gauge starts at **0** each run and auto-fires when full
   - Assist order is kit-driven per active character; Ultimate is the last slot in each character's priority list and fires automatically when the gauge is full and all other skills are on cooldown
-    - Mirai: Dread Sweep → Grave Fang → Rend Pulse → Collapse Field (Ultimate)
-    - Sylwen: Thornfall → Gale Pierce → Whisper Shot → Silver Tempest (Ultimate)
-    - Velvet: Umbral Path → Death Strike → Void Chain → Storm Collapse (Ultimate)
+    - Mirai: Dread Sweep -> Rend Pulse -> Collapse Field (Ultimate)
+    - Sylwen: Thornfall -> Gale Pierce -> Silver Tempest (Ultimate)
+    - Velvet: Umbral Path -> Death Strike -> Storm Collapse (Ultimate)
   - Manual cast hotkey slot mapping (from backend character catalog fixed kit order):
     - `Q` = Skill 1
     - `W` = Skill 2

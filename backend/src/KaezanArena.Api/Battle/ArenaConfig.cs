@@ -935,6 +935,9 @@ public static class ArenaConfig
     public static class WeaponIds
     {
         public const string AutoAttackRanged = "auto_attack_ranged";
+        public const string GraveFang = "weapon:grave_fang";
+        public const string WhisperShot = "weapon:whisper_shot";
+        public const string VoidChain = "weapon:void_chain";
         public const string ExoriMin  = "weapon:exori_min";
         public const string Exori     = "weapon:exori";
         public const string ExoriMas  = "weapon:exori_mas";
@@ -1131,6 +1134,26 @@ public static class ArenaConfig
             ]
         };
 
+    /// <summary>Single source of truth for signature auto-attack weapon IDs by character.</summary>
+    public static readonly IReadOnlyDictionary<string, string> SignatureAutoAttackWeaponIdByCharacterId =
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [CharacterIds.Mirai] = WeaponIds.GraveFang,
+            [CharacterIds.Sylwen] = WeaponIds.WhisperShot,
+            [CharacterIds.Velvet] = WeaponIds.VoidChain
+        };
+
+    /// <summary>Returns the signature auto-attack weapon ID for a character, defaulting to Mirai when unknown.</summary>
+    public static string GetSignatureAutoAttackWeaponIdForCharacterId(string characterId)
+    {
+        if (SignatureAutoAttackWeaponIdByCharacterId.TryGetValue(characterId, out var weaponId))
+        {
+            return weaponId;
+        }
+
+        return SignatureAutoAttackWeaponIdByCharacterId[CharacterIds.Mirai];
+    }
+
     /// <summary>Returns fixed-kit weapon IDs for a character, defaulting to Mirai when unknown.</summary>
     public static IReadOnlyList<string> GetFixedWeaponKitForCharacterId(string characterId)
     {
@@ -1177,6 +1200,9 @@ public static class ArenaConfig
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
             [WeaponIds.AutoAttackRanged] = "Ranged Attack",
+            [WeaponIds.GraveFang]       = "Grave Fang",
+            [WeaponIds.WhisperShot]     = "Whisper Shot",
+            [WeaponIds.VoidChain]       = "Void Chain",
             [WeaponIds.ExoriMin]        = "Exori Min",
             [WeaponIds.Exori]           = "Exori",
             [WeaponIds.ExoriMas]        = "Exori Mas",
@@ -1233,6 +1259,9 @@ public static class ArenaConfig
     private static readonly IReadOnlyDictionary<string, string> SkillIdToWeaponId =
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
+            [SkillIds.MiraiGraveFang] = WeaponIds.GraveFang,
+            [SkillIds.SylwenWhisperShot] = WeaponIds.WhisperShot,
+            [SkillIds.VelvetVoidChain] = WeaponIds.VoidChain,
             [ExoriSkillId]     = WeaponIds.Exori,
             [ExoriMinSkillId]  = WeaponIds.ExoriMin,
             [ExoriMasSkillId]  = WeaponIds.ExoriMas,
@@ -1257,6 +1286,9 @@ public static class ArenaConfig
     private static readonly IReadOnlyDictionary<string, string> WeaponIdToSkillId =
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
+            [WeaponIds.GraveFang] = SkillIds.MiraiGraveFang,
+            [WeaponIds.WhisperShot] = SkillIds.SylwenWhisperShot,
+            [WeaponIds.VoidChain] = SkillIds.VelvetVoidChain,
             [WeaponIds.Exori]     = ExoriSkillId,
             [WeaponIds.ExoriMin]  = ExoriMinSkillId,
             [WeaponIds.ExoriMas]  = ExoriMasSkillId,
@@ -1267,6 +1299,16 @@ public static class ArenaConfig
             [WeaponIds.Heal]      = HealSkillId,
             [WeaponIds.Guard]     = GuardSkillId,
         };
+
+    private static readonly IReadOnlySet<string> SignatureAutoAttackSkillIds =
+        SignatureAutoAttackWeaponIdByCharacterId.Values
+            .Select(GetSkillIdForWeaponId)
+            .Where(skillId => !string.IsNullOrWhiteSpace(skillId))
+            .Cast<string>()
+            .ToHashSet(StringComparer.Ordinal);
+
+    public static bool IsSignatureAutoAttackSkillId(string skillId) =>
+        SignatureAutoAttackSkillIds.Contains(skillId);
 
     /// <summary>Returns the simulation skill ID for a stable weapon ID, or null if not found.</summary>
     public static string? GetSkillIdForWeaponId(string weaponId) =>

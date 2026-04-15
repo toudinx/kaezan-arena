@@ -84,7 +84,6 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             [ArenaConfig.PlayerClassMirai] =
             [
                 ArenaConfig.SkillIds.MiraiDreadSweep,
-                ArenaConfig.SkillIds.MiraiGraveFang,
                 ArenaConfig.SkillIds.MiraiRendPulse,
                 ArenaConfig.SkillIds.MiraiCollapseField
             ],
@@ -92,14 +91,12 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             [
                 ArenaConfig.SkillIds.SylwenThornfall,
                 ArenaConfig.SkillIds.SylwenGalePierce,
-                ArenaConfig.SkillIds.SylwenWhisperShot,
                 ArenaConfig.SkillIds.SylwenSilverTempest
             ],
             [ArenaConfig.PlayerClassVelvet] =
             [
                 ArenaConfig.SkillIds.VelvetUmbralPath,
                 ArenaConfig.SkillIds.VelvetDeathStrike,
-                ArenaConfig.SkillIds.VelvetVoidChain,
                 ArenaConfig.SkillIds.VelvetStormCollapse
             ]
         };
@@ -1327,6 +1324,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
     private static StoredAssistConfig BuildDefaultAssistConfig(string playerClassId)
     {
         var defaultAutoSkills = ResolveFixedSkillIdsForPlayerClass(playerClassId)
+            .Where(skillId => !ArenaConfig.IsSignatureAutoAttackSkillId(skillId))
             .ToDictionary(skillId => skillId, _ => true, StringComparer.Ordinal);
 
         return new StoredAssistConfig(
@@ -1841,28 +1839,11 @@ public sealed partial class InMemoryBattleStore : IBattleStore
 
         if (string.Equals(normalizedSkillId, ArenaConfig.SkillIds.MiraiGraveFang, StringComparison.Ordinal))
         {
-            var graveFangTarget = ResolveAssistTarget(state);
-            var playerPos = new TilePos(player.TileX, player.TileY);
-            var targetPos = graveFangTarget is not null
-                ? new TilePos(graveFangTarget.TileX, graveFangTarget.TileY)
-                : new TilePos(player.TileX + 1, player.TileY);
-            var graveFangTiles = BuildGraveFangTiles(playerPos, targetPos)
-                .Select(tile => (TileX: tile.X, TileY: tile.Y));
-            var hitAnyTarget = ApplyTileSkill(
+            var hitAnyTarget = TryExecuteMiraiGraveFang(
                 state,
                 events,
-                graveFangTiles,
-                ArenaConfig.SkillConfig.MiraiGraveFangDamage,
-                ArenaConfig.HitSmallFxId,
-                GetPlayerBaseElement(state),
                 player,
-                ref pendingLifeLeechHeal,
-                postModifierFlatDamageBonusResolver: ResolveMiraiSunderBrandBonusDamage,
-                onSuccessfulHit: hitMob =>
-                {
-                    ApplyMiraiSunderBrand(hitMob);
-                    events.Add(new SunderBrandUpdatedEventDto(MobId: hitMob.ActorId, StackCount: hitMob.SunderBrandStacks));
-                });
+                ref pendingLifeLeechHeal);
             ApplyPlayerCooldownsForCast(state, skill);
             GrantPlayerShield(state, events, ArenaConfig.PlayerShieldGainPerAction);
             return SkillCastResult.Ok(hitAnyTarget ? null : ArenaConfig.NoTargetReason);
@@ -2048,6 +2029,36 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         }
 
         return dispatchResult;
+    }
+
+    private static bool TryExecuteMiraiGraveFang(
+        StoredBattle state,
+        List<BattleEventDto> events,
+        StoredActor player,
+        ref int pendingLifeLeechHeal)
+    {
+        var graveFangTarget = ResolveAssistTarget(state);
+        var playerPos = new TilePos(player.TileX, player.TileY);
+        var targetPos = graveFangTarget is not null
+            ? new TilePos(graveFangTarget.TileX, graveFangTarget.TileY)
+            : new TilePos(player.TileX + 1, player.TileY);
+        var graveFangTiles = BuildGraveFangTiles(playerPos, targetPos)
+            .Select(tile => (TileX: tile.X, TileY: tile.Y));
+        return ApplyTileSkill(
+            state,
+            events,
+            graveFangTiles,
+            ArenaConfig.SkillConfig.MiraiGraveFangDamage,
+            ArenaConfig.HitSmallFxId,
+            GetPlayerBaseElement(state),
+            player,
+            ref pendingLifeLeechHeal,
+            postModifierFlatDamageBonusResolver: ResolveMiraiSunderBrandBonusDamage,
+            onSuccessfulHit: hitMob =>
+            {
+                ApplyMiraiSunderBrand(hitMob);
+                events.Add(new SunderBrandUpdatedEventDto(MobId: hitMob.ActorId, StackCount: hitMob.SunderBrandStacks));
+            });
     }
 
     private static void ApplyPlayerCooldownsForCast(StoredBattle state, StoredSkill skill)
@@ -2808,87 +2819,62 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             return;
         }
 
-        var isRangedAutoAttack =
-            string.Equals(state.PlayerActorId, ArenaConfig.CharacterIds.Sylwen, StringComparison.Ordinal) ||
-            string.Equals(state.PlayerActorId, ArenaConfig.CharacterIds.Velvet, StringComparison.Ordinal);
-
-        if (isRangedAutoAttack)
-        {
-            var rangedTarget = ResolveRangedTarget(
-                state,
-                ArenaConfig.AutoAttackRangedMaxRange,
-                requireLOS: false);
-            if (rangedTarget is null)
-            {
-                return;
-            }
-
-            var fromTile = new TilePos(player.TileX, player.TileY);
-            var toTile = new TilePos(rangedTarget.TileX, rangedTarget.TileY);
-            events.Add(new RangedProjectileFiredEventDto(
-                WeaponId: ArenaConfig.WeaponIds.AutoAttackRanged,
-                FromTile: fromTile,
-                ToTile: toTile,
-                TargetActorId: rangedTarget.ActorId,
-                Pierces: false));
-
-            var rangedHpDamageApplied = ApplyRangedDamageToMob(
-                state,
-                rangedTarget,
-                ArenaConfig.PlayerAutoAttackDamage,
-                ArenaConfig.WeaponIds.AutoAttackRanged,
-                events,
-                emitProjectileEvent: false,
-                projectilePierces: false,
-                projectileFromTile: fromTile,
-                applyLifeLeech: false);
-            pendingLifeLeechHeal += ComputeLifeLeechHeal(state, rangedHpDamageApplied);
-            GrantPlayerShield(state, events, ArenaConfig.PlayerShieldGainPerAction);
-            state.PlayerAttackCooldownRemainingMs = ResolvePlayerAutoAttackCooldownMs(state);
-            return;
-        }
-
-        var targetMob = ResolveEffectivePlayerAutoAttackTarget(state, player);
-
-        if (targetMob is null)
+        var signatureWeaponId = ArenaConfig.GetSignatureAutoAttackWeaponIdForCharacterId(state.PlayerActorId);
+        var signatureSkillId = ArenaConfig.GetSkillIdForWeaponId(signatureWeaponId);
+        if (string.IsNullOrWhiteSpace(signatureSkillId))
         {
             return;
         }
 
-        if (ComputeChebyshevDistance(targetMob, player.TileX, player.TileY) > 1)
-        {
-            // Effective target can exist while out of melee range; no hit occurs this tick.
-            return;
-        }
-
-        var playerBaseElement = GetPlayerBaseElement(state);
-        EmitAttackFx(
+        var hitAnyTarget = TryExecuteSignatureAutoAttack(
             state,
             events,
-            fxKind: CombatFxKind.MeleeSwing,
-            fromActor: player,
-            toActor: targetMob,
-            elementType: playerBaseElement,
-            durationMs: ArenaConfig.MeleeSwingDurationMs);
+            player,
+            signatureSkillId,
+            ref pendingLifeLeechHeal);
+        if (!hitAnyTarget)
+        {
+            return;
+        }
 
-        events.Add(new FxSpawnEventDto(
-            FxId: ArenaConfig.HitSmallFxId,
-            TileX: targetMob.TileX,
-            TileY: targetMob.TileY,
-            Layer: "hitFx",
-            DurationMs: 620,
-            Element: playerBaseElement));
-
-        var hpDamageApplied = ApplyDamageToMob(
-            state,
-            events,
-            targetMob,
-            ArenaConfig.PlayerAutoAttackDamage,
-            playerBaseElement,
-            attacker: player);
-        pendingLifeLeechHeal += ComputeLifeLeechHeal(state, hpDamageApplied);
         GrantPlayerShield(state, events, ArenaConfig.PlayerShieldGainPerAction);
         state.PlayerAttackCooldownRemainingMs = ResolvePlayerAutoAttackCooldownMs(state);
+    }
+
+    private static bool TryExecuteSignatureAutoAttack(
+        StoredBattle state,
+        List<BattleEventDto> events,
+        StoredActor player,
+        string signatureSkillId,
+        ref int pendingLifeLeechHeal)
+    {
+        if (string.Equals(signatureSkillId, ArenaConfig.SkillIds.MiraiGraveFang, StringComparison.Ordinal))
+        {
+            return TryExecuteMiraiGraveFang(
+                state,
+                events,
+                player,
+                ref pendingLifeLeechHeal);
+        }
+
+        if (string.Equals(signatureSkillId, ArenaConfig.SkillIds.SylwenWhisperShot, StringComparison.Ordinal))
+        {
+            return TryExecuteSylwenWhisperShot(
+                state,
+                events,
+                player);
+        }
+
+        if (string.Equals(signatureSkillId, ArenaConfig.SkillIds.VelvetVoidChain, StringComparison.Ordinal))
+        {
+            return TryExecuteVelvetVoidChain(
+                state,
+                events,
+                player);
+        }
+
+        throw new InvalidOperationException(
+            $"Unsupported signature auto-attack skill id '{signatureSkillId}'.");
     }
 
     private static void UpdatePlayerFacingTowardEffectiveAutoAttackTarget(StoredBattle state)
