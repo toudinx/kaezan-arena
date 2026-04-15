@@ -154,7 +154,7 @@
       ],
       "fps": 12
     },
-    "sprite.player.kina.idle": {
+    "sprite.player.mirai_legacy.idle": {
       "type": "anim",
       "frames": [
         "sprites/knight_f_idle_anim_f0.png",
@@ -164,7 +164,7 @@
       ],
       "fps": 8
     },
-    "sprite.player.kina.run": {
+    "sprite.player.mirai_legacy.run": {
       "type": "anim",
       "frames": [
         "sprites/knight_f_run_anim_f0.png",
@@ -174,22 +174,22 @@
       ],
       "fps": 10
     },
-    "sprite.player.kina.hit": {
+    "sprite.player.mirai_legacy.hit": {
       "type": "anim",
       "frames": [
         "sprites/knight_f_hit_anim_f0.png"
       ],
       "fps": 12
     },
-    "sprite.player.ranged_prototype.idle": {
+    "sprite.player.sylwen_alias.idle": {
       "type": "alias",
       "assetId": "sprite.player.sylwen.1.idle"
     },
-    "sprite.player.ranged_prototype.run": {
+    "sprite.player.sylwen_alias.run": {
       "type": "alias",
       "assetId": "sprite.player.sylwen.1.run"
     },
-    "sprite.player.ranged_prototype.hit": {
+    "sprite.player.sylwen_alias.hit": {
       "type": "alias",
       "assetId": "sprite.player.sylwen.1.hit"
     },

@@ -164,11 +164,11 @@ Auto-attack melee single-target removido — substituído pelas armas do kit fix
 
 Kits de personagem:
 
-Kina:
+Mirai:
   Fixos: Exori Min (frontal, 800ms) + Exori (AoE quadrado r=1, 1200ms) + Exori Mas (AoE diamond r=2, 2000ms)
   Livre: 1 arma de ataque escolhida por run via carta
 
-Ranged Prototype:
+Sylwen:
   Fixos: Sigil Bolt (single-target ranged, 800ms) + Shotgun (cone AoE estilo dragon wave, 800ms) + Void Ricochet (ricochete com pierce por segmento, 2000ms)
   Livre: 1 arma de ataque escolhida por run via carta
   Status atual de produto: selecionavel na Characters page como "Prototype" (Ranged Kit [WIP]) para testes de ranged
@@ -193,8 +193,8 @@ Todas as armas disparam automaticamente via Assist System — sem casting manual
 Ordem de prioridade do Assist (apenas ofensivo):
 
 Ordem potency-first baseada no kit fixo da classe ativa, seguida de Ultimate auto-fire quando pronto
-  - Kina: Exori Mas -> Exori -> Exori Min
-  - Ranged Prototype: Void Ricochet -> Shotgun -> Sigil Bolt
+  - Mirai: Exori Mas -> Exori -> Exori Min
+  - Sylwen: Void Ricochet -> Shotgun -> Sigil Bolt
 
 Máx 1 auto-cast por tick.
 
@@ -216,7 +216,7 @@ Cada personagem desbloqueia uma rune especial (arma evoluída) ao ser obtido.
 
 Runes de personagem:
 
-Velvet / Kina: Exori Mas Rune (AoE melee evoluído)
+Velvet / Mirai: Exori Mas Rune (AoE melee evoluído)
 Archer: Shotgun + Pierce combinados
 Mage: Pierce + Void Ricochet combinados
 
@@ -553,8 +553,8 @@ ranged foundation compartilhada pronta (evento de projetil, evento de knockback,
 ProjectileAnimator visual no frontend (projetil puramente visual; sem simulacao de gameplay no cliente)
 animacao visual de knockback no frontend (slide curto por evento; sem simulacao de gameplay no cliente)
 LOS preparado para obstaculos destrutiveis futuros (stub ativo hoje)
-Sigil Bolt, Shotgun e Void Ricochet ativas para classes de kit ranged; Kina permanece sem Sigil Bolt/Shotgun/Void Ricochet
-Ranged Prototype selecionavel na Characters page (personagem provisoria de teste)
+Sigil Bolt, Shotgun e Void Ricochet ativas para classes de kit ranged; Mirai permanece sem Sigil Bolt/Shotgun/Void Ricochet
+Sylwen selecionavel na Characters page (personagem provisoria de teste)
 HTTP batch step (MAX_TICK_DEBT = 0 atualmente)
 inventory + characters page + bestiary page
 replay system
@@ -591,3 +591,4 @@ LoL skill leveling
 Vampire Survivors chaos
 
 Tudo em runs curtas e altamente rejogáveis.
+

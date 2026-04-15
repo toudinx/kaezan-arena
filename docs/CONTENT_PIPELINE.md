@@ -276,7 +276,7 @@ starting equipment
 
 Example:
 
-Character: Kina
+Character: Mirai
 Skills:
 Exori
 Exori Min

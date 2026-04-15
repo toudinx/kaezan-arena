@@ -43,7 +43,7 @@ The project already has:
 - simulation invariants
 - structured run telemetry
 
-The project is no longer just a combat prototype.  
+The project is no longer just a combat baseline.  
 It now has a real game/product structure and is entering the phase of:
 
 > **balance, build identity, progression clarity, and long-term replayability**

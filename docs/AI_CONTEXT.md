@@ -188,11 +188,11 @@ Auto-attack single-target melee is removed — kit melee weapons replace it.
 
 Character kits (3 fixed slots + 1 free slot):
 
-Kina:
+Mirai:
   Fixed: Exori Min (frontal melee, 800ms) + Exori (square AoE r=1, 1200ms) + Exori Mas (diamond AoE r=2, 2000ms)
   Free: 1 attack weapon chosen per run via card
 
-Ranged Prototype:
+Sylwen:
   Fixed: Sigil Bolt (single-target ranged, 800ms) + Shotgun (dragon-wave cone AoE, 800ms) + Void Ricochet (bounce + pierce, 2000ms)
   Free: 1 attack weapon chosen per run via card
   Current product status: selectable on Characters page as provisional "Prototype" (subtitle: "Ranged Kit [WIP]") for ranged testing
@@ -217,8 +217,8 @@ All weapons fire automatically via the Assist System.
 Assist priority order (offensive only):
 
 Class-kit-driven potency-first order (resolved from active class fixed kit), then Ultimate auto-fire when ready
-  - Kina: Exori Mas -> Exori -> Exori Min
-  - Ranged Prototype: Void Ricochet -> Shotgun -> Sigil Bolt
+  - Mirai: Exori Mas -> Exori -> Exori Min
+  - Sylwen: Void Ricochet -> Shotgun -> Sigil Bolt
 
 Max 1 auto-cast per tick.
 
@@ -240,7 +240,7 @@ Each character unlocks a powerful evolved weapon rune when obtained.
 
 Character runes:
 
-Velvet / Kina rune: Exori Mas Rune (evolved AoE melee)
+Velvet / Mirai rune: Exori Mas Rune (evolved AoE melee)
 Archer rune: Shotgun + Pierce combined
 Mage rune: Pierce + Void Ricochet combined
 
@@ -439,7 +439,7 @@ Ranged foundation status (infrastructure + active ranged weapons):
 - Shotgun uses cone AoE damage and also emits 5 representative visual projectile lines per cast for cone readability
 - Sigil Bolt, Shotgun, and Void Ricochet are active for ranged-kit characters
 - Void Ricochet emits one projectile event per bounce segment and frontend renders segments sequentially
-- Kina remains unchanged and never casts Sigil Bolt, Shotgun, or Void Ricochet
+- Mirai remains unchanged and never casts Sigil Bolt, Shotgun, or Void Ricochet
 
 15. Determinism Rules
 
@@ -541,7 +541,7 @@ Arena page (player fixed at center, Vampire Survivors skill unlock, assist auto-
 Home page
 
 Kaelis page
-  - Kina + Prototype are selectable
+  - Mirai + Sylwen are selectable
   - Prototype is explicitly marked as provisional ranged test character ("Ranged Kit [WIP]")
   - Bestiary lives inside Kaelis as a character-context tab (not a top-level sibling page)
 
@@ -561,7 +561,7 @@ ArenaConfig.cs — centralized constants (all simulation tuning values)
 
 Tibia-style UI layout with skills and passives in right panel
 
-The project is no longer “just an arena prototype”; it already has meaningful product structure outside combat.
+The project is no longer “just an arena baseline”; it already has meaningful product structure outside combat.
 
 19. Design Principles for New Suggestions
 
@@ -739,7 +739,7 @@ rune-equipping flow is superseded by the Ultimate gauge system
 
 all constants are in ArenaConfig.cs — never hardcode simulation values
 
-ranged infrastructure exists (projectile + knockback events, LOS stub, shared helpers); Sigil Bolt, Shotgun, and Void Ricochet are active for ranged-kit characters, and Kina remains unchanged
+ranged infrastructure exists (projectile + knockback events, LOS stub, shared helpers); Sigil Bolt, Shotgun, and Void Ricochet are active for ranged-kit characters, and Mirai remains unchanged
 
 short-run fun matters more than large-system complexity
 
@@ -758,3 +758,5 @@ how they preserve the game identity
 how they interact with determinism and current architecture
 
 whether they should be permanent progression or run-only progression
+
+

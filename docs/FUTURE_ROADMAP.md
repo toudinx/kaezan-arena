@@ -70,7 +70,7 @@ simulation invariants
 Tibia-style UI with skills + passives in right panel
 configurable tick (50ms – 2000ms)
 
-This means the project is no longer in “prototype-only” stage.
+This means the project is no longer in “early-build-only” stage.
 It is now moving from technical MVP into playable product shaping.
 The skill unlock system (Vampire Survivors model) is complete and working.
 The current focus should be on balance tuning using real telemetry data.

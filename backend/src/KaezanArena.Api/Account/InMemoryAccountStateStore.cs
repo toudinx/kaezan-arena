@@ -1753,21 +1753,22 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
         }
     }
 
-    private static readonly IReadOnlySet<string> LegacyCharacterIds = new HashSet<string>(StringComparer.Ordinal)
-    {
-        "character:kina",
-        "character:ranged_prototype",
-        "character:lizard",
-        "kaelis_01",
-        "kaelis_02"
-    };
-
     private static readonly IReadOnlyList<string> PlayableCharacterIds =
     [
         ArenaConfig.CharacterIds.Mirai,
         ArenaConfig.CharacterIds.Sylwen,
         ArenaConfig.CharacterIds.Velvet
     ];
+
+    private static bool IsPlayableCharacterId(string characterId)
+    {
+        return PlayableCharacterIds.Contains(characterId, StringComparer.Ordinal);
+    }
+
+    private static bool IsNonPlayableCharacterId(string characterId)
+    {
+        return !string.IsNullOrWhiteSpace(characterId) && !IsPlayableCharacterId(characterId);
+    }
 
     private static bool NeedsMigration(AccountState state)
     {
@@ -1779,12 +1780,12 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
             return true;
         }
 
-        if (LegacyCharacterIds.Contains(state.ActiveCharacterId))
+        if (IsNonPlayableCharacterId(state.ActiveCharacterId))
         {
             return true;
         }
 
-        if (state.Characters.Keys.Any(id => LegacyCharacterIds.Contains(id)))
+        if (state.Characters.Keys.Any(IsNonPlayableCharacterId))
         {
             return true;
         }
@@ -1920,9 +1921,9 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
 
         // Remove non-playable character entries.
         var characters = new Dictionary<string, CharacterState>(state.Characters, StringComparer.Ordinal);
-        foreach (var legacyId in LegacyCharacterIds)
+        foreach (var nonPlayableId in characters.Keys.Where(IsNonPlayableCharacterId).ToArray())
         {
-            if (characters.Remove(legacyId))
+            if (characters.Remove(nonPlayableId))
             {
                 anyChanged = true;
             }
@@ -1942,7 +1943,7 @@ public sealed class InMemoryAccountStateStore : IAccountStateStore
 
         // Remap legacy activeCharacterId to Mirai.
         var activeCharacterId = state.ActiveCharacterId;
-        if (LegacyCharacterIds.Contains(activeCharacterId) ||
+        if (IsNonPlayableCharacterId(activeCharacterId) ||
             !characters.ContainsKey(activeCharacterId))
         {
             activeCharacterId = ArenaConfig.CharacterIds.Mirai;

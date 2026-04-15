@@ -611,10 +611,6 @@ public static class ArenaConfig
     }
 
     #region Player Class
-    public const int KinaReflectPercent = 20;
-    public const int KinaRangedReflectMultiplier = 2;
-    public const string PlayerClassKina = "kina";
-    public const string PlayerClassRangedPrototype = "ranged_prototype";
     public const string PlayerClassMirai = "mirai";
     public const string PlayerClassSylwen = "sylwen";
     public const string PlayerClassVelvet = "velvet";
@@ -1103,7 +1099,6 @@ public static class ArenaConfig
         public const string Mirai = "character:mirai";
         public const string Sylwen = "character:sylwen";
         public const string Velvet = "character:velvet";
-        public const string RangedPrototype = "character:ranged_prototype";
     }
 
     /// <summary>
@@ -1194,7 +1189,6 @@ public static class ArenaConfig
             [CharacterIds.Mirai]           = "Mirai",
             [CharacterIds.Sylwen]          = "Sylwen",
             [CharacterIds.Velvet]          = "Velvet",
-            [CharacterIds.RangedPrototype] = "Ranged Prototype",
             [SkillIds.MiraiRendPulse]      = "Rend Pulse",
             [SkillIds.MiraiGraveFang]      = "Grave Fang",
             [SkillIds.MiraiDreadSweep]     = "Dread Sweep",

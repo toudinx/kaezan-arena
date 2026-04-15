@@ -205,7 +205,7 @@ Four permanent Elemental Arenas, always accessible regardless of Account Level. 
   - Velvet kit: Void Chain + Umbral Path + Death Strike (Ultimate: Storm Collapse)
   - Selecting the active character on Characters page carries into Arena start (`playerId`) and activates that character kit
   - Frontend active-character fallback defaults to `character:mirai`
-  - Legacy active IDs (`kaelis_01`, `kaelis_02`, and deprecated non-playable `character:*` IDs) are migrated to `character:mirai` on first load
+  - Active character is always one of: `character:mirai`, `character:sylwen`, or `character:velvet`
   - Character art is remapped by ID only (no file moves/renames): `character:mirai` uses the former Kaelis Vex art, `character:sylwen` is unchanged, and `character:velvet` uses the former Kaelis Dawn art
   - Ultimate gauge starts at **0** each run and auto-fires when full
   - Assist order is kit-driven per active character; Ultimate is the last slot in each character's priority list and fires automatically when the gauge is full and all other skills are on cooldown
@@ -312,7 +312,7 @@ All weapon, character, and species IDs are defined as named constants in `backen
 - `ArenaConfig.SkillIds` - hero skill IDs for fixed kits (Mirai, Sylwen, Velvet)
 - `ArenaConfig.PassiveIds` - hero passive IDs for fixed kits
 - `ArenaConfig.KitIds` - fixed-kit IDs (e.g. `kit:mirai`, `kit:sylwen`, `kit:velvet`)
-- `ArenaConfig.CharacterIds` - stable character IDs (e.g. `CharacterIds.Mirai = "character:mirai"`); also includes legacy IDs `KaelisDawn = "kaelis_01"` and `KaelisEmber = "kaelis_02"` for accounts persisted before the stable ID migration
+- `ArenaConfig.CharacterIds` - stable character IDs (e.g. `CharacterIds.Mirai = "character:mirai"`) for the 3 playable roster entries: Mirai, Sylwen, Velvet
 - `ArenaConfig.SpeciesIds` - mob species ID strings used in snapshots and the account bestiary
 
 `ArenaConfig.DisplayNames` is the **single source of truth** for all entity display names, keyed by the stable IDs above. No display name strings should appear anywhere else in the codebase.

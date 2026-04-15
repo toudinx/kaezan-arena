@@ -52,10 +52,10 @@ Mob → Player pipeline:
 
 CanAutoAttack() per archetype → RollDamageForAttacker (0.85–1.15x)
 → ApplyDamageToPlayer → AntiRangedPressureBuff (−20% ranged) → shield → HP
-→ On death: Kina reflect passive → RunEnded
+→ On death: Mirai reflect passive → RunEnded
 Scaling: normalHpMult = lerp(1.0→3.2, t), normalDmgMult = lerp(1.0→2.6, t), elite ×1.35 HP / ×1.30 dmg, applied at spawn time only.
 
-Coupling issues: Kina reflect nested in damage path (player takes damage → reflects → mob takes damage); life leech passed as ref through 5+ methods; all player base stats hardcoded
+Coupling issues: Mirai reflect nested in damage path (player takes damage → reflects → mob takes damage); life leech passed as ref through 5+ methods; all player base stats hardcoded
 
 4. Skill System
 Files: InMemoryBattleStore.cs (TryExecutePlayerSkillCast, ApplyAreaSquareSkill, ApplyFrontalMeleeSkill, EvaluateCombatAssist), InMemoryBattleStore.SkillLeveling.cs (cooldown formulas, upgrade order)

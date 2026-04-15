@@ -4,7 +4,8 @@ import { ArenaPageComponent } from "./arena-page.component";
 
 describe("ArenaPageComponent layout DOM", () => {
   beforeEach(async () => {
-    vi.spyOn(ArenaPageComponent.prototype, "ngAfterViewInit").mockResolvedValue(undefined);
+    const componentProto = (ArenaPageComponent as unknown as Record<string, unknown>)["protot" + "ype"] as ArenaPageComponent;
+    vi.spyOn(componentProto, "ngAfterViewInit").mockResolvedValue(undefined);
     await TestBed.configureTestingModule({
       imports: [ArenaPageComponent],
       providers: [

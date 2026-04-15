@@ -40,10 +40,12 @@ public sealed partial class InMemoryBattleStore : IBattleStore
     private static readonly IReadOnlyDictionary<string, IReadOnlyList<string>> FixedWeaponKitByPlayerClassId =
         new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal)
         {
-            [ArenaConfig.PlayerClassKina] =
-                ArenaConfig.GetFixedWeaponKitForCharacterId("character:kina"),
-            [ArenaConfig.PlayerClassRangedPrototype] =
-                ArenaConfig.GetFixedWeaponKitForCharacterId("character:ranged_prototype")
+            [ArenaConfig.PlayerClassMirai] =
+                ArenaConfig.GetFixedWeaponKitForCharacterId(ArenaConfig.CharacterIds.Mirai),
+            [ArenaConfig.PlayerClassSylwen] =
+                ArenaConfig.GetFixedWeaponKitForCharacterId(ArenaConfig.CharacterIds.Sylwen),
+            [ArenaConfig.PlayerClassVelvet] =
+                ArenaConfig.GetFixedWeaponKitForCharacterId(ArenaConfig.CharacterIds.Velvet)
         };
     private static readonly IReadOnlyDictionary<string, IReadOnlyList<string>> FixedSkillKitByPlayerClassId =
         new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal)
@@ -79,18 +81,6 @@ public sealed partial class InMemoryBattleStore : IBattleStore
     private static readonly IReadOnlyDictionary<string, IReadOnlyList<string>> AssistOffenseSkillPriorityByPlayerClassId =
         new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal)
         {
-            [ArenaConfig.PlayerClassKina] =
-            [
-                ArenaConfig.ExoriMasSkillId,
-                ArenaConfig.ExoriSkillId,
-                ArenaConfig.ExoriMinSkillId
-            ],
-            [ArenaConfig.PlayerClassRangedPrototype] =
-            [
-                ArenaConfig.VoidRicochetSkillId,
-                ArenaConfig.ShotgunSkillId,
-                ArenaConfig.SigilBoltSkillId
-            ],
             [ArenaConfig.PlayerClassMirai] =
             [
                 ArenaConfig.SkillIds.MiraiDreadSweep,
@@ -116,18 +106,6 @@ public sealed partial class InMemoryBattleStore : IBattleStore
     private static readonly IReadOnlyDictionary<string, IReadOnlyList<string>> RunLevelSkillUpgradeOrderByPlayerClassId =
         new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal)
         {
-            [ArenaConfig.PlayerClassKina] =
-            [
-                ArenaConfig.ExoriSkillId,
-                ArenaConfig.ExoriMinSkillId,
-                ArenaConfig.ExoriMasSkillId
-            ],
-            [ArenaConfig.PlayerClassRangedPrototype] =
-            [
-                ArenaConfig.VoidRicochetSkillId,
-                ArenaConfig.SigilBoltSkillId,
-                ArenaConfig.ShotgunSkillId
-            ],
             [ArenaConfig.PlayerClassMirai] =
             [
                 ArenaConfig.SkillIds.MiraiDreadSweep,
@@ -1086,12 +1064,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             return ArenaConfig.PlayerClassVelvet;
         }
 
-        if (string.Equals(playerActorId, "character:ranged_prototype", StringComparison.Ordinal))
-        {
-            return ArenaConfig.PlayerClassRangedPrototype;
-        }
-
-        return ArenaConfig.PlayerClassKina;
+        return ArenaConfig.PlayerClassMirai;
     }
 
     private void ApplySigilPassiveModifiersAtBattleStart(StoredBattle state)
@@ -1284,7 +1257,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             return fixedWeaponKit;
         }
 
-        return FixedWeaponKitByPlayerClassId[ArenaConfig.PlayerClassKina];
+        return FixedWeaponKitByPlayerClassId[ArenaConfig.PlayerClassMirai];
     }
 
     private static IReadOnlyList<string> ResolveFixedSkillIdsForPlayerClass(string playerClassId)
@@ -1348,7 +1321,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             return order;
         }
 
-        return RunLevelSkillUpgradeOrderByPlayerClassId[ArenaConfig.PlayerClassKina];
+        return RunLevelSkillUpgradeOrderByPlayerClassId[ArenaConfig.PlayerClassMirai];
     }
 
     private static StoredAssistConfig BuildDefaultAssistConfig(string playerClassId)
@@ -2139,26 +2112,6 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         var hasAutoAttackTarget = ResolveEffectivePlayerAutoAttackTarget(state, player) is not null;
 
         var offenseSkillPriority = ResolveAssistOffenseSkillPriority(state);
-        if (string.Equals(state.PlayerClassId, ArenaConfig.PlayerClassKina, StringComparison.Ordinal))
-        {
-            if (offenseSkillPriority.Contains(ArenaConfig.SigilBoltSkillId, StringComparer.Ordinal))
-            {
-                throw new InvalidOperationException(
-                    "Critical invariant violation: Sigil Bolt entered Kina assist priority.");
-            }
-
-            if (offenseSkillPriority.Contains(ArenaConfig.ShotgunSkillId, StringComparer.Ordinal))
-            {
-                throw new InvalidOperationException(
-                    "Critical invariant violation: Shotgun entered Kina assist priority.");
-            }
-
-            if (offenseSkillPriority.Contains(ArenaConfig.VoidRicochetSkillId, StringComparer.Ordinal))
-            {
-                throw new InvalidOperationException(
-                    "Critical invariant violation: Void Ricochet entered Kina assist priority.");
-            }
-        }
 
         if (hasAutoAttackTarget)
         {
@@ -2184,12 +2137,6 @@ public sealed partial class InMemoryBattleStore : IBattleStore
 
                 if (string.Equals(skillId, ArenaConfig.SigilBoltSkillId, StringComparison.Ordinal))
                 {
-                    if (string.Equals(state.PlayerClassId, ArenaConfig.PlayerClassKina, StringComparison.Ordinal))
-                    {
-                        throw new InvalidOperationException(
-                            "Critical invariant violation: Sigil Bolt entered Kina assist priority.");
-                    }
-
                     if (TryExecuteSigilBolt(state, events))
                     {
                         events.Add(new AssistCastEventDto(ArenaConfig.SigilBoltSkillId, ArenaConfig.AssistReasonAutoOffense, ArenaConfig.GetSkillDisplayName(ArenaConfig.SigilBoltSkillId) ?? ArenaConfig.SigilBoltSkillId));
@@ -2201,12 +2148,6 @@ public sealed partial class InMemoryBattleStore : IBattleStore
 
                 if (string.Equals(skillId, ArenaConfig.ShotgunSkillId, StringComparison.Ordinal))
                 {
-                    if (string.Equals(state.PlayerClassId, ArenaConfig.PlayerClassKina, StringComparison.Ordinal))
-                    {
-                        throw new InvalidOperationException(
-                            "Critical invariant violation: Shotgun entered Kina assist priority.");
-                    }
-
                     if (TryExecuteShotgun(state, events))
                     {
                         events.Add(new AssistCastEventDto(ArenaConfig.ShotgunSkillId, ArenaConfig.AssistReasonAutoOffense, ArenaConfig.GetSkillDisplayName(ArenaConfig.ShotgunSkillId) ?? ArenaConfig.ShotgunSkillId));
@@ -2218,12 +2159,6 @@ public sealed partial class InMemoryBattleStore : IBattleStore
 
                 if (string.Equals(skillId, ArenaConfig.VoidRicochetSkillId, StringComparison.Ordinal))
                 {
-                    if (string.Equals(state.PlayerClassId, ArenaConfig.PlayerClassKina, StringComparison.Ordinal))
-                    {
-                        throw new InvalidOperationException(
-                            "Critical invariant violation: Void Ricochet entered Kina assist priority.");
-                    }
-
                     if (TryExecuteVoidRicochet(state, events))
                     {
                         events.Add(new AssistCastEventDto(ArenaConfig.VoidRicochetSkillId, ArenaConfig.AssistReasonAutoOffense, ArenaConfig.GetSkillDisplayName(ArenaConfig.VoidRicochetSkillId) ?? ArenaConfig.VoidRicochetSkillId));
@@ -3877,8 +3812,6 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             EmitCritTextEvent(events, player.TileX, player.TileY, nowMs);
         }
 
-        TryApplyKinaReflectPassive(state, events, player, attacker, damageAppliedToPlayer);
-
         if (isFinalBlow)
         {
             EmitDeathEvent(state, events, player, element, attacker?.ActorId);
@@ -3895,74 +3828,6 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             player.Shield = 0;
             EndRun(state, events, ArenaConfig.RunEndReasonDefeatDeath);
         }
-    }
-
-    private static void TryApplyKinaReflectPassive(
-        StoredBattle state,
-        List<BattleEventDto> events,
-        StoredActor player,
-        StoredActor? attacker,
-        int incomingDamageAppliedToPlayer)
-    {
-        if (incomingDamageAppliedToPlayer <= 0)
-        {
-            return;
-        }
-
-        if (!IsKinaReflectEnabled(state, player))
-        {
-            return;
-        }
-
-        if (attacker is null || !string.Equals(attacker.Kind, "mob", StringComparison.Ordinal))
-        {
-            return;
-        }
-
-        if (attacker.Hp <= 0)
-        {
-            return;
-        }
-
-        var reflectedBase = (int)Math.Floor(incomingDamageAppliedToPlayer * (ArenaConfig.KinaReflectPercent / 100.0d));
-        reflectedBase = Math.Max(1, reflectedBase);
-        var reflectedDamage = reflectedBase;
-        if (attacker.MobType is MobArchetype attackerArchetype && IsRangedArchetype(attackerArchetype))
-        {
-            reflectedDamage *= ArenaConfig.KinaRangedReflectMultiplier;
-        }
-
-        if (IsBuffActive(state, ArenaConfig.ThornsBoostBuffId))
-        {
-            reflectedDamage = ApplyPercentIncrease(reflectedDamage, ArenaConfig.ThornsBoostBonusPercent);
-        }
-
-        events.Add(new ReflectEventDto(
-            SourceEntityId: player.ActorId,
-            SourceTileX: player.TileX,
-            SourceTileY: player.TileY,
-            TargetEntityId: attacker.ActorId,
-            TargetTileX: attacker.TileX,
-            TargetTileY: attacker.TileY,
-            Amount: reflectedDamage,
-            ElementType: ElementType.Physical,
-            TargetMobType: attacker.MobType));
-
-        ApplyDamageToMob(
-            state,
-            events,
-            attacker,
-            reflectedDamage,
-            ElementType.Physical,
-            attacker: player,
-            allowPlayerDamageBuffs: false,
-            allowCriticalHits: false);
-    }
-
-    private static bool IsKinaReflectEnabled(StoredBattle state, StoredActor player)
-    {
-        return string.Equals(player.Kind, "player", StringComparison.Ordinal) &&
-               string.Equals(state.PlayerClassId, ArenaConfig.PlayerClassKina, StringComparison.Ordinal);
     }
 
     private static void GrantPlayerShield(StoredBattle state, List<BattleEventDto> events, int amount)

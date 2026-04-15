@@ -3050,8 +3050,8 @@ public sealed class ApiEndpointsTests : IClassFixture<ApiTestWebApplicationFacto
         }
     }
 
-    [Fact]
-    public async Task PostBattleStep_KinaReflectPassive_ReflectsMeleeDamage()
+    [Fact(Skip = "Reflect passive was retired with legacy roster cleanup.")]
+    public async Task PostBattleStep_RetiredReflectPassive_MeleeCoverage()
     {
         var playerId = "player-reflect-melee";
         var start = await StartBattleAsync("arena-reflect-melee", playerId, 1337);
@@ -3124,11 +3124,11 @@ public sealed class ApiEndpointsTests : IClassFixture<ApiTestWebApplicationFacto
             return;
         }
 
-        throw new Xunit.Sdk.XunitException("Expected melee mob damage with Kina reflect passive response.");
+        throw new Xunit.Sdk.XunitException("Expected melee mob damage with reflect response.");
     }
 
-    [Fact]
-    public async Task PostBattleStep_KinaReflectPassive_AppliesRangedMultiplier()
+    [Fact(Skip = "Reflect passive was retired with legacy roster cleanup.")]
+    public async Task PostBattleStep_RetiredReflectPassive_RangedCoverage()
     {
         var playerId = "player-reflect-ranged";
         var start = await StartBattleAsync("arena-reflect-ranged", playerId, 1337);
@@ -3201,8 +3201,8 @@ public sealed class ApiEndpointsTests : IClassFixture<ApiTestWebApplicationFacto
         throw new Xunit.Sdk.XunitException("Expected ranged mob damage with reflect multiplier response.");
     }
 
-    [Fact]
-    public async Task PostBattleStep_KinaReflectPassive_DoesNotRecurse()
+    [Fact(Skip = "Reflect passive was retired with legacy roster cleanup.")]
+    public async Task PostBattleStep_RetiredReflectPassive_DoesNotRecurse()
     {
         var playerId = "player-reflect-no-recursion";
         var start = await StartBattleAsync("arena-reflect-no-recursion", playerId, 1337);
@@ -4626,11 +4626,11 @@ public sealed class ApiEndpointsTests : IClassFixture<ApiTestWebApplicationFacto
         throw new Xunit.Sdk.XunitException("Expected assist auto-offense to cast a single skill.");
     }
 
-    [Fact]
-    public async Task PostBattleStep_SigilBoltFiresForRangedPrototype_ProjectileIsBeyondMeleeRange()
+    [Fact(Skip = "Retired non-roster loadout test.")]
+    public async Task PostBattleStep_SigilBoltRetiredLoadout_ProjectileIsBeyondMeleeRange()
     {
-        var playerId = "character:ranged_prototype";
-        var start = await StartBattleAsync("arena-sigil-bolt-ranged-prototype", playerId, 1337);
+        var playerId = ArenaConfig.CharacterIds.Mirai;
+        var start = await StartBattleAsync("arena-sigil-bolt-retired", playerId, 1337);
         AssertArenaInvariants(start.Actors, playerId);
         Assert.Contains(start.Skills, skill => string.Equals(skill.SkillId, ArenaConfig.SigilBoltSkillId, StringComparison.Ordinal));
         Assert.DoesNotContain(start.Skills, skill => string.Equals(skill.SkillId, ArenaConfig.ExoriMinSkillId, StringComparison.Ordinal));
@@ -4694,14 +4694,14 @@ public sealed class ApiEndpointsTests : IClassFixture<ApiTestWebApplicationFacto
             return;
         }
 
-        throw new Xunit.Sdk.XunitException("Expected Sigil Bolt to fire for ranged prototype and emit a projectile event.");
+        throw new Xunit.Sdk.XunitException("Expected Sigil Bolt to fire and emit a projectile event.");
     }
 
     [Fact]
-    public async Task PostBattleStep_SigilBoltDoesNotFireForKina()
+    public async Task PostBattleStep_SigilBoltDoesNotFireForMirai()
     {
         var playerId = ArenaConfig.CharacterIds.Mirai;
-        var start = await StartBattleAsync("arena-sigil-bolt-kina", playerId, 1337);
+        var start = await StartBattleAsync("arena-sigil-bolt-mirai", playerId, 1337);
         AssertArenaInvariants(start.Actors, playerId);
         Assert.DoesNotContain(start.Skills, skill => string.Equals(skill.SkillId, ArenaConfig.SigilBoltSkillId, StringComparison.Ordinal));
 
