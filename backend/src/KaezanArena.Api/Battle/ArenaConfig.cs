@@ -19,6 +19,7 @@ public static class ArenaConfig
     public const int PlayerBaseHp = 120;
     public const int PlayerMoveCooldownMs = 300;
     public const int PlayerAutoAttackCooldownMs = 800;
+    public const int PlayerAttackCooldownFloorMs = 1;
     public const int PlayerGlobalCooldownMs = 800;
     #endregion  
 
@@ -1143,6 +1144,15 @@ public static class ArenaConfig
             [CharacterIds.Velvet] = WeaponIds.VoidChain
         };
 
+    /// <summary>Single source of truth for signature auto-attack base cooldown by signature weapon ID.</summary>
+    public static readonly IReadOnlyDictionary<string, int> SignatureAutoAttackBaseCooldownMsByWeaponId =
+        new Dictionary<string, int>(StringComparer.Ordinal)
+        {
+            [WeaponIds.GraveFang] = SkillConfig.MiraiGraveFangCooldownMs,
+            [WeaponIds.WhisperShot] = SkillConfig.SylwenWhisperShotCooldownMs,
+            [WeaponIds.VoidChain] = SkillConfig.VelvetVoidChainCooldownMs
+        };
+
     /// <summary>Returns the signature auto-attack weapon ID for a character, defaulting to Mirai when unknown.</summary>
     public static string GetSignatureAutoAttackWeaponIdForCharacterId(string characterId)
     {
@@ -1152,6 +1162,24 @@ public static class ArenaConfig
         }
 
         return SignatureAutoAttackWeaponIdByCharacterId[CharacterIds.Mirai];
+    }
+
+    /// <summary>Returns the signature auto-attack base cooldown for a weapon, defaulting to Grave Fang when unknown.</summary>
+    public static int GetSignatureAutoAttackBaseCooldownMsForWeaponId(string weaponId)
+    {
+        if (SignatureAutoAttackBaseCooldownMsByWeaponId.TryGetValue(weaponId, out var cooldownMs))
+        {
+            return cooldownMs;
+        }
+
+        return SignatureAutoAttackBaseCooldownMsByWeaponId[WeaponIds.GraveFang];
+    }
+
+    /// <summary>Returns the signature auto-attack base cooldown for a character, defaulting to Mirai when unknown.</summary>
+    public static int GetSignatureAutoAttackBaseCooldownMsForCharacterId(string characterId)
+    {
+        var signatureWeaponId = GetSignatureAutoAttackWeaponIdForCharacterId(characterId);
+        return GetSignatureAutoAttackBaseCooldownMsForWeaponId(signatureWeaponId);
     }
 
     /// <summary>Returns fixed-kit weapon IDs for a character, defaulting to Mirai when unknown.</summary>

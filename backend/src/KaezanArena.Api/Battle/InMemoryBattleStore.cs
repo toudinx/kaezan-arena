@@ -1452,11 +1452,11 @@ public sealed partial class InMemoryBattleStore : IBattleStore
 
     private static int ResolvePlayerAutoAttackCooldownMs(StoredBattle state)
     {
-        return Math.Max(
-            1,
-            ApplyPercentReduction(
-                ArenaConfig.PlayerAutoAttackCooldownMs,
-                Math.Max(0, state.PlayerModifiers.PercentAttackSpeedBonus)));
+        var baseCooldownMs = ArenaConfig.GetSignatureAutoAttackBaseCooldownMsForCharacterId(state.PlayerActorId);
+        var attackSpeedBonusPercent = Math.Max(0, state.PlayerModifiers.PercentAttackSpeedBonus);
+        var attackSpeedMultiplier = 1d + (attackSpeedBonusPercent / 100d);
+        var effectiveCooldownMs = (int)Math.Floor(baseCooldownMs / attackSpeedMultiplier);
+        return Math.Max(ArenaConfig.PlayerAttackCooldownFloorMs, effectiveCooldownMs);
     }
 
     private static int ResolvePlayerGlobalCooldownMs(StoredBattle state)

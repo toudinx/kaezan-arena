@@ -162,6 +162,8 @@ Four permanent Elemental Arenas, always accessible regardless of Account Level. 
   - `Velvet` -> `Void Chain`
   - `Sylwen` -> `Whisper Shot`
   - `Mirai` -> `Grave Fang`
+- Signature AA cadence scales with passive-card `PercentAttackSpeedBonus` (faster attack speed -> lower signature AA cooldown, down to the configured attack cooldown floor)
+- Kit skill cooldowns (Exori Min, Exori, Exori Mas, and character kit skills) are not affected by attack speed; they use `GlobalCooldownReductionPercent` instead
 - Q/W/E/R trigger immediate manual `cast_skill` commands for active character kit slots (Skill 1/2/3/Ultimate)
 - Manual casts follow normal cooldown and GCD checks; if a skill is on cooldown the keypress is ignored
 - `R` manual cast is routed through backend `TryFireUltimate` for the active character ultimate; it fires only when `UltimateGauge >= ArenaConfig.UltimateConfig.GaugeMax`, otherwise it silently skips (no error)
