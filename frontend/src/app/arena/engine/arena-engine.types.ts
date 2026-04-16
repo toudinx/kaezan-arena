@@ -52,7 +52,7 @@ export interface ArenaActorState {
   attackElement?: string | null;
   weakTo?: string | null;
   resistantTo?: string | null;
-  sunderBrandStacks?: number;
+  bleedingMarkStacks?: number;
   corrosionStacks?: number;
   focusStacks?: number;
   isStunned?: boolean;
@@ -466,8 +466,8 @@ export interface ArenaMimicActivatedEvent {
   tileY: number;
 }
 
-export interface ArenaSunderBrandUpdatedEvent {
-  type: "sunder_brand_updated";
+export interface ArenaBleedingMarkUpdatedEvent {
+  type: "bleeding_mark_updated";
   mobId: string;
   stacks: number;
 }
@@ -560,7 +560,7 @@ export type ArenaBattleEvent =
   | ArenaRangedProjectileFiredEvent
   | ArenaMobKnockedBackEvent
   | ArenaMimicActivatedEvent
-  | ArenaSunderBrandUpdatedEvent
+  | ArenaBleedingMarkUpdatedEvent
   | ArenaCorrosionUpdatedEvent
   | ArenaFocusUpdatedEvent
   | ArenaHeadshotEvent
@@ -627,7 +627,7 @@ export interface ScreenTintOverlay {
   durationMs: number;
 }
 
-export interface RendPulseTileFlashOverlay {
+export interface MiraiTileFlashOverlay {
   tilePos: TilePos;
   colorHex: string;
   elapsedMs: number;
@@ -671,7 +671,7 @@ export interface ArenaScene {
   stormCollapseStackTexts: StormCollapseStackTextOverlay[];
   stormCollapseArenaRings: StormCollapseArenaRingOverlay[];
   screenTintOverlays: ScreenTintOverlay[];
-  rendPulseTileFlashes: RendPulseTileFlashOverlay[];
+  miraiTileFlashes: MiraiTileFlashOverlay[];
   sylwenHitOverlays: SylwenHitOverlay[];
   skullImpactOverlays?: SkullImpactOverlay[];
   sylwenDissipateRings: SylwenDissipateRingOverlay[];
@@ -688,3 +688,4 @@ export interface ArenaScene {
   floatingTexts: FloatingTextInstance[];
   momentCues?: ArenaCombatMomentCue[];
 }
+

@@ -244,10 +244,6 @@ public sealed partial class InMemoryBattleStore
             hitActorIds.Add(target.ActorId);
         }
 
-        var projectileCount = state.SilverTempestActive
-            ? Math.Max(1, ArenaConfig.SkillConfig.SylwenSilverTempestWhisperShotCount)
-            : 1;
-        var projectileDelayMs = Math.Max(0, ArenaConfig.SkillConfig.SylwenSilverTempestWhisperShotDelayMs);
         var hitAnyTarget = false;
         foreach (var hitActorId in hitActorIds.Distinct(StringComparer.Ordinal))
         {
@@ -265,14 +261,6 @@ public sealed partial class InMemoryBattleStore
             }
 
             hitAnyTarget = true;
-
-            for (var shotIndex = 1; shotIndex < projectileCount; shotIndex += 1)
-            {
-                state.PendingWhisperShotHits.Add(new PendingHit(
-                    TargetActorId: hitActorId,
-                    DamageBase: ArenaConfig.SkillConfig.SylwenWhisperShotDamage,
-                    DelayRemainingMs: shotIndex * projectileDelayMs));
-            }
         }
 
         return hitAnyTarget;
@@ -414,12 +402,21 @@ public sealed partial class InMemoryBattleStore
                 continue;
             }
 
-            _ = TryApplyKnockback(
+            var wasDisplaced = TryApplyKnockback(
                 state,
                 liveTarget,
                 new TilePos(stepX, stepY),
                 ArenaConfig.SkillConfig.SylwenGalePierceKnockbackTiles,
                 events);
+            if (!wasDisplaced || liveTarget.Hp <= 0)
+            {
+                continue;
+            }
+
+            liveTarget.IsStunned = true;
+            liveTarget.StunRemainingMs = Math.Max(
+                liveTarget.StunRemainingMs,
+                ArenaConfig.SkillConfig.SylwenGalePierceStunMs);
         }
 
         return hitAnyTarget;

@@ -30,15 +30,36 @@ export class ProjectileAnimator {
     if (style === "sylwen_whisper_shot") {
       const directionX = Math.cos(angleRad);
       const directionY = Math.sin(angleRad);
+      const ghostCopies = [
+        { offsetTiles: 0.3, alpha: 0.3 },
+        { offsetTiles: 0.15, alpha: 0.6 }
+      ];
+
+      if (options?.projectileArrowSprite) {
+        for (const ghost of ghostCopies) {
+          const offsetDistance = scene.tileSize * ghost.offsetTiles;
+          const ghostX = x - (directionX * offsetDistance);
+          const ghostY = y - (directionY * offsetDistance);
+          this.drawArrowSprite(
+            context,
+            scene,
+            ghostX,
+            ghostY,
+            angleRad,
+            options.projectileArrowSprite,
+            0.8,
+            ghost.alpha
+          );
+        }
+
+        this.drawArrowSprite(context, scene, x, y, angleRad, options.projectileArrowSprite, 0.8, 1);
+        return;
+      }
 
       const arrowLength = scene.tileSize * 0.8;
       const arrowWidth = Math.max(1, scene.tileSize * (6 / 48));
       const headLength = scene.tileSize * 0.22;
       const headWidth = Math.max(1, scene.tileSize * (16 / 48));
-      const ghostCopies = [
-        { offsetTiles: 0.3, alpha: 0.3 },
-        { offsetTiles: 0.15, alpha: 0.6 }
-      ];
 
       for (const ghost of ghostCopies) {
         const offsetDistance = scene.tileSize * ghost.offsetTiles;
@@ -68,7 +89,7 @@ export class ProjectileAnimator {
       }
 
       if (this.isSylwenActiveCharacter(scene) && options?.projectileArrowSprite) {
-        this.drawSylwenAutoAttackArrowSprite(context, scene, x, y, angleRad, options.projectileArrowSprite);
+        this.drawArrowSprite(context, scene, x, y, angleRad, options.projectileArrowSprite, 0.6, 1);
         return;
       }
 
@@ -150,20 +171,23 @@ export class ProjectileAnimator {
     context.restore();
   }
 
-  private drawSylwenAutoAttackArrowSprite(
+  private drawArrowSprite(
     context: CanvasRenderingContext2D,
     scene: ArenaScene,
     centerX: number,
     centerY: number,
     travelAngle: number,
-    sprite: HTMLImageElement
+    sprite: HTMLImageElement,
+    targetHeightScale: number,
+    alpha: number
   ): void {
-    const targetHeight = scene.tileSize * 0.6;
+    const targetHeight = scene.tileSize * targetHeightScale;
     const scale = targetHeight / Math.max(1, sprite.height);
     const width = sprite.width * scale;
     const height = sprite.height * scale;
 
     context.save();
+    context.globalAlpha = Math.max(0, Math.min(1, alpha));
     context.translate(centerX, centerY);
     context.rotate(travelAngle + (Math.PI / 2));
     context.drawImage(sprite, -width / 2, -height / 2, width, height);

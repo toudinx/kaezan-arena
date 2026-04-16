@@ -936,7 +936,8 @@ public static class ArenaConfig
     public static class WeaponIds
     {
         public const string AutoAttackRanged = "auto_attack_ranged";
-        public const string GraveFang = "weapon:grave_fang";
+        public const string IronFang = "weapon:iron_fang";
+        public const string RendClaw = "weapon:rend_claw";
         public const string WhisperShot = "weapon:whisper_shot";
         public const string VoidChain = "weapon:void_chain";
         public const string ExoriMin  = "weapon:exori_min";
@@ -952,9 +953,9 @@ public static class ArenaConfig
 
     public static class SkillIds
     {
-        public const string MiraiRendPulse = "skill:mirai_rend_pulse";
-        public const string MiraiGraveFang = "skill:mirai_grave_fang";
-        public const string MiraiDreadSweep = "skill:mirai_dread_sweep";
+        public const string MiraiIronFang = "skill:mirai_iron_fang";
+        public const string MiraiRendClaw = "skill:mirai_rend_claw";
+        public const string MiraiPrimalRoar = "skill:mirai_primal_roar";
         public const string MiraiCollapseField = "skill:mirai_collapse_field";
         public const string SylwenWhisperShot = "skill:sylwen_whisper_shot";
         public const string SylwenGalePierce = "skill:sylwen_gale_pierce";
@@ -968,7 +969,7 @@ public static class ArenaConfig
 
     public static class PassiveIds
     {
-        public const string MiraiSunderBrand = "passive:mirai_sunder_brand";
+        public const string MiraiBleedingMark = "passive:mirai_bleeding_mark";
         public const string SylwenDeadeyeGrace = "passive:sylwen_deadeye_grace";
         public const string VelvetArcaneDecay = "passive:velvet_arcane_decay";
     }
@@ -994,10 +995,10 @@ public static class ArenaConfig
         public static readonly KitDefinition Mirai =
             new(
                 KitIds.Mirai,
-                PassiveIds.MiraiSunderBrand,
-                SkillIds.MiraiRendPulse,
-                SkillIds.MiraiGraveFang,
-                SkillIds.MiraiDreadSweep,
+                PassiveIds.MiraiBleedingMark,
+                SkillIds.MiraiIronFang,
+                SkillIds.MiraiPrimalRoar,
+                SkillIds.MiraiRendClaw,
                 SkillIds.MiraiCollapseField);
 
         public static readonly KitDefinition Sylwen =
@@ -1022,18 +1023,18 @@ public static class ArenaConfig
     public static class SkillConfig
     {
         // Mirai
-        public const int MiraiRendPulseRadius = 1;
         public const int MiraiCollapseFieldStopDistanceChebyshev = 1;
-        public const int MiraiRendPulseCooldownMs = 2500;
-        public const int MiraiRendPulseDamage = 8;
-        public const int MiraiGraveFangCooldownMs = 2800;
-        public const int MiraiGraveFangDamage = 12;
-        public const int MiraiDreadSweepCooldownMs = 4400;
-        public const int MiraiDreadSweepDamage = 7;
+        public const int MiraiIronFangCooldownMs = 3200;
+        public const int MiraiIronFangDamage = 16;
+        public const int MiraiIronFangBonusDamagePerConsumedBleedingMarkStack = 3;
+        public const int MiraiRendClawCooldownMs = 2800;
+        public const int MiraiRendClawDamage = 12;
+        public const int MiraiPrimalRoarCooldownMs = 4000;
+        public const int MiraiPrimalRoarDamage = 10;
         public const int MiraiCollapseFieldDamage = 10;
         public const int MiraiCollapseFieldImmobilizeDurationMs = 5000;
-        public const int MiraiSunderBrandStacksPerHit = 1;
-        public const int MiraiSunderBrandFlatDamagePerStack = 1; // +1 flat dmg per stack on target
+        public const int MiraiBleedingMarkStacksPerHit = 1;
+        public const int MiraiBleedingMarkFlatDamagePerStack = 1; // +1 flat dmg per stack on target
 
         // Sylwen
         public const int SylwenWhisperShotMaxRangeTilesChebyshev = AutoAttackRangedMaxRange;
@@ -1047,6 +1048,7 @@ public static class ArenaConfig
         public const int SylwenGalePierceCooldownMs = 3600;
         public const int SylwenGalePierceDamage = 10;
         public const int SylwenGalePierceKnockbackTiles = 1;
+        public const int SylwenGalePierceStunMs = 3000;
         public const int SylwenThornfallCooldownMs = 5000;
         public const int SylwenThornfallRadius = 1;
         public const int SylwenThornfallDamagePerTick = 3;
@@ -1054,8 +1056,8 @@ public static class ArenaConfig
         public const int SylwenDeadeyeGraceHeadshotEveryNHits = 3;
         public const int SylwenDeadeyeGraceStunDurationMs = 1000;
         public const int SylwenSilverTempestDurationMs = 5000;
-        public const int SylwenSilverTempestWhisperShotDelayMs = 80;
-        public const int SylwenSilverTempestWhisperShotCount = 2;
+        public const int SylwenSilverTempestStunMs = 5000;
+        public const double SylwenSilverTempestAttackSpeedMultiplier = 2.0d;
 
         // Velvet
         public const int VelvetCorrosionStacksPerHit = 1;
@@ -1075,6 +1077,8 @@ public static class ArenaConfig
         public const int VelvetDeathStrikeBaseDamage = 8;
         public const int VelvetStormCollapseBaseDamage = 5; // per stack: totalDamage = BaseDamage * corrosionStacks
         public const int VelvetStormCollapseMinimumStacksMultiplier = 1;
+        public const int VelvetStormCollapseAoeBaseDamage = 10; // flat AoE hit in square r=1 on every activation
+        public const int MiraiRendClawRangeTilesChebyshev = 1; // Rend Claw only fires when a mob is within this range
         public const double VelvetCorrosionDamageAmpPerStack = 0.05; // +5% damage taken per stack
     }
 
@@ -1114,9 +1118,9 @@ public static class ArenaConfig
         {
             [CharacterIds.Mirai] =
             [
-                SkillIds.MiraiRendPulse,
-                SkillIds.MiraiGraveFang,
-                SkillIds.MiraiDreadSweep,
+                SkillIds.MiraiIronFang,
+                SkillIds.MiraiPrimalRoar,
+                SkillIds.MiraiRendClaw,
                 SkillIds.MiraiCollapseField
             ],
             [CharacterIds.Sylwen] =
@@ -1139,7 +1143,7 @@ public static class ArenaConfig
     public static readonly IReadOnlyDictionary<string, string> SignatureAutoAttackWeaponIdByCharacterId =
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            [CharacterIds.Mirai] = WeaponIds.GraveFang,
+            [CharacterIds.Mirai] = WeaponIds.RendClaw,
             [CharacterIds.Sylwen] = WeaponIds.WhisperShot,
             [CharacterIds.Velvet] = WeaponIds.VoidChain
         };
@@ -1148,7 +1152,7 @@ public static class ArenaConfig
     public static readonly IReadOnlyDictionary<string, int> SignatureAutoAttackBaseCooldownMsByWeaponId =
         new Dictionary<string, int>(StringComparer.Ordinal)
         {
-            [WeaponIds.GraveFang] = SkillConfig.MiraiGraveFangCooldownMs,
+            [WeaponIds.RendClaw] = SkillConfig.MiraiRendClawCooldownMs,
             [WeaponIds.WhisperShot] = SkillConfig.SylwenWhisperShotCooldownMs,
             [WeaponIds.VoidChain] = SkillConfig.VelvetVoidChainCooldownMs
         };
@@ -1164,7 +1168,7 @@ public static class ArenaConfig
         return SignatureAutoAttackWeaponIdByCharacterId[CharacterIds.Mirai];
     }
 
-    /// <summary>Returns the signature auto-attack base cooldown for a weapon, defaulting to Grave Fang when unknown.</summary>
+    /// <summary>Returns the signature auto-attack base cooldown for a weapon, defaulting to Rend Claw when unknown.</summary>
     public static int GetSignatureAutoAttackBaseCooldownMsForWeaponId(string weaponId)
     {
         if (SignatureAutoAttackBaseCooldownMsByWeaponId.TryGetValue(weaponId, out var cooldownMs))
@@ -1172,7 +1176,7 @@ public static class ArenaConfig
             return cooldownMs;
         }
 
-        return SignatureAutoAttackBaseCooldownMsByWeaponId[WeaponIds.GraveFang];
+        return SignatureAutoAttackBaseCooldownMsByWeaponId[WeaponIds.RendClaw];
     }
 
     /// <summary>Returns the signature auto-attack base cooldown for a character, defaulting to Mirai when unknown.</summary>
@@ -1228,7 +1232,8 @@ public static class ArenaConfig
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
             [WeaponIds.AutoAttackRanged] = "Ranged Attack",
-            [WeaponIds.GraveFang]       = "Grave Fang",
+            [WeaponIds.IronFang]       = "Iron Fang",
+            [WeaponIds.RendClaw]       = "Rend Claw",
             [WeaponIds.WhisperShot]     = "Whisper Shot",
             [WeaponIds.VoidChain]       = "Void Chain",
             [WeaponIds.ExoriMin]        = "Exori Min",
@@ -1243,11 +1248,11 @@ public static class ArenaConfig
             [CharacterIds.Mirai]           = "Mirai",
             [CharacterIds.Sylwen]          = "Sylwen",
             [CharacterIds.Velvet]          = "Velvet",
-            [SkillIds.MiraiRendPulse]      = "Rend Pulse",
-            [SkillIds.MiraiGraveFang]      = "Grave Fang",
-            [SkillIds.MiraiDreadSweep]     = "Dread Sweep",
+            [SkillIds.MiraiIronFang]      = "Iron Fang",
+            [SkillIds.MiraiRendClaw]      = "Rend Claw",
+            [SkillIds.MiraiPrimalRoar]    = "Primal Roar",
             [SkillIds.MiraiCollapseField]  = "Collapse Field",
-            [PassiveIds.MiraiSunderBrand]  = "Sunder Brand",
+            [PassiveIds.MiraiBleedingMark]  = "Bleeding Mark",
             [SkillIds.SylwenWhisperShot]   = "Whisper Shot",
             [SkillIds.SylwenGalePierce]    = "Gale Pierce",
             [SkillIds.SylwenThornfall]     = "Thornfall",
@@ -1287,7 +1292,8 @@ public static class ArenaConfig
     private static readonly IReadOnlyDictionary<string, string> SkillIdToWeaponId =
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            [SkillIds.MiraiGraveFang] = WeaponIds.GraveFang,
+            [SkillIds.MiraiIronFang] = WeaponIds.IronFang,
+            [SkillIds.MiraiRendClaw] = WeaponIds.RendClaw,
             [SkillIds.SylwenWhisperShot] = WeaponIds.WhisperShot,
             [SkillIds.VelvetVoidChain] = WeaponIds.VoidChain,
             [ExoriSkillId]     = WeaponIds.Exori,
@@ -1314,7 +1320,8 @@ public static class ArenaConfig
     private static readonly IReadOnlyDictionary<string, string> WeaponIdToSkillId =
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            [WeaponIds.GraveFang] = SkillIds.MiraiGraveFang,
+            [WeaponIds.IronFang] = SkillIds.MiraiIronFang,
+            [WeaponIds.RendClaw] = SkillIds.MiraiRendClaw,
             [WeaponIds.WhisperShot] = SkillIds.SylwenWhisperShot,
             [WeaponIds.VoidChain] = SkillIds.VelvetVoidChain,
             [WeaponIds.Exori]     = ExoriSkillId,
@@ -1353,3 +1360,4 @@ public static class ArenaConfig
         return Math.Clamp(configuredStepDeltaMs.Value, MinStepDeltaMs, MaxStepDeltaMs);
     }
 }
+

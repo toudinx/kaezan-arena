@@ -1,5 +1,6 @@
 namespace KaezanArena.Api.Contracts.Battle;
 
-public sealed record SunderBrandUpdatedEventDto(
+public sealed record BleedingMarkUpdatedEventDto(
     string MobId,
     int StackCount) : BattleEventDto;
+

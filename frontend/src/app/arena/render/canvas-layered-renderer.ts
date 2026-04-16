@@ -39,7 +39,7 @@ const CRIT_TEXT_PALETTE = {
   fill: "#fde047",
   outline: "rgba(15, 23, 42, 0.95)"
 } as const;
-const SUNDER_BRAND_COLOR_HEX = "#EF9F27";
+const BLEEDING_MARK_COLOR_HEX = "#EF9F27";
 const CORROSION_COLOR_HEX = "#7F77DD";
 const FOCUS_COLOR_HEX = "#1D9E75";
 const STUN_COLOR_HEX = "#EF9F27";
@@ -125,7 +125,7 @@ export class CanvasLayeredRenderer {
 
           this.drawVelvetUmbralPathTrails(scene, viewport);
           this.drawThornfallCrossZones(scene, viewport);
-          this.drawRendPulseTileFlashes(scene, viewport);
+          this.drawMiraiTileFlashes(scene, viewport);
           this.drawImmobilizeGroundBorders(scene, viewport);
           await this.drawMobTierAuraGroundFx(scene, viewport, imageCache, imageLoader);
         }
@@ -354,12 +354,12 @@ export class CanvasLayeredRenderer {
     this.context.restore();
   }
 
-  private drawRendPulseTileFlashes(scene: ArenaScene, viewport: RenderViewport): void {
-    if (scene.rendPulseTileFlashes.length === 0) {
+  private drawMiraiTileFlashes(scene: ArenaScene, viewport: RenderViewport): void {
+    if (scene.miraiTileFlashes.length === 0) {
       return;
     }
 
-    for (const flash of scene.rendPulseTileFlashes) {
+    for (const flash of scene.miraiTileFlashes) {
       const life = Math.max(0, Math.min(1, flash.elapsedMs / flash.durationMs));
       const alpha = Math.max(0, 0.6 * (1 - life));
       if (alpha <= 0) {
@@ -392,11 +392,9 @@ export class CanvasLayeredRenderer {
       this.context.save();
       this.context.strokeStyle = this.hexToRgba(zone.colorHex, 0.7 * fadeMultiplier);
       this.context.lineWidth = 1.5;
-      this.context.setLineDash([scene.tileSize * 0.08, scene.tileSize * 0.06]);
       this.context.beginPath();
       this.traceTileSetPerimeterPath(scene, viewport, zone.crossTiles);
       this.context.stroke();
-      this.context.setLineDash([]);
       this.context.restore();
     }
   }
@@ -1504,7 +1502,7 @@ export class CanvasLayeredRenderer {
       const length = scene.tileSize * 0.5 + (maxDistance * life);
 
       this.context.save();
-      this.context.strokeStyle = this.hexToRgba(SUNDER_BRAND_COLOR_HEX, alpha * 0.9);
+      this.context.strokeStyle = this.hexToRgba(BLEEDING_MARK_COLOR_HEX, alpha * 0.9);
       this.context.lineWidth = Math.max(1.4, scene.tileSize * 0.03);
       for (let index = 0; index < 8; index += 1) {
         const angle = (Math.PI * 2 * index) / 8;
@@ -1680,9 +1678,9 @@ export class CanvasLayeredRenderer {
         continue;
       }
 
-      const sunderStacks = Math.max(0, mob.sunderBrandStacks ?? 0);
+      const bleedingMarkStacks = Math.max(0, mob.bleedingMarkStacks ?? 0);
       const corrosionStacks = Math.max(0, mob.corrosionStacks ?? 0);
-      if (sunderStacks <= 0 && corrosionStacks <= 0) {
+      if (bleedingMarkStacks <= 0 && corrosionStacks <= 0) {
         continue;
       }
 
@@ -1695,11 +1693,11 @@ export class CanvasLayeredRenderer {
         this.drawStatusPill(centerX, firstRowCenterY, `✦${corrosionStacks}`, CORROSION_COLOR_HEX, pillHeight);
       }
 
-      if (sunderStacks > 0) {
-        const sunderY = corrosionStacks > 0
+      if (bleedingMarkStacks > 0) {
+        const bleedingMarkY = corrosionStacks > 0
           ? firstRowCenterY - pillHeight - gapBetweenPills
           : firstRowCenterY;
-        this.drawStatusPill(centerX, sunderY, `▲${sunderStacks}`, SUNDER_BRAND_COLOR_HEX, pillHeight);
+        this.drawStatusPill(centerX, bleedingMarkY, `▲${bleedingMarkStacks}`, BLEEDING_MARK_COLOR_HEX, pillHeight);
       }
     }
   }

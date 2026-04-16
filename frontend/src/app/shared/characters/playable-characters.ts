@@ -21,8 +21,8 @@ export type PlayableCharacterOverview = Readonly<{
 export const PLAYABLE_CHARACTER_OVERVIEW_BY_ID: Readonly<Record<PlayableCharacterId, PlayableCharacterOverview>> = {
   [CHARACTER_ID_MIRAI]: {
     kitLabel: "Melee AoE Kit",
-    passiveName: "Sunder Brand",
-    passiveDescription: "Each hit stacks Sunder Brand - +1 flat damage per stack on target. Resets on death."
+    passiveName: "Bleeding Mark",
+    passiveDescription: "Each hit stacks Bleeding Mark - +1 flat damage per stack on target. Resets on death."
   },
   [CHARACTER_ID_SYLWEN]: {
     kitLabel: "Cadence Archer Kit",
@@ -63,3 +63,4 @@ export function normalizeCharacterIdForPlayableRoster(characterId: string | null
 
   return normalized;
 }
+

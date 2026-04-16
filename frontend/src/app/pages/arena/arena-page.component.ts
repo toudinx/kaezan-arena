@@ -1108,8 +1108,8 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     return `resist: ${resist.toUpperCase()}`;
   }
 
-  get lockedTargetSunderStacksForHud(): number {
-    return Math.max(0, this.lockedTargetActorForHud?.sunderBrandStacks ?? 0);
+  get lockedTargetBleedingMarkStacksForHud(): number {
+    return Math.max(0, this.lockedTargetActorForHud?.bleedingMarkStacks ?? 0);
   }
 
   get lockedTargetCorrosionStacksForHud(): number {
@@ -4429,7 +4429,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         continue;
       }
 
-      if (eventType === "sunder_brand_updated") {
+      if (eventType === "bleeding_mark_updated") {
         const mobId = this.readString(value["mobId"]);
         const stacks = this.readNumber(value["stacks"]) ?? this.readNumber(value["stackCount"]);
         if (!mobId || stacks === null) {
@@ -4437,7 +4437,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         }
 
         mapped.push({
-          type: "sunder_brand_updated",
+          type: "bleeding_mark_updated",
           mobId,
           stacks: Math.max(0, stacks)
         });
@@ -7426,3 +7426,4 @@ async function copyTextBestEffort(text: string): Promise<boolean> {
 
   return copied;
 }
+

@@ -61,9 +61,11 @@ const STORM_COLLAPSE_ARENA_RING_DURATION_MS = 500;
 const STORM_COLLAPSE_ARENA_RING_STROKE_WIDTH_PX = 1;
 const STORM_COLLAPSE_ARENA_RING_MAX_OPACITY = 0.2;
 const SILVER_TEMPEST_TEXT_DURATION_MS = 1200;
-const REND_PULSE_TILE_FLASH_DURATION_MS = 120;
-const MIRAI_DREAD_SWEEP_SKILL_ID = "skill:mirai_dread_sweep";
-const MIRAI_GRAVE_FANG_SKILL_ID = "skill:mirai_grave_fang";
+const MIRAI_TILE_FLASH_DURATION_MS = 120;
+const MIRAI_PRIMAL_ROAR_SKILL_ID = "skill:mirai_primal_roar";
+const MIRAI_REND_CLAW_SKILL_ID = "skill:mirai_rend_claw";
+const MIRAI_IRON_FANG_SKILL_ID = "skill:mirai_iron_fang";
+const MIRAI_IRON_FANG_FX_DURATION_MS = 400;
 const SYLWEN_WHISPER_SHOT_PROJECTILE_DURATION_MS = 220;
 const SYLWEN_GALE_PIERCE_PROJECTILE_DURATION_MS = 350;
 const SYLWEN_WHISPER_SHOT_HIT_BURST_DURATION_MS = 250;
@@ -198,7 +200,7 @@ export class ArenaEngine {
       stormCollapseStackTexts: [],
       stormCollapseArenaRings: [],
       screenTintOverlays: [],
-      rendPulseTileFlashes: [],
+      miraiTileFlashes: [],
       sylwenHitOverlays: [],
       skullImpactOverlays: [],
       sylwenDissipateRings: [],
@@ -221,7 +223,7 @@ export class ArenaEngine {
     const sortedActors = [...actorStates]
       .map((actor) => ({
         ...actor,
-        sunderBrandStacks: Math.max(0, actor.sunderBrandStacks ?? scene.actorsById[actor.actorId]?.sunderBrandStacks ?? 0),
+        bleedingMarkStacks: Math.max(0, actor.bleedingMarkStacks ?? scene.actorsById[actor.actorId]?.bleedingMarkStacks ?? 0),
         corrosionStacks: Math.max(0, actor.corrosionStacks ?? scene.actorsById[actor.actorId]?.corrosionStacks ?? 0),
         focusStacks: Math.max(0, actor.focusStacks ?? scene.actorsById[actor.actorId]?.focusStacks ?? 0),
         isStunned: actor.isStunned ?? scene.actorsById[actor.actorId]?.isStunned ?? false,
@@ -290,7 +292,7 @@ export class ArenaEngine {
     const stormCollapseStackTexts = [...nextScene.stormCollapseStackTexts];
     const stormCollapseArenaRings = [...nextScene.stormCollapseArenaRings];
     const screenTintOverlays = [...nextScene.screenTintOverlays];
-    const rendPulseTileFlashes = [...nextScene.rendPulseTileFlashes];
+    const miraiTileFlashes = [...nextScene.miraiTileFlashes];
     const sylwenHitOverlays = [...nextScene.sylwenHitOverlays];
     const skullImpactOverlays = [...(nextScene.skullImpactOverlays ?? [])];
     const sylwenDissipateRings = [...nextScene.sylwenDissipateRings];
@@ -479,6 +481,13 @@ export class ArenaEngine {
             layer: "hitFx",
             startFrame: this.resolveElementFxStartFrame(nextScene)
           });
+          nextScene = spawnFx(nextScene, {
+            fxId: "fx.skill.death_strike_impact",
+            tilePos: { x: event.toTile.x, y: event.toTile.y },
+            durationMs: VELVET_DEATH_STRIKE_BURST_DURATION_MS,
+            layer: "hitFx",
+            startFrame: this.resolveElementFxStartFrame(nextScene)
+          });
         }
 
         if (this.isVelvetUmbralPathSkillId(event.weaponId)) {
@@ -508,10 +517,10 @@ export class ArenaEngine {
         continue;
       }
 
-      if (event.type === "sunder_brand_updated") {
+      if (event.type === "bleeding_mark_updated") {
         const actor = nextScene.actorsById[event.mobId];
         if (actor && actor.kind === "mob") {
-          actor.sunderBrandStacks = Math.max(0, event.stacks);
+          actor.bleedingMarkStacks = Math.max(0, event.stacks);
         }
         continue;
       }
@@ -816,31 +825,34 @@ export class ArenaEngine {
           continue;
         }
 
-        if (this.isMiraiRendPulseSkillId(event.skillId)) {
-          const rendPulseTiles = this.buildMiraiRendPulseTiles(nextScene.columns, nextScene.rows);
-          const colorHex = this.resolveProjectileColorHex(nextScene.rangedConfig, event.skillId, nextScene);
-          for (const tilePos of rendPulseTiles) {
-            rendPulseTileFlashes.push({
-              tilePos,
-              colorHex,
-              elapsedMs: 0,
-              durationMs: REND_PULSE_TILE_FLASH_DURATION_MS
-            });
-          }
-        }
-
-        if (this.isMiraiDreadSweepSkillId(event.skillId) || this.isMiraiGraveFangSkillId(event.skillId)) {
+        if (this.isMiraiPrimalRoarSkillId(event.skillId) || this.isMiraiRendClawSkillId(event.skillId)) {
           const hitTiles = this.normalizeAssistCastHitTiles(event.hitTiles, nextScene.columns, nextScene.rows);
           if (hitTiles.length > 0) {
             const colorHex = this.resolveProjectileColorHex(nextScene.rangedConfig, event.skillId, nextScene);
             for (const tilePos of hitTiles) {
-              rendPulseTileFlashes.push({
+              miraiTileFlashes.push({
                 tilePos,
                 colorHex,
                 elapsedMs: 0,
-                durationMs: REND_PULSE_TILE_FLASH_DURATION_MS
+                durationMs: MIRAI_TILE_FLASH_DURATION_MS
               });
             }
+          }
+        }
+
+        if (this.isMiraiIronFangSkillId(event.skillId)) {
+          const targetId = nextScene.effectiveTargetEntityId ?? nextScene.lockedTargetEntityId;
+          const targetActor = targetId
+            ? (nextScene.actorsById[targetId] ?? scene.actorsById[targetId])
+            : null;
+          if (targetActor) {
+            nextScene = spawnFx(nextScene, {
+              fxId: "fx.skill.iron_fang_strike",
+              tilePos: { x: targetActor.tileX, y: targetActor.tileY },
+              durationMs: MIRAI_IRON_FANG_FX_DURATION_MS,
+              layer: "hitFx",
+              startFrame: this.resolveElementFxStartFrame(nextScene)
+            });
           }
         }
 
@@ -1031,7 +1043,7 @@ export class ArenaEngine {
       stormCollapseStackTexts,
       stormCollapseArenaRings,
       screenTintOverlays,
-      rendPulseTileFlashes,
+      miraiTileFlashes,
       sylwenHitOverlays,
       skullImpactOverlays,
       sylwenDissipateRings,
@@ -1141,8 +1153,8 @@ export class ArenaEngine {
     const sceneWithKnockbackSlides = this.tickMobKnockbackSlides(sceneWithVisuals, safeDelta);
     const sceneWithAdjustedSprites = this.applyMobKnockbackSlidesToSprites(sceneWithKnockbackSlides);
     const sceneWithFx = tickFx(sceneWithAdjustedSprites, safeDelta);
-    const sceneWithRendPulseFlashes = this.tickRendPulseTileFlashes(sceneWithFx, safeDelta);
-    const sceneWithThornfallZones = this.tickThornfallCrossZones(sceneWithRendPulseFlashes, safeDelta);
+    const sceneWithMiraiTileFlashes = this.tickMiraiTileFlashes(sceneWithFx, safeDelta);
+    const sceneWithThornfallZones = this.tickThornfallCrossZones(sceneWithMiraiTileFlashes, safeDelta);
     const sceneWithVelvetUmbralTrails = this.tickVelvetUmbralPathTrails(sceneWithThornfallZones, safeDelta);
     const sceneWithVelvetVoidChainArcs = this.tickVelvetVoidChainArcs(sceneWithVelvetUmbralTrails, safeDelta);
     const sceneWithVelvetVoidChainShimmers = this.tickVelvetVoidChainBorderShimmers(sceneWithVelvetVoidChainArcs, safeDelta);
@@ -2012,23 +2024,25 @@ export class ArenaEngine {
     }
   }
 
-  private isMiraiRendPulseSkillId(skillId: string): boolean {
+  private isMiraiPrimalRoarSkillId(skillId: string): boolean {
     const normalized = skillId.trim().toLowerCase();
-    return normalized === "skill:mirai_rend_pulse" || normalized === "mirai_rend_pulse";
+    return normalized === MIRAI_PRIMAL_ROAR_SKILL_ID ||
+      normalized === "mirai_primal_roar" ||
+      normalized.includes("mirai_primal_roar");
   }
 
-  private isMiraiDreadSweepSkillId(skillId: string): boolean {
+  private isMiraiRendClawSkillId(skillId: string): boolean {
     const normalized = skillId.trim().toLowerCase();
-    return normalized === MIRAI_DREAD_SWEEP_SKILL_ID ||
-      normalized === "mirai_dread_sweep" ||
-      normalized.includes("mirai_dread_sweep");
+    return normalized === MIRAI_REND_CLAW_SKILL_ID ||
+      normalized === "mirai_rend_claw" ||
+      normalized.includes("mirai_rend_claw");
   }
 
-  private isMiraiGraveFangSkillId(skillId: string): boolean {
+  private isMiraiIronFangSkillId(skillId: string): boolean {
     const normalized = skillId.trim().toLowerCase();
-    return normalized === MIRAI_GRAVE_FANG_SKILL_ID ||
-      normalized === "mirai_grave_fang" ||
-      normalized.includes("mirai_grave_fang");
+    return normalized === MIRAI_IRON_FANG_SKILL_ID ||
+      normalized === "mirai_iron_fang" ||
+      normalized.includes("mirai_iron_fang");
   }
 
   private isSylwenWhisperShotSkillId(skillId: string): boolean {
@@ -2267,24 +2281,6 @@ export class ArenaEngine {
 
   private computeChebyshevDistance(fromX: number, fromY: number, toX: number, toY: number): number {
     return Math.max(Math.abs(fromX - toX), Math.abs(fromY - toY));
-  }
-
-  private buildMiraiRendPulseTiles(columns: number, rows: number): TilePos[] {
-    const adjacentOffsets: ReadonlyArray<Readonly<{ dx: number; dy: number }>> = [
-      { dx: -1, dy: -1 }, { dx: 0, dy: -1 }, { dx: 1, dy: -1 },
-      { dx: -1, dy: 0 }, { dx: 1, dy: 0 },
-      { dx: -1, dy: 1 }, { dx: 0, dy: 1 }, { dx: 1, dy: 1 }
-    ];
-    const playerTile = { x: 3, y: 3 };
-    const maxX = Math.max(0, columns - 1);
-    const maxY = Math.max(0, rows - 1);
-
-    return adjacentOffsets
-      .map((offset) => ({
-        x: playerTile.x + offset.dx,
-        y: playerTile.y + offset.dy
-      }))
-      .filter((tile) => tile.x >= 0 && tile.y >= 0 && tile.x <= maxX && tile.y <= maxY);
   }
 
   private normalizeAssistCastHitTiles(
@@ -2698,12 +2694,12 @@ export class ArenaEngine {
     };
   }
 
-  private tickRendPulseTileFlashes(scene: ArenaScene, deltaMs: number): ArenaScene {
-    if (scene.rendPulseTileFlashes.length === 0) {
+  private tickMiraiTileFlashes(scene: ArenaScene, deltaMs: number): ArenaScene {
+    if (scene.miraiTileFlashes.length === 0) {
       return scene;
     }
 
-    const nextFlashes = scene.rendPulseTileFlashes
+    const nextFlashes = scene.miraiTileFlashes
       .map((overlay) => ({
         ...overlay,
         elapsedMs: overlay.elapsedMs + deltaMs
@@ -2712,7 +2708,7 @@ export class ArenaEngine {
 
     return {
       ...scene,
-      rendPulseTileFlashes: nextFlashes
+      miraiTileFlashes: nextFlashes
     };
   }
 
@@ -3005,3 +3001,4 @@ export class ArenaEngine {
     return undefined;
   }
 }
+
