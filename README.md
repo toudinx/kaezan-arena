@@ -103,10 +103,10 @@ Arena run setup no longer lives on `/`; it lives on `/arena-prep`.
 Bestiary now lives as a Kaelis tab (`/kaelis/:id?tab=bestiary`) and always uses the currently selected Kaelis context from the Kaelis parent screen.
 
 - **Header context:** Bestiary heading + current Kaelis identity + Echo Fragments balance.
-- **Stats row:** Tracked species / Unlocked / Total kills — numbers large, labels small, in dark tiles.
-- **LEFT — Species list:** Each row shows display name, optional "Rank N" amber pill (rank > 0), kill count, kills-to-next label, and a progress bar (`linear-gradient` teal). Selected species highlighted with teal border.
-- **CENTER — Species hero + loot:** Large species hero, rank/progress block, and discovered loot cards grouped by slot.
-- **RIGHT — Progression actions:** Species-scoped crafting progression per Kaelis: `Craft Weapon` (when none exists), then `Refine Weapon` (unified owned-weapon list + refine actions).
+- **Stats row:** Tracked species / Unlocked / Total kills â€” numbers large, labels small, in dark tiles.
+- **LEFT â€” Species list:** Each row shows display name, optional "Rank N" amber pill (rank > 0), kill count, kills-to-next label, and a progress bar (`linear-gradient` teal). Selected species highlighted with teal border.
+- **CENTER â€” Species hero + loot:** Large species hero, rank/progress block, and discovered loot cards grouped by slot.
+- **RIGHT â€” Progression actions:** Species-scoped crafting progression per Kaelis: `Craft Weapon` (when none exists), then `Refine Weapon` (unified owned-weapon list + refine actions).
 - No raw species IDs visible; catalog display names are shown for all known species.
 
 ## Characters Page
@@ -114,7 +114,7 @@ Bestiary now lives as a Kaelis tab (`/kaelis/:id?tab=bestiary`) and always uses 
 The Kaelis page is a dark-themed parent experience with a persistent left selector rail and internal tabs:
 
 - **Tabs:** `Overview`, `Loadout`, and `Bestiary` are subviews under Kaelis.
-- **LEFT — Kaelis selector rail:** Fixed 3-character roster in this order: `Mirai`, `Sylwen`, `Velvet`.
+- **LEFT â€” Kaelis selector rail:** Fixed 3-character roster in this order: `Mirai`, `Sylwen`, `Velvet`.
 - **Overview/Loadout tabs:** Keep portrait/identity and Kaelis detail blocks (stats, loadout, actions).
 - **Bestiary tab:** Renders the bestiary system as a Kaelis-scoped subview instead of a separate top-level page.
 
@@ -124,17 +124,17 @@ Arena preparation now lives on `/arena-prep` with focused zone selection, Start 
 
 After each run ends (`isRunEnded`), a full-screen dark overlay replaces the arena:
 
-- **Section A — Outcome header:** Large "VICTORY" (teal) or "DEFEAT" (coral), subtitle reason, inline meta line showing duration, level, kills, and elites.
-- **Section B — Key stats grid:** Responsive 4-column grid of stat tiles covering Kills, Elites, Damage Dealt, Damage Taken, Min HP, XP Gained, Echo Fragments (net, color-coded), Primal Core. Chests and Equipment tiles are shown conditionally when non-zero.
-- **Section C — Build summary:** Section header "Build · N cards" with all chosen card names as pills. Hidden when no cards were selected.
-- **Section D — Bestiary Progress:** Top 3 species by kills gained this run, each row showing kills delta and a "NEW RANK N" amber pill when a milestone was crossed. Hidden if no kills were registered.
+- **Section A â€” Outcome header:** Large "VICTORY" (teal) or "DEFEAT" (coral), subtitle reason, inline meta line showing duration, level, kills, and elites.
+- **Section B â€” Key stats grid:** Responsive 4-column grid of stat tiles covering Kills, Elites, Damage Dealt, Damage Taken, Min HP, XP Gained, Echo Fragments (net, color-coded), Primal Core. Chests and Equipment tiles are shown conditionally when non-zero.
+- **Section C â€” Build summary:** Section header "Build Â· N cards" with all chosen card names as pills. Hidden when no cards were selected.
+- **Section D â€” Bestiary Progress:** Top 3 species by kills gained this run, each row showing kills delta and a "NEW RANK N" amber pill when a milestone was crossed. Hidden if no kills were registered.
 - **Actions:** "RUN AGAIN" (teal primary) and "EXIT TO PREP" (muted secondary).
-- **[DEV] disclosure:** Collapsed `<details>` element containing Export Replay, Import Replay, Play Imported Replay, Copy Last/All Run JSON, Export Runs. Collapsed by default; native HTML toggle — no Angular state needed.
+- **[DEV] disclosure:** Collapsed `<details>` element containing Export Replay, Import Replay, Play Imported Replay, Copy Last/All Run JSON, Export Runs. Collapsed by default; native HTML toggle â€” no Angular state needed.
 - Subtle footer: "Run result logged and stored."
 
 Data source: all stats are read from existing component properties (`combatTotalDamageDealt`, `combatTotalDamageTaken`, `economyTotalXpGained`, etc.). `runPlayerMinHp` is captured from `RunResultLogger.finalizeIfEnded()` in `tryFinalizeRunResult()` and reset alongside other run counters.
 
-Bestiary delta calculation: `runStartBestiaryKills` is captured from the account state at `beginNewRun()` before resetting `bestiaryEntries`. Post-run delta = `bestiaryEntry.killsTotal − runStartBestiaryKills[species]`.
+Bestiary delta calculation: `runStartBestiaryKills` is captured from the account state at `beginNewRun()` before resetting `bestiaryEntries`. Post-run delta = `bestiaryEntry.killsTotal âˆ’ runStartBestiaryKills[species]`.
 
 ## Elemental Arenas
 
@@ -193,9 +193,9 @@ Four permanent Elemental Arenas, always accessible regardless of Account Level. 
   - Mob kills roll Sigil drops independently at 8% per kill (species-based), currently generating Hollow-tier levels (1-20)
   - Dropped Sigils go directly to account inventory during runs; equip/unequip remains in Characters page only
 - **Ascendant Unlock System:** Each Sigil slot tier has an Ascendant unlock condition based on Bestiary mastery
-  - Unlock condition: Rank 5 (100 kills) in ALL species of that tier — evaluated per character after every drop award
+  - Unlock condition: Rank 5 (100 kills) in ALL species of that tier â€” evaluated per character after every drop award
   - Hollow tier (Slot 1) requires Rank 5 in: Melee Brute, Ranged Archer, Melee Demon, Hollow Shaman
-  - Future tiers (Brave–Ascendant) will add more species as they are implemented
+  - Future tiers (Braveâ€“Ascendant) will add more species as they are implemented
   - Tier-to-species mapping is data-driven: `ArenaConfig.BestiaryConfig.TierSpecies` is the single source of truth
   - Ascendant unlock state is tracked in `CharacterState.AscendantSigilSlotsUnlocked` (per character, per tier index)
   - Progress is exposed via `AscendantTierProgressDto` in every `CharacterStateDto` response
@@ -203,17 +203,21 @@ Four permanent Elemental Arenas, always accessible regardless of Account Level. 
   - Characters page Loadout tab shows Ascendant unlock state inline in each Sigil slot card
 - Each playable character has a **fixed 3-slot kit** + **1 Ultimate slot**
   - Frontend roster now has exactly 3 playable entries in fixed order: `Mirai`, `Sylwen`, `Velvet`
-  - Mirai kit: Iron Fang + Primal Roar + Rend Claw (Ultimate: Collapse Field)
-  - Sylwen kit: Whisper Shot + Gale Pierce + Thornfall (Ultimate: Silver Tempest)
+  - Mirai kit: Primal Roar + Collapse Field + Rend Claw (Ultimate: Blood Fang)
+  - Sylwen kit: Whisper Shot + Gale Pierce + Wind Break (Ultimate: Thornfall)
   - Velvet kit: Void Chain + Umbral Path + Death Strike (Ultimate: Storm Collapse)
   - Selecting the active character on Characters page carries into Arena start (`playerId`) and activates that character kit
   - Frontend active-character fallback defaults to `character:mirai`
   - Active character is always one of: `character:mirai`, `character:sylwen`, or `character:velvet`
   - Character art is remapped by ID only (no file moves/renames): `character:mirai` uses the former Kaelis Vex art, `character:sylwen` is unchanged, and `character:velvet` uses the former Kaelis Dawn art
   - Ultimate gauge starts at **0** each run and auto-fires when full
+  - Ultimates evolve during the run based on total cards collected:
+    - Level 1: fewer than 3 cards collected
+    - Level 2: 3 to 5 cards collected
+    - Level 3: 6 or more cards collected
   - Assist order is kit-driven per active character; Ultimate auto-casts when ready (Mirai priority checks Ultimate first, then offensive skills)
-    - Mirai: Collapse Field (Ultimate) -> Iron Fang -> Primal Roar
-    - Sylwen: Thornfall -> Gale Pierce -> Silver Tempest (Ultimate)
+    - Mirai: Blood Fang (Ultimate) -> Primal Roar -> Collapse Field
+    - Sylwen: Gale Pierce -> Wind Break -> Thornfall (Ultimate)
     - Velvet: Umbral Path -> Death Strike -> Storm Collapse (Ultimate)
   - Manual cast hotkey slot mapping (from backend character catalog fixed kit order):
     - `Q` = Skill 1
@@ -221,63 +225,67 @@ Four permanent Elemental Arenas, always accessible regardless of Account Level. 
     - `E` = Skill 3
     - `R` = Ultimate
   - Per-character slot mapping:
-    - Mirai: `Q` Iron Fang, `W` Primal Roar, `E` Rend Claw, `R` Collapse Field
-    - Sylwen: `Q` Whisper Shot, `W` Gale Pierce, `E` Thornfall, `R` Silver Tempest
+    - Mirai: `Q` Primal Roar, `W` Collapse Field, `E` Rend Claw
+    - Sylwen: `Q` Whisper Shot, `W` Gale Pierce, `E` Wind Break, `R` Thornfall
     - Velvet: `Q` Void Chain, `W` Umbral Path, `E` Death Strike, `R` Storm Collapse
-  - Silver Tempest active: Whisper Shot cadence is doubled from its current calculated value (effective cooldown `/ 2.0`), attack speed cap is removed for the buff duration, and Sylwen projectiles pierce while the frenzy is active
+  - Wind Break active: Whisper Shot cadence is doubled from its current calculated value (effective cooldown `/ 2.0`), attack speed cap is removed for the buff duration, and Sylwen projectiles pierce while the frenzy is active
   - Focus (FocusStacks + DeadeyeConsecutiveHits) resets on both target switch and locked target death; a `focus_reset` event (mob ID) is emitted on both paths
   - `bleeding_mark_updated` event (mob ID + stack count) is emitted whenever Mirai updates Bleeding Mark stacks (apply or consume/reset)
   - `corrosion_updated` event (mob ID + stack count) is emitted after every Velvet skill hit that applies Corrosion
   - Frontend kit-mechanic FX are fully wired:
-    - Stack indicators above mobs: Bleeding Mark (amber `▲N`) and Corrosion (purple `✦N`)
+    - Stack indicators above mobs: Bleeding Mark (amber `â–²N`) and Corrosion (purple `âœ¦N`)
     - Focus indicator below locked target: teal pip row (caps at `6+`)
     - Headshot: white flash + `HEADSHOT` floating text
-    - Iron Fang (Mirai): heavy single-target strike on locked target (or nearest fallback), consuming all Bleeding Mark stacks on hit for bonus damage
     - Crowd control: rotating dashed stun ring (amber) and pulsing immobilize tile border (teal)
-    - Collapse Field: pull slide animation + post-slide white flash + amber radial burst centered on player
+    - Collapse Field: pulled-mob slide animation + amber radial burst centered on player + red reflect aura on player (`#ef4444`) while reflect is active
     - Void Chain: aggressive chain-lightning pass with 5px main arcs + secondary 2px parallel arcs, 700ms visibility, 36px hit pulses, inner hit flashes, and short border shimmer flashes per jump
-    - Umbral Path: 14px heavy projectile (60% fill, 3px border) with 160ms travel, impact ring + 6-ray splash, and a stronger trail overlay (45%→75% pulsing fill, 2px solid perimeter, persistent centerline)
+    - Umbral Path: 14px heavy projectile (60% fill, 3px border) with 160ms travel, impact ring + 6-ray splash, and a stronger trail overlay (45%â†’75% pulsing fill, 2px solid perimeter, persistent centerline)
     - Death Strike: heavy 12px projectile with element-color border, 8-line radial impact burst (24px lines), and an added expanding impact fill circle
-    - Storm Collapse: per-mob expanding detonation rings in staggered cascade (`30ms` steps), purple `×N` stack text, purple scaled damage numbers, and a final arena-wide ring when `>= 3` mobs detonate (no full-screen flash)
-    - Silver Tempest: teal player glow border while active + teal pierce trail rendering for Sylwen projectiles
-    - Sylwen skill-specific FX: Whisper Shot now renders the `fx.projectile.arrow` (`weapon_arrow`) sprite oriented to projectile travel (`tileSize * 0.8`, 220ms travel) with two ghost trailing copies and a 6-line impact star + flash; Gale Pierce now renders as a concave sweeping wave arc (`tileSize * 0.9` width, 350ms travel) with wake trail, X-slash hit marks, and end-of-path ring/radiating lines; Thornfall uses a 5-tile cross zone (center + N/S/E/W) with solid white perimeter outline only (no tile fill) plus sprite rain
+    - Storm Collapse: activation flashes the target-centered diamond tiles with white border (`#ffffff`, `2px`, `300ms`, no fill); detonation keeps per-mob expanding rings + purple `xN` stack text + purple scaled damage numbers; Levels 2/3 additionally pulse the local diamond perimeter in `#7F77DD` (`2px`, `200ms`, staggered pulses) for mobs that consumed stacks
+    - Wind Break: teal player glow border while active + teal pierce trail rendering for Sylwen projectiles
+    - Sylwen skill-specific FX: Whisper Shot now renders the `fx.projectile.arrow` (`weapon_arrow`) sprite oriented to projectile travel (`tileSize * 0.8`, 220ms travel) with two ghost trailing copies and a 6-line impact star + flash; Gale Pierce now renders as a concave sweeping wave arc (`tileSize * 0.9` width, 350ms travel) with wake trail, X-slash hit marks, and end-of-path ring/radiating lines; Thornfall uses a cross zone with solid white perimeter outline (Level 1: r=1, Levels 2/3: r=2), and Level 3 adds subtle red tile-floor tint (`rgba(239, 68, 68, 0.15)`) plus sprite rain
     - Character-aware ranged auto-attack FX: Sylwen `auto_attack_ranged` now renders `weapon_arrow` sprite oriented to travel direction (`tileSize * 0.6`, 150ms) with a small 4-line hit burst; Velvet `auto_attack_ranged` now renders a rotating arcane orb (inner orb + dashed ring, 180ms) with an expanding hit ring
     - Mob melee auto-attack readability: player-hit impacts now render `skull` sprite on the player tile (hitFx layer, 400ms fade)
-  - Thornfall correctly dispatches to its own handler (`BuildThornfallCrossTiles` + decal registration) through an explicit Thornfall dispatch branch with no fallthrough; when no valid target exists the cast is skipped
+  - Thornfall ultimate dispatches through `TryExecuteSylwenThornfall` (`BuildThornfallCrossTiles` + decal registration + level-driven radius/stun behavior); when no valid target exists, the ultimate cast is skipped
   - Rend Claw adapts to all 8 facing directions with fan logic derived from the locked/nearest target position, producing correct 3-tile fans for cardinal and diagonal facings alike
   - Skill name floating text is restored above the player on every assist cast for all characters (white, 11 px, rises 20 px, 800 ms duration with fade starting at 500 ms); a new cast replaces any previous text still visible; display names come from `AssistCastEventDto.DisplayName` populated server-side via `ArenaConfig.DisplayNames`
-  - **BALANCE-1 — Combat pacing:** All player skill cooldowns and mob auto-attack cooldowns have been doubled; Global Cooldown increased from 400 ms to 800 ms. Affected constants (all in `ArenaConfig.cs`): `PlayerGlobalCooldownMs`; all nine `SkillConfig.*CooldownMs` values (Mirai: Iron Fang, Rend Claw, Primal Roar; Sylwen: Whisper Shot, Gale Pierce, Thornfall; Velvet: Void Chain, Umbral Path, Death Strike); all mob AA cooldown constants (Melee Brute, Ranged Archer, Melee Demon, Ranged Shaman, Melee Skeleton, Melee Wogol, Melee Warrior, Melee Zombie, Tiny Zombie, Ranged Imp, Ranged Swampy, Ranged Muddy, Melee Slug, Elite Masked Orc, Elite Pumpkin Dude, Elite Doc, Frost Revenant); and boss `AutoAttackCooldownMs` inline values for Demon Lord (800 → 1600), Plague Titan (1000 → 2000), and The Ascendant (1200 → 2400). Ultimate gauge-based skills are unchanged.
+    - **BALANCE-1 â€” Combat pacing:** All player skill cooldowns and mob auto-attack cooldowns have been doubled; Global Cooldown increased from 400 ms to 800 ms. Affected constants (all in `ArenaConfig.cs`): `PlayerGlobalCooldownMs`; all nine `SkillConfig.*CooldownMs` values (Mirai: Rend Claw, Primal Roar, Collapse Field; Sylwen: Whisper Shot, Gale Pierce, Wind Break; Velvet: Void Chain, Umbral Path, Death Strike); all mob AA cooldown constants (Melee Brute, Ranged Archer, Melee Demon, Ranged Shaman, Melee Skeleton, Melee Wogol, Melee Warrior, Melee Zombie, Tiny Zombie, Ranged Imp, Ranged Swampy, Ranged Muddy, Melee Slug, Elite Masked Orc, Elite Pumpkin Dude, Elite Doc, Frost Revenant); and boss `AutoAttackCooldownMs` inline values for Demon Lord (800 â†’ 1600), Plague Titan (1000 â†’ 2000), and The Ascendant (1200 â†’ 2400). Ultimate gauge-based skills are unchanged.
   - Arena HUD now includes:
     - Collapsible `STATS` panel (collapsed by default) bound to snapshot `effectivePlayerStats` values
     - Enhanced Ultimate panel with gauge fraction, amber `READY` pulse at full gauge, and character-specific ultimate description
-    - Silver Tempest active override on Ultimate panel: countdown drain bar + active label while buff is running
-    - Active Cards panel showing chosen passive cards with stack counts (`×N`) and teal border at max stacks
+    - Active Cards panel showing chosen passive cards with stack counts (`Ã—N`) and teal border at max stacks
     - Locked target info panel (on right-click lock) with target name, HP bar (green/amber/red), element/weakness/resistance badges, and Bleeding Mark/Corrosion/Focus stack chips
-    - Compact active-effects row showing only current effects: `ST` (Silver Tempest), `IMM` (immobilize present), `STN` (stun present)
+    - Compact active-effects row showing only current effects: `WB` (Wind Break), `IMM` (immobilize present), `STN` (stun present)
     - Helper panel dynamic kit rows (`Q/W/E/R`) with backend display names and live cooldown bars from snapshot skill state
 - **Mirai Kit (Backend):**
   - Passive `Bleeding Mark`: Mirai attacks build stacks on target; stacks increase subsequent Mirai skill damage and reset on mob death.
   - `Rend Claw` (Signature AA): frontal 3-tile cone based on current facing (diagonal facings use adaptive 3-tile cone), applies Bleeding Mark, and fires on the player AA cooldown slot (not assist pool). **Only fires when at least one mob is within Chebyshev range 1 (adjacent tiles); skipped without cooldown reset when no mob is in range.**
-  - `Iron Fang`: heavy single-target strike on locked target (or nearest fallback) that consumes **all** Bleeding Mark stacks on hit for additional damage, then resets stacks to `0`. Plays sprite FX effect 947 (Part 19) centered on the target tile on cast.
   - `Primal Roar`: AoE burst hitting all 8 adjacent tiles simultaneously (Chebyshev distance = 1, full square ring around the player), applies Bleeding Mark to every mob hit.
-  - Ultimate `Collapse Field`: pulls all mobs toward the player, then deals `10` damage with Bleeding Mark bonus and immobilizes mobs for `5000ms` (5s).
+  - `Collapse Field` (Skill 2, Assist-enabled):
+    - Pull target selection is deterministic and stable: all living mobs are sorted by Chebyshev distance from the player (closest first), with `ActorId` as tiebreaker.
+    - Pull resolution is processed in that order, one mob at a time, updating occupancy immediately after each step.
+    - Each mob pulls directly toward player tile `(3,3)` using per-step sign deltas on X/Y, stopping when adjacent (`r=1`) or blocked.
+    - Mobs already adjacent are not pulled, but are still targeted by the post-pull impact.
+    - After all pulls resolve, every targeted mob receives Collapse Field damage and `5000ms` stun if it survives.
+    - Player gains reflect for `3000ms`: returns `30%` of incoming damage to the attacking mob as direct damage (no crit/modifiers), while active.
+  - Ultimate `Blood Fang`: triggers from Ultimate gauge and is prioritized by Assist before Primal Roar/Collapse Field when ready.
 - **Sylwen Kit (Backend):**
   - Passive `Deadeye Grace`: Whisper Shot builds `FocusStacks` and `DeadeyeConsecutiveHits` on hit; Focus grants flat Whisper Shot bonus damage; every 3rd hit is a Headshot (2x damage + `1000ms` stun).
-  - `Whisper Shot`: full-range projectile with locked-target-first selection; during Silver Tempest, projectiles pierce all mobs in the projectile path while Focus/Headshot counters continue accumulating.
+  - `Whisper Shot`: full-range projectile with locked-target-first selection; during Wind Break, projectiles pierce all mobs in the projectile path while Focus/Headshot counters continue accumulating.
   - `Gale Pierce`: full-range directional line shot that pierces all mobs in line, pushes each hit mob back by 1 tile when walkable, and stuns only displaced mobs for `3000ms` (3s).
-  - `Thornfall`: sustained ranged ground-zone that places a 5-tile cross centered on the locked/nearest target position (center + north/south/east/west), applying periodic damage over `5000ms` with no melee range requirement.
-  - Ultimate `Silver Tempest`: on activation, repels mobs outward toward the border and stuns displaced mobs for `5000ms` (5s); then applies a `5000ms` frenzy that doubles Whisper Shot cadence, removes the attack speed cap while active, and enables projectile pierce during the buff window.
+  - `Wind Break`: pushes mobs outward until Chebyshev distance `r=2` from the player (mobs already at `r>=2` do not move), stuns only displaced mobs for `5000ms` (5s), and applies a `5000ms` frenzy that doubles Whisper Shot cadence, removes the attack speed cap while active, and enables projectile pierce.
+  - Ultimate `Thornfall`: sustained ranged ground-zone centered on locked/nearest target, applying periodic damage over `5000ms` with level progression by cards collected: Level 1 cross `r=1`, Level 2 cross `r=2`, Level 3 cross `r=2` + stuns mobs that enter the area for `3000ms`.
 - **Velvet Kit (Backend):**
   - Passive `Arcane Decay`: every Velvet skill hit adds `+1` `CorrosionStacks` on the target mob; Velvet damage is amplified by `+5%` per corrosion stack with no time decay.
   - `Void Chain`: chain projectile that starts on locked/nearest target, then keeps jumping to the nearest not-yet-hit mob within Chebyshev range `3`.
   - `Umbral Path`: pierces from player to arena edge in the exact player-to-target direction (cardinal or diagonal), applies `r=1` splash damage across the full path, and leaves a persistent 3-tile-wide trail that deals periodic damage and applies Corrosion each tick.
   - `Death Strike`: single-target projectile whose final damage is amplified by existing Corrosion stacks on the target. Plays sprite FX effect 633 (Part 13) centered on the target tile on impact.
-  - Ultimate `Storm Collapse`: activates whenever the ultimate gauge is full — no stack condition required. On activation: (1) deals `VelvetStormCollapseAoeBaseDamage` flat damage to all mobs in a square r=1 area around the player (player tile + all 8 adjacent tiles); (2) detonates Corrosion on all living mobs across the entire map, dealing `baseDamage * stacks` (minimum `1x` base damage when stacks are `0`), then resets Corrosion to `0`.
+  - Ultimate `Storm Collapse`: activates whenever the ultimate gauge is full - no stack condition required. Target resolution uses locked target first, with nearest-mob fallback. Geometry is resolved by `ResolveUltimateLevel()` using card thresholds (Level 1: `<3`; Level 2: `3-5`; Level 3: `>=6` cards), always centered on that resolved target. Diamond radii: Level 1 = `r=2`, Level 2 = `r=2`, Level 3 = `r=3` using Manhattan distance (`|dx| + |dy| <= r`). All mobs in the target-centered diamond take `VelvetStormCollapseAoeBaseDamage`. Stack detonation is local only: Levels 2/3 consume and detonate Corrosion stacks only for mobs inside the same diamond; Level 1 has no stack detonation.
 - Per-mob passive/CC state is tracked on `StoredActor`: `BleedingMarkStacks`, `CorrosionStacks`, `FocusStacks`, `DeadeyeConsecutiveHits`, `IsStunned`/`StunRemainingMs`, and `IsImmobilized`/`ImmobilizeRemainingMs`.
 - Tick behavior for crowd control:
   - Stunned mobs skip movement and auto-attacks.
   - Immobilized mobs skip movement but can still auto-attack.
-- Ultimate applies a flat AoE burst (radius 2) around the player when charged
+- Ultimate behavior is character-specific and level-gated by cards collected (`ResolveUltimateLevel()`).
 - Heal and Guard removed from kit - survivability comes from passive cards only
 - **Left-click** a POI (chest, altar) to interact
 - **Right-click** a mob to lock it as the priority target
@@ -302,7 +310,7 @@ The following `anim_strip_rows` FX assets are registered in `frontend/src/assets
 
 These are used by frontend combat FX as follows:
 
-- Thornfall cross tiles: sprite arrow rain (`448`) on `groundFx`, with only solid white cross-perimeter outline overlay (tile fill removed).
+- Thornfall cross tiles: sprite arrow rain (`448`) on `groundFx`, with solid white cross-perimeter outline (Level 1 `r=1`, Levels 2/3 `r=2`); Level 3 also applies subtle red floor tint (`rgba(239, 68, 68, 0.15)`).
 - Umbral Path trail: sprite flame trail (`467`) on `groundFx`, while keeping perimeter stroke and centerline overlay.
 - Death Strike impact: sprite crystal burst (`623`) on `hitFx`, layered on top of the existing radial burst + expanding impact circle.
 - Sprite row selection for `448` / `467` / `623` now follows active weapon element (fire/ice/earth/energy/physical).

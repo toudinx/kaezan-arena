@@ -22,22 +22,37 @@ public sealed partial class InMemoryBattleStore
         state.PlayerGlobalCooldownRemainingMs = Math.Max(0, state.PlayerGlobalCooldownRemainingMs - StepDeltaMs);
     }
 
-    private static void TickSilverTempestDuration(StoredBattle state)
+    private static void TickWindBreakDuration(StoredBattle state)
     {
-        if (!state.SilverTempestActive && state.SilverTempestRemainingMs <= 0)
+        if (!state.WindBreakActive && state.WindBreakRemainingMs <= 0)
         {
             return;
         }
 
-        state.SilverTempestRemainingMs = Math.Max(0, state.SilverTempestRemainingMs - StepDeltaMs);
-        if (state.SilverTempestRemainingMs > 0)
+        state.WindBreakRemainingMs = Math.Max(0, state.WindBreakRemainingMs - StepDeltaMs);
+        if (state.WindBreakRemainingMs > 0)
         {
-            state.SilverTempestActive = true;
+            state.WindBreakActive = true;
             return;
         }
 
-        state.SilverTempestActive = false;
-        state.SilverTempestRemainingMs = 0;
+        state.WindBreakActive = false;
+        state.WindBreakRemainingMs = 0;
+    }
+
+    private static void TickCollapseFieldReflectDuration(StoredBattle state)
+    {
+        if (state.ReflectRemainingMs <= 0)
+        {
+            state.ReflectRemainingMs = 0;
+            return;
+        }
+
+        state.ReflectRemainingMs = Math.Max(0, state.ReflectRemainingMs - StepDeltaMs);
+        if (state.ReflectRemainingMs == 0)
+        {
+            state.ReflectPercent = 0;
+        }
     }
 
     private static void TickPendingWhisperShotHits(StoredBattle state, List<BattleEventDto> events)
@@ -200,6 +215,7 @@ public sealed partial class InMemoryBattleStore
 
     private static void TickDecals(StoredBattle state, List<BattleEventDto> events)
     {
+        TickActiveThornfallZones(state);
         if (state.Decals.Count == 0)
         {
             return;
@@ -226,10 +242,6 @@ public sealed partial class InMemoryBattleStore
                                 actor.TileY == decal.TileY)
                             .OrderBy(actor => actor.ActorId, StringComparer.Ordinal)
                             .ToList();
-
-                        System.Console.WriteLine(
-                            $"[ThornfallTick] Tick={state.Tick} Tile=({decal.TileX},{decal.TileY}) " +
-                            $"MobsOnTile={mobsOnTile.Count} RemainingMs={decal.RemainingMs}");
 
                         foreach (var mob in mobsOnTile)
                         {
@@ -297,6 +309,53 @@ public sealed partial class InMemoryBattleStore
             {
                 state.Decals.RemoveAt(index);
             }
+        }
+    }
+
+    private static void TickActiveThornfallZones(StoredBattle state)
+    {
+        if (state.ActiveThornfallZones.Count == 0)
+        {
+            return;
+        }
+
+        for (var index = state.ActiveThornfallZones.Count - 1; index >= 0; index -= 1)
+        {
+            var zone = state.ActiveThornfallZones[index];
+            zone.RemainingMs = Math.Max(0, zone.RemainingMs - StepDeltaMs);
+            if (zone.RemainingMs == 0)
+            {
+                state.ActiveThornfallZones.RemoveAt(index);
+                continue;
+            }
+
+            var occupants = state.Actors.Values
+                .Where(actor =>
+                    (actor.Kind == "mob" || actor.Kind == "boss") &&
+                    actor.Hp > 0 &&
+                    zone.TileKeys.Contains(EncodeTileKey(actor.TileX, actor.TileY)))
+                .OrderBy(actor => actor.ActorId, StringComparer.Ordinal)
+                .ToList();
+
+            if (zone.ApplyEntryStun)
+            {
+                foreach (var occupant in occupants)
+                {
+                    if (zone.OccupyingActorIds.Contains(occupant.ActorId))
+                    {
+                        continue;
+                    }
+
+                    occupant.IsStunned = true;
+                    occupant.StunRemainingMs = Math.Max(
+                        occupant.StunRemainingMs,
+                        ArenaConfig.SkillConfig.ThornfallLevelThreeStunDurationMs);
+                }
+            }
+
+            zone.OccupyingActorIds = occupants
+                .Select(actor => actor.ActorId)
+                .ToHashSet(StringComparer.Ordinal);
         }
     }
 }

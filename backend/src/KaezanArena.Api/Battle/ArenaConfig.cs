@@ -153,6 +153,11 @@ public static class ArenaConfig
     public const int SkillDefensivePercentBonusPerLevel = 2;
     #endregion
 
+    #region Ultimate Leveling
+    public const int UltimateLevelTwoCardThreshold = 3;
+    public const int UltimateLevelThreeCardThreshold = 6;
+    #endregion
+
     #region Skill Effects
     public const int AvalancheDamage = 3;
     public const int AvalancheRangeTilesManhattan = 3;
@@ -936,7 +941,6 @@ public static class ArenaConfig
     public static class WeaponIds
     {
         public const string AutoAttackRanged = "auto_attack_ranged";
-        public const string IronFang = "weapon:iron_fang";
         public const string RendClaw = "weapon:rend_claw";
         public const string WhisperShot = "weapon:whisper_shot";
         public const string VoidChain = "weapon:void_chain";
@@ -953,14 +957,13 @@ public static class ArenaConfig
 
     public static class SkillIds
     {
-        public const string MiraiIronFang = "skill:mirai_iron_fang";
         public const string MiraiRendClaw = "skill:mirai_rend_claw";
         public const string MiraiPrimalRoar = "skill:mirai_primal_roar";
         public const string MiraiCollapseField = "skill:mirai_collapse_field";
         public const string SylwenWhisperShot = "skill:sylwen_whisper_shot";
         public const string SylwenGalePierce = "skill:sylwen_gale_pierce";
         public const string SylwenThornfall = "skill:sylwen_thornfall";
-        public const string SylwenSilverTempest = "skill:sylwen_silver_tempest";
+        public const string SylwenWindBreak = "skill:sylwen_wind_break";
         public const string VelvetVoidChain = "skill:velvet_void_chain";
         public const string VelvetUmbralPath = "skill:velvet_umbral_path";
         public const string VelvetDeathStrike = "skill:velvet_death_strike";
@@ -996,10 +999,10 @@ public static class ArenaConfig
             new(
                 KitIds.Mirai,
                 PassiveIds.MiraiBleedingMark,
-                SkillIds.MiraiIronFang,
                 SkillIds.MiraiPrimalRoar,
+                SkillIds.MiraiCollapseField,
                 SkillIds.MiraiRendClaw,
-                SkillIds.MiraiCollapseField);
+                UltimateConfig.UltimateSkillId);
 
         public static readonly KitDefinition Sylwen =
             new(
@@ -1007,8 +1010,8 @@ public static class ArenaConfig
                 PassiveIds.SylwenDeadeyeGrace,
                 SkillIds.SylwenWhisperShot,
                 SkillIds.SylwenGalePierce,
-                SkillIds.SylwenThornfall,
-                SkillIds.SylwenSilverTempest);
+                SkillIds.SylwenWindBreak,
+                SkillIds.SylwenThornfall);
 
         public static readonly KitDefinition Velvet =
             new(
@@ -1023,16 +1026,21 @@ public static class ArenaConfig
     public static class SkillConfig
     {
         // Mirai
-        public const int MiraiCollapseFieldStopDistanceChebyshev = 1;
-        public const int MiraiIronFangCooldownMs = 3200;
-        public const int MiraiIronFangDamage = 16;
-        public const int MiraiIronFangBonusDamagePerConsumedBleedingMarkStack = 3;
+        public const int CollapseFieldLevelOnePullRadius = 2;
+        public const int CollapseFieldLevelTwoAndThreePullRadius = 1;
+        public const int CollapseFieldBleedingMarkStacks = 3;
+        public const int CollapseFieldDamage = 10;
+        public const int CollapseFieldImmobilizeDurationMs = 5000;
+        public const int CollapseFieldReflectDurationMs = 3000;
+        public const int CollapseFieldReflectPercent = 30;
+        public const int MiraiCollapseFieldStopDistanceChebyshev = CollapseFieldLevelTwoAndThreePullRadius;
         public const int MiraiRendClawCooldownMs = 2800;
         public const int MiraiRendClawDamage = 12;
         public const int MiraiPrimalRoarCooldownMs = 4000;
         public const int MiraiPrimalRoarDamage = 10;
-        public const int MiraiCollapseFieldDamage = 10;
-        public const int MiraiCollapseFieldImmobilizeDurationMs = 5000;
+        public const int MiraiCollapseFieldCooldownMs = 5000;
+        public const int MiraiCollapseFieldDamage = CollapseFieldDamage;
+        public const int MiraiCollapseFieldImmobilizeDurationMs = CollapseFieldImmobilizeDurationMs;
         public const int MiraiBleedingMarkStacksPerHit = 1;
         public const int MiraiBleedingMarkFlatDamagePerStack = 1; // +1 flat dmg per stack on target
 
@@ -1049,15 +1057,20 @@ public static class ArenaConfig
         public const int SylwenGalePierceDamage = 10;
         public const int SylwenGalePierceKnockbackTiles = 1;
         public const int SylwenGalePierceStunMs = 3000;
+        public const int SylwenWindBreakCooldownMs = 5000;
         public const int SylwenThornfallCooldownMs = 5000;
         public const int SylwenThornfallRadius = 1;
         public const int SylwenThornfallDamagePerTick = 3;
         public const int SylwenThornfallDurationMs = 5000;
+        public const int WindBreakPushRadius = 2;
+        public const int ThornfallLevelOneRadius = 1;
+        public const int ThornfallLevelTwoRadius = 2;
+        public const int ThornfallLevelThreeStunDurationMs = 3000;
         public const int SylwenDeadeyeGraceHeadshotEveryNHits = 3;
         public const int SylwenDeadeyeGraceStunDurationMs = 1000;
-        public const int SylwenSilverTempestDurationMs = 5000;
-        public const int SylwenSilverTempestStunMs = 5000;
-        public const double SylwenSilverTempestAttackSpeedMultiplier = 2.0d;
+        public const int SylwenWindBreakDurationMs = 5000;
+        public const int SylwenWindBreakStunMs = 5000;
+        public const double SylwenWindBreakAttackSpeedMultiplier = 2.0d;
 
         // Velvet
         public const int VelvetCorrosionStacksPerHit = 1;
@@ -1077,7 +1090,9 @@ public static class ArenaConfig
         public const int VelvetDeathStrikeBaseDamage = 8;
         public const int VelvetStormCollapseBaseDamage = 5; // per stack: totalDamage = BaseDamage * corrosionStacks
         public const int VelvetStormCollapseMinimumStacksMultiplier = 1;
-        public const int VelvetStormCollapseAoeBaseDamage = 10; // flat AoE hit in square r=1 on every activation
+        public const int VelvetStormCollapseAoeBaseDamage = 10; // flat AoE hit on all tiles within the target-centered diamond
+        public const int StormCollapseDiamondRadiusL1 = 2; // used by Level 1 and Level 2
+        public const int StormCollapseDiamondRadiusL3 = 3; // used by Level 3
         public const int MiraiRendClawRangeTilesChebyshev = 1; // Rend Claw only fires when a mob is within this range
         public const double VelvetCorrosionDamageAmpPerStack = 0.05; // +5% damage taken per stack
     }
@@ -1118,17 +1133,16 @@ public static class ArenaConfig
         {
             [CharacterIds.Mirai] =
             [
-                SkillIds.MiraiIronFang,
                 SkillIds.MiraiPrimalRoar,
-                SkillIds.MiraiRendClaw,
-                SkillIds.MiraiCollapseField
+                SkillIds.MiraiCollapseField,
+                SkillIds.MiraiRendClaw
             ],
             [CharacterIds.Sylwen] =
             [
                 SkillIds.SylwenWhisperShot,
                 SkillIds.SylwenGalePierce,
-                SkillIds.SylwenThornfall,
-                SkillIds.SylwenSilverTempest
+                SkillIds.SylwenWindBreak,
+                SkillIds.SylwenThornfall
             ],
             [CharacterIds.Velvet] =
             [
@@ -1232,7 +1246,6 @@ public static class ArenaConfig
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
             [WeaponIds.AutoAttackRanged] = "Ranged Attack",
-            [WeaponIds.IronFang]       = "Iron Fang",
             [WeaponIds.RendClaw]       = "Rend Claw",
             [WeaponIds.WhisperShot]     = "Whisper Shot",
             [WeaponIds.VoidChain]       = "Void Chain",
@@ -1248,15 +1261,15 @@ public static class ArenaConfig
             [CharacterIds.Mirai]           = "Mirai",
             [CharacterIds.Sylwen]          = "Sylwen",
             [CharacterIds.Velvet]          = "Velvet",
-            [SkillIds.MiraiIronFang]      = "Iron Fang",
             [SkillIds.MiraiRendClaw]      = "Rend Claw",
             [SkillIds.MiraiPrimalRoar]    = "Primal Roar",
             [SkillIds.MiraiCollapseField]  = "Collapse Field",
+            [UltimateConfig.UltimateSkillId] = "Blood Fang",
             [PassiveIds.MiraiBleedingMark]  = "Bleeding Mark",
             [SkillIds.SylwenWhisperShot]   = "Whisper Shot",
             [SkillIds.SylwenGalePierce]    = "Gale Pierce",
             [SkillIds.SylwenThornfall]     = "Thornfall",
-            [SkillIds.SylwenSilverTempest] = "Silver Tempest",
+            [SkillIds.SylwenWindBreak] = "Wind Break",
             [PassiveIds.SylwenDeadeyeGrace] = "Deadeye Grace",
             [SkillIds.VelvetVoidChain]     = "Void Chain",
             [SkillIds.VelvetUmbralPath]    = "Umbral Path",
@@ -1292,7 +1305,6 @@ public static class ArenaConfig
     private static readonly IReadOnlyDictionary<string, string> SkillIdToWeaponId =
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            [SkillIds.MiraiIronFang] = WeaponIds.IronFang,
             [SkillIds.MiraiRendClaw] = WeaponIds.RendClaw,
             [SkillIds.SylwenWhisperShot] = WeaponIds.WhisperShot,
             [SkillIds.VelvetVoidChain] = WeaponIds.VoidChain,
@@ -1320,7 +1332,6 @@ public static class ArenaConfig
     private static readonly IReadOnlyDictionary<string, string> WeaponIdToSkillId =
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            [WeaponIds.IronFang] = SkillIds.MiraiIronFang,
             [WeaponIds.RendClaw] = SkillIds.MiraiRendClaw,
             [WeaponIds.WhisperShot] = SkillIds.SylwenWhisperShot,
             [WeaponIds.VoidChain] = SkillIds.VelvetVoidChain,

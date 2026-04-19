@@ -151,8 +151,8 @@ type EffectivePlayerStatsDto = Readonly<{
   effectiveAttackSpeedPercent: number;
   ultimateGaugeCurrent: number;
   ultimateGaugeMax: number;
-  silverTempestActive: boolean;
-  silverTempestRemainingMs: number;
+  windBreakActive: boolean;
+  windBreakRemainingMs: number;
 }>;
 type EffectiveStatRow = Readonly<{
   label: string;
@@ -160,7 +160,7 @@ type EffectiveStatRow = Readonly<{
   tone: "muted" | "boosted" | "amber" | "teal";
 }>;
 type ActiveEffectPill = Readonly<{
-  id: "silver_tempest" | "immobilize" | "stun";
+  id: "wind_break" | "immobilize" | "stun";
   label: string;
   tone: "teal" | "amber";
 }>;
@@ -623,8 +623,8 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   private replayCommandBatchIndex = 0;
   private replayCardChoices: RunRecordingChoice[] = [];
   private replayCardChoiceIndex = 0;
-  private silverTempestDurationBaselineMs = 5000;
-  private wasSilverTempestActive = false;
+  private windBreakDurationBaselineMs = 5000;
+  private wasWindBreakActive = false;
   private lastKnownViewportWidthCss = 0;
   private lastKnownViewportHeightCss = 0;
   private readyPulseSkillIds = new Set<string>();
@@ -1143,10 +1143,6 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   }
 
   get ultimateGaugePercentForHud(): number {
-    if (this.silverTempestActiveForHud) {
-      return this.silverTempestDrainPercentForHud;
-    }
-
     return computeUnifiedVitalsPercent(this.ultimateGaugeCurrentForHud, this.ultimateGaugeMaxForHud);
   }
 
@@ -1154,46 +1150,46 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     return `${this.ultimateGaugeCurrentForHud} / ${this.ultimateGaugeMaxForHud}`;
   }
 
-  get silverTempestActiveForHud(): boolean {
-    const fromStats = this.effectivePlayerStats?.silverTempestActive;
+  get windBreakActiveForHud(): boolean {
+    const fromStats = this.effectivePlayerStats?.windBreakActive;
     if (typeof fromStats === "boolean") {
       return fromStats;
     }
 
-    return this.scene?.silverTempestActive === true;
+    return this.scene?.windBreakActive === true;
   }
 
-  get silverTempestRemainingMsForHud(): number {
-    const fromStats = this.effectivePlayerStats?.silverTempestRemainingMs;
+  get windBreakRemainingMsForHud(): number {
+    const fromStats = this.effectivePlayerStats?.windBreakRemainingMs;
     if (typeof fromStats === "number" && Number.isFinite(fromStats)) {
       return Math.max(0, Math.floor(fromStats));
     }
 
-    return Math.max(0, this.scene?.silverTempestRemainingMs ?? 0);
+    return Math.max(0, this.scene?.windBreakRemainingMs ?? 0);
   }
 
-  get silverTempestRemainingSecondsForHud(): number {
-    return Math.max(0, Math.ceil(this.silverTempestRemainingMsForHud / 1000));
+  get windBreakRemainingSecondsForHud(): number {
+    return Math.max(0, Math.ceil(this.windBreakRemainingMsForHud / 1000));
   }
 
-  get silverTempestDrainPercentForHud(): number {
-    const baseline = Math.max(1, this.silverTempestDurationBaselineMs);
-    const remaining = Math.max(0, this.silverTempestRemainingMsForHud);
+  get windBreakDrainPercentForHud(): number {
+    const baseline = Math.max(1, this.windBreakDurationBaselineMs);
+    const remaining = Math.max(0, this.windBreakRemainingMsForHud);
     return Math.max(0, Math.min(100, (remaining / baseline) * 100));
   }
 
   get ultimateDescriptionForHud(): string {
     const characterId = this.selectedCharacterId || this.accountState?.activeCharacterId || DEFAULT_PLAYABLE_CHARACTER_ID;
     if (characterId === "character:mirai") {
-      return "Collapse Field - pull all mobs + immobilize 5s";
+      return "Blood Fang - ultimate AoE burst around Mirai";
     }
 
     if (characterId === "character:sylwen") {
-      return "Silver Tempest - max cadence + pierce 5s";
+      return "Thornfall - Level 1 r=1, Level 2 r=2, Level 3 r=2 + stun";
     }
 
     if (characterId === "character:velvet") {
-      return "Storm Collapse - detonate all Corrosion stacks";
+      return "Storm Collapse - target-centered diamond burst; L2/L3 detonate local Corrosion stacks";
     }
 
     return "Ultimate";
@@ -1201,10 +1197,10 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
 
   get activeEffectPills(): ReadonlyArray<ActiveEffectPill> {
     const pills: ActiveEffectPill[] = [];
-    if (this.silverTempestActiveForHud) {
+    if (this.windBreakActiveForHud) {
       pills.push({
-        id: "silver_tempest",
-        label: `ST ${this.silverTempestRemainingSecondsForHud}s`,
+        id: "wind_break",
+        label: `WB ${this.windBreakRemainingSecondsForHud}s`,
         tone: "teal"
       });
     }
@@ -3170,6 +3166,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         this.applyCardChoiceStateFromSnapshot(response);
         this.applyEffectivePlayerStatsFromSnapshot(response);
         this.applyUltimateFromSnapshot(response);
+        this.applyReflectFromSnapshot(response);
         this.applyZoneFromSnapshot(response);
         this.applyBossStateFromSnapshot(response);
         this.runResultLogger.startRun({
@@ -3665,6 +3662,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.updateCardChoicePresentationFromEvents(response.events);
     this.applyEffectivePlayerStatsFromSnapshot(response);
     this.applyUltimateFromSnapshot(response);
+    this.applyReflectFromSnapshot(response);
     this.applyZoneFromSnapshot(response);
     this.applyBossStateFromSnapshot(response);
     this.processBossEventsFromSnapshot(response);
@@ -4383,7 +4381,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         const targetActorId = this.readString(value["targetActorId"]);
         const pierces = this.readBoolean(value["pierces"]);
         const isChainJump = this.readBoolean(value["isChainJump"]);
-        const isSilverTempestFollowUp = this.readBoolean(value["isSilverTempestFollowUp"]);
+        const isWindBreakFollowUp = this.readBoolean(value["isWindBreakFollowUp"]);
         if (
           !weaponId ||
           fromX === null ||
@@ -4403,7 +4401,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
           targetActorId: targetActorId ?? undefined,
           pierces,
           isChainJump: isChainJump ?? undefined,
-          isSilverTempestFollowUp: isSilverTempestFollowUp ?? undefined
+          isWindBreakFollowUp: isWindBreakFollowUp ?? undefined
         });
         continue;
       }
@@ -4541,81 +4539,121 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         const playerPositionRecord = this.readRecord(value["playerPosition"]);
         const playerX = this.readNumber(playerPositionRecord?.["x"]);
         const playerY = this.readNumber(playerPositionRecord?.["y"]);
-        const rawPullResults = Array.isArray(value["pullResults"])
-          ? value["pullResults"]
-          : Array.isArray(value["mobs"])
-            ? value["mobs"]
-            : [];
+        const rawPulledMobs = Array.isArray(value["pulledMobs"])
+          ? value["pulledMobs"]
+          : [];
+        const reflectDurationMs = this.readNumber(value["reflectDurationMs"]) ?? 0;
         if (playerX === null || playerY === null) {
           continue;
         }
 
-        const pullResults: Array<{ mobId: string; newPosition: { x: number; y: number }; damageDealt: number }> = [];
-        for (const entry of rawPullResults) {
+        const pulledMobs: Array<{
+          mobId: string;
+          fromPosition: { x: number; y: number };
+          toPosition: { x: number; y: number };
+        }> = [];
+        for (const entry of rawPulledMobs) {
           const record = this.readRecord(entry);
           const mobId = this.readString(record?.["mobId"]);
-          const positionRecord = this.readRecord(record?.["newPosition"]) ?? this.readRecord(record?.["position"]);
-          const tileX = this.readNumber(positionRecord?.["x"]);
-          const tileY = this.readNumber(positionRecord?.["y"]);
-          const damageDealt = this.readNumber(record?.["damageDealt"]) ?? 0;
-          if (!mobId || tileX === null || tileY === null) {
+          const fromRecord = this.readRecord(record?.["fromPosition"]);
+          const toRecord = this.readRecord(record?.["toPosition"]);
+          const fromX = this.readNumber(fromRecord?.["x"]);
+          const fromY = this.readNumber(fromRecord?.["y"]);
+          const toX = this.readNumber(toRecord?.["x"]);
+          const toY = this.readNumber(toRecord?.["y"]);
+          if (!mobId || fromX === null || fromY === null || toX === null || toY === null) {
             continue;
           }
 
-          pullResults.push({
+          pulledMobs.push({
             mobId,
-            newPosition: { x: tileX, y: tileY },
-            damageDealt: Math.max(0, damageDealt)
+            fromPosition: { x: fromX, y: fromY },
+            toPosition: { x: toX, y: toY }
           });
         }
 
         mapped.push({
           type: "collapse_field_activated",
           playerPosition: { x: playerX, y: playerY },
-          pullResults
+          pulledMobs,
+          reflectDurationMs: Math.max(0, Math.floor(reflectDurationMs))
         });
         continue;
       }
 
       if (eventType === "storm_collapse_detonated") {
+        const ultimateLevel = this.readNumber(value["ultimateLevel"]);
+        const targetRecord = this.readRecord(value["targetPosition"]);
+        const targetX = this.readNumber(targetRecord?.["x"]);
+        const targetY = this.readNumber(targetRecord?.["y"]);
+        const targetPosition = targetX === null || targetY === null
+          ? undefined
+          : { x: targetX, y: targetY };
+        const rawAffectedTiles = Array.isArray(value["affectedTiles"])
+          ? value["affectedTiles"]
+          : Array.isArray(value["aoeTiles"])
+            ? value["aoeTiles"]
+            : [];
+        const affectedTiles: Array<{ x: number; y: number }> = [];
+        for (const tileEntry of rawAffectedTiles) {
+          const tileRecord = this.readRecord(tileEntry);
+          const tileX = this.readNumber(tileRecord?.["x"]);
+          const tileY = this.readNumber(tileRecord?.["y"]);
+          if (tileX === null || tileY === null) {
+            continue;
+          }
+
+          affectedTiles.push({ x: tileX, y: tileY });
+        }
+
         const rawHits = Array.isArray(value["hits"])
           ? value["hits"]
           : Array.isArray(value["mobs"])
             ? value["mobs"]
             : [];
-        const hits: Array<{ mobId: string; stacksConsumed: number; damageDealt: number }> = [];
+        const hits: Array<{ mobId: string; mobPosition: { x: number; y: number }; stacksConsumed: number; aoeDamage: number }> = [];
         for (const entry of rawHits) {
           const record = this.readRecord(entry);
           const mobId = this.readString(record?.["mobId"]);
+          const mobPositionRecord = this.readRecord(record?.["mobPosition"]);
+          const mobPosX = this.readNumber(mobPositionRecord?.["x"]) ?? this.readNumber(record?.["targetTileX"]);
+          const mobPosY = this.readNumber(mobPositionRecord?.["y"]) ?? this.readNumber(record?.["targetTileY"]);
           const stacksConsumed = this.readNumber(record?.["stacksConsumed"]) ??
             this.readNumber(record?.["corrosionStacksBeforeDetonation"]);
-          const damageDealt = this.readNumber(record?.["damageDealt"]);
-          if (!mobId || stacksConsumed === null || damageDealt === null) {
+          const aoeDamage = this.readNumber(record?.["aoeDamage"]) ??
+            this.readNumber(record?.["damageDealt"]) ?? 0;
+          if (!mobId || mobPosX === null || mobPosY === null || stacksConsumed === null) {
             continue;
           }
 
           hits.push({
             mobId,
+            mobPosition: { x: mobPosX, y: mobPosY },
             stacksConsumed: Math.max(0, stacksConsumed),
-            damageDealt: Math.max(0, damageDealt)
+            aoeDamage: Math.max(0, aoeDamage)
           });
         }
 
         mapped.push({
           type: "storm_collapse_detonated",
-          hits
+          hits,
+          targetPosition,
+          affectedTiles: affectedTiles.length > 0 ? affectedTiles : undefined,
+          ultimateLevel: ultimateLevel === null
+            ? undefined
+            : Math.max(1, Math.min(3, Math.floor(ultimateLevel)))
         });
         continue;
       }
 
-      if (eventType === "silver_tempest_activated") {
+      if (eventType === "wind_break_activated") {
         const durationMs = this.readNumber(value["durationMs"]);
         if (durationMs === null) {
           continue;
         }
 
         mapped.push({
-          type: "silver_tempest_activated",
+          type: "wind_break_activated",
           durationMs: Math.max(0, durationMs)
         });
         continue;
@@ -4643,10 +4681,13 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
           continue;
         }
 
+        const ultimateLevel = this.readNumber(value["ultimateLevel"]);
+
         mapped.push({
           type: "thornfall_placed",
           fanTiles: crossTiles,
-          crossTiles
+          crossTiles,
+          ultimateLevel: ultimateLevel === null ? undefined : Math.max(1, Math.floor(ultimateLevel))
         });
         continue;
       }
@@ -4920,8 +4961,8 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     const statsRecord = this.readRecord(record["effectivePlayerStats"]);
     if (!statsRecord) {
       this.effectivePlayerStats = null;
-      this.wasSilverTempestActive = false;
-      this.silverTempestDurationBaselineMs = 5000;
+      this.wasWindBreakActive = false;
+      this.windBreakDurationBaselineMs = 5000;
       return;
     }
 
@@ -4942,20 +4983,20 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       effectiveAttackSpeedPercent: this.readNumber(statsRecord["effectiveAttackSpeedPercent"]) ?? 0,
       ultimateGaugeCurrent: Math.max(0, Math.floor(this.readNumber(statsRecord["ultimateGaugeCurrent"]) ?? 0)),
       ultimateGaugeMax: Math.max(1, Math.floor(this.readNumber(statsRecord["ultimateGaugeMax"]) ?? 1)),
-      silverTempestActive: this.readBoolean(statsRecord["silverTempestActive"]) === true,
-      silverTempestRemainingMs: Math.max(0, Math.floor(this.readNumber(statsRecord["silverTempestRemainingMs"]) ?? 0))
+      windBreakActive: this.readBoolean(statsRecord["windBreakActive"]) === true,
+      windBreakRemainingMs: Math.max(0, Math.floor(this.readNumber(statsRecord["windBreakRemainingMs"]) ?? 0))
     };
 
-    if (mapped.silverTempestActive) {
-      if (!this.wasSilverTempestActive) {
-        this.silverTempestDurationBaselineMs = Math.max(1, mapped.silverTempestRemainingMs);
+    if (mapped.windBreakActive) {
+      if (!this.wasWindBreakActive) {
+        this.windBreakDurationBaselineMs = Math.max(1, mapped.windBreakRemainingMs);
       } else {
-        this.silverTempestDurationBaselineMs = Math.max(this.silverTempestDurationBaselineMs, mapped.silverTempestRemainingMs);
+        this.windBreakDurationBaselineMs = Math.max(this.windBreakDurationBaselineMs, mapped.windBreakRemainingMs);
       }
     } else {
-      this.silverTempestDurationBaselineMs = 5000;
+      this.windBreakDurationBaselineMs = 5000;
     }
-    this.wasSilverTempestActive = mapped.silverTempestActive;
+    this.wasWindBreakActive = mapped.windBreakActive;
     this.effectivePlayerStats = mapped;
   }
 
@@ -4977,6 +5018,24 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       ultimateGauge,
       ultimateGaugeMax,
       ultimateReady
+    };
+  }
+
+  private applyReflectFromSnapshot(snapshot: StartBattleResponse | StepBattleResponse): void {
+    if (!this.scene) {
+      return;
+    }
+
+    const record = snapshot as Record<string, unknown>;
+    const reflectRemainingMs = Math.max(0, Math.floor(this.readNumber(record["reflectRemainingMs"]) ?? 0));
+    const reflectPercent = reflectRemainingMs > 0
+      ? Math.max(0, Math.floor(this.readNumber(record["reflectPercent"]) ?? 0))
+      : 0;
+
+    this.scene = {
+      ...this.scene,
+      reflectRemainingMs,
+      reflectPercent
     };
   }
 

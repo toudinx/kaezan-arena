@@ -198,6 +198,162 @@ describe("ArenaEngine combat fx mapping", () => {
     expect(expired.floatingTexts).toHaveLength(0);
   });
 
+  it("maps Collapse Field activation into pull slides, burst, and reflect timer", () => {
+    const engine = new ArenaEngine();
+    const scene = engine.createTestScene(7, 7, 32);
+    const actors: ArenaActorState[] = [
+      {
+        actorId: "player.test",
+        kind: "player",
+        tileX: 3,
+        tileY: 3,
+        hp: 100,
+        maxHp: 100
+      },
+      {
+        actorId: "mob.test.01",
+        kind: "mob",
+        mobType: 2,
+        tileX: 4,
+        tileY: 3,
+        hp: 20,
+        maxHp: 20
+      }
+    ];
+    const events: ArenaBattleEvent[] = [
+      {
+        type: "collapse_field_activated",
+        playerPosition: { x: 3, y: 3 },
+        pulledMobs: [
+          {
+            mobId: "mob.test.01",
+            fromPosition: { x: 5, y: 3 },
+            toPosition: { x: 4, y: 3 }
+          }
+        ],
+        reflectDurationMs: 3000
+      }
+    ];
+
+    const applied = engine.applyBattleStep(scene, actors, [], [], events);
+    expect(applied.scene.collapseFieldBursts).toHaveLength(1);
+    expect(applied.scene.collapseFieldBursts[0]?.centerTile).toEqual({ x: 3, y: 3 });
+    expect(applied.scene.reflectRemainingMs).toBe(3000);
+    expect(applied.scene.mobKnockbackSlidesByActorId?.["mob.test.01"]).toEqual({
+      actorId: "mob.test.01",
+      fromPos: { x: 5, y: 3 },
+      toPos: { x: 4, y: 3 },
+      elapsedMs: 0,
+      durationMs: 180
+    });
+
+    const reflectTicked = engine.update(applied.scene, 500);
+    expect(reflectTicked.reflectRemainingMs).toBe(2500);
+  });
+
+  it("renders Storm Collapse activation flash geometry by ultimate level", () => {
+    const engine = new ArenaEngine();
+    const scene = engine.createTestScene(7, 7, 32);
+    const actors = createActors();
+    const targetPosition = { x: 5, y: 4 };
+    const toKeySet = (flashes: ReadonlyArray<{ tilePos: { x: number; y: number } }>): Set<string> =>
+      new Set(flashes.map((overlay) => `${overlay.tilePos.x},${overlay.tilePos.y}`));
+
+    const levelOne = engine.applyBattleStep(scene, actors, [], [], [
+      {
+        type: "storm_collapse_detonated",
+        hits: [],
+        targetPosition,
+        ultimateLevel: 1
+      }
+    ]);
+    const levelOneTiles = toKeySet(levelOne.scene.miraiTileFlashes);
+    expect(levelOneTiles.size).toBe(12);
+    expect(levelOneTiles.has("5,4")).toBe(true);
+    expect(levelOneTiles.has("6,4")).toBe(true);
+    expect(levelOneTiles.has("3,3")).toBe(false);
+
+    const levelTwo = engine.applyBattleStep(scene, actors, [], [], [
+      {
+        type: "storm_collapse_detonated",
+        hits: [],
+        targetPosition,
+        ultimateLevel: 2
+      }
+    ]);
+    const levelTwoTiles = toKeySet(levelTwo.scene.miraiTileFlashes);
+    expect(levelTwoTiles.size).toBe(12);
+    expect(levelTwoTiles.has("5,4")).toBe(true);
+    expect(levelTwoTiles.has("2,4")).toBe(false);
+
+    const levelThree = engine.applyBattleStep(scene, actors, [], [], [
+      {
+        type: "storm_collapse_detonated",
+        hits: [],
+        targetPosition,
+        ultimateLevel: 3
+      }
+    ]);
+    const levelThreeTiles = toKeySet(levelThree.scene.miraiTileFlashes);
+    expect(levelThreeTiles.size).toBe(20);
+    expect(levelThreeTiles.has("5,1")).toBe(true);
+    expect(levelThreeTiles.has("3,3")).toBe(true);
+    expect(levelThree.scene.miraiTileFlashes.every((overlay) =>
+      overlay.maxFillAlpha === 0 &&
+      overlay.borderColorHex === "#ffffff" &&
+      overlay.durationMs === 300)).toBe(true);
+
+    const expired = engine.update(levelThree.scene, 301);
+    expect(expired.miraiTileFlashes).toHaveLength(0);
+  });
+
+  it("adds local Storm Collapse border pulses only when stacks are consumed at level 2+", () => {
+    const engine = new ArenaEngine();
+    const scene = engine.createTestScene(7, 7, 32);
+    const actors = createActors();
+    const targetPosition = { x: 5, y: 4 };
+
+    const levelOne = engine.applyBattleStep(scene, actors, [], [], [
+      {
+        type: "storm_collapse_detonated",
+        targetPosition,
+        ultimateLevel: 1,
+        hits: [
+          {
+            mobId: "mob.test.01",
+            mobPosition: { x: 5, y: 4 },
+            stacksConsumed: 2,
+            aoeDamage: 10
+          }
+        ]
+      }
+    ]);
+    expect(levelOne.scene.stormCollapseBorderPulses).toHaveLength(0);
+
+    const levelTwo = engine.applyBattleStep(scene, actors, [], [], [
+      {
+        type: "storm_collapse_detonated",
+        targetPosition,
+        ultimateLevel: 2,
+        hits: [
+          {
+            mobId: "mob.test.01",
+            mobPosition: { x: 5, y: 4 },
+            stacksConsumed: 3,
+            aoeDamage: 10
+          }
+        ]
+      }
+    ]);
+
+    expect(levelTwo.scene.stormCollapseBorderPulses).toHaveLength(3);
+    expect(levelTwo.scene.stormCollapseBorderPulses.map((pulse) => pulse.delayRemainingMs)).toEqual([0, 150, 300]);
+    expect(levelTwo.scene.stormCollapseBorderPulses.every((pulse) =>
+      pulse.durationMs === 200 &&
+      pulse.borderWidthPx === 2 &&
+      pulse.colorHex === "#7F77DD")).toBe(true);
+  });
+
   it("maps mob_knocked_back events into short slide visuals without changing gameplay authority", () => {
     const engine = new ArenaEngine();
     const scene = engine.createTestScene(7, 7, 32);

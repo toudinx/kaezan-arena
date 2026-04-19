@@ -101,6 +101,15 @@ public sealed partial class InMemoryBattleStore
                 BuffId: buff.BuffId,
                 RemainingMs: (int)Math.Max(0, buff.ExpiresAtMs - nowMs)))
             .ToList();
+        if (state.ReflectRemainingMs > 0)
+        {
+            activeBuffs.Add(new BattleBuffDto(
+                BuffId: "reflect",
+                RemainingMs: state.ReflectRemainingMs));
+        }
+        activeBuffs = activeBuffs
+            .OrderBy(buff => buff.BuffId, StringComparer.Ordinal)
+            .ToList();
         var bestiary = state.Bestiary
             .OrderBy(entry => (int)entry.Key)
             .Select(entry => new BestiaryEntryDto(
@@ -213,7 +222,10 @@ public sealed partial class InMemoryBattleStore
             ZoneIndex: safeZoneIndex,
             UltimateGauge: state.UltimateGauge,
             UltimateGaugeMax: ArenaConfig.UltimateConfig.GaugeMax,
+            UltimateLevel: ResolveUltimateLevel(state),
             UltimateReady: state.UltimateReady,
+            ReflectRemainingMs: state.ReflectRemainingMs,
+            ReflectPercent: state.ReflectPercent,
             ArenaType: state.ArenaType.ToString().ToLowerInvariant(),
             ArenaDisplayName: state.ElementalArenaDef?.DisplayName,
             BossActive: bossActive,

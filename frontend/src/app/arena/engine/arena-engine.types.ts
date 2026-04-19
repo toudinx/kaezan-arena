@@ -190,6 +190,15 @@ export interface ThornfallCrossZoneOverlay {
   centerTile: TilePos;
   crossTiles: TilePos[];
   colorHex: string;
+  floorTintRgba?: string | null;
+  elapsedMs: number;
+  durationMs: number;
+}
+
+export interface StormCollapseZoneOverlay {
+  tiles: TilePos[];
+  colorHex: string;
+  floorTintRgba: string;
   elapsedMs: number;
   durationMs: number;
 }
@@ -255,7 +264,7 @@ export interface MobKnockbackSlideInstance {
 
 export interface FloatingTextInstance {
   kind: "crit_text" | "combat_callout" | "skill_name";
-  tone?: "crit" | "elite" | "assist" | "shield_break" | "danger" | "reward" | "headshot" | "silver_tempest";
+  tone?: "crit" | "elite" | "assist" | "shield_break" | "danger" | "reward" | "headshot" | "wind_break";
   text: string;
   tilePos: TilePos;
   startAtMs: number;
@@ -391,7 +400,7 @@ export interface ArenaRangedProjectileFiredEvent {
   targetActorId?: string | null;
   pierces: boolean;
   isChainJump?: boolean;
-  isSilverTempestFollowUp?: boolean;
+  isWindBreakFollowUp?: boolean;
 }
 
 export interface ArenaMobKnockedBackEvent {
@@ -509,31 +518,36 @@ export interface ArenaImmobilizeAppliedEvent {
   durationMs: number;
 }
 
-export interface ArenaCollapseFieldPullResult {
+export interface ArenaCollapseFieldPulledMob {
   mobId: string;
-  newPosition: TilePos;
-  damageDealt: number;
+  fromPosition: TilePos;
+  toPosition: TilePos;
 }
 
 export interface ArenaCollapseFieldActivatedEvent {
   type: "collapse_field_activated";
   playerPosition: TilePos;
-  pullResults: ArenaCollapseFieldPullResult[];
+  pulledMobs: ArenaCollapseFieldPulledMob[];
+  reflectDurationMs: number;
 }
 
 export interface ArenaStormCollapseHit {
   mobId: string;
+  mobPosition: TilePos;
   stacksConsumed: number;
-  damageDealt: number;
+  aoeDamage: number;
 }
 
 export interface ArenaStormCollapseDetonatedEvent {
   type: "storm_collapse_detonated";
+  targetPosition?: TilePos;
   hits: ArenaStormCollapseHit[];
+  affectedTiles?: TilePos[];
+  ultimateLevel?: number;
 }
 
-export interface ArenaSilverTempestActivatedEvent {
-  type: "silver_tempest_activated";
+export interface ArenaWindBreakActivatedEvent {
+  type: "wind_break_activated";
   durationMs: number;
 }
 
@@ -541,6 +555,7 @@ export interface ArenaThornfallPlacedEvent {
   type: "thornfall_placed";
   fanTiles?: TilePos[];
   crossTiles?: TilePos[];
+  ultimateLevel?: number;
 }
 
 export type ArenaBattleEvent =
@@ -569,7 +584,7 @@ export type ArenaBattleEvent =
   | ArenaImmobilizeAppliedEvent
   | ArenaCollapseFieldActivatedEvent
   | ArenaStormCollapseDetonatedEvent
-  | ArenaSilverTempestActivatedEvent
+  | ArenaWindBreakActivatedEvent
   | ArenaThornfallPlacedEvent;
 
 export interface ActorFlashOverlay {
@@ -620,6 +635,15 @@ export interface StormCollapseArenaRingOverlay {
   maxOpacity: number;
 }
 
+export interface StormCollapseBorderPulseOverlay {
+  tiles: TilePos[];
+  colorHex: string;
+  borderWidthPx: number;
+  delayRemainingMs: number;
+  elapsedMs: number;
+  durationMs: number;
+}
+
 export interface ScreenTintOverlay {
   colorHex: string;
   maxOpacity: number;
@@ -630,6 +654,10 @@ export interface ScreenTintOverlay {
 export interface MiraiTileFlashOverlay {
   tilePos: TilePos;
   colorHex: string;
+  maxFillAlpha?: number;
+  borderColorHex?: string;
+  borderWidthPx?: number;
+  maxBorderAlpha?: number;
   elapsedMs: number;
   durationMs: number;
 }
@@ -659,8 +687,10 @@ export interface ArenaScene {
   rangedConfig?: ArenaRangedConfig;
   hoveredMobEntityId?: string | null;
   threatMobEntityId?: string | null;
-  silverTempestActive: boolean;
-  silverTempestRemainingMs: number;
+  windBreakActive: boolean;
+  windBreakRemainingMs: number;
+  reflectRemainingMs: number;
+  reflectPercent: number;
   fxInstances: FxInstance[];
   attackFxInstances: AttackFxInstance[];
   projectileInstances: RangedProjectileInstance[];
@@ -670,12 +700,14 @@ export interface ArenaScene {
   stormCollapseRings: StormCollapseRingOverlay[];
   stormCollapseStackTexts: StormCollapseStackTextOverlay[];
   stormCollapseArenaRings: StormCollapseArenaRingOverlay[];
+  stormCollapseBorderPulses: StormCollapseBorderPulseOverlay[];
   screenTintOverlays: ScreenTintOverlay[];
   miraiTileFlashes: MiraiTileFlashOverlay[];
   sylwenHitOverlays: SylwenHitOverlay[];
   skullImpactOverlays?: SkullImpactOverlay[];
   sylwenDissipateRings: SylwenDissipateRingOverlay[];
   thornfallCrossZones: ThornfallCrossZoneOverlay[];
+  stormCollapseZoneOverlays: StormCollapseZoneOverlay[];
   velvetVoidChainArcs: VelvetVoidChainArcOverlay[];
   velvetVoidChainBorderShimmers?: VelvetVoidChainBorderShimmerOverlay[];
   velvetVoidChainHitPulses: VelvetVoidChainHitPulseOverlay[];

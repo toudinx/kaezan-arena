@@ -14,12 +14,12 @@ public sealed partial class InMemoryBattleStore
             [ArenaConfig.HealSkillId] = ArenaConfig.HealCooldownTotalMs,
             [ArenaConfig.GuardSkillId] = ArenaConfig.GuardCooldownTotalMs,
             [ArenaConfig.AvalancheSkillId] = ArenaConfig.AvalancheCooldownTotalMs,
-            [ArenaConfig.SkillIds.MiraiIronFang] = ArenaConfig.SkillConfig.MiraiIronFangCooldownMs,
             [ArenaConfig.SkillIds.MiraiRendClaw] = ArenaConfig.SkillConfig.MiraiRendClawCooldownMs,
             [ArenaConfig.SkillIds.MiraiPrimalRoar] = ArenaConfig.SkillConfig.MiraiPrimalRoarCooldownMs,
+            [ArenaConfig.SkillIds.MiraiCollapseField] = ArenaConfig.SkillConfig.MiraiCollapseFieldCooldownMs,
             [ArenaConfig.SkillIds.SylwenWhisperShot] = ArenaConfig.SkillConfig.SylwenWhisperShotCooldownMs,
             [ArenaConfig.SkillIds.SylwenGalePierce] = ArenaConfig.SkillConfig.SylwenGalePierceCooldownMs,
-            [ArenaConfig.SkillIds.SylwenThornfall] = ArenaConfig.SkillConfig.SylwenThornfallCooldownMs,
+            [ArenaConfig.SkillIds.SylwenWindBreak] = ArenaConfig.SkillConfig.SylwenWindBreakCooldownMs,
             [ArenaConfig.SkillIds.VelvetVoidChain] = ArenaConfig.SkillConfig.VelvetVoidChainCooldownMs,
             [ArenaConfig.SkillIds.VelvetUmbralPath] = ArenaConfig.SkillConfig.VelvetUmbralPathCooldownMs,
             [ArenaConfig.SkillIds.VelvetDeathStrike] = ArenaConfig.SkillConfig.VelvetDeathStrikeCooldownMs
@@ -125,4 +125,3 @@ public sealed partial class InMemoryBattleStore
             ArenaConfig.MaxGlobalCooldownReductionPercent);
     }
 }
-

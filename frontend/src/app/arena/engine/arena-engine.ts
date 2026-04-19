@@ -45,7 +45,6 @@ const REWARD_CHOSEN_CUE_DURATION_MS = 460;
 const MIN_MOB_TIER_INDEX = 1;
 const MAX_MOB_TIER_INDEX = 5;
 const COLLAPSE_FIELD_SLIDE_DURATION_MS = 180;
-const COLLAPSE_FIELD_FLASH_DURATION_MS = 60;
 const COLLAPSE_FIELD_BURST_DURATION_MS = 400;
 const HEADSHOT_FLASH_DURATION_MS = 200;
 const HEADSHOT_FLASH_FULL_WHITE_DURATION_MS = 80;
@@ -56,16 +55,18 @@ const STORM_COLLAPSE_RING_START_RADIUS_PX = 8;
 const STORM_COLLAPSE_RING_END_RADIUS_PX = 32;
 const STORM_COLLAPSE_RING_STROKE_WIDTH_PX = 2;
 const STORM_COLLAPSE_STACK_TEXT_DURATION_MS = 400;
-const STORM_COLLAPSE_ARENA_RING_EXTRA_DELAY_MS = 50;
-const STORM_COLLAPSE_ARENA_RING_DURATION_MS = 500;
-const STORM_COLLAPSE_ARENA_RING_STROKE_WIDTH_PX = 1;
-const STORM_COLLAPSE_ARENA_RING_MAX_OPACITY = 0.2;
-const SILVER_TEMPEST_TEXT_DURATION_MS = 1200;
+const STORM_COLLAPSE_ACTIVATION_FLASH_DURATION_MS = 300;
+const STORM_COLLAPSE_ACTIVATION_FLASH_BORDER_COLOR_HEX = "#ffffff";
+const STORM_COLLAPSE_ACTIVATION_FLASH_BORDER_WIDTH_PX = 2;
+const STORM_COLLAPSE_LOCAL_PULSE_COLOR_HEX = "#7F77DD";
+const STORM_COLLAPSE_LOCAL_PULSE_BORDER_WIDTH_PX = 2;
+const STORM_COLLAPSE_LOCAL_PULSE_DURATION_MS = 200;
+const STORM_COLLAPSE_LOCAL_PULSE_STAGGER_MS = 150;
+const STORM_COLLAPSE_LOCAL_PULSE_COUNT = 3;
+const WIND_BREAK_TEXT_DURATION_MS = 1200;
 const MIRAI_TILE_FLASH_DURATION_MS = 120;
 const MIRAI_PRIMAL_ROAR_SKILL_ID = "skill:mirai_primal_roar";
 const MIRAI_REND_CLAW_SKILL_ID = "skill:mirai_rend_claw";
-const MIRAI_IRON_FANG_SKILL_ID = "skill:mirai_iron_fang";
-const MIRAI_IRON_FANG_FX_DURATION_MS = 400;
 const SYLWEN_WHISPER_SHOT_PROJECTILE_DURATION_MS = 220;
 const SYLWEN_GALE_PIERCE_PROJECTILE_DURATION_MS = 350;
 const SYLWEN_WHISPER_SHOT_HIT_BURST_DURATION_MS = 250;
@@ -73,6 +74,7 @@ const SYLWEN_GALE_PIERCE_HIT_SLASH_DURATION_MS = 350;
 const SYLWEN_GALE_PIERCE_END_RING_DURATION_MS = 300;
 const SYLWEN_GALE_PIERCE_END_RING_MAX_RADIUS_TILE_MULTIPLIER = 0.6;
 const SYLWEN_THORNFALL_DURATION_MS = 5000;
+const SYLWEN_THORNFALL_LEVEL_THREE_FLOOR_TINT_RGBA = "rgba(239, 68, 68, 0.15)";
 const SYLWEN_THORNFALL_SKILL_ID = "skill:sylwen_thornfall";
 const SYLWEN_WHISPER_SHOT_SKILL_ID = "skill:sylwen_whisper_shot";
 const SYLWEN_GALE_PIERCE_SKILL_ID = "skill:sylwen_gale_pierce";
@@ -179,8 +181,10 @@ export class ArenaEngine {
       groundTargetPos: null,
       hoveredMobEntityId: null,
       threatMobEntityId: null,
-      silverTempestActive: false,
-      silverTempestRemainingMs: 0,
+      windBreakActive: false,
+      windBreakRemainingMs: 0,
+      reflectRemainingMs: 0,
+      reflectPercent: 0,
       actorsById: {},
       actorVisualsById: {},
       skillsById: {},
@@ -199,12 +203,14 @@ export class ArenaEngine {
       stormCollapseRings: [],
       stormCollapseStackTexts: [],
       stormCollapseArenaRings: [],
+      stormCollapseBorderPulses: [],
       screenTintOverlays: [],
       miraiTileFlashes: [],
       sylwenHitOverlays: [],
       skullImpactOverlays: [],
       sylwenDissipateRings: [],
       thornfallCrossZones: [],
+      stormCollapseZoneOverlays: [],
       velvetVoidChainArcs: [],
       velvetVoidChainBorderShimmers: [],
       velvetVoidChainHitPulses: [],
@@ -291,6 +297,7 @@ export class ArenaEngine {
     const stormCollapseRings = [...nextScene.stormCollapseRings];
     const stormCollapseStackTexts = [...nextScene.stormCollapseStackTexts];
     const stormCollapseArenaRings = [...nextScene.stormCollapseArenaRings];
+    const stormCollapseBorderPulses = [...nextScene.stormCollapseBorderPulses];
     const screenTintOverlays = [...nextScene.screenTintOverlays];
     const miraiTileFlashes = [...nextScene.miraiTileFlashes];
     const sylwenHitOverlays = [...nextScene.sylwenHitOverlays];
@@ -574,33 +581,46 @@ export class ArenaEngine {
           durationMs: COLLAPSE_FIELD_BURST_DURATION_MS
         });
 
-        for (const pullResult of event.pullResults) {
+        for (const pullResult of event.pulledMobs) {
           const actor = nextScene.actorsById[pullResult.mobId];
           if (!actor || actor.kind !== "mob") {
             continue;
           }
 
-          const previousActor = scene.actorsById[pullResult.mobId] ?? actor;
           mobKnockbackSlidesByActorId[pullResult.mobId] = {
             actorId: pullResult.mobId,
-            fromPos: { x: previousActor.tileX, y: previousActor.tileY },
-            toPos: { x: pullResult.newPosition.x, y: pullResult.newPosition.y },
+            fromPos: { x: pullResult.fromPosition.x, y: pullResult.fromPosition.y },
+            toPos: { x: pullResult.toPosition.x, y: pullResult.toPosition.y },
             elapsedMs: 0,
             durationMs: COLLAPSE_FIELD_SLIDE_DURATION_MS
           };
-          actorFlashOverlays.push({
-            actorId: pullResult.mobId,
-            delayRemainingMs: COLLAPSE_FIELD_SLIDE_DURATION_MS,
-            elapsedMs: 0,
-            durationMs: COLLAPSE_FIELD_FLASH_DURATION_MS,
-            fullWhiteDurationMs: COLLAPSE_FIELD_FLASH_DURATION_MS
-          });
         }
+        nextScene.reflectRemainingMs = Math.max(0, event.reflectDurationMs);
         continue;
       }
 
       if (event.type === "storm_collapse_detonated") {
         const detonationColorHex = this.resolveProjectileColorHex(nextScene.rangedConfig, VELVET_STORM_COLLAPSE_SKILL_ID, nextScene);
+        const activationTiles = this.resolveStormCollapseActivationTiles(
+          event,
+          nextScene.playerTile,
+          nextScene.columns,
+          nextScene.rows
+        );
+        for (const tilePos of activationTiles) {
+          miraiTileFlashes.push({
+            tilePos,
+            colorHex: STORM_COLLAPSE_ACTIVATION_FLASH_BORDER_COLOR_HEX,
+            maxFillAlpha: 0,
+            borderColorHex: STORM_COLLAPSE_ACTIVATION_FLASH_BORDER_COLOR_HEX,
+            borderWidthPx: STORM_COLLAPSE_ACTIVATION_FLASH_BORDER_WIDTH_PX,
+            maxBorderAlpha: 0.95,
+            elapsedMs: 0,
+            durationMs: STORM_COLLAPSE_ACTIVATION_FLASH_DURATION_MS
+          });
+        }
+
+        const shouldRenderLocalPulse = (event.ultimateLevel ?? 1) >= 2;
         for (let index = 0; index < event.hits.length; index += 1) {
           const hit = event.hits[index];
           const delayRemainingMs = index * STORM_COLLAPSE_RING_STAGGER_MS;
@@ -610,7 +630,7 @@ export class ArenaEngine {
             ? { x: actor.tileX, y: actor.tileY }
             : previousActor && previousActor.kind === "mob"
               ? { x: previousActor.tileX, y: previousActor.tileY }
-              : { x: 3, y: 3 };
+              : { x: hit.mobPosition.x, y: hit.mobPosition.y };
 
           if (actor && actor.kind === "mob") {
             actor.corrosionStacks = 0;
@@ -639,29 +659,26 @@ export class ArenaEngine {
               durationMs: STORM_COLLAPSE_STACK_TEXT_DURATION_MS
             });
           }
-        }
 
-        if (event.hits.length >= 3) {
-          const playerTile = nextScene.playerTile;
-          const arenaHalfWidth = Math.max(nextScene.columns, nextScene.rows) * nextScene.tileSize * 0.5;
-          stormCollapseArenaRings.push({
-            centerTile: { x: playerTile.x, y: playerTile.y },
-            colorHex: detonationColorHex,
-            delayRemainingMs: (event.hits.length * STORM_COLLAPSE_RING_STAGGER_MS) + STORM_COLLAPSE_ARENA_RING_EXTRA_DELAY_MS,
-            elapsedMs: 0,
-            durationMs: STORM_COLLAPSE_ARENA_RING_DURATION_MS,
-            startRadiusPx: 0,
-            endRadiusPx: arenaHalfWidth,
-            strokeWidthPx: STORM_COLLAPSE_ARENA_RING_STROKE_WIDTH_PX,
-            maxOpacity: STORM_COLLAPSE_ARENA_RING_MAX_OPACITY
-          });
+          if (shouldRenderLocalPulse && hit.stacksConsumed > 0 && activationTiles.length > 0) {
+            for (let pulseIndex = 0; pulseIndex < STORM_COLLAPSE_LOCAL_PULSE_COUNT; pulseIndex += 1) {
+              stormCollapseBorderPulses.push({
+                tiles: activationTiles,
+                colorHex: STORM_COLLAPSE_LOCAL_PULSE_COLOR_HEX,
+                borderWidthPx: STORM_COLLAPSE_LOCAL_PULSE_BORDER_WIDTH_PX,
+                delayRemainingMs: delayRemainingMs + (pulseIndex * STORM_COLLAPSE_LOCAL_PULSE_STAGGER_MS),
+                elapsedMs: 0,
+                durationMs: STORM_COLLAPSE_LOCAL_PULSE_DURATION_MS
+              });
+            }
+          }
         }
         continue;
       }
 
-      if (event.type === "silver_tempest_activated") {
-        nextScene.silverTempestActive = event.durationMs > 0;
-        nextScene.silverTempestRemainingMs = Math.max(0, event.durationMs);
+      if (event.type === "wind_break_activated") {
+        nextScene.windBreakActive = event.durationMs > 0;
+        nextScene.windBreakRemainingMs = Math.max(0, event.durationMs);
 
         const playerActor = playerActorId
           ? (nextScene.actorsById[playerActorId] ?? scene.actorsById[playerActorId])
@@ -669,11 +686,11 @@ export class ArenaEngine {
         if (playerActor) {
           spawnedFloatingTexts.push(
             this.createCombatCalloutText(
-              "SILVER TEMPEST",
+              "WIND BREAK",
               playerActor.tileX,
               playerActor.tileY,
-              "silver_tempest",
-              SILVER_TEMPEST_TEXT_DURATION_MS,
+              "wind_break",
+              WIND_BREAK_TEXT_DURATION_MS,
               1
             )
           );
@@ -683,6 +700,7 @@ export class ArenaEngine {
 
       if (event.type === "thornfall_placed") {
         const sourceTiles = (event.crossTiles ?? event.fanTiles ?? []);
+        const ultimateLevel = Math.max(1, Math.floor(event.ultimateLevel ?? 1));
         const crossTiles = sourceTiles
           .map((tile) => ({
             x: Math.round(tile.x),
@@ -696,7 +714,8 @@ export class ArenaEngine {
         thornfallCrossZones.push({
           centerTile: crossTiles[0],
           crossTiles,
-          colorHex: this.resolveProjectileColorHex(nextScene.rangedConfig, SYLWEN_THORNFALL_SKILL_ID, nextScene),
+          colorHex: "#ffffff",
+          floorTintRgba: ultimateLevel >= 3 ? SYLWEN_THORNFALL_LEVEL_THREE_FLOOR_TINT_RGBA : null,
           elapsedMs: 0,
           durationMs: SYLWEN_THORNFALL_DURATION_MS
         });
@@ -837,22 +856,6 @@ export class ArenaEngine {
                 durationMs: MIRAI_TILE_FLASH_DURATION_MS
               });
             }
-          }
-        }
-
-        if (this.isMiraiIronFangSkillId(event.skillId)) {
-          const targetId = nextScene.effectiveTargetEntityId ?? nextScene.lockedTargetEntityId;
-          const targetActor = targetId
-            ? (nextScene.actorsById[targetId] ?? scene.actorsById[targetId])
-            : null;
-          if (targetActor) {
-            nextScene = spawnFx(nextScene, {
-              fxId: "fx.skill.iron_fang_strike",
-              tilePos: { x: targetActor.tileX, y: targetActor.tileY },
-              durationMs: MIRAI_IRON_FANG_FX_DURATION_MS,
-              layer: "hitFx",
-              startFrame: this.resolveElementFxStartFrame(nextScene)
-            });
           }
         }
 
@@ -1032,8 +1035,8 @@ export class ArenaEngine {
     nextScene = {
       ...nextScene,
       threatMobEntityId,
-      silverTempestActive: nextScene.silverTempestActive,
-      silverTempestRemainingMs: nextScene.silverTempestRemainingMs,
+      windBreakActive: nextScene.windBreakActive,
+      windBreakRemainingMs: nextScene.windBreakRemainingMs,
       attackFxInstances: [...nextScene.attackFxInstances, ...spawnedAttackFx],
       projectileInstances: [...nextScene.projectileInstances, ...spawnedProjectiles],
       mobKnockbackSlidesByActorId,
@@ -1042,6 +1045,7 @@ export class ArenaEngine {
       stormCollapseRings,
       stormCollapseStackTexts,
       stormCollapseArenaRings,
+      stormCollapseBorderPulses,
       screenTintOverlays,
       miraiTileFlashes,
       sylwenHitOverlays,
@@ -1175,7 +1179,8 @@ export class ArenaEngine {
     const sceneWithStormRings = this.tickStormCollapseRings(sceneWithCollapseBursts, safeDelta);
     const sceneWithStormStackTexts = this.tickStormCollapseStackTexts(sceneWithStormRings, safeDelta);
     const sceneWithStormArenaRings = this.tickStormCollapseArenaRings(sceneWithStormStackTexts, safeDelta);
-    return this.tickScreenTintOverlays(sceneWithStormArenaRings, safeDelta);
+    const sceneWithStormBorderPulses = this.tickStormCollapseBorderPulses(sceneWithStormArenaRings, safeDelta);
+    return this.tickScreenTintOverlays(sceneWithStormBorderPulses, safeDelta);
   }
 
   tick(scene: ArenaScene, deltaMs: number): ArenaScene {
@@ -1291,18 +1296,22 @@ export class ArenaEngine {
       };
     }
 
-    const nextSilverTempestRemainingMs = Math.max(0, scene.silverTempestRemainingMs - deltaMs);
-    const silverTempestChanged = nextSilverTempestRemainingMs !== scene.silverTempestRemainingMs ||
-      scene.silverTempestActive !== (nextSilverTempestRemainingMs > 0);
-    if (!actorsChanged && !silverTempestChanged) {
+    const nextWindBreakRemainingMs = Math.max(0, scene.windBreakRemainingMs - deltaMs);
+    const nextReflectRemainingMs = Math.max(0, scene.reflectRemainingMs - deltaMs);
+    const windBreakChanged = nextWindBreakRemainingMs !== scene.windBreakRemainingMs ||
+      scene.windBreakActive !== (nextWindBreakRemainingMs > 0);
+    const reflectChanged = nextReflectRemainingMs !== scene.reflectRemainingMs;
+    if (!actorsChanged && !windBreakChanged && !reflectChanged) {
       return scene;
     }
 
     return {
       ...scene,
       actorsById: actorsChanged ? nextActorsById : scene.actorsById,
-      silverTempestActive: nextSilverTempestRemainingMs > 0,
-      silverTempestRemainingMs: nextSilverTempestRemainingMs
+      windBreakActive: nextWindBreakRemainingMs > 0,
+      windBreakRemainingMs: nextWindBreakRemainingMs,
+      reflectRemainingMs: nextReflectRemainingMs,
+      reflectPercent: nextReflectRemainingMs > 0 ? scene.reflectPercent : 0
     };
   }
 
@@ -1838,7 +1847,7 @@ export class ArenaEngine {
   ): RangedProjectileInstance {
     const baseFromPos: TilePos = { x: event.fromTile.x, y: event.fromTile.y };
     const impactPos: TilePos = { x: event.toTile.x, y: event.toTile.y };
-    const fromPos = this.applySilverTempestFollowUpWhisperOffset(baseFromPos, impactPos, event, scene);
+    const fromPos = this.applyWindBreakFollowUpWhisperOffset(baseFromPos, impactPos, event, scene);
     const visualEndPos = event.pierces
       ? this.computePierceVisualEndTile(baseFromPos, impactPos, scene.columns, scene.rows)
       : impactPos;
@@ -1888,13 +1897,13 @@ export class ArenaEngine {
     };
   }
 
-  private applySilverTempestFollowUpWhisperOffset(
+  private applyWindBreakFollowUpWhisperOffset(
     baseFromPos: TilePos,
     impactPos: TilePos,
     event: Extract<ArenaBattleEvent, { type: "ranged_projectile_fired" }>,
     scene: ArenaScene
   ): TilePos {
-    if (!event.isSilverTempestFollowUp || !this.isSylwenWhisperShotSkillId(event.weaponId)) {
+    if (!event.isWindBreakFollowUp || !this.isSylwenWhisperShotSkillId(event.weaponId)) {
       return baseFromPos;
     }
 
@@ -2036,13 +2045,6 @@ export class ArenaEngine {
     return normalized === MIRAI_REND_CLAW_SKILL_ID ||
       normalized === "mirai_rend_claw" ||
       normalized.includes("mirai_rend_claw");
-  }
-
-  private isMiraiIronFangSkillId(skillId: string): boolean {
-    const normalized = skillId.trim().toLowerCase();
-    return normalized === MIRAI_IRON_FANG_SKILL_ID ||
-      normalized === "mirai_iron_fang" ||
-      normalized.includes("mirai_iron_fang");
   }
 
   private isSylwenWhisperShotSkillId(skillId: string): boolean {
@@ -2299,6 +2301,73 @@ export class ArenaEngine {
       }))
       .filter((tile, index, array) => array.findIndex((entry) => entry.x === tile.x && entry.y === tile.y) === index);
     return clampedTiles;
+  }
+
+  private buildAdjacentTiles(center: TilePos, columns: number, rows: number): TilePos[] {
+    const tiles: TilePos[] = [];
+    for (let deltaY = -1; deltaY <= 1; deltaY += 1) {
+      for (let deltaX = -1; deltaX <= 1; deltaX += 1) {
+        if (deltaX === 0 && deltaY === 0) {
+          continue;
+        }
+
+        const tileX = center.x + deltaX;
+        const tileY = center.y + deltaY;
+        if (tileX < 0 || tileY < 0 || tileX >= columns || tileY >= rows) {
+          continue;
+        }
+
+        tiles.push({ x: tileX, y: tileY });
+      }
+    }
+
+    return tiles;
+  }
+
+  private resolveStormCollapseActivationTiles(
+    event: Extract<ArenaBattleEvent, { type: "storm_collapse_detonated" }>,
+    fallbackCenter: TilePos,
+    columns: number,
+    rows: number
+  ): TilePos[] {
+    const eventTiles = this.normalizeAssistCastHitTiles(event.affectedTiles, columns, rows);
+    if (eventTiles.length > 0) {
+      return eventTiles;
+    }
+
+    const ultimateLevel = Math.max(1, Math.min(3, Math.floor(event.ultimateLevel ?? 1)));
+    const radius = ultimateLevel >= 3 ? 3 : 2;
+    const normalizedTargetPos = event.targetPosition
+      ? {
+        x: Math.max(0, Math.min(columns - 1, Math.round(event.targetPosition.x))),
+        y: Math.max(0, Math.min(rows - 1, Math.round(event.targetPosition.y)))
+      }
+      : null;
+    const centerX = normalizedTargetPos?.x ?? Math.max(0, Math.min(columns - 1, Math.round(fallbackCenter.x)));
+    const centerY = normalizedTargetPos?.y ?? Math.max(0, Math.min(rows - 1, Math.round(fallbackCenter.y)));
+    const tilesByKey = new Map<string, TilePos>();
+    const addTile = (tileX: number, tileY: number): void => {
+      if (tileX < 0 || tileY < 0 || tileX >= columns || tileY >= rows) {
+        return;
+      }
+
+      const key = `${tileX},${tileY}`;
+      if (!tilesByKey.has(key)) {
+        tilesByKey.set(key, { x: tileX, y: tileY });
+      }
+    };
+
+    for (let tileY = 0; tileY < rows; tileY += 1) {
+      for (let tileX = 0; tileX < columns; tileX += 1) {
+        const deltaX = tileX - centerX;
+        const deltaY = tileY - centerY;
+        if ((Math.abs(deltaX) + Math.abs(deltaY)) <= radius) {
+          addTile(tileX, tileY);
+        }
+      }
+    }
+
+    return Array.from(tilesByKey.values());
   }
 
   private normalizeProjectileSpeedTilesPerSecond(value: number | undefined): number {
@@ -2730,6 +2799,29 @@ export class ArenaEngine {
     };
   }
 
+  private tickStormCollapseBorderPulses(scene: ArenaScene, deltaMs: number): ArenaScene {
+    if (scene.stormCollapseBorderPulses.length === 0) {
+      return scene;
+    }
+
+    const nextPulses = scene.stormCollapseBorderPulses
+      .map((pulse) => {
+        const nextDelay = Math.max(0, pulse.delayRemainingMs - deltaMs);
+        const overflowMs = Math.max(0, deltaMs - pulse.delayRemainingMs);
+        return {
+          ...pulse,
+          delayRemainingMs: nextDelay,
+          elapsedMs: nextDelay > 0 ? pulse.elapsedMs : pulse.elapsedMs + overflowMs
+        };
+      })
+      .filter((pulse) => pulse.elapsedMs < pulse.durationMs);
+
+    return {
+      ...scene,
+      stormCollapseBorderPulses: nextPulses
+    };
+  }
+
   private tickVelvetVoidChainArcs(scene: ArenaScene, deltaMs: number): ArenaScene {
     if (scene.velvetVoidChainArcs.length === 0) {
       return scene;
@@ -2925,8 +3017,8 @@ export class ArenaEngine {
       return delaysByActorId;
     }
 
-    for (const pullResult of collapseEvent.pullResults) {
-      delaysByActorId.set(pullResult.mobId, COLLAPSE_FIELD_SLIDE_DURATION_MS);
+    for (const pulledMob of collapseEvent.pulledMobs) {
+      delaysByActorId.set(pulledMob.mobId, COLLAPSE_FIELD_SLIDE_DURATION_MS);
     }
 
     return delaysByActorId;

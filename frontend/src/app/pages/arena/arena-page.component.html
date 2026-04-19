@@ -455,22 +455,13 @@
               <h3 class="status-details__title">{{ selectedCharacter?.name ?? "Unknown" }}</h3>
               <section class="hud-ultimate-panel">
                 <h4>Ultimate</h4>
-                @if (silverTempestActiveForHud) {
-                  <div class="hud-ultimate-panel__bar hud-ultimate-panel__bar--silver-tempest">
-                    <span class="hud-ultimate-panel__bar-fill" [style.width.%]="ultimateGaugePercentForHud"></span>
-                  </div>
-                  <p class="hud-ultimate-panel__state hud-ultimate-panel__state--silver">
-                    SILVER TEMPEST ACTIVE ({{ silverTempestRemainingSecondsForHud }}s)
-                  </p>
+                <div class="hud-ultimate-panel__bar" [class.hud-ultimate-panel__bar--ready]="ultimateGaugeReadyForHud">
+                  <span class="hud-ultimate-panel__bar-fill" [style.width.%]="ultimateGaugePercentForHud"></span>
+                </div>
+                @if (ultimateGaugeReadyForHud) {
+                  <p class="hud-ultimate-panel__state hud-ultimate-panel__state--ready">READY</p>
                 } @else {
-                  <div class="hud-ultimate-panel__bar" [class.hud-ultimate-panel__bar--ready]="ultimateGaugeReadyForHud">
-                    <span class="hud-ultimate-panel__bar-fill" [style.width.%]="ultimateGaugePercentForHud"></span>
-                  </div>
-                  @if (ultimateGaugeReadyForHud) {
-                    <p class="hud-ultimate-panel__state hud-ultimate-panel__state--ready">READY</p>
-                  } @else {
-                    <p class="hud-ultimate-panel__state">{{ ultimateGaugeFractionLabelForHud }}</p>
-                  }
+                  <p class="hud-ultimate-panel__state">{{ ultimateGaugeFractionLabelForHud }}</p>
                 }
                 <p class="hud-ultimate-panel__desc">{{ ultimateDescriptionForHud }}</p>
               </section>

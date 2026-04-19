@@ -7,4 +7,4 @@ public sealed record RangedProjectileFiredEventDto(
     string? TargetActorId,
     bool Pierces,
     bool IsChainJump = false,
-    bool IsSilverTempestFollowUp = false) : BattleEventDto;
+    bool IsWindBreakFollowUp = false) : BattleEventDto;

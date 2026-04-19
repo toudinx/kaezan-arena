@@ -32,7 +32,7 @@ export const PLAYABLE_CHARACTER_OVERVIEW_BY_ID: Readonly<Record<PlayableCharacte
   [CHARACTER_ID_VELVET]: {
     kitLabel: "Chaos Mage Kit",
     passiveName: "Arcane Decay",
-    passiveDescription: "Every skill hit applies Corrosion - +5% damage taken per stack. Storm Collapse detonates all stacks."
+    passiveDescription: "Every skill hit applies Corrosion - +5% damage taken per stack. Storm Collapse detonates stacks only inside its target-centered diamond."
   }
 };
 

@@ -83,15 +83,14 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         {
             [ArenaConfig.PlayerClassMirai] =
             [
-                ArenaConfig.SkillIds.MiraiCollapseField,
-                ArenaConfig.SkillIds.MiraiIronFang,
-                ArenaConfig.SkillIds.MiraiPrimalRoar
+                ArenaConfig.UltimateConfig.UltimateSkillId,
+                ArenaConfig.SkillIds.MiraiPrimalRoar,
+                ArenaConfig.SkillIds.MiraiCollapseField
             ],
             [ArenaConfig.PlayerClassSylwen] =
             [
-                ArenaConfig.SkillIds.SylwenThornfall,
                 ArenaConfig.SkillIds.SylwenGalePierce,
-                ArenaConfig.SkillIds.SylwenSilverTempest
+                ArenaConfig.SkillIds.SylwenWindBreak
             ],
             [ArenaConfig.PlayerClassVelvet] =
             [
@@ -106,11 +105,11 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             [ArenaConfig.PlayerClassMirai] =
             [
                 ArenaConfig.SkillIds.MiraiPrimalRoar,
-                ArenaConfig.SkillIds.MiraiIronFang
+                ArenaConfig.SkillIds.MiraiCollapseField
             ],
             [ArenaConfig.PlayerClassSylwen] =
             [
-                ArenaConfig.SkillIds.SylwenThornfall,
+                ArenaConfig.SkillIds.SylwenWindBreak,
                 ArenaConfig.SkillIds.SylwenGalePierce,
                 ArenaConfig.SkillIds.SylwenWhisperShot
             ],
@@ -637,14 +636,18 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             pendingCardChoice: null,
             selectedCardIds: [],
             selectedCardStacks: new Dictionary<string, int>(StringComparer.Ordinal),
+            totalCardsCollected: 0,
             cardSelectionsGranted: 0,
             nextCardChoiceSequence: 1,
             replayActions: [],
             zoneIndex: normalizedZoneIndex,
             ultimateGauge: 0,
             ultimateReady: false,
-            silverTempestActive: false,
-            silverTempestRemainingMs: 0,
+            windBreakActive: false,
+            windBreakRemainingMs: 0,
+            reflectRemainingMs: 0,
+            reflectPercent: 0,
+            activeThornfallZones: [],
             pendingWhisperShotHits: [],
             masteryXpAwardedAtRunEnd: false);
 
@@ -791,7 +794,8 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         TickSkillCooldowns(state);
         TickPlayerGlobalCooldown(state);
         TickPlayerAutoAttackCooldown(state);
-        TickSilverTempestDuration(state);
+        TickWindBreakDuration(state);
+        TickCollapseFieldReflectDuration(state);
         TickPendingWhisperShotHits(state, events);
         TickMobCombatCooldowns(state);
         TickMobImmobilizeDurations(state);
@@ -932,6 +936,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             ApplyCardEffects(state, player, selectedCard, nextStack);
             state.SelectedCardIds.Add(selectedCard.Id);
             state.SelectedCardStacks[selectedCard.Id] = nextStack;
+            state.TotalCardsCollected += 1;
             state.PendingCardChoice = null;
 
             var events = new List<BattleEventDto>
@@ -1455,18 +1460,18 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         var attackSpeedBonusPercent = Math.Max(0, state.PlayerModifiers.PercentAttackSpeedBonus);
         var attackSpeedMultiplier = 1d + (attackSpeedBonusPercent / 100d);
         if (string.Equals(state.PlayerClassId, ArenaConfig.PlayerClassSylwen, StringComparison.Ordinal) &&
-            state.SilverTempestActive &&
-            state.SilverTempestRemainingMs > 0)
+            state.WindBreakActive &&
+            state.WindBreakRemainingMs > 0)
         {
-            attackSpeedMultiplier *= ArenaConfig.SkillConfig.SylwenSilverTempestAttackSpeedMultiplier;
+            attackSpeedMultiplier *= ArenaConfig.SkillConfig.SylwenWindBreakAttackSpeedMultiplier;
         }
 
         var effectiveCooldownMs = (int)Math.Floor(baseCooldownMs / attackSpeedMultiplier);
         if (string.Equals(state.PlayerClassId, ArenaConfig.PlayerClassSylwen, StringComparison.Ordinal) &&
-            state.SilverTempestActive &&
-            state.SilverTempestRemainingMs > 0)
+            state.WindBreakActive &&
+            state.WindBreakRemainingMs > 0)
         {
-            // While Silver Tempest is active, cadence is uncapped by the normal attack cooldown floor.
+            // While Wind Break is active, cadence is uncapped by the normal attack cooldown floor.
             return Math.Max(1, effectiveCooldownMs);
         }
 
@@ -1728,12 +1733,12 @@ public sealed partial class InMemoryBattleStore : IBattleStore
     {
         if (string.Equals(state.PlayerClassId, ArenaConfig.PlayerClassMirai, StringComparison.Ordinal))
         {
-            return ArenaConfig.SkillIds.MiraiCollapseField;
+            return ArenaConfig.UltimateConfig.UltimateSkillId;
         }
 
         if (string.Equals(state.PlayerClassId, ArenaConfig.PlayerClassSylwen, StringComparison.Ordinal))
         {
-            return ArenaConfig.SkillIds.SylwenSilverTempest;
+            return ArenaConfig.SkillIds.SylwenThornfall;
         }
 
         if (string.Equals(state.PlayerClassId, ArenaConfig.PlayerClassVelvet, StringComparison.Ordinal))
@@ -1829,23 +1834,6 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             return SkillCastResult.Ok(hitAnyTarget ? null : ArenaConfig.NoTargetReason);
         }
 
-        if (string.Equals(normalizedSkillId, ArenaConfig.SkillIds.MiraiIronFang, StringComparison.Ordinal))
-        {
-            var hitAnyTarget = TryExecuteMiraiIronFang(
-                state,
-                events,
-                player,
-                ref pendingLifeLeechHeal);
-            if (!hitAnyTarget)
-            {
-                return SkillCastResult.Fail(ArenaConfig.NoTargetReason);
-            }
-
-            ApplyPlayerCooldownsForCast(state, skill);
-            GrantPlayerShield(state, events, ArenaConfig.PlayerShieldGainPerAction);
-            return SkillCastResult.Ok(null);
-        }
-
         if (string.Equals(normalizedSkillId, ArenaConfig.SkillIds.MiraiPrimalRoar, StringComparison.Ordinal))
         {
             var hitAnyTarget = ApplyTileSkill(
@@ -1866,6 +1854,23 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             ApplyPlayerCooldownsForCast(state, skill);
             GrantPlayerShield(state, events, ArenaConfig.PlayerShieldGainPerAction);
             return SkillCastResult.Ok(hitAnyTarget ? null : ArenaConfig.NoTargetReason);
+        }
+
+        if (string.Equals(normalizedSkillId, ArenaConfig.SkillIds.MiraiCollapseField, StringComparison.Ordinal))
+        {
+            var hitAnyTarget = TryExecuteMiraiCollapseFieldSkill(
+                state,
+                events,
+                player,
+                ref pendingLifeLeechHeal);
+            if (!hitAnyTarget)
+            {
+                return SkillCastResult.Fail(ArenaConfig.NoTargetReason);
+            }
+
+            ApplyPlayerCooldownsForCast(state, skill);
+            GrantPlayerShield(state, events, ArenaConfig.PlayerShieldGainPerAction);
+            return SkillCastResult.Ok(null);
         }
 
         if (string.Equals(normalizedSkillId, ArenaConfig.SkillIds.SylwenWhisperShot, StringComparison.Ordinal))
@@ -2000,17 +2005,10 @@ public sealed partial class InMemoryBattleStore : IBattleStore
 
         switch (normalizedSkillId)
         {
-            case var id when id == ArenaConfig.SkillIds.SylwenThornfall:
+            case var id when id == ArenaConfig.SkillIds.SylwenWindBreak:
             {
-                var target = ResolveAssistTarget(state);
-                if (target is null)
-                {
-                    dispatchResult = SkillCastResult.Fail(ArenaConfig.NoTargetReason);
-                    break; // no target - skip, no fallthrough
-                }
-
-                var placed = TryExecuteSylwenThornfall(state, events, target);
-                if (!placed)
+                var casted = TryExecuteSylwenWindBreak(state, events, player);
+                if (!casted)
                 {
                     dispatchResult = SkillCastResult.Fail(ArenaConfig.NoTargetReason);
                     break; // explicit break - no fallthrough
@@ -2065,37 +2063,6 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                 ApplyMiraiBleedingMark(hitMob);
                 events.Add(new BleedingMarkUpdatedEventDto(MobId: hitMob.ActorId, StackCount: hitMob.BleedingMarkStacks));
             });
-    }
-
-    private static bool TryExecuteMiraiIronFang(
-        StoredBattle state,
-        List<BattleEventDto> events,
-        StoredActor player,
-        ref int pendingLifeLeechHeal)
-    {
-        var target = ResolveAssistTarget(state);
-        if (target is null || !state.Actors.TryGetValue(target.ActorId, out var liveTarget) || liveTarget.Hp <= 0)
-        {
-            return false;
-        }
-
-        var consumedBleedingMarkStacks = Math.Max(0, liveTarget.BleedingMarkStacks);
-        var consumedBleedingMarkBonusDamage =
-            consumedBleedingMarkStacks * ArenaConfig.SkillConfig.MiraiIronFangBonusDamagePerConsumedBleedingMarkStack;
-
-        var hpDamageApplied = ApplyDamageToMob(
-            state,
-            events,
-            liveTarget,
-            ArenaConfig.SkillConfig.MiraiIronFangDamage,
-            GetPlayerBaseElement(state),
-            attacker: player,
-            additionalFlatDamageAfterModifiers: consumedBleedingMarkBonusDamage);
-        pendingLifeLeechHeal += ComputeLifeLeechHeal(state, hpDamageApplied);
-
-        liveTarget.BleedingMarkStacks = 0;
-        events.Add(new BleedingMarkUpdatedEventDto(MobId: liveTarget.ActorId, StackCount: liveTarget.BleedingMarkStacks));
-        return true;
     }
 
     private static void ApplyPlayerCooldownsForCast(StoredBattle state, StoredSkill skill)
@@ -2159,15 +2126,15 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         var hasAutoAttackTarget = ResolveEffectivePlayerAutoAttackTarget(state, player) is not null;
 
         var offenseSkillPriority = ResolveAssistOffenseSkillPriority(state);
+        var activeUltimateSkillId = ResolveActiveUltimateSkillId(state);
 
         if (hasAutoAttackTarget)
         {
             foreach (var skillId in offenseSkillPriority)
             {
                 // Ultimate skill IDs bypass the autoSkills toggle and delegate directly to TryFireUltimate.
-                if (string.Equals(skillId, ArenaConfig.SkillIds.MiraiCollapseField, StringComparison.Ordinal) ||
-                    string.Equals(skillId, ArenaConfig.SkillIds.SylwenSilverTempest, StringComparison.Ordinal) ||
-                    string.Equals(skillId, ArenaConfig.SkillIds.VelvetStormCollapse, StringComparison.Ordinal))
+                if (!string.IsNullOrWhiteSpace(activeUltimateSkillId) &&
+                    string.Equals(skillId, activeUltimateSkillId, StringComparison.Ordinal))
                 {
                     if (TryFireUltimate(state, events, player, ref pendingLifeLeechHeal))
                     {
@@ -2294,23 +2261,25 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         }
 
         var skillId = ArenaConfig.UltimateConfig.UltimateSkillId;
-        if (string.Equals(state.PlayerClassId, ArenaConfig.PlayerClassMirai, StringComparison.Ordinal))
+        var ultimateLevel = ResolveUltimateLevel(state);
+        if (string.Equals(state.PlayerClassId, ArenaConfig.PlayerClassSylwen, StringComparison.Ordinal))
         {
-            _ = ApplyMiraiCollapseFieldUltimate(state, events, player, ref pendingLifeLeechHeal);
-            skillId = ArenaConfig.SkillIds.MiraiCollapseField;
-        }
-        else if (string.Equals(state.PlayerClassId, ArenaConfig.PlayerClassSylwen, StringComparison.Ordinal))
-        {
-            ApplySylwenSilverTempestRepel(state, events, player);
-            state.SilverTempestActive = true;
-            state.SilverTempestRemainingMs = ArenaConfig.SkillConfig.SylwenSilverTempestDurationMs;
-            skillId = ArenaConfig.SkillIds.SylwenSilverTempest;
-            events.Add(new SilverTempestActivatedEventDto(
-                DurationMs: ArenaConfig.SkillConfig.SylwenSilverTempestDurationMs));
+            var target = ResolveAssistTarget(state);
+            if (target is null || !TryExecuteSylwenThornfall(state, events, target, ultimateLevel))
+            {
+                return false;
+            }
+
+            skillId = ArenaConfig.SkillIds.SylwenThornfall;
         }
         else if (string.Equals(state.PlayerClassId, ArenaConfig.PlayerClassVelvet, StringComparison.Ordinal))
         {
-            _ = ApplyVelvetStormCollapseUltimate(state, events, player);
+            var target = ResolveAssistTarget(state);
+            if (target is null || !ApplyVelvetStormCollapseUltimate(state, events, player, target, ultimateLevel))
+            {
+                return false;
+            }
+
             skillId = ArenaConfig.SkillIds.VelvetStormCollapse;
         }
         else
@@ -2336,6 +2305,22 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         return true;
     }
 
+    private static int ResolveUltimateLevel(StoredBattle state)
+    {
+        var totalCardsCollected = Math.Max(0, state.TotalCardsCollected);
+        if (totalCardsCollected >= ArenaConfig.UltimateLevelThreeCardThreshold)
+        {
+            return 3;
+        }
+
+        if (totalCardsCollected >= ArenaConfig.UltimateLevelTwoCardThreshold)
+        {
+            return 2;
+        }
+
+        return 1;
+    }
+
     private static void AddUltimateGauge(StoredBattle state, int amount)
     {
         if (amount <= 0)
@@ -2349,11 +2334,12 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         state.UltimateReady = state.UltimateGauge >= ArenaConfig.UltimateConfig.GaugeMax;
     }
 
-    private static void ApplySylwenSilverTempestRepel(
+    private static void ApplySylwenWindBreakRepel(
         StoredBattle state,
         List<BattleEventDto> events,
         StoredActor player)
     {
+        var desiredDistance = Math.Max(0, ArenaConfig.SkillConfig.WindBreakPushRadius);
         var targets = state.Actors.Values
             .Where(actor =>
                 (string.Equals(actor.Kind, "mob", StringComparison.Ordinal) ||
@@ -2370,17 +2356,19 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                 continue;
             }
 
+            var currentDistance = ComputeChebyshevDistance(liveTarget, player.TileX, player.TileY);
+            if (currentDistance >= desiredDistance)
+            {
+                continue;
+            }
+
             var direction = ResolveRepelDirectionFromPlayer(player, liveTarget);
             if (direction.StepX == 0 && direction.StepY == 0)
             {
                 continue;
             }
 
-            var maxRepelTiles = ResolveMaxRepelTilesToBorder(
-                liveTarget.TileX,
-                liveTarget.TileY,
-                direction.StepX,
-                direction.StepY);
+            var maxRepelTiles = desiredDistance - currentDistance;
             if (maxRepelTiles <= 0)
             {
                 continue;
@@ -2400,7 +2388,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             liveTarget.IsStunned = true;
             liveTarget.StunRemainingMs = Math.Max(
                 liveTarget.StunRemainingMs,
-                ArenaConfig.SkillConfig.SylwenSilverTempestStunMs);
+                ArenaConfig.SkillConfig.SylwenWindBreakStunMs);
         }
     }
 
@@ -2411,46 +2399,38 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         return (stepX, stepY);
     }
 
-    private static int ResolveMaxRepelTilesToBorder(int startX, int startY, int stepX, int stepY)
+    private static bool TryExecuteSylwenWindBreak(
+        StoredBattle state,
+        List<BattleEventDto> events,
+        StoredActor player)
     {
-        if (stepX == 0 && stepY == 0)
-        {
-            return 0;
-        }
-
-        var currentX = startX;
-        var currentY = startY;
-        var maxSteps = 0;
-        while (true)
-        {
-            var nextX = currentX + stepX;
-            var nextY = currentY + stepY;
-            if (!IsInBounds(nextX, nextY))
-            {
-                break;
-            }
-
-            currentX = nextX;
-            currentY = nextY;
-            maxSteps += 1;
-        }
-
-        return maxSteps;
+        ApplySylwenWindBreakRepel(state, events, player);
+        state.WindBreakActive = true;
+        state.WindBreakRemainingMs = ArenaConfig.SkillConfig.SylwenWindBreakDurationMs;
+        events.Add(new WindBreakActivatedEventDto(
+            DurationMs: ArenaConfig.SkillConfig.SylwenWindBreakDurationMs));
+        return true;
     }
 
-    private static bool ApplyMiraiCollapseFieldUltimate(
+    private static bool TryExecuteMiraiCollapseFieldSkill(
         StoredBattle state,
         List<BattleEventDto> events,
         StoredActor player,
         ref int pendingLifeLeechHeal)
     {
+        var stopDistance = Math.Max(0, ArenaConfig.SkillConfig.MiraiCollapseFieldStopDistanceChebyshev);
         var targets = state.Actors.Values
             .Where(actor => actor.Kind == "mob" && actor.Hp > 0)
             .OrderBy(actor => ComputeChebyshevDistance(actor, player.TileX, player.TileY))
             .ThenBy(actor => actor.ActorId, StringComparer.Ordinal)
             .ToList();
+        if (targets.Count == 0)
+        {
+            return false;
+        }
 
-        var movedMobs = new List<CollapseFieldMobPositionDto>(targets.Count);
+        var targetedMobIds = new List<string>(capacity: targets.Count);
+        var pulledMobs = new List<CollapseFieldPulledMobDto>(capacity: targets.Count);
         foreach (var target in targets)
         {
             if (!state.Actors.TryGetValue(target.ActorId, out var liveTarget) || liveTarget.Hp <= 0)
@@ -2458,19 +2438,26 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                 continue;
             }
 
-            PullMobTowardPlayerForCollapseField(state, liveTarget, player);
-            movedMobs.Add(new CollapseFieldMobPositionDto(
-                MobId: liveTarget.ActorId,
-                Position: new TilePos(liveTarget.TileX, liveTarget.TileY)));
+            targetedMobIds.Add(liveTarget.ActorId);
+            var fromPosition = new TilePos(liveTarget.TileX, liveTarget.TileY);
+            if (ComputeChebyshevDistance(liveTarget, player.TileX, player.TileY) > stopDistance &&
+                TryPullMobTowardPlayerUntilAdjacentForCollapseField(state, liveTarget, player, stopDistance))
+            {
+                pulledMobs.Add(new CollapseFieldPulledMobDto(
+                    MobId: liveTarget.ActorId,
+                    FromPosition: fromPosition,
+                    ToPosition: new TilePos(liveTarget.TileX, liveTarget.TileY)));
+            }
         }
 
         events.Add(new CollapseFieldActivatedEventDto(
             PlayerPosition: new TilePos(player.TileX, player.TileY),
-            Mobs: movedMobs));
+            PulledMobs: pulledMobs,
+            ReflectDurationMs: ArenaConfig.SkillConfig.CollapseFieldReflectDurationMs));
 
-        foreach (var movedMob in movedMobs)
+        foreach (var targetMobId in targetedMobIds)
         {
-            if (!state.Actors.TryGetValue(movedMob.MobId, out var liveTarget) || liveTarget.Hp <= 0)
+            if (!state.Actors.TryGetValue(targetMobId, out var liveTarget) || liveTarget.Hp <= 0)
             {
                 continue;
             }
@@ -2479,42 +2466,55 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                 state,
                 events,
                 liveTarget,
-                ArenaConfig.SkillConfig.MiraiCollapseFieldDamage,
+                ArenaConfig.SkillConfig.CollapseFieldDamage,
                 GetPlayerBaseElement(state),
-                attacker: player,
-                additionalFlatDamageAfterModifiers: ResolveMiraiBleedingMarkBonusDamage(liveTarget));
+                attacker: player);
             pendingLifeLeechHeal += ComputeLifeLeechHeal(state, hpDamageApplied);
             if (liveTarget.Hp <= 0)
             {
                 continue;
             }
 
-            liveTarget.IsImmobilized = true;
-            liveTarget.ImmobilizeRemainingMs = ArenaConfig.SkillConfig.MiraiCollapseFieldImmobilizeDurationMs;
+            liveTarget.IsStunned = true;
+            liveTarget.StunRemainingMs = Math.Max(
+                liveTarget.StunRemainingMs,
+                ArenaConfig.SkillConfig.CollapseFieldImmobilizeDurationMs);
         }
 
-        return movedMobs.Count > 0;
+        state.ReflectRemainingMs = ArenaConfig.SkillConfig.CollapseFieldReflectDurationMs;
+        state.ReflectPercent = ArenaConfig.SkillConfig.CollapseFieldReflectPercent;
+        return true;
     }
 
-    private static void PullMobTowardPlayerForCollapseField(StoredBattle state, StoredActor mob, StoredActor player)
+    private static bool TryPullMobTowardPlayerUntilAdjacentForCollapseField(
+        StoredBattle state,
+        StoredActor mob,
+        StoredActor player,
+        int stopDistance)
     {
-        while (mob.Hp > 0 && ComputeChebyshevDistance(mob, player.TileX, player.TileY) > ArenaConfig.SkillConfig.MiraiCollapseFieldStopDistanceChebyshev)
+        var startTileX = mob.TileX;
+        var startTileY = mob.TileY;
+        while (mob.Hp > 0 && ComputeChebyshevDistance(mob, player.TileX, player.TileY) > stopDistance)
         {
-            if (!TryGetFirstWalkableGreedyStepTowardTarget(state, mob, player.TileX, player.TileY, out var destination))
+            var stepX = Math.Sign(player.TileX - mob.TileX);
+            var stepY = Math.Sign(player.TileY - mob.TileY);
+            if (stepX == 0 && stepY == 0)
             {
                 break;
             }
 
-            if (!destination.HasValue)
+            var destination = (TileX: mob.TileX + stepX, TileY: mob.TileY + stepY);
+            if (!IsWalkableTile(state, mob, destination))
             {
                 break;
             }
-
             if (!TryMoveMobToTile(state, mob, destination))
             {
                 break;
             }
         }
+
+        return mob.TileX != startTileX || mob.TileY != startTileY;
     }
 
     private static void ApplyMiraiBleedingMark(StoredActor mob)
@@ -2560,76 +2560,93 @@ public sealed partial class InMemoryBattleStore : IBattleStore
     private static bool ApplyVelvetStormCollapseUltimate(
         StoredBattle state,
         List<BattleEventDto> events,
-        StoredActor player)
+        StoredActor player,
+        StoredActor targetMob,
+        int ultimateLevel)
     {
-        // Base damage AoE hit: square r=1 around the player (player tile + all 8 adjacent)
-        var aoeTiles = BuildSquareTiles(player.TileX, player.TileY, 1, includeCenter: true).ToList();
+        var clampedUltimateLevel = Math.Clamp(ultimateLevel, 1, 3);
+        var aoeTiles = BuildVelvetStormCollapseActivationTiles(
+            targetMob.TileX,
+            targetMob.TileY,
+            clampedUltimateLevel);
         EmitFxForTiles(events, aoeTiles, ArenaConfig.HitSmallFxId, GetPlayerBaseElement(state));
         var aoeMobIds = ResolveMobIdsOnTiles(state, aoeTiles).ToList();
+        var canDetonateStacksLocally = clampedUltimateLevel >= 2;
+        var hits = new List<StormCollapseDetonationMobDto>(aoeMobIds.Count);
         foreach (var mobId in aoeMobIds)
         {
-            if (!state.Actors.TryGetValue(mobId, out var aoeTarget) || aoeTarget.Hp <= 0)
+            if (!state.Actors.TryGetValue(mobId, out var liveTarget) || liveTarget.Hp <= 0)
             {
                 continue;
             }
 
-            var aoeDmg = ApplyDamageToMob(
-                state,
-                events,
-                aoeTarget,
-                ArenaConfig.SkillConfig.VelvetStormCollapseAoeBaseDamage,
-                GetPlayerBaseElement(state),
-                player);
-            ApplyPlayerLifeLeech(state, events, ComputeLifeLeechHeal(state, aoeDmg));
-        }
-
-        var targets = state.Actors.Values
-            .Where(actor => actor.Kind == "mob" && actor.Hp > 0)
-            .OrderBy(actor => actor.ActorId, StringComparer.Ordinal)
-            .ToList();
-
-        var detonations = new List<StormCollapseDetonationMobDto>(targets.Count);
-        foreach (var target in targets)
-        {
-            if (!state.Actors.TryGetValue(target.ActorId, out var liveTarget) || liveTarget.Hp <= 0)
-            {
-                continue;
-            }
-
-            var corrosionStacksBefore = Math.Max(0, liveTarget.CorrosionStacks);
-            var stackMultiplier = Math.Max(
-                ArenaConfig.SkillConfig.VelvetStormCollapseMinimumStacksMultiplier,
-                corrosionStacksBefore);
-            var stormDamage = ArenaConfig.SkillConfig.VelvetStormCollapseBaseDamage * stackMultiplier;
-
-            var hpDamageApplied = ApplyDamageToMob(
+            var mobPosition = new TilePos(liveTarget.TileX, liveTarget.TileY);
+            var stacksBeforeDetonation = Math.Max(0, liveTarget.CorrosionStacks);
+            var aoeDamageApplied = ApplyDamageToMob(
                 state,
                 events,
                 liveTarget,
-                stormDamage,
+                ArenaConfig.SkillConfig.VelvetStormCollapseAoeBaseDamage,
                 GetPlayerBaseElement(state),
-                attacker: player,
-                finalDamageMultiplierResolver: ResolveVelvetCorrosionDamageMultiplier);
-            ApplyPlayerLifeLeech(state, events, ComputeLifeLeechHeal(state, hpDamageApplied));
-            liveTarget.CorrosionStacks = 0;
+                player);
+            ApplyPlayerLifeLeech(state, events, ComputeLifeLeechHeal(state, aoeDamageApplied));
 
-            detonations.Add(new StormCollapseDetonationMobDto(
+            if (canDetonateStacksLocally)
+            {
+                if (liveTarget.Hp > 0)
+                {
+                    var stackMultiplier = Math.Max(
+                        ArenaConfig.SkillConfig.VelvetStormCollapseMinimumStacksMultiplier,
+                        stacksBeforeDetonation);
+                    var stormDamage = ArenaConfig.SkillConfig.VelvetStormCollapseBaseDamage * stackMultiplier;
+                    var detonationDamageApplied = ApplyDamageToMob(
+                        state,
+                        events,
+                        liveTarget,
+                        stormDamage,
+                        GetPlayerBaseElement(state),
+                        attacker: player,
+                        finalDamageMultiplierResolver: ResolveVelvetCorrosionDamageMultiplier);
+                    ApplyPlayerLifeLeech(state, events, ComputeLifeLeechHeal(state, detonationDamageApplied));
+                }
+
+                liveTarget.CorrosionStacks = 0;
+            }
+
+            hits.Add(new StormCollapseDetonationMobDto(
                 MobId: liveTarget.ActorId,
-                CorrosionStacksBeforeDetonation: corrosionStacksBefore,
-                DamageDealt: hpDamageApplied));
+                MobPosition: mobPosition,
+                StacksConsumed: canDetonateStacksLocally ? stacksBeforeDetonation : 0,
+                AoeDamage: aoeDamageApplied));
         }
 
-        events.Add(new StormCollapseDetonatedEventDto(Mobs: detonations));
-        return detonations.Count > 0;
+        events.Add(new StormCollapseDetonatedEventDto(
+            TargetPosition: new TilePos(targetMob.TileX, targetMob.TileY),
+            AffectedTiles: aoeTiles
+                .Select(tile => new TilePos(tile.TileX, tile.TileY))
+                .ToList(),
+            UltimateLevel: clampedUltimateLevel,
+            Hits: hits));
+
+        return hits.Count > 0;
     }
 
     private static bool TryExecuteSylwenThornfall(
         StoredBattle state,
         List<BattleEventDto> events,
-        StoredActor targetMob)
+        StoredActor targetMob,
+        int ultimateLevel)
     {
+        var clampedUltimateLevel = Math.Clamp(ultimateLevel, 1, 3);
+        var radius = clampedUltimateLevel switch
+        {
+            1 => ArenaConfig.SkillConfig.ThornfallLevelOneRadius,
+            _ => ArenaConfig.SkillConfig.ThornfallLevelTwoRadius
+        };
+        var applyEntryStun = clampedUltimateLevel >= 3;
         var crossTiles = BuildThornfallCrossTiles(
-            targetPos: new TilePos(targetMob.TileX, targetMob.TileY));
+            targetPos: new TilePos(targetMob.TileX, targetMob.TileY),
+            radius: radius);
         if (crossTiles.Count == 0)
         {
             return false;
@@ -2639,7 +2656,9 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             .Select(tile => (TileX: tile.X, TileY: tile.Y))
             .ToList();
         EmitFxForTiles(events, affectedTiles, ArenaConfig.AvalancheFxId, GetPlayerBaseElement(state));
-        events.Add(new ThornfallPlacedEventDto(FanTiles: crossTiles));
+        events.Add(new ThornfallPlacedEventDto(
+            CrossTiles: crossTiles,
+            UltimateLevel: clampedUltimateLevel));
 
         AddDamagingHazardDecalZone(
             state,
@@ -2647,6 +2666,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             ArenaConfig.SkillConfig.SylwenThornfallDurationMs,
             ArenaConfig.SkillConfig.SylwenThornfallDamagePerTick,
             entityType: ArenaConfig.SkillIds.SylwenThornfall);
+        RegisterThornfallZone(state, crossTiles, applyEntryStun);
 
         return true;
     }
@@ -2672,21 +2692,53 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             .FirstOrDefault();
     }
 
-    private static List<TilePos> BuildThornfallCrossTiles(TilePos targetPos)
+    private static List<TilePos> BuildThornfallCrossTiles(TilePos targetPos, int radius)
     {
-        var offsets = new[]
+        var safeRadius = Math.Max(0, radius);
+        var tiles = new List<TilePos> { targetPos };
+        for (var step = 1; step <= safeRadius; step += 1)
         {
-            (0, 0),   // center
-            (0, -1),  // north
-            (-1, 0),  // west
-            (1, 0),   // east
-            (0, 1),   // south
-        };
+            tiles.Add(new TilePos(targetPos.X, targetPos.Y - step));
+            tiles.Add(new TilePos(targetPos.X - step, targetPos.Y));
+            tiles.Add(new TilePos(targetPos.X + step, targetPos.Y));
+            tiles.Add(new TilePos(targetPos.X, targetPos.Y + step));
+        }
 
-        return offsets
-            .Select(offset => new TilePos(targetPos.X + offset.Item1, targetPos.Y + offset.Item2))
+        return tiles
             .Where(tile => IsInBounds(tile.X, tile.Y))
+            .Distinct()
             .ToList();
+    }
+
+    private static void RegisterThornfallZone(StoredBattle state, IReadOnlyCollection<TilePos> crossTiles, bool applyEntryStun)
+    {
+        if (crossTiles.Count == 0)
+        {
+            return;
+        }
+
+        var tileKeys = crossTiles
+            .Select(tile => EncodeTileKey(tile.X, tile.Y))
+            .ToHashSet(StringComparer.Ordinal);
+        var occupantActorIds = state.Actors.Values
+            .Where(actor =>
+                (string.Equals(actor.Kind, "mob", StringComparison.Ordinal) || string.Equals(actor.Kind, "boss", StringComparison.Ordinal)) &&
+                actor.Hp > 0 &&
+                tileKeys.Contains(EncodeTileKey(actor.TileX, actor.TileY)))
+            .Select(actor => actor.ActorId)
+            .ToHashSet(StringComparer.Ordinal);
+        var zoneId = $"thornfall_{state.Tick}_{NextTickEventId(state)}";
+        state.ActiveThornfallZones.Add(new StoredThornfallZone(
+            zoneId: zoneId,
+            tileKeys: tileKeys,
+            remainingMs: ArenaConfig.SkillConfig.SylwenThornfallDurationMs,
+            applyEntryStun: applyEntryStun,
+            occupyingActorIds: occupantActorIds));
+    }
+
+    private static string EncodeTileKey(int tileX, int tileY)
+    {
+        return $"{tileX}:{tileY}";
     }
 
     private static IEnumerable<TilePos> GetFanNeighbors(int dx, int dy, TilePos center)
@@ -3939,6 +3991,13 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             state,
             damageAppliedToPlayer * ArenaConfig.UltimateConfig.GaugePerDamageTaken);
 
+        TryApplyCollapseFieldReflectDamage(
+            state,
+            events,
+            player,
+            attacker,
+            damageAppliedToPlayer);
+
         if (isCrit)
         {
             EmitCritTextEvent(events, player.TileX, player.TileY, nowMs);
@@ -3960,6 +4019,65 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             player.Shield = 0;
             EndRun(state, events, ArenaConfig.RunEndReasonDefeatDeath);
         }
+    }
+
+    private static void TryApplyCollapseFieldReflectDamage(
+        StoredBattle state,
+        List<BattleEventDto> events,
+        StoredActor player,
+        StoredActor? attacker,
+        int incomingDamageApplied)
+    {
+        if (incomingDamageApplied <= 0 ||
+            state.ReflectRemainingMs <= 0 ||
+            state.ReflectPercent <= 0 ||
+            attacker is null ||
+            !string.Equals(attacker.Kind, "mob", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        if (!state.Actors.TryGetValue(attacker.ActorId, out var liveAttacker) || liveAttacker.Hp <= 0)
+        {
+            return;
+        }
+
+        var reflectDamage = (int)Math.Floor(incomingDamageApplied * (state.ReflectPercent / 100.0d));
+        if (reflectDamage <= 0)
+        {
+            return;
+        }
+
+        var previousShield = liveAttacker.Shield;
+        var previousHp = liveAttacker.Hp;
+        _ = ApplyDamageToMob(
+            state,
+            events,
+            liveAttacker,
+            reflectDamage,
+            ElementType.Physical,
+            attacker: player,
+            allowPlayerDamageBuffs: false,
+            allowCriticalHits: false,
+            emitDamageNumberEvent: false,
+            bypassCombatModifiers: true);
+
+        var reflectedAmount = Math.Max(0, (previousShield - liveAttacker.Shield) + (previousHp - liveAttacker.Hp));
+        if (reflectedAmount <= 0)
+        {
+            return;
+        }
+
+        events.Add(new ReflectEventDto(
+            SourceEntityId: player.ActorId,
+            SourceTileX: player.TileX,
+            SourceTileY: player.TileY,
+            TargetEntityId: liveAttacker.ActorId,
+            TargetTileX: liveAttacker.TileX,
+            TargetTileY: liveAttacker.TileY,
+            Amount: reflectedAmount,
+            ElementType: ElementType.Physical,
+            TargetMobType: liveAttacker.MobType));
     }
 
     private static void GrantPlayerShield(StoredBattle state, List<BattleEventDto> events, int amount)
@@ -4000,7 +4118,9 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         bool allowCriticalHits = true,
         int additionalFlatDamageAfterModifiers = 0,
         Action<StoredActor>? onSuccessfulHit = null,
-        Func<StoredActor, double>? finalDamageMultiplierResolver = null)
+        Func<StoredActor, double>? finalDamageMultiplierResolver = null,
+        bool emitDamageNumberEvent = true,
+        bool bypassCombatModifiers = false)
     {
         if (mob.Hp <= 0)
         {
@@ -4008,30 +4128,37 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         }
 
         var remainingDamage = Math.Max(0, damage);
-        if (allowPlayerDamageBuffs &&
+        var attackerIsPlayer = attacker is not null && string.Equals(attacker.Kind, "player", StringComparison.Ordinal);
+        if (!bypassCombatModifiers &&
+            allowPlayerDamageBuffs &&
             attacker is not null &&
-            string.Equals(attacker.Kind, "player", StringComparison.Ordinal))
+            attackerIsPlayer)
         {
             remainingDamage = ApplyOutgoingDamageModifiers(state, remainingDamage);
         }
 
-        remainingDamage = RollDamageForAttacker(state, remainingDamage, attacker);
-        var attackerIsPlayer = attacker is not null && string.Equals(attacker.Kind, "player", StringComparison.Ordinal);
-        var hitKind = ResolveHitKind(
-            state,
-            allowCriticalHits,
-            attackerIsPlayer
-                ? ResolvePlayerCriticalHitChancePercent(state)
-                : ArenaConfig.CriticalHitChancePercent);
-        var isCrit = string.Equals(hitKind, BattleHitKinds.Crit, StringComparison.Ordinal);
-        if (isCrit && attackerIsPlayer)
+        var hitKind = BattleHitKinds.Normal;
+        var isCrit = false;
+        if (!bypassCombatModifiers)
         {
-            remainingDamage = ApplyPercentIncrease(remainingDamage, ResolvePlayerCriticalDamageBonusPercent(state));
+            remainingDamage = RollDamageForAttacker(state, remainingDamage, attacker);
+            hitKind = ResolveHitKind(
+                state,
+                allowCriticalHits,
+                attackerIsPlayer
+                    ? ResolvePlayerCriticalHitChancePercent(state)
+                    : ArenaConfig.CriticalHitChancePercent);
+            isCrit = string.Equals(hitKind, BattleHitKinds.Crit, StringComparison.Ordinal);
+            if (isCrit && attackerIsPlayer)
+            {
+                remainingDamage = ApplyPercentIncrease(remainingDamage, ResolvePlayerCriticalDamageBonusPercent(state));
+            }
         }
 
         var isWeaknessHit = false;
         var isResistanceHit = false;
-        if (string.Equals(mob.Kind, "boss", StringComparison.Ordinal))
+        if (!bypassCombatModifiers &&
+            string.Equals(mob.Kind, "boss", StringComparison.Ordinal))
         {
             // Boss has physical resistance; also track elemental weakness/resistance from its BossDef
             var bossDef = ArenaConfig.BossConfig.TryResolveBossById(mob.ActorId);
@@ -4053,7 +4180,9 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                     remainingDamage = Math.Max(1, (int)Math.Round(remainingDamage * bossMult));
             }
         }
-        else if (mob.MobType is MobArchetype mobArchetypeForElem && MobConfigs.TryGetValue(mobArchetypeForElem, out var mobElemConfig))
+        else if (!bypassCombatModifiers &&
+                 mob.MobType is MobArchetype mobArchetypeForElem &&
+                 MobConfigs.TryGetValue(mobArchetypeForElem, out var mobElemConfig))
         {
             var elementalMult = ResolveElementalModifier(element, mobElemConfig.WeakTo, mobElemConfig.ResistantTo);
             if (elementalMult > 1.0f)
@@ -4064,18 +4193,21 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                 remainingDamage = Math.Max(1, (int)Math.Round(remainingDamage * elementalMult));
         }
 
-        if (GetBuffingEliteArchetype(state, mob) == MobArchetype.EliteIceZombie)
+        if (!bypassCombatModifiers &&
+            GetBuffingEliteArchetype(state, mob) == MobArchetype.EliteIceZombie)
         {
             remainingDamage = ApplyPercentReduction(remainingDamage, ArenaConfig.EliteCommanderDamageReductionPercent);
             remainingDamage = Math.Max(1, remainingDamage);
         }
 
-        if (additionalFlatDamageAfterModifiers > 0)
+        if (!bypassCombatModifiers && additionalFlatDamageAfterModifiers > 0)
         {
             remainingDamage = Math.Max(0, remainingDamage + additionalFlatDamageAfterModifiers);
         }
 
-        if (remainingDamage > 0 && finalDamageMultiplierResolver is not null)
+        if (!bypassCombatModifiers &&
+            remainingDamage > 0 &&
+            finalDamageMultiplierResolver is not null)
         {
             var resolvedMultiplier = finalDamageMultiplierResolver(mob);
             if (!double.IsFinite(resolvedMultiplier))
@@ -4105,30 +4237,33 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         var isFinalBlow = mob.Hp <= 0;
         var nowMs = GetElapsedMsForTick(state.Tick);
 
-        events.Add(new DamageNumberEventDto(
-            SourceEntityId: attacker?.ActorId,
-            SourceTileX: attacker?.TileX,
-            SourceTileY: attacker?.TileY,
-            AttackerEntityId: attacker?.ActorId,
-            AttackerTileX: attacker?.TileX,
-            AttackerTileY: attacker?.TileY,
-            TargetEntityId: mob.ActorId,
-            TargetTileX: mob.TileX,
-            TargetTileY: mob.TileY,
-            DamageAmount: absorbed + hpDamageApplied,
-            ElementType: element,
-            IsKill: isFinalBlow,
-            IsCrit: isCrit,
-            HitId: NextTickEventId(state),
-            ShieldDamageAmount: absorbed,
-            HpDamageAmount: hpDamageApplied,
-            HitKind: hitKind,
-            IsWeaknessHit: isWeaknessHit,
-            IsResistanceHit: isResistanceHit));
-
-        if (isCrit)
+        if (emitDamageNumberEvent)
         {
-            EmitCritTextEvent(events, mob.TileX, mob.TileY, nowMs);
+            events.Add(new DamageNumberEventDto(
+                SourceEntityId: attacker?.ActorId,
+                SourceTileX: attacker?.TileX,
+                SourceTileY: attacker?.TileY,
+                AttackerEntityId: attacker?.ActorId,
+                AttackerTileX: attacker?.TileX,
+                AttackerTileY: attacker?.TileY,
+                TargetEntityId: mob.ActorId,
+                TargetTileX: mob.TileX,
+                TargetTileY: mob.TileY,
+                DamageAmount: absorbed + hpDamageApplied,
+                ElementType: element,
+                IsKill: isFinalBlow,
+                IsCrit: isCrit,
+                HitId: NextTickEventId(state),
+                ShieldDamageAmount: absorbed,
+                HpDamageAmount: hpDamageApplied,
+                HitKind: hitKind,
+                IsWeaknessHit: isWeaknessHit,
+                IsResistanceHit: isResistanceHit));
+
+            if (isCrit)
+            {
+                EmitCritTextEvent(events, mob.TileX, mob.TileY, nowMs);
+            }
         }
 
         if (allowPlayerDamageBuffs &&
@@ -4982,6 +5117,48 @@ public sealed partial class InMemoryBattleStore : IBattleStore
     private static string BuildMobActorId(int slotIndex)
     {
         return $"mob.slime.{slotIndex}";
+    }
+
+    private static List<(int TileX, int TileY)> BuildVelvetStormCollapseActivationTiles(
+        int centerX,
+        int centerY,
+        int ultimateLevel)
+    {
+        var clampedUltimateLevel = Math.Clamp(ultimateLevel, 1, 3);
+        var radius = clampedUltimateLevel >= 3
+            ? ArenaConfig.SkillConfig.StormCollapseDiamondRadiusL3
+            : ArenaConfig.SkillConfig.StormCollapseDiamondRadiusL1;
+
+        return BuildDiamondTiles(centerX, centerY, radius, includeCenter: true)
+            .Where(tile => IsInBounds(tile.TileX, tile.TileY))
+            .OrderBy(tile => tile.TileY)
+            .ThenBy(tile => tile.TileX)
+            .ToList();
+    }
+
+    private static IEnumerable<(int TileX, int TileY)> BuildChebyshevRingTiles(
+        int centerX,
+        int centerY,
+        int radius)
+    {
+        var safeRadius = Math.Max(0, radius);
+        if (safeRadius == 0)
+        {
+            yield return (centerX, centerY);
+            yield break;
+        }
+
+        for (var tileY = centerY - safeRadius; tileY <= centerY + safeRadius; tileY += 1)
+        {
+            for (var tileX = centerX - safeRadius; tileX <= centerX + safeRadius; tileX += 1)
+            {
+                var chebyshevDistance = Math.Max(Math.Abs(tileX - centerX), Math.Abs(tileY - centerY));
+                if (chebyshevDistance == safeRadius)
+                {
+                    yield return (tileX, tileY);
+                }
+            }
+        }
     }
 
     private static IEnumerable<(int TileX, int TileY)> BuildSquareTiles(
@@ -6019,6 +6196,17 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         }
 
         var selectedCardIds = state.SelectedCardIds.ToList();
+        if (state.TotalCardsCollected < 0)
+        {
+            throw new InvalidOperationException($"Total cards collected is invalid: {state.TotalCardsCollected}.");
+        }
+
+        if (state.TotalCardsCollected != selectedCardIds.Count)
+        {
+            throw new InvalidOperationException(
+                $"Total cards collected is inconsistent with selected card history: total={state.TotalCardsCollected}, history={selectedCardIds.Count}.");
+        }
+
         foreach (var selectedCardId in selectedCardIds)
         {
             if (!CardById.ContainsKey(selectedCardId))
@@ -6273,16 +6461,43 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             throw new InvalidOperationException($"Assist maxAutoCastsPerTick is invalid: {assist.MaxAutoCastsPerTick}.");
         }
 
-        if (state.SilverTempestRemainingMs < 0)
+        if (state.WindBreakRemainingMs < 0)
         {
             throw new InvalidOperationException(
-                $"Silver Tempest remaining duration is invalid: {state.SilverTempestRemainingMs}.");
+                $"Wind Break remaining duration is invalid: {state.WindBreakRemainingMs}.");
         }
 
-        if (!state.SilverTempestActive && state.SilverTempestRemainingMs > 0)
+        if (!state.WindBreakActive && state.WindBreakRemainingMs > 0)
         {
             throw new InvalidOperationException(
-                "Silver Tempest remaining duration is positive while the buff is inactive.");
+                "Wind Break remaining duration is positive while the buff is inactive.");
+        }
+
+        if (state.ReflectRemainingMs < 0)
+        {
+            throw new InvalidOperationException(
+                $"Collapse Field reflect remaining duration is invalid: {state.ReflectRemainingMs}.");
+        }
+
+        if (state.ReflectPercent < 0 || state.ReflectPercent > 100)
+        {
+            throw new InvalidOperationException(
+                $"Collapse Field reflect percent is invalid: {state.ReflectPercent}.");
+        }
+
+        if (state.ReflectRemainingMs == 0 && state.ReflectPercent != 0)
+        {
+            throw new InvalidOperationException(
+                "Collapse Field reflect percent must be zero when the reflect duration has expired.");
+        }
+
+        foreach (var zone in state.ActiveThornfallZones)
+        {
+            if (zone.RemainingMs < 0)
+            {
+                throw new InvalidOperationException(
+                    $"Thornfall zone has invalid remaining duration: {zone.RemainingMs}.");
+            }
         }
 
         foreach (var pendingHit in state.PendingWhisperShotHits)
@@ -6362,14 +6577,18 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             PendingCardChoiceState? pendingCardChoice,
             List<string> selectedCardIds,
             Dictionary<string, int> selectedCardStacks,
+            int totalCardsCollected,
             int cardSelectionsGranted,
             int nextCardChoiceSequence,
             List<BattleReplayActionDto> replayActions,
             int zoneIndex,
             int ultimateGauge,
             bool ultimateReady,
-            bool silverTempestActive,
-            int silverTempestRemainingMs,
+            bool windBreakActive,
+            int windBreakRemainingMs,
+            int reflectRemainingMs,
+            int reflectPercent,
+            List<StoredThornfallZone> activeThornfallZones,
             List<PendingHit> pendingWhisperShotHits,
             bool masteryXpAwardedAtRunEnd)
         {
@@ -6422,14 +6641,18 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             PendingCardChoice = pendingCardChoice;
             SelectedCardIds = selectedCardIds;
             SelectedCardStacks = selectedCardStacks;
+            TotalCardsCollected = totalCardsCollected;
             CardSelectionsGranted = cardSelectionsGranted;
             NextCardChoiceSequence = nextCardChoiceSequence;
             ReplayActions = replayActions;
             ZoneIndex = zoneIndex;
             UltimateGauge = ultimateGauge;
             UltimateReady = ultimateReady;
-            SilverTempestActive = silverTempestActive;
-            SilverTempestRemainingMs = silverTempestRemainingMs;
+            WindBreakActive = windBreakActive;
+            WindBreakRemainingMs = windBreakRemainingMs;
+            ReflectRemainingMs = Math.Max(0, reflectRemainingMs);
+            ReflectPercent = Math.Max(0, reflectPercent);
+            ActiveThornfallZones = activeThornfallZones;
             PendingWhisperShotHits = pendingWhisperShotHits;
             MasteryXpAwardedAtRunEnd = masteryXpAwardedAtRunEnd;
         }
@@ -6552,6 +6775,8 @@ public sealed partial class InMemoryBattleStore : IBattleStore
 
         public Dictionary<string, int> SelectedCardStacks { get; }
 
+        public int TotalCardsCollected { get; set; }
+
         public int CardSelectionsGranted { get; set; }
 
         public int NextCardChoiceSequence { get; set; }
@@ -6564,9 +6789,15 @@ public sealed partial class InMemoryBattleStore : IBattleStore
 
         public bool UltimateReady { get; set; }
 
-        public bool SilverTempestActive { get; set; }
+        public bool WindBreakActive { get; set; }
 
-        public int SilverTempestRemainingMs { get; set; }
+        public int WindBreakRemainingMs { get; set; }
+
+        public int ReflectRemainingMs { get; set; }
+
+        public int ReflectPercent { get; set; }
+
+        public List<StoredThornfallZone> ActiveThornfallZones { get; }
 
         public List<PendingHit> PendingWhisperShotHits { get; }
 
@@ -6815,6 +7046,33 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         public int Level { get; set; }
     }
 
+    private sealed class StoredThornfallZone
+    {
+        public StoredThornfallZone(
+            string zoneId,
+            HashSet<string> tileKeys,
+            int remainingMs,
+            bool applyEntryStun,
+            HashSet<string> occupyingActorIds)
+        {
+            ZoneId = zoneId;
+            TileKeys = tileKeys;
+            RemainingMs = remainingMs;
+            ApplyEntryStun = applyEntryStun;
+            OccupyingActorIds = occupyingActorIds;
+        }
+
+        public string ZoneId { get; }
+
+        public HashSet<string> TileKeys { get; }
+
+        public int RemainingMs { get; set; }
+
+        public bool ApplyEntryStun { get; }
+
+        public HashSet<string> OccupyingActorIds { get; set; }
+    }
+
     private sealed class StoredDecal
     {
         public StoredDecal(
@@ -6974,4 +7232,3 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         public int CommitTicksRemaining { get; set; }
     }
 }
-

@@ -44,7 +44,8 @@ const CORROSION_COLOR_HEX = "#7F77DD";
 const FOCUS_COLOR_HEX = "#1D9E75";
 const STUN_COLOR_HEX = "#EF9F27";
 const IMMOBILIZE_COLOR_HEX = "#1D9E75";
-const SILVER_TEMPEST_TRAIL_COLOR_HEX = "#1D9E75";
+const WIND_BREAK_TRAIL_COLOR_HEX = "#1D9E75";
+const REFLECT_AURA_COLOR_HEX = "#ef4444";
 const SYLWEN_THORNFALL_FADE_OUT_MS = 500;
 export class CanvasLayeredRenderer {
   private readonly pipeline: RenderLayer[] = ["ground", "groundFx", "actors", "hitFx", "ui"];
@@ -125,6 +126,8 @@ export class CanvasLayeredRenderer {
 
           this.drawVelvetUmbralPathTrails(scene, viewport);
           this.drawThornfallCrossZones(scene, viewport);
+          this.drawStormCollapseZoneOverlays(scene, viewport);
+          this.drawStormCollapseBorderPulses(scene, viewport);
           this.drawMiraiTileFlashes(scene, viewport);
           this.drawImmobilizeGroundBorders(scene, viewport);
           await this.drawMobTierAuraGroundFx(scene, viewport, imageCache, imageLoader);
@@ -159,7 +162,7 @@ export class CanvasLayeredRenderer {
               continue;
             }
 
-            this.drawSilverTempestProjectileTrail(scene, viewport, projectile);
+            this.drawWindBreakProjectileTrail(scene, viewport, projectile);
             this.projectileAnimator.draw(
               this.context,
               scene,
@@ -184,7 +187,8 @@ export class CanvasLayeredRenderer {
         this.drawPoiMarkers(scene, viewport);
         this.drawAimDirectionGuides(scene, viewport);
         this.drawGroundTargetReticle(scene, viewport);
-        this.drawSilverTempestPlayerGlow(scene, viewport);
+        this.drawWindBreakPlayerGlow(scene, viewport);
+        this.drawReflectPlayerAura(scene, viewport);
         this.drawCollapseFieldBursts(scene, viewport);
         this.drawStormCollapseRings(scene, viewport);
         this.drawStormCollapseStackTexts(scene, viewport);
@@ -361,16 +365,35 @@ export class CanvasLayeredRenderer {
 
     for (const flash of scene.miraiTileFlashes) {
       const life = Math.max(0, Math.min(1, flash.elapsedMs / flash.durationMs));
-      const alpha = Math.max(0, 0.6 * (1 - life));
-      if (alpha <= 0) {
+      const fillAlpha = Math.max(0, (flash.maxFillAlpha ?? 0.6) * (1 - life));
+      const borderAlpha = flash.borderColorHex
+        ? Math.max(0, (flash.maxBorderAlpha ?? 0.95) * (1 - life))
+        : 0;
+      if (fillAlpha <= 0 && borderAlpha <= 0) {
         continue;
       }
 
       const x = viewport.originX + flash.tilePos.x * scene.tileSize;
       const y = viewport.originY + flash.tilePos.y * scene.tileSize;
       this.context.save();
-      this.context.fillStyle = this.hexToRgba(flash.colorHex, alpha);
-      this.context.fillRect(x, y, scene.tileSize, scene.tileSize);
+      if (fillAlpha > 0) {
+        this.context.fillStyle = this.hexToRgba(flash.colorHex, fillAlpha);
+        this.context.fillRect(x, y, scene.tileSize, scene.tileSize);
+      }
+
+      if (flash.borderColorHex && borderAlpha > 0) {
+        const strokeWidth = Math.max(1, flash.borderWidthPx ?? 1.5);
+        const inset = strokeWidth / 2;
+        this.context.strokeStyle = this.hexToRgba(flash.borderColorHex, borderAlpha);
+        this.context.lineWidth = strokeWidth;
+        this.context.strokeRect(
+          x + inset,
+          y + inset,
+          Math.max(0, scene.tileSize - strokeWidth),
+          Math.max(0, scene.tileSize - strokeWidth)
+        );
+      }
+
       this.context.restore();
     }
   }
@@ -389,11 +412,83 @@ export class CanvasLayeredRenderer {
         continue;
       }
 
+      if (zone.floorTintRgba) {
+        this.context.save();
+        this.context.globalAlpha = fadeMultiplier;
+        this.context.fillStyle = zone.floorTintRgba;
+        for (const tile of zone.crossTiles) {
+          const x = viewport.originX + tile.x * scene.tileSize;
+          const y = viewport.originY + tile.y * scene.tileSize;
+          this.context.fillRect(x, y, scene.tileSize, scene.tileSize);
+        }
+        this.context.restore();
+      }
+
       this.context.save();
-      this.context.strokeStyle = this.hexToRgba(zone.colorHex, 0.7 * fadeMultiplier);
+      this.context.strokeStyle = this.hexToRgba("#ffffff", 0.9 * fadeMultiplier);
       this.context.lineWidth = 1.5;
       this.context.beginPath();
       this.traceTileSetPerimeterPath(scene, viewport, zone.crossTiles);
+      this.context.stroke();
+      this.context.restore();
+    }
+  }
+
+  private drawStormCollapseZoneOverlays(scene: ArenaScene, viewport: RenderViewport): void {
+    if (scene.stormCollapseZoneOverlays.length === 0) {
+      return;
+    }
+
+    for (const zone of scene.stormCollapseZoneOverlays) {
+      const fadeStartMs = Math.max(0, zone.durationMs - SYLWEN_THORNFALL_FADE_OUT_MS);
+      const fadeMultiplier = zone.elapsedMs < fadeStartMs
+        ? 1
+        : Math.max(0, 1 - ((zone.elapsedMs - fadeStartMs) / Math.max(1, SYLWEN_THORNFALL_FADE_OUT_MS)));
+      if (fadeMultiplier <= 0) {
+        continue;
+      }
+
+      this.context.save();
+      this.context.globalAlpha = fadeMultiplier;
+      this.context.fillStyle = zone.floorTintRgba;
+      for (const tile of zone.tiles) {
+        const x = viewport.originX + tile.x * scene.tileSize;
+        const y = viewport.originY + tile.y * scene.tileSize;
+        this.context.fillRect(x, y, scene.tileSize, scene.tileSize);
+      }
+      this.context.restore();
+
+      this.context.save();
+      this.context.strokeStyle = this.hexToRgba(zone.colorHex, 0.9 * fadeMultiplier);
+      this.context.lineWidth = 1.5;
+      this.context.beginPath();
+      this.traceTileSetPerimeterPath(scene, viewport, zone.tiles);
+      this.context.stroke();
+      this.context.restore();
+    }
+  }
+
+  private drawStormCollapseBorderPulses(scene: ArenaScene, viewport: RenderViewport): void {
+    if (scene.stormCollapseBorderPulses.length === 0) {
+      return;
+    }
+
+    for (const pulse of scene.stormCollapseBorderPulses) {
+      if (pulse.delayRemainingMs > 0 || pulse.tiles.length === 0) {
+        continue;
+      }
+
+      const life = Math.max(0, Math.min(1, pulse.elapsedMs / pulse.durationMs));
+      const alpha = Math.max(0, 1 - life);
+      if (alpha <= 0) {
+        continue;
+      }
+
+      this.context.save();
+      this.context.strokeStyle = this.hexToRgba(pulse.colorHex, alpha);
+      this.context.lineWidth = Math.max(1, pulse.borderWidthPx);
+      this.context.beginPath();
+      this.traceTileSetPerimeterPath(scene, viewport, pulse.tiles);
       this.context.stroke();
       this.context.restore();
     }
@@ -1428,12 +1523,12 @@ export class CanvasLayeredRenderer {
     }
   }
 
-  private drawSilverTempestProjectileTrail(
+  private drawWindBreakProjectileTrail(
     scene: ArenaScene,
     viewport: RenderViewport,
     projectile: ArenaScene["projectileInstances"][number]
   ): void {
-    if (!scene.silverTempestActive) {
+    if (!scene.windBreakActive) {
       return;
     }
 
@@ -1453,7 +1548,7 @@ export class CanvasLayeredRenderer {
     const endY = viewport.originY + (projectile.visualEndPos.y + 0.5) * scene.tileSize;
 
     this.context.save();
-    this.context.strokeStyle = this.hexToRgba(SILVER_TEMPEST_TRAIL_COLOR_HEX, alpha);
+    this.context.strokeStyle = this.hexToRgba(WIND_BREAK_TRAIL_COLOR_HEX, alpha);
     this.context.lineWidth = Math.max(1, scene.tileSize * 0.032);
     this.context.lineCap = "round";
     this.context.beginPath();
@@ -1463,8 +1558,8 @@ export class CanvasLayeredRenderer {
     this.context.restore();
   }
 
-  private drawSilverTempestPlayerGlow(scene: ArenaScene, viewport: RenderViewport): void {
-    if (!scene.silverTempestActive || scene.silverTempestRemainingMs <= 0) {
+  private drawWindBreakPlayerGlow(scene: ArenaScene, viewport: RenderViewport): void {
+    if (!scene.windBreakActive || scene.windBreakRemainingMs <= 0) {
       return;
     }
 
@@ -1485,6 +1580,39 @@ export class CanvasLayeredRenderer {
     this.context.shadowColor = this.hexToRgba(FOCUS_COLOR_HEX, Math.max(0.25, pulse * 0.6));
     this.context.shadowBlur = Math.max(4, scene.tileSize * 0.18);
     this.context.strokeRect(x, y, spriteSize, spriteSize);
+    this.context.restore();
+  }
+
+  private drawReflectPlayerAura(scene: ArenaScene, viewport: RenderViewport): void {
+    if (scene.reflectRemainingMs <= 0) {
+      return;
+    }
+
+    const player = Object.values(scene.actorsById).find((actor) => actor.kind === "player");
+    if (!player) {
+      return;
+    }
+
+    const nowMs = this.nowMs();
+    const pulse = 0.6 + (0.4 * (0.5 + (Math.sin(nowMs / 120) * 0.5)));
+    const centerX = viewport.originX + (player.tileX + 0.5) * scene.tileSize;
+    const centerY = viewport.originY + (player.tileY + 0.5) * scene.tileSize;
+    const radius = scene.tileSize * 0.52;
+
+    this.context.save();
+    this.context.strokeStyle = this.hexToRgba(REFLECT_AURA_COLOR_HEX, Math.max(0.45, pulse));
+    this.context.lineWidth = Math.max(2, scene.tileSize * 0.05);
+    this.context.shadowColor = this.hexToRgba(REFLECT_AURA_COLOR_HEX, 0.45);
+    this.context.shadowBlur = Math.max(5, scene.tileSize * 0.2);
+    this.context.beginPath();
+    this.context.arc(centerX, centerY, radius, 0, Math.PI * 2);
+    this.context.stroke();
+
+    this.context.strokeStyle = this.hexToRgba(REFLECT_AURA_COLOR_HEX, 0.26);
+    this.context.lineWidth = Math.max(1.2, scene.tileSize * 0.03);
+    this.context.beginPath();
+    this.context.arc(centerX, centerY, radius * 1.2, 0, Math.PI * 2);
+    this.context.stroke();
     this.context.restore();
   }
 
@@ -1865,7 +1993,7 @@ export class CanvasLayeredRenderer {
           baseY = viewport.originY + entry.tilePos.y * scene.tileSize - scene.tileSize * 0.24;
           forcedFontSizePx = 13;
           toneScale = 1;
-        } else if (entry.tone === "silver_tempest") {
+        } else if (entry.tone === "wind_break") {
           riseOffset = life * 10;
           baseY = viewport.originY + entry.tilePos.y * scene.tileSize - scene.tileSize * 0.3;
           forcedFontSizePx = 12;
@@ -1980,7 +2108,7 @@ export class CanvasLayeredRenderer {
       return { fill: FOCUS_COLOR_HEX, outline: "rgba(10, 77, 58, 0.95)" };
     }
 
-    if (entry.tone === "silver_tempest") {
+    if (entry.tone === "wind_break") {
       return { fill: FOCUS_COLOR_HEX, outline: "rgba(8, 47, 73, 0.95)" };
     }
 

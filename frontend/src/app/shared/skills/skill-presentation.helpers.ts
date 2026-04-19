@@ -101,7 +101,7 @@ const SKILL_META: readonly SkillMeta[] = [
     accentColor: "#22d3ee",
     family: "ranged",
     tier: "heavy",
-    description: "Range: Cross - 5 tiles centered on target (N/S/E/W + center). Places a cross-shaped zone of sustained arrow rain centered on the target mob. All mobs within the zone take damage each tick for the duration.",
+    description: "Ultimate cross-zone centered on target: Level 1 uses r=1, Level 2 uses r=2, and Level 3 adds a stun on mobs entering the area during the effect.",
     aliases: ["skill:sylwen_thornfall", "thornfall"]
   },
   {

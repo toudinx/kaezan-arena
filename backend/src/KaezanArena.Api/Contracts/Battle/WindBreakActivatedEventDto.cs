@@ -1,4 +1,4 @@
 namespace KaezanArena.Api.Contracts.Battle;
 
-public sealed record SilverTempestActivatedEventDto(
+public sealed record WindBreakActivatedEventDto(
     int DurationMs) : BattleEventDto;

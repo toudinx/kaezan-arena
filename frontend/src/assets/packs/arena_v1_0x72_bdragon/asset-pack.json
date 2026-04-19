@@ -974,16 +974,6 @@
       "rowCount": 10,
       "frameCount": 0
     },
-    "fx.skill.iron_fang_strike": {
-      "type": "anim_strip_rows",
-      "src": "fx/rpg_effect_all_free/Part 19/947.png",
-      "frameWidth": 64,
-      "frameHeight": 64,
-      "row": 1,
-      "fps": 12,
-      "rowCount": 10,
-      "frameCount": 0
-    },
     "fx.skill.death_strike_impact": {
       "type": "anim_strip_rows",
       "src": "fx/rpg_effect_all_free/Part 13/633.png",
@@ -1099,7 +1089,6 @@
       "thornfallArrow": "fx.skill.thornfall_arrow",
       "umbralFlame": "fx.skill.umbral_flame",
       "deathStrikeCrystal": "fx.skill.death_strike_crystal",
-      "ironFangStrike": "fx.skill.iron_fang_strike",
       "deathStrikeImpact": "fx.skill.death_strike_impact",
       "projectileArrow": "fx.projectile.arrow",
       "projectileSkull": "fx.projectile.skull"

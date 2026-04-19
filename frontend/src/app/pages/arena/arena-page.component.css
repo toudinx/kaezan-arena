@@ -2831,10 +2831,6 @@ canvas {
   background: linear-gradient(90deg, #ef9f27, #facc15);
 }
 
-.hud-ultimate-panel__bar--silver-tempest .hud-ultimate-panel__bar-fill {
-  background: linear-gradient(90deg, #1d9e75, #2dd4bf);
-}
-
 .hud-ultimate-panel__state {
   margin: 0;
   font-size: 0.64rem;
@@ -2843,11 +2839,6 @@ canvas {
 
 .hud-ultimate-panel__state--ready {
   color: #facc15;
-  font-weight: 700;
-}
-
-.hud-ultimate-panel__state--silver {
-  color: #2dd4bf;
   font-weight: 700;
 }
 

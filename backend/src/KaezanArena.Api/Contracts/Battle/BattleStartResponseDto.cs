@@ -51,6 +51,9 @@ public sealed record BattleStartResponseDto(
     int ZoneIndex,
     int UltimateGauge,
     int UltimateGaugeMax,
+    int UltimateLevel,
     bool UltimateReady,
+    int ReflectRemainingMs,
+    int ReflectPercent,
     string ArenaType,
     string? ArenaDisplayName);

@@ -213,7 +213,7 @@ public sealed partial class InMemoryBattleStore
         }
 
         var hitActorIds = new List<string>();
-        if (state.SilverTempestActive)
+        if (state.WindBreakActive)
         {
             hitActorIds.AddRange(ResolveLivingActorIdsOnTilesInOrder(state, lineTiles));
         }
@@ -253,8 +253,8 @@ public sealed partial class InMemoryBattleStore
                 hitActorId,
                 fromTile,
                 ArenaConfig.SkillConfig.SylwenWhisperShotDamage,
-                projectilePierces: state.SilverTempestActive,
-                isSilverTempestFollowUp: false);
+                projectilePierces: state.WindBreakActive,
+                isWindBreakFollowUp: false);
             if (!hitApplied)
             {
                 continue;
@@ -284,7 +284,7 @@ public sealed partial class InMemoryBattleStore
             new TilePos(player.TileX, player.TileY),
             pendingHit.DamageBase,
             projectilePierces: true,
-            isSilverTempestFollowUp: true);
+            isWindBreakFollowUp: true);
     }
 
     private static bool TryApplySylwenWhisperShotHit(
@@ -294,7 +294,7 @@ public sealed partial class InMemoryBattleStore
         TilePos fromTile,
         int damageBase,
         bool projectilePierces,
-        bool isSilverTempestFollowUp)
+        bool isWindBreakFollowUp)
     {
         if (!state.Actors.TryGetValue(targetActorId, out var liveTarget) || liveTarget.Hp <= 0)
         {
@@ -330,7 +330,7 @@ public sealed partial class InMemoryBattleStore
             emitProjectileEvent: true,
             projectilePierces: projectilePierces,
             projectileFromTile: fromTile,
-            isSilverTempestFollowUp: isSilverTempestFollowUp);
+            isWindBreakFollowUp: isWindBreakFollowUp);
 
         if (!isHeadshot)
         {
@@ -877,7 +877,7 @@ public sealed partial class InMemoryBattleStore
         Action<StoredActor>? onSuccessfulHit = null,
         Func<StoredActor, double>? finalDamageMultiplierResolver = null,
         bool isChainJump = false,
-        bool isSilverTempestFollowUp = false,
+        bool isWindBreakFollowUp = false,
         bool applyLifeLeech = true)
     {
         var player = GetPlayerActor(state);
@@ -895,7 +895,7 @@ public sealed partial class InMemoryBattleStore
                 TargetActorId: target.ActorId,
                 Pierces: projectilePierces,
                 IsChainJump: isChainJump,
-                IsSilverTempestFollowUp: isSilverTempestFollowUp));
+                IsWindBreakFollowUp: isWindBreakFollowUp));
         }
 
         // Shared ranged damage path intentionally reuses the existing melee damage pipeline.

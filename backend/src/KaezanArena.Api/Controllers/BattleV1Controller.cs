@@ -250,7 +250,10 @@ public sealed class BattleV1Controller : ControllerBase
             ZoneIndex: snapshot.ZoneIndex,
             UltimateGauge: snapshot.UltimateGauge,
             UltimateGaugeMax: snapshot.UltimateGaugeMax,
+            UltimateLevel: snapshot.UltimateLevel,
             UltimateReady: snapshot.UltimateReady,
+            ReflectRemainingMs: snapshot.ReflectRemainingMs,
+            ReflectPercent: snapshot.ReflectPercent,
             ArenaType: snapshot.ArenaType,
             ArenaDisplayName: snapshot.ArenaDisplayName);
     }
@@ -310,7 +313,10 @@ public sealed class BattleV1Controller : ControllerBase
             ZoneIndex: snapshot.ZoneIndex,
             UltimateGauge: snapshot.UltimateGauge,
             UltimateGaugeMax: snapshot.UltimateGaugeMax,
+            UltimateLevel: snapshot.UltimateLevel,
             UltimateReady: snapshot.UltimateReady,
+            ReflectRemainingMs: snapshot.ReflectRemainingMs,
+            ReflectPercent: snapshot.ReflectPercent,
             ArenaType: snapshot.ArenaType,
             ArenaDisplayName: snapshot.ArenaDisplayName);
     }
