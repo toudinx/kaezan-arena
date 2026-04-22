@@ -364,6 +364,10 @@ export class CanvasLayeredRenderer {
     }
 
     for (const flash of scene.miraiTileFlashes) {
+      if ((flash.delayRemainingMs ?? 0) > 0) {
+        continue;
+      }
+
       const life = Math.max(0, Math.min(1, flash.elapsedMs / flash.durationMs));
       const fillAlpha = Math.max(0, (flash.maxFillAlpha ?? 0.6) * (1 - life));
       const borderAlpha = flash.borderColorHex
@@ -1598,22 +1602,37 @@ export class CanvasLayeredRenderer {
     const centerX = viewport.originX + (player.tileX + 0.5) * scene.tileSize;
     const centerY = viewport.originY + (player.tileY + 0.5) * scene.tileSize;
     const radius = scene.tileSize * 0.52;
+    const glowColor = REFLECT_AURA_COLOR_HEX;
 
+    this.context.shadowBlur = 0;
+    this.context.shadowColor = "transparent";
     this.context.save();
-    this.context.strokeStyle = this.hexToRgba(REFLECT_AURA_COLOR_HEX, Math.max(0.45, pulse));
+    this.context.strokeStyle = this.hexToRgba(glowColor, Math.max(0.45, pulse));
     this.context.lineWidth = Math.max(2, scene.tileSize * 0.05);
-    this.context.shadowColor = this.hexToRgba(REFLECT_AURA_COLOR_HEX, 0.45);
-    this.context.shadowBlur = Math.max(5, scene.tileSize * 0.2);
     this.context.beginPath();
     this.context.arc(centerX, centerY, radius, 0, Math.PI * 2);
     this.context.stroke();
 
-    this.context.strokeStyle = this.hexToRgba(REFLECT_AURA_COLOR_HEX, 0.26);
-    this.context.lineWidth = Math.max(1.2, scene.tileSize * 0.03);
+    this.context.strokeStyle = this.hexToRgba(glowColor, 0.6);
+    this.context.lineWidth = 2;
     this.context.beginPath();
-    this.context.arc(centerX, centerY, radius * 1.2, 0, Math.PI * 2);
+    this.context.arc(centerX, centerY, radius + 2, 0, Math.PI * 2);
+    this.context.stroke();
+
+    this.context.strokeStyle = this.hexToRgba(glowColor, 0.3);
+    this.context.lineWidth = 1.5;
+    this.context.beginPath();
+    this.context.arc(centerX, centerY, radius + 5, 0, Math.PI * 2);
+    this.context.stroke();
+
+    this.context.strokeStyle = this.hexToRgba(glowColor, 0.1);
+    this.context.lineWidth = 1;
+    this.context.beginPath();
+    this.context.arc(centerX, centerY, radius + 9, 0, Math.PI * 2);
     this.context.stroke();
     this.context.restore();
+    this.context.shadowBlur = 0;
+    this.context.shadowColor = "transparent";
   }
 
   private drawCollapseFieldBursts(scene: ArenaScene, viewport: RenderViewport): void {
@@ -1801,7 +1820,21 @@ export class CanvasLayeredRenderer {
   private drawMobStackIndicators(scene: ArenaScene, viewport: RenderViewport): void {
     const pillHeight = 14;
     const gapBetweenPills = 2;
-    for (const mob of Object.values(scene.actorsById)) {
+
+    const mobsWithBleedingStacks = Object.values(scene.actorsById).filter((actor) =>
+      actor.kind === "mob" && Math.max(0, actor.bleedingMarkStacks ?? 0) > 0
+    );
+    let mobsWithStacks = mobsWithBleedingStacks;
+    if (mobsWithStacks.length === 0) {
+      mobsWithStacks = Object.values(scene.actorsById).filter((actor) =>
+        actor.kind === "mob" && Math.max(0, actor.corrosionStacks ?? 0) > 0
+      );
+      if (mobsWithStacks.length === 0) {
+        return;
+      }
+    }
+
+    for (const mob of mobsWithStacks) {
       if (mob.kind !== "mob") {
         continue;
       }

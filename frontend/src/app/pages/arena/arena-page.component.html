@@ -331,13 +331,11 @@
               </span>
             }
           </div>
-          @if (topHudBuffs.length > 0) {
-            <div class="top-hud__buffs" aria-label="Active buffs">
-              @for (buff of topHudBuffs; track buff.buffId) {
-                <span class="top-hud__buff">{{ buff.label }} {{ buff.remainingSeconds }}s</span>
-              }
-            </div>
-          }
+          <div class="top-hud__buffs" aria-label="Active buffs">
+            @for (buff of topHudBuffs; track buff.buffId) {
+              <span class="top-hud__buff">{{ buff.label }} {{ buff.remainingSeconds }}s</span>
+            }
+          </div>
         </div>
       </header>
 
@@ -433,9 +431,13 @@
           aria-label="Experience bar"
         >
           <div class="bottom-hotbar__exp-fill" [style.width.%]="playerExpPercent"></div>
-          @if (levelUpPulseActive) {
-            <span class="bottom-hotbar__exp-burst">LEVEL UP</span>
-          }
+          <span
+            class="bottom-hotbar__exp-burst"
+            [style.visibility]="levelUpPulseActive ? 'visible' : 'hidden'"
+            [style.opacity]="levelUpPulseActive ? '1' : '0'"
+            [style.animation]="levelUpPulseActive ? 'bottom-hotbar-level-up-burst 760ms ease-out both' : 'none'"
+            [attr.aria-hidden]="levelUpPulseActive ? null : 'true'"
+          >LEVEL UP</span>
         </div>
       </footer>
     </section>
@@ -466,13 +468,16 @@
                 <p class="hud-ultimate-panel__desc">{{ ultimateDescriptionForHud }}</p>
               </section>
 
-              @if (activeEffectPills.length > 0) {
-                <div class="hud-effects-row">
-                  @for (effect of activeEffectPills; track effect.id) {
-                    <span class="hud-effects-row__pill" [attr.data-tone]="effect.tone">{{ effect.label }}</span>
-                  }
-                </div>
-              }
+              <div class="hud-effects-row" [attr.aria-hidden]="hasAnyActiveHudEffectPill ? null : 'true'">
+                @for (effect of hudEffectPillSlots; track effect.id) {
+                  <span
+                    class="hud-effects-row__pill"
+                    [attr.data-tone]="effect.tone"
+                    [style.visibility]="effect.visible ? 'visible' : 'hidden'"
+                    [style.opacity]="effect.visible ? '1' : '0'"
+                  >{{ effect.label }}</span>
+                }
+              </div>
 
               <section class="status-details__block">
                 <h4>Skills</h4>

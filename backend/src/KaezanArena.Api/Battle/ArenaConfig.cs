@@ -170,8 +170,6 @@ public static class ArenaConfig
         public const int GaugeMax = 100;
         public const int GaugePerKill = 12;
         public const int GaugePerDamageTaken = 3; // per damage point received
-        public const int BaseDamage = 20;
-        public const int AoeRadius = 2;
         public const string UltimateSkillId = "skill:ultimate";
     }
 
@@ -1043,6 +1041,11 @@ public static class ArenaConfig
         public const int MiraiCollapseFieldImmobilizeDurationMs = CollapseFieldImmobilizeDurationMs;
         public const int MiraiBleedingMarkStacksPerHit = 1;
         public const int MiraiBleedingMarkFlatDamagePerStack = 1; // +1 flat dmg per stack on target
+        public const int BloodFangSquareRadius = 1;
+        public const int BloodFangBaseDamage = 18;
+        public const int BloodFangStackDamage = 4;
+        public const int BloodFangExecutionHpPercent = 15;
+        public const int BloodFangSpreadStacks = 3;
 
         // Sylwen
         public const int SylwenWhisperShotMaxRangeTilesChebyshev = AutoAttackRangedMaxRange;

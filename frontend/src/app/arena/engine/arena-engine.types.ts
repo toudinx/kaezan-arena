@@ -546,6 +546,36 @@ export interface ArenaStormCollapseDetonatedEvent {
   ultimateLevel?: number;
 }
 
+export interface ArenaBloodFangDetonationHit {
+  mobId: string;
+  position: TilePos;
+  aoeDamage: number;
+  stacksConsumed: number;
+  stackDamage: number;
+  wasExecuted: boolean;
+  hadStacksBeforeConsumption: boolean;
+}
+
+export interface ArenaBloodFangExecutionSpreadTarget {
+  mobId: string;
+  position: TilePos;
+}
+
+export interface ArenaBloodFangExecution {
+  executedMobId: string;
+  executedMobPosition: TilePos;
+  spreadTargets: ArenaBloodFangExecutionSpreadTarget[];
+}
+
+export interface ArenaBloodFangDetonatedEvent {
+  type: "blood_fang_detonated";
+  targetPosition?: TilePos;
+  affectedTiles?: TilePos[];
+  ultimateLevel?: number;
+  hits: ArenaBloodFangDetonationHit[];
+  executions: ArenaBloodFangExecution[];
+}
+
 export interface ArenaWindBreakActivatedEvent {
   type: "wind_break_activated";
   durationMs: number;
@@ -583,6 +613,7 @@ export type ArenaBattleEvent =
   | ArenaStunAppliedEvent
   | ArenaImmobilizeAppliedEvent
   | ArenaCollapseFieldActivatedEvent
+  | ArenaBloodFangDetonatedEvent
   | ArenaStormCollapseDetonatedEvent
   | ArenaWindBreakActivatedEvent
   | ArenaThornfallPlacedEvent;
@@ -658,6 +689,7 @@ export interface MiraiTileFlashOverlay {
   borderColorHex?: string;
   borderWidthPx?: number;
   maxBorderAlpha?: number;
+  delayRemainingMs?: number;
   elapsedMs: number;
   durationMs: number;
 }

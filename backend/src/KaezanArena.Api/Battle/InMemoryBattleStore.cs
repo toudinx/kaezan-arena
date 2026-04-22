@@ -2032,20 +2032,17 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         StoredActor player,
         ref int pendingLifeLeechHeal)
     {
-        var anyMobInRange = state.Actors.Values.Any(actor =>
-            string.Equals(actor.Kind, "mob", StringComparison.Ordinal) &&
-            actor.Hp > 0 &&
-            ComputeChebyshevDistance(actor, player.TileX, player.TileY) <= ArenaConfig.SkillConfig.MiraiRendClawRangeTilesChebyshev);
-        if (!anyMobInRange)
+        var rendClawTarget = ResolveClosestLivingMobWithinChebyshevRange(
+            state,
+            player,
+            ArenaConfig.SkillConfig.MiraiRendClawRangeTilesChebyshev);
+        if (rendClawTarget is null)
         {
             return false;
         }
 
-        var rendClawTarget = ResolveAssistTarget(state);
         var playerPos = new TilePos(player.TileX, player.TileY);
-        var targetPos = rendClawTarget is not null
-            ? new TilePos(rendClawTarget.TileX, rendClawTarget.TileY)
-            : new TilePos(player.TileX + 1, player.TileY);
+        var targetPos = new TilePos(rendClawTarget.TileX, rendClawTarget.TileY);
         var rendClawTiles = BuildRendClawTiles(playerPos, targetPos)
             .Select(tile => (TileX: tile.X, TileY: tile.Y));
         return ApplyTileSkill(
@@ -2237,11 +2234,16 @@ public sealed partial class InMemoryBattleStore : IBattleStore
 
         if (string.Equals(skillId, ArenaConfig.SkillIds.MiraiRendClaw, StringComparison.Ordinal))
         {
-            var target = ResolveAssistTarget(state);
+            var target = ResolveClosestLivingMobWithinChebyshevRange(
+                state,
+                player,
+                ArenaConfig.SkillConfig.MiraiRendClawRangeTilesChebyshev);
+            if (target is null)
+            {
+                return null;
+            }
             var playerPos = new TilePos(player.TileX, player.TileY);
-            var targetPos = target is not null
-                ? new TilePos(target.TileX, target.TileY)
-                : new TilePos(player.TileX + 1, player.TileY);
+            var targetPos = new TilePos(target.TileX, target.TileY);
             var rendClawTiles = BuildRendClawTiles(playerPos, targetPos);
             return rendClawTiles.Count > 0 ? rendClawTiles : null;
         }
@@ -2284,15 +2286,11 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         }
         else
         {
-            _ = ApplyAreaSquareSkill(
-                state,
-                events,
-                player,
-                ArenaConfig.UltimateConfig.AoeRadius,
-                ArenaConfig.UltimateConfig.BaseDamage,
-                ArenaConfig.AvalancheFxId,
-                GetPlayerBaseElement(state),
-                ref pendingLifeLeechHeal);
+            var target = ResolveAssistTarget(state);
+            if (target is null || !ApplyMiraiBloodFangUltimate(state, events, player, target, ultimateLevel))
+            {
+                return false;
+            }
         }
 
         state.UltimateGauge = 0;
@@ -2537,6 +2535,169 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         return mob.BleedingMarkStacks * ArenaConfig.SkillConfig.MiraiBleedingMarkFlatDamagePerStack;
     }
 
+    private static bool ApplyMiraiBloodFangUltimate(
+        StoredBattle state,
+        List<BattleEventDto> events,
+        StoredActor player,
+        StoredActor targetMob,
+        int ultimateLevel)
+    {
+        var clampedUltimateLevel = Math.Clamp(ultimateLevel, 1, 3);
+        var affectedTiles = BuildSquareTiles(
+                targetMob.TileX,
+                targetMob.TileY,
+                ArenaConfig.SkillConfig.BloodFangSquareRadius,
+                includeCenter: true)
+            .Where(tile => IsInBounds(tile.TileX, tile.TileY))
+            .OrderBy(tile => tile.TileY)
+            .ThenBy(tile => tile.TileX)
+            .ToList();
+        if (affectedTiles.Count == 0)
+        {
+            return false;
+        }
+
+        EmitFxForTiles(events, affectedTiles, ArenaConfig.HitSmallFxId, GetPlayerBaseElement(state));
+        var aoeMobIds = ResolveMobIdsOnTiles(state, affectedTiles).ToList();
+        if (aoeMobIds.Count == 0)
+        {
+            return false;
+        }
+
+        var canConsumeStacks = clampedUltimateLevel >= 2;
+        var hits = new List<BloodFangDetonationHitDto>(aoeMobIds.Count);
+        foreach (var mobId in aoeMobIds)
+        {
+            if (!state.Actors.TryGetValue(mobId, out var liveTarget) || liveTarget.Hp <= 0)
+            {
+                continue;
+            }
+
+            var mobPosition = new TilePos(liveTarget.TileX, liveTarget.TileY);
+            var stacksBeforeConsumption = Math.Max(0, liveTarget.BleedingMarkStacks);
+
+            var aoeDamageApplied = ApplyDamageToMob(
+                state,
+                events,
+                liveTarget,
+                ArenaConfig.SkillConfig.BloodFangBaseDamage,
+                GetPlayerBaseElement(state),
+                attacker: player);
+            ApplyPlayerLifeLeech(state, events, ComputeLifeLeechHeal(state, aoeDamageApplied));
+
+            var stackDamageApplied = 0;
+            if (canConsumeStacks)
+            {
+                if (liveTarget.Hp > 0 && stacksBeforeConsumption > 0)
+                {
+                    var stackDamage = ArenaConfig.SkillConfig.BloodFangStackDamage * stacksBeforeConsumption;
+                    stackDamageApplied = ApplyDamageToMob(
+                        state,
+                        events,
+                        liveTarget,
+                        stackDamage,
+                        GetPlayerBaseElement(state),
+                        attacker: player);
+                    ApplyPlayerLifeLeech(state, events, ComputeLifeLeechHeal(state, stackDamageApplied));
+                }
+
+                if (state.Actors.TryGetValue(mobId, out var consumedTarget) && consumedTarget.Hp > 0)
+                {
+                    consumedTarget.BleedingMarkStacks = 0;
+                    events.Add(new BleedingMarkUpdatedEventDto(MobId: consumedTarget.ActorId, StackCount: 0));
+                }
+            }
+
+            hits.Add(new BloodFangDetonationHitDto(
+                MobId: mobId,
+                Position: mobPosition,
+                AoeDamage: aoeDamageApplied,
+                StacksConsumed: canConsumeStacks ? stacksBeforeConsumption : 0,
+                StackDamage: canConsumeStacks ? stackDamageApplied : 0,
+                WasExecuted: false,
+                HadStacksBeforeConsumption: stacksBeforeConsumption > 0));
+        }
+
+        var executions = new List<BloodFangExecutionEventDto>();
+        var executedMobIds = new HashSet<string>(StringComparer.Ordinal);
+        if (clampedUltimateLevel >= 3)
+        {
+            foreach (var hit in hits.Where(entry => entry.HadStacksBeforeConsumption))
+            {
+                if (!state.Actors.TryGetValue(hit.MobId, out var liveTarget) || liveTarget.Hp <= 0)
+                {
+                    continue;
+                }
+
+                var executionThreshold = liveTarget.MaxHp * (ArenaConfig.SkillConfig.BloodFangExecutionHpPercent / 100d);
+                if (liveTarget.Hp > executionThreshold)
+                {
+                    continue;
+                }
+
+                var executedMobPosition = new TilePos(liveTarget.TileX, liveTarget.TileY);
+                var lethalExecutionDamage = Math.Max(1, liveTarget.Hp + Math.Max(0, liveTarget.Shield) + 1);
+                _ = ApplyDamageToMob(
+                    state,
+                    events,
+                    liveTarget,
+                    lethalExecutionDamage,
+                    GetPlayerBaseElement(state),
+                    attacker: player,
+                    allowPlayerDamageBuffs: false,
+                    allowCriticalHits: false,
+                    emitDamageNumberEvent: false,
+                    bypassCombatModifiers: true);
+                executedMobIds.Add(hit.MobId);
+
+                var spreadTargets = state.Actors.Values
+                    .Where(actor =>
+                        string.Equals(actor.Kind, "mob", StringComparison.Ordinal) &&
+                        actor.Hp > 0 &&
+                        ComputeChebyshevDistance(actor, executedMobPosition.X, executedMobPosition.Y) == 1)
+                    .OrderBy(actor => actor.ActorId, StringComparer.Ordinal)
+                    .ToList();
+                var spreadTargetDtos = new List<BloodFangExecutionSpreadTargetDto>(spreadTargets.Count);
+                foreach (var spreadTarget in spreadTargets)
+                {
+                    for (var stack = 0; stack < ArenaConfig.SkillConfig.BloodFangSpreadStacks; stack += 1)
+                    {
+                        ApplyMiraiBleedingMark(spreadTarget);
+                    }
+
+                    events.Add(new BleedingMarkUpdatedEventDto(
+                        MobId: spreadTarget.ActorId,
+                        StackCount: spreadTarget.BleedingMarkStacks));
+                    spreadTargetDtos.Add(new BloodFangExecutionSpreadTargetDto(
+                        MobId: spreadTarget.ActorId,
+                        Position: new TilePos(spreadTarget.TileX, spreadTarget.TileY)));
+                }
+
+                executions.Add(new BloodFangExecutionEventDto(
+                    ExecutedMobId: hit.MobId,
+                    ExecutedMobPosition: executedMobPosition,
+                    SpreadTargets: spreadTargetDtos));
+            }
+        }
+
+        var finalizedHits = executedMobIds.Count == 0
+            ? hits
+            : hits
+                .Select(hit => hit with { WasExecuted = executedMobIds.Contains(hit.MobId) })
+                .ToList();
+
+        events.Add(new BloodFangDetonatedEventDto(
+            TargetPosition: new TilePos(targetMob.TileX, targetMob.TileY),
+            AffectedTiles: affectedTiles
+                .Select(tile => new TilePos(tile.TileX, tile.TileY))
+                .ToList(),
+            UltimateLevel: clampedUltimateLevel,
+            Hits: finalizedHits,
+            Executions: executions));
+
+        return finalizedHits.Count > 0;
+    }
+
     private static void ApplyVelvetCorrosion(StoredActor mob)
     {
         if (mob.Hp <= 0 || !string.Equals(mob.Kind, "mob", StringComparison.Ordinal))
@@ -2688,6 +2849,22 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         return state.Actors.Values
             .Where(actor => string.Equals(actor.Kind, "mob", StringComparison.Ordinal) && actor.Hp > 0)
             .OrderBy(actor => ComputeChebyshevDistance(actor, player.TileX, player.TileY))
+            .ThenBy(actor => actor.ActorId, StringComparer.Ordinal)
+            .FirstOrDefault();
+    }
+
+    private static StoredActor? ResolveClosestLivingMobWithinChebyshevRange(
+        StoredBattle state,
+        StoredActor source,
+        int maxRangeTilesChebyshev)
+    {
+        var safeRange = Math.Max(0, maxRangeTilesChebyshev);
+        return state.Actors.Values
+            .Where(actor =>
+                string.Equals(actor.Kind, "mob", StringComparison.Ordinal) &&
+                actor.Hp > 0 &&
+                ComputeChebyshevDistance(actor, source.TileX, source.TileY) <= safeRange)
+            .OrderBy(actor => ComputeChebyshevDistance(actor, source.TileX, source.TileY))
             .ThenBy(actor => actor.ActorId, StringComparer.Ordinal)
             .FirstOrDefault();
     }
@@ -3021,6 +3198,22 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         var signatureSkillId = ArenaConfig.GetSkillIdForWeaponId(signatureWeaponId);
         if (string.IsNullOrWhiteSpace(signatureSkillId))
         {
+            return;
+        }
+
+        if (string.Equals(signatureSkillId, ArenaConfig.SkillIds.MiraiRendClaw, StringComparison.Ordinal))
+        {
+            var hitAnyRendClawTarget = TryExecuteMiraiRendClaw(
+                state,
+                events,
+                player,
+                ref pendingLifeLeechHeal);
+            state.PlayerAttackCooldownRemainingMs = ResolvePlayerAutoAttackCooldownMs(state);
+            if (hitAnyRendClawTarget)
+            {
+                GrantPlayerShield(state, events, ArenaConfig.PlayerShieldGainPerAction);
+            }
+
             return;
         }
 

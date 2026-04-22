@@ -1123,6 +1123,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0.16rem;
+  min-height: 1.4rem;
 }
 
 .top-hud__buff {

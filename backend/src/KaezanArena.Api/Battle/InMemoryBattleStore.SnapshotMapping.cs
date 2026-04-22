@@ -51,13 +51,26 @@ public sealed partial class InMemoryBattleStore
             })
             .ToList();
 
+        var playerAttackCooldownRemainingMs = Math.Max(0, state.PlayerAttackCooldownRemainingMs);
+        var playerAttackCooldownTotalMs = ResolvePlayerAutoAttackCooldownMs(state);
         var skills = state.Skills.Values
             .OrderBy(skill => skill.SkillId, StringComparer.Ordinal)
-            .Select(skill => new SkillStateDto(
-                SkillId: skill.SkillId,
-                DisplayName: ArenaConfig.GetSkillDisplayName(skill.SkillId),
-                CooldownRemainingMs: skill.CooldownRemainingMs,
-                CooldownTotalMs: ResolveSkillCooldownTotalMs(state, skill)))
+            .Select(skill =>
+            {
+                var isSignatureAutoAttackSkill = ArenaConfig.IsSignatureAutoAttackSkillId(skill.SkillId);
+                var cooldownRemainingMs = isSignatureAutoAttackSkill
+                    ? playerAttackCooldownRemainingMs
+                    : skill.CooldownRemainingMs;
+                var cooldownTotalMs = isSignatureAutoAttackSkill
+                    ? playerAttackCooldownTotalMs
+                    : ResolveSkillCooldownTotalMs(state, skill);
+
+                return new SkillStateDto(
+                    SkillId: skill.SkillId,
+                    DisplayName: ArenaConfig.GetSkillDisplayName(skill.SkillId),
+                    CooldownRemainingMs: cooldownRemainingMs,
+                    CooldownTotalMs: cooldownTotalMs);
+            })
             .ToList();
 
         var decals = state.Decals
@@ -167,6 +180,8 @@ public sealed partial class InMemoryBattleStore
             Skills: skills,
             GlobalCooldownRemainingMs: state.PlayerGlobalCooldownRemainingMs,
             GlobalCooldownTotalMs: playerGlobalCooldownTotalMs,
+            PlayerAttackCooldownRemainingMs: playerAttackCooldownRemainingMs,
+            PlayerAttackCooldownTotalMs: playerAttackCooldownTotalMs,
             AltarCooldownRemainingMs: (int)Math.Max(0, state.NextAltarInteractAllowedAtMs - nowMs),
             Seed: state.Seed,
             FacingDirection: state.PlayerFacingDirection,

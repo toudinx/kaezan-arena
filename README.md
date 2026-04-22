@@ -168,6 +168,7 @@ Four permanent Elemental Arenas, always accessible regardless of Account Level. 
 - Manual casts follow normal cooldown and GCD checks; if a skill is on cooldown the keypress is ignored
 - `R` manual cast is routed through backend `TryFireUltimate` for the active character ultimate; it fires only when `UltimateGauge >= ArenaConfig.UltimateConfig.GaugeMax`, otherwise it silently skips (no error)
 - Assist continues firing other skills normally after a manual cast
+- Loot awarding (`awardLootSources`) is fire-and-forget after each `stepBattle` response; `battleRequestInFlight` is released before loot HTTP work starts, preventing game-loop stalls during mass-kill moments (for example, Blood Fang)
 - Account progression now includes Account Level + Account XP (Lv. 1-100), earned from runs and kills
 - Zone selection happens before each run (Zone 1-5), with unlock gates at Account Lv. 1/21/41/61/81
 - Zone multipliers scale mob HP and outgoing damage on top of normal run scaling
@@ -238,6 +239,7 @@ Four permanent Elemental Arenas, always accessible regardless of Account Level. 
     - Headshot: white flash + `HEADSHOT` floating text
     - Crowd control: rotating dashed stun ring (amber) and pulsing immobilize tile border (teal)
     - Collapse Field: pulled-mob slide animation + amber radial burst centered on player + red reflect aura on player (`#ef4444`) while reflect is active
+    - Reflect aura glow is rendered with concentric multi-stroke rings instead of `shadowBlur` to avoid per-frame compositing lag
     - Void Chain: aggressive chain-lightning pass with 5px main arcs + secondary 2px parallel arcs, 700ms visibility, 36px hit pulses, inner hit flashes, and short border shimmer flashes per jump
     - Umbral Path: 14px heavy projectile (60% fill, 3px border) with 160ms travel, impact ring + 6-ray splash, and a stronger trail overlay (45%â†’75% pulsing fill, 2px solid perimeter, persistent centerline)
     - Death Strike: heavy 12px projectile with element-color border, 8-line radial impact burst (24px lines), and an added expanding impact fill circle
@@ -257,6 +259,8 @@ Four permanent Elemental Arenas, always accessible regardless of Account Level. 
     - Locked target info panel (on right-click lock) with target name, HP bar (green/amber/red), element/weakness/resistance badges, and Bleeding Mark/Corrosion/Focus stack chips
     - Compact active-effects row showing only current effects: `WB` (Wind Break), `IMM` (immobilize present), `STN` (stun present)
     - Helper panel dynamic kit rows (`Q/W/E/R`) with backend display names and live cooldown bars from snapshot skill state
+    - Signature AA HUD cooldown (Rend Claw / Whisper Shot / Void Chain) is mapped from `PlayerAttackCooldownRemainingMs` + `ResolvePlayerAutoAttackCooldownMs(state)` into signature `SkillStateDto` entries
+    - `top-hud__buffs` is always rendered in the DOM to prevent top HUD height collapse and canvas reflow/resize flashes when buffs appear or expire
 - **Mirai Kit (Backend):**
   - Passive `Bleeding Mark`: Mirai attacks build stacks on target; stacks increase subsequent Mirai skill damage and reset on mob death.
   - `Rend Claw` (Signature AA): frontal 3-tile cone based on current facing (diagonal facings use adaptive 3-tile cone), applies Bleeding Mark, and fires on the player AA cooldown slot (not assist pool). **Only fires when at least one mob is within Chebyshev range 1 (adjacent tiles); skipped without cooldown reset when no mob is in range.**
@@ -268,7 +272,11 @@ Four permanent Elemental Arenas, always accessible regardless of Account Level. 
     - Mobs already adjacent are not pulled, but are still targeted by the post-pull impact.
     - After all pulls resolve, every targeted mob receives Collapse Field damage and `5000ms` stun if it survives.
     - Player gains reflect for `3000ms`: returns `30%` of incoming damage to the attacking mob as direct damage (no crit/modifiers), while active.
-  - Ultimate `Blood Fang`: triggers from Ultimate gauge and is prioritized by Assist before Primal Roar/Collapse Field when ready.
+  - Ultimate `Blood Fang`: gauge-based ultimate centered on locked target (fallback: nearest living mob by Chebyshev distance; if no mobs exist, it does not fire and gauge is not consumed).
+    - Geometry: target-centered square `r=1` (`max(|dx|, |dy|) <= 1`), in-bounds tiles only (3x3, up to 9 tiles).
+    - Level 1 (`<3` cards): AoE only (`BloodFangBaseDamage = 18`) on all mobs in the square.
+    - Level 2 (`3-5` cards): Level 1 AoE + consumes Bleeding Mark on each hit mob, dealing extra stack damage (`BloodFangStackDamage = 4` per consumed stack), then resets consumed stacks to `0`.
+    - Level 3 (`>=6` cards): Level 2 behavior + execution check after damage: survivors at or below `15%` max HP are instantly executed only if they had stacks before consumption; each executed mob spreads `3` Bleeding Mark stacks to adjacent living mobs (Chebyshev distance `1`).
 - **Sylwen Kit (Backend):**
   - Passive `Deadeye Grace`: Whisper Shot builds `FocusStacks` and `DeadeyeConsecutiveHits` on hit; Focus grants flat Whisper Shot bonus damage; every 3rd hit is a Headshot (2x damage + `1000ms` stun).
   - `Whisper Shot`: full-range projectile with locked-target-first selection; during Wind Break, projectiles pierce all mobs in the projectile path while Focus/Headshot counters continue accumulating.

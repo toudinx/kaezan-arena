@@ -164,6 +164,9 @@ type ActiveEffectPill = Readonly<{
   label: string;
   tone: "teal" | "amber";
 }>;
+type HudEffectPillSlot = Readonly<ActiveEffectPill & {
+  visible: boolean;
+}>;
 type ActiveCardPill = Readonly<{
   id: string;
   label: string;
@@ -1181,7 +1184,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   get ultimateDescriptionForHud(): string {
     const characterId = this.selectedCharacterId || this.accountState?.activeCharacterId || DEFAULT_PLAYABLE_CHARACTER_ID;
     if (characterId === "character:mirai") {
-      return "Blood Fang - ultimate AoE burst around Mirai";
+      return "Blood Fang - target-centered diamond burst; L2 consumes Bleeding Mark, L3 executes <=15% and spreads stacks";
     }
 
     if (characterId === "character:sylwen") {
@@ -1195,30 +1198,43 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     return "Ultimate";
   }
 
-  get activeEffectPills(): ReadonlyArray<ActiveEffectPill> {
-    const pills: ActiveEffectPill[] = [];
-    if (this.windBreakActiveForHud) {
-      pills.push({
-        id: "wind_break",
-        label: `WB ${this.windBreakRemainingSecondsForHud}s`,
-        tone: "teal"
-      });
-    }
-
+  get hudEffectPillSlots(): ReadonlyArray<HudEffectPillSlot> {
     const actors = Object.values(this.scene?.actorsById ?? {});
     const hasImmobilize = actors.some((actor) =>
       actor.kind === "mob" && actor.isImmobilized === true && (actor.immobilizeRemainingMs ?? 0) > 0);
     const hasStun = actors.some((actor) =>
       actor.kind === "mob" && actor.isStunned === true && (actor.stunRemainingMs ?? 0) > 0);
+    const windBreakLabel = `WB ${String(this.windBreakRemainingSecondsForHud).padStart(2, "0")}s`;
+    return [
+      {
+        id: "wind_break",
+        label: windBreakLabel,
+        tone: "teal",
+        visible: this.windBreakActiveForHud
+      },
+      {
+        id: "immobilize",
+        label: "IMM",
+        tone: "amber",
+        visible: hasImmobilize
+      },
+      {
+        id: "stun",
+        label: "STN",
+        tone: "amber",
+        visible: hasStun
+      }
+    ];
+  }
 
-    if (hasImmobilize) {
-      pills.push({ id: "immobilize", label: "IMM", tone: "amber" });
-    }
-    if (hasStun) {
-      pills.push({ id: "stun", label: "STN", tone: "amber" });
-    }
+  get activeEffectPills(): ReadonlyArray<ActiveEffectPill> {
+    return this.hudEffectPillSlots
+      .filter((pill) => pill.visible)
+      .map(({ visible: _visible, ...pill }) => pill);
+  }
 
-    return pills;
+  get hasAnyActiveHudEffectPill(): boolean {
+    return this.hudEffectPillSlots.some((pill) => pill.visible);
   }
 
   get canReplayLastRun(): boolean {
@@ -3005,10 +3021,14 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
           this.autoStepEnabled = false;
           this.stopAutoStepLoop();
         }
+
+        this.battleRequestInFlight = false;
       });
 
       if (!this.isReplayInProgress && battleIdForLoot && lootSources.length > 0) {
-        await this.awardLootSources(battleIdForLoot, lootSources);
+        void this.awardLootSources(battleIdForLoot, lootSources).catch((error) => {
+          console.error("[arena] awardLootSources failed", error);
+        });
       }
     } catch (error) {
       this.runInAngularZone(() => {
@@ -4637,6 +4657,128 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
         mapped.push({
           type: "storm_collapse_detonated",
           hits,
+          targetPosition,
+          affectedTiles: affectedTiles.length > 0 ? affectedTiles : undefined,
+          ultimateLevel: ultimateLevel === null
+            ? undefined
+            : Math.max(1, Math.min(3, Math.floor(ultimateLevel)))
+        });
+        continue;
+      }
+
+      if (eventType === "blood_fang_detonated") {
+        const ultimateLevel = this.readNumber(value["ultimateLevel"]);
+        const targetRecord = this.readRecord(value["targetPosition"]);
+        const targetX = this.readNumber(targetRecord?.["x"]);
+        const targetY = this.readNumber(targetRecord?.["y"]);
+        const targetPosition = targetX === null || targetY === null
+          ? undefined
+          : { x: targetX, y: targetY };
+
+        const rawAffectedTiles = Array.isArray(value["affectedTiles"])
+          ? value["affectedTiles"]
+          : [];
+        const affectedTiles: Array<{ x: number; y: number }> = [];
+        for (const tileEntry of rawAffectedTiles) {
+          const tileRecord = this.readRecord(tileEntry);
+          const tileX = this.readNumber(tileRecord?.["x"]);
+          const tileY = this.readNumber(tileRecord?.["y"]);
+          if (tileX === null || tileY === null) {
+            continue;
+          }
+
+          affectedTiles.push({ x: tileX, y: tileY });
+        }
+
+        const rawHits = Array.isArray(value["hits"])
+          ? value["hits"]
+          : [];
+        const hits: Array<{
+          mobId: string;
+          position: { x: number; y: number };
+          aoeDamage: number;
+          stacksConsumed: number;
+          stackDamage: number;
+          wasExecuted: boolean;
+          hadStacksBeforeConsumption: boolean;
+        }> = [];
+        for (const entry of rawHits) {
+          const record = this.readRecord(entry);
+          const mobId = this.readString(record?.["mobId"]);
+          const positionRecord = this.readRecord(record?.["position"]) ?? this.readRecord(record?.["mobPosition"]);
+          const posX = this.readNumber(positionRecord?.["x"]) ?? this.readNumber(record?.["targetTileX"]);
+          const posY = this.readNumber(positionRecord?.["y"]) ?? this.readNumber(record?.["targetTileY"]);
+          const aoeDamage = this.readNumber(record?.["aoeDamage"]) ?? 0;
+          const stacksConsumed = this.readNumber(record?.["stacksConsumed"]) ?? 0;
+          const stackDamage = this.readNumber(record?.["stackDamage"]) ?? 0;
+          const wasExecuted = this.readBoolean(record?.["wasExecuted"]) ?? false;
+          const hadStacksBeforeConsumption =
+            this.readBoolean(record?.["hadStacksBeforeConsumption"]) ??
+            (Math.max(0, stacksConsumed) > 0);
+          if (!mobId || posX === null || posY === null) {
+            continue;
+          }
+
+          hits.push({
+            mobId,
+            position: { x: posX, y: posY },
+            aoeDamage: Math.max(0, aoeDamage),
+            stacksConsumed: Math.max(0, stacksConsumed),
+            stackDamage: Math.max(0, stackDamage),
+            wasExecuted,
+            hadStacksBeforeConsumption
+          });
+        }
+
+        const rawExecutions = Array.isArray(value["executions"])
+          ? value["executions"]
+          : [];
+        const executions: Array<{
+          executedMobId: string;
+          executedMobPosition: { x: number; y: number };
+          spreadTargets: Array<{ mobId: string; position: { x: number; y: number } }>;
+        }> = [];
+        for (const executionEntry of rawExecutions) {
+          const executionRecord = this.readRecord(executionEntry);
+          const executedMobId = this.readString(executionRecord?.["executedMobId"]);
+          const executedPositionRecord = this.readRecord(executionRecord?.["executedMobPosition"]);
+          const executedPosX = this.readNumber(executedPositionRecord?.["x"]);
+          const executedPosY = this.readNumber(executedPositionRecord?.["y"]);
+          if (!executedMobId || executedPosX === null || executedPosY === null) {
+            continue;
+          }
+
+          const rawSpreadTargets = Array.isArray(executionRecord?.["spreadTargets"])
+            ? executionRecord["spreadTargets"]
+            : [];
+          const spreadTargets: Array<{ mobId: string; position: { x: number; y: number } }> = [];
+          for (const spreadEntry of rawSpreadTargets) {
+            const spreadRecord = this.readRecord(spreadEntry);
+            const spreadMobId = this.readString(spreadRecord?.["mobId"]);
+            const spreadPositionRecord = this.readRecord(spreadRecord?.["position"]);
+            const spreadPosX = this.readNumber(spreadPositionRecord?.["x"]);
+            const spreadPosY = this.readNumber(spreadPositionRecord?.["y"]);
+            if (!spreadMobId || spreadPosX === null || spreadPosY === null) {
+              continue;
+            }
+
+            spreadTargets.push({
+              mobId: spreadMobId,
+              position: { x: spreadPosX, y: spreadPosY }
+            });
+          }
+
+          executions.push({
+            executedMobId,
+            executedMobPosition: { x: executedPosX, y: executedPosY },
+            spreadTargets
+          });
+        }
+
+        mapped.push({
+          type: "blood_fang_detonated",
+          hits,
+          executions,
           targetPosition,
           affectedTiles: affectedTiles.length > 0 ? affectedTiles : undefined,
           ultimateLevel: ultimateLevel === null

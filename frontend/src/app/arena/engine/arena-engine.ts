@@ -65,6 +65,16 @@ const STORM_COLLAPSE_LOCAL_PULSE_STAGGER_MS = 150;
 const STORM_COLLAPSE_LOCAL_PULSE_COUNT = 3;
 const WIND_BREAK_TEXT_DURATION_MS = 1200;
 const MIRAI_TILE_FLASH_DURATION_MS = 120;
+const BLOOD_FANG_COLOR_HEX = "#ef4444";
+const BLOOD_FANG_SQUARE_RADIUS = 1;
+const BLOOD_FANG_ACTIVATION_FLASH_DURATION_MS = 300;
+const BLOOD_FANG_ACTIVATION_FLASH_BORDER_WIDTH_PX = 2;
+const BLOOD_FANG_STACK_CONSUME_PULSE_DURATION_MS = 150;
+const BLOOD_FANG_EXECUTION_FLASH_DURATION_MS = 400;
+const BLOOD_FANG_SPREAD_PULSE_DURATION_MS = 150;
+const BLOOD_FANG_SPREAD_PULSE_STAGGER_MS = 50;
+const BLOOD_FANG_SPREAD_STACK_TEXT_DURATION_MS = 600;
+const BLOOD_FANG_SPREAD_STACK_TEXT = "+3";
 const MIRAI_PRIMAL_ROAR_SKILL_ID = "skill:mirai_primal_roar";
 const MIRAI_REND_CLAW_SKILL_ID = "skill:mirai_rend_claw";
 const SYLWEN_WHISPER_SHOT_PROJECTILE_DURATION_MS = 220;
@@ -596,6 +606,108 @@ export class ArenaEngine {
           };
         }
         nextScene.reflectRemainingMs = Math.max(0, event.reflectDurationMs);
+        continue;
+      }
+
+      if (event.type === "blood_fang_detonated") {
+        const activationTiles = this.resolveBloodFangActivationTiles(
+          event,
+          nextScene.playerTile,
+          nextScene.columns,
+          nextScene.rows
+        );
+        for (const tilePos of activationTiles) {
+          miraiTileFlashes.push({
+            tilePos,
+            colorHex: BLOOD_FANG_COLOR_HEX,
+            maxFillAlpha: 0,
+            borderColorHex: BLOOD_FANG_COLOR_HEX,
+            borderWidthPx: BLOOD_FANG_ACTIVATION_FLASH_BORDER_WIDTH_PX,
+            maxBorderAlpha: 0.95,
+            delayRemainingMs: 0,
+            elapsedMs: 0,
+            durationMs: BLOOD_FANG_ACTIVATION_FLASH_DURATION_MS
+          });
+        }
+
+        if ((event.ultimateLevel ?? 1) >= 2) {
+          for (const hit of event.hits) {
+            if (hit.stacksConsumed <= 0) {
+              continue;
+            }
+
+            const actor = nextScene.actorsById[hit.mobId];
+            const previousActor = scene.actorsById[hit.mobId];
+            const pulseTilePos: TilePos = actor && actor.kind === "mob"
+              ? { x: actor.tileX, y: actor.tileY }
+              : previousActor && previousActor.kind === "mob"
+                ? { x: previousActor.tileX, y: previousActor.tileY }
+                : { x: hit.position.x, y: hit.position.y };
+            if (actor && actor.kind === "mob") {
+              actor.bleedingMarkStacks = 0;
+            }
+
+            miraiTileFlashes.push({
+              tilePos: pulseTilePos,
+              colorHex: BLOOD_FANG_COLOR_HEX,
+              maxFillAlpha: 0.45,
+              delayRemainingMs: 0,
+              elapsedMs: 0,
+              durationMs: BLOOD_FANG_STACK_CONSUME_PULSE_DURATION_MS
+            });
+          }
+        }
+
+        if ((event.ultimateLevel ?? 1) >= 3) {
+          for (const execution of event.executions) {
+            const executedActor = nextScene.actorsById[execution.executedMobId] ?? scene.actorsById[execution.executedMobId];
+            const executedTilePos: TilePos = executedActor && executedActor.kind === "mob"
+              ? { x: executedActor.tileX, y: executedActor.tileY }
+              : { x: execution.executedMobPosition.x, y: execution.executedMobPosition.y };
+            miraiTileFlashes.push({
+              tilePos: executedTilePos,
+              colorHex: BLOOD_FANG_COLOR_HEX,
+              maxFillAlpha: 0.6,
+              delayRemainingMs: 0,
+              elapsedMs: 0,
+              durationMs: BLOOD_FANG_EXECUTION_FLASH_DURATION_MS
+            });
+
+            for (let index = 0; index < execution.spreadTargets.length; index += 1) {
+              const spreadTarget = execution.spreadTargets[index];
+              const spreadActor = nextScene.actorsById[spreadTarget.mobId];
+              const spreadPreviousActor = scene.actorsById[spreadTarget.mobId];
+              const spreadTilePos: TilePos = spreadActor && spreadActor.kind === "mob"
+                ? { x: spreadActor.tileX, y: spreadActor.tileY }
+                : spreadPreviousActor && spreadPreviousActor.kind === "mob"
+                  ? { x: spreadPreviousActor.tileX, y: spreadPreviousActor.tileY }
+                  : { x: spreadTarget.position.x, y: spreadTarget.position.y };
+              if (spreadActor && spreadActor.kind === "mob") {
+                spreadActor.bleedingMarkStacks = Math.max(0, spreadActor.bleedingMarkStacks ?? 0) + 3;
+              }
+
+              miraiTileFlashes.push({
+                tilePos: spreadTilePos,
+                colorHex: BLOOD_FANG_COLOR_HEX,
+                maxFillAlpha: 0.42,
+                delayRemainingMs: index * BLOOD_FANG_SPREAD_PULSE_STAGGER_MS,
+                elapsedMs: 0,
+                durationMs: BLOOD_FANG_SPREAD_PULSE_DURATION_MS
+              });
+              spawnedFloatingTexts.push(
+                this.createCombatCalloutText(
+                  BLOOD_FANG_SPREAD_STACK_TEXT,
+                  spreadTilePos.x,
+                  spreadTilePos.y,
+                  "danger",
+                  BLOOD_FANG_SPREAD_STACK_TEXT_DURATION_MS,
+                  0.8
+                )
+              );
+            }
+          }
+        }
+
         continue;
       }
 
@@ -2324,6 +2436,43 @@ export class ArenaEngine {
     return tiles;
   }
 
+  private resolveBloodFangActivationTiles(
+    event: Extract<ArenaBattleEvent, { type: "blood_fang_detonated" }>,
+    fallbackCenter: TilePos,
+    columns: number,
+    rows: number
+  ): TilePos[] {
+    const eventTiles = this.normalizeAssistCastHitTiles(event.affectedTiles, columns, rows);
+    if (eventTiles.length > 0) {
+      return eventTiles;
+    }
+
+    const radius = BLOOD_FANG_SQUARE_RADIUS;
+    const normalizedTargetPos = event.targetPosition
+      ? {
+        x: Math.max(0, Math.min(columns - 1, Math.round(event.targetPosition.x))),
+        y: Math.max(0, Math.min(rows - 1, Math.round(event.targetPosition.y)))
+      }
+      : null;
+    const centerX = normalizedTargetPos?.x ?? Math.max(0, Math.min(columns - 1, Math.round(fallbackCenter.x)));
+    const centerY = normalizedTargetPos?.y ?? Math.max(0, Math.min(rows - 1, Math.round(fallbackCenter.y)));
+    const tilesByKey = new Map<string, TilePos>();
+
+    for (let tileY = 0; tileY < rows; tileY += 1) {
+      for (let tileX = 0; tileX < columns; tileX += 1) {
+        const deltaX = tileX - centerX;
+        const deltaY = tileY - centerY;
+        if (Math.max(Math.abs(deltaX), Math.abs(deltaY)) > radius) {
+          continue;
+        }
+
+        tilesByKey.set(`${tileX},${tileY}`, { x: tileX, y: tileY });
+      }
+    }
+
+    return Array.from(tilesByKey.values());
+  }
+
   private resolveStormCollapseActivationTiles(
     event: Extract<ArenaBattleEvent, { type: "storm_collapse_detonated" }>,
     fallbackCenter: TilePos,
@@ -2769,10 +2918,15 @@ export class ArenaEngine {
     }
 
     const nextFlashes = scene.miraiTileFlashes
-      .map((overlay) => ({
-        ...overlay,
-        elapsedMs: overlay.elapsedMs + deltaMs
-      }))
+      .map((overlay) => {
+        const nextDelay = Math.max(0, (overlay.delayRemainingMs ?? 0) - deltaMs);
+        const overflowMs = Math.max(0, deltaMs - (overlay.delayRemainingMs ?? 0));
+        return {
+          ...overlay,
+          delayRemainingMs: nextDelay,
+          elapsedMs: nextDelay > 0 ? overlay.elapsedMs : overlay.elapsedMs + overflowMs
+        };
+      })
       .filter((overlay) => overlay.elapsedMs < overlay.durationMs);
 
     return {

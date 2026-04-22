@@ -9,6 +9,8 @@ public sealed record BattleSnapshot(
     IReadOnlyList<SkillStateDto> Skills,
     int GlobalCooldownRemainingMs,
     int GlobalCooldownTotalMs,
+    int PlayerAttackCooldownRemainingMs,
+    int PlayerAttackCooldownTotalMs,
     int AltarCooldownRemainingMs,
     int Seed,
     string FacingDirection,

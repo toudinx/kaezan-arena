@@ -30,6 +30,7 @@ namespace KaezanArena.Api.Contracts.Battle;
 [JsonDerivedType(typeof(CollapseFieldActivatedEventDto), "collapse_field_activated")]
 [JsonDerivedType(typeof(HeadshotEventDto), "headshot")]
 [JsonDerivedType(typeof(WindBreakActivatedEventDto), "wind_break_activated")]
+[JsonDerivedType(typeof(BloodFangDetonatedEventDto), "blood_fang_detonated")]
 [JsonDerivedType(typeof(StormCollapseDetonatedEventDto), "storm_collapse_detonated")]
 [JsonDerivedType(typeof(ThornfallPlacedEventDto), "thornfall_placed")]
 [JsonDerivedType(typeof(MimicActivatedEventDto), "mimic_activated")]
