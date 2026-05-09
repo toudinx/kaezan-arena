@@ -6,7 +6,7 @@ Long-term repository for Kaezan Arena with backend, frontend, docs, and tooling.
 
 - `backend/` ASP.NET Core + Clean Architecture project layout
 - `frontend/` Angular workspace with Home Hub, Arena Prep, Kaelis, Backpack, Recruit, and live Arena pages
-- `docs/` architecture and asset/license documentation
+- `docs/` architecture and asset/license documentation — see [docs/INVENTORY.md](docs/INVENTORY.md) for a full system-by-system implementation status inventory, [docs/DEBT_AND_OPPORTUNITIES.md](docs/DEBT_AND_OPPORTUNITIES.md) for technical debt and high-value improvement opportunities, and [docs/ROADMAP.md](docs/ROADMAP.md) for the prioritized development roadmap
 - `tools/` helper scripts for asset and project workflows
 
 ## Prerequisites
