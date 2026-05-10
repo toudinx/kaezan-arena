@@ -178,6 +178,11 @@ Four permanent Elemental Arenas, always accessible regardless of Account Level. 
   - Zone 3 / Awakened: medium blue aura
   - Zone 4 / Exalted: strong purple aura
   - Zone 5 / Ascendant: intense orange-gold aura
+- Elite mobs have server-authoritative timed abilities:
+  - Elite Masked Orc remains the commander identity and buffs nearby non-elite mobs.
+  - Elite Doc heals the nearest wounded living mob within 4 tiles for 18 HP every 12s.
+  - Elite Pumpkin Dude triggers a 1-tile fire burst centered on the player when within 2 tiles every 14s.
+  - Elite Ice Zombie creates a 1-tile frost hazard centered on the player when within 3 tiles every 16s; the hazard lasts 2.5s and deals 1 damage per tick.
 - Daily Contracts system assigns 3 deterministic account-specific contracts per UTC day (resets at midnight UTC)
 - Zone Arenas use a UTC-daily rotating element seed (Fire / Ice / Earth / Energy):
   - Rotation is deterministic per UTC date and shared by all players.

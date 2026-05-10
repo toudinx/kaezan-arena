@@ -905,25 +905,28 @@ public static class ArenaConfig
     public const int ElitePumpkinDudeAutoAttackRangeTiles = 1;
     public const int ElitePumpkinDudeAutoAttackDamage = 3;
     public const int ElitePumpkinDudeAutoAttackCooldownMs = 2000;
-    public const int ElitePumpkinDudeAbilityDamage = 0;
-    public const int ElitePumpkinDudeAbilityRangeTiles = 0;
-    public const int ElitePumpkinDudeAbilityCooldownMs = 99999;
+    public const int ElitePumpkinDudeAbilityDamage = 5;
+    public const int ElitePumpkinDudeAbilityRangeTiles = 2;
+    public const int ElitePumpkinDudeAbilityCooldownMs = 14000;
     public const int EliteDocMaxHp = 90;
     public const int EliteDocMoveCooldownMs = 500;
     public const int EliteDocAutoAttackRangeTiles = 1;
     public const int EliteDocAutoAttackDamage = 2;
     public const int EliteDocAutoAttackCooldownMs = 2200;
-    public const int EliteDocAbilityDamage = 0;
-    public const int EliteDocAbilityRangeTiles = 0;
-    public const int EliteDocAbilityCooldownMs = 99999;
+    public const int EliteDocAbilityDamage = 18;
+    public const int EliteDocAbilityRangeTiles = 4;
+    public const int EliteDocAbilityCooldownMs = 12000;
+    public const string EliteDocHealSource = "elite_doc_heal";
     public const int EliteIceZombieMaxHp = 110;
     public const int EliteIceZombieMoveCooldownMs = 500;
     public const int EliteIceZombieAutoAttackRangeTiles = 1;
     public const int EliteIceZombieAutoAttackDamage = 2;
     public const int EliteIceZombieAutoAttackCooldownMs = 2000;
-    public const int EliteIceZombieAbilityDamage = 0;
-    public const int EliteIceZombieAbilityRangeTiles = 0;
-    public const int EliteIceZombieAbilityCooldownMs = 99999;
+    public const int EliteIceZombieAbilityDamage = 1;
+    public const int EliteIceZombieAbilityRangeTiles = 3;
+    public const int EliteIceZombieAbilityCooldownMs = 16000;
+    public const int EliteIceZombieHazardDurationMs = 2500;
+    public const string EliteIceZombieHazardEntityType = "elite_ice_zombie_hazard";
     #endregion
 
     #region Batch Processing

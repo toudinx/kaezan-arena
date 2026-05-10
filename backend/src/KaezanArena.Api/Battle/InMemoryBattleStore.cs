@@ -477,7 +477,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                 AbilityDamage: ArenaConfig.ElitePumpkinDudeAbilityDamage,
                 AbilityRangeTiles: ArenaConfig.ElitePumpkinDudeAbilityRangeTiles,
                 AbilityCooldownMs: ArenaConfig.ElitePumpkinDudeAbilityCooldownMs,
-                AbilityFxId: "",
+                AbilityFxId: ArenaConfig.ExoriFxId,
                 AttackElement: ElementType.Fire,
                 WeakTo: ElementType.Ice,
                 ResistantTo: ElementType.Earth,
@@ -491,7 +491,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                 AbilityDamage: ArenaConfig.EliteDocAbilityDamage,
                 AbilityRangeTiles: ArenaConfig.EliteDocAbilityRangeTiles,
                 AbilityCooldownMs: ArenaConfig.EliteDocAbilityCooldownMs,
-                AbilityFxId: "",
+                AbilityFxId: ArenaConfig.HealFxId,
                 AttackElement: ElementType.Earth,
                 WeakTo: ElementType.Fire,
                 ResistantTo: ElementType.Physical,
@@ -505,7 +505,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                 AbilityDamage: ArenaConfig.EliteIceZombieAbilityDamage,
                 AbilityRangeTiles: ArenaConfig.EliteIceZombieAbilityRangeTiles,
                 AbilityCooldownMs: ArenaConfig.EliteIceZombieAbilityCooldownMs,
-                AbilityFxId: "",
+                AbilityFxId: ArenaConfig.MobShamanStormPulseFxId,
                 AttackElement: ElementType.Ice,
                 WeakTo: ElementType.Energy,
                 ResistantTo: ElementType.Fire,
@@ -3789,6 +3789,108 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         return true;
     }
 
+    private static bool TryCastEliteDocHeal(
+        StoredBattle state,
+        StoredActor mob,
+        MobArchetypeConfig config,
+        List<BattleEventDto> events)
+    {
+        if (config.AbilityDamage <= 0 || config.AbilityRangeTiles <= 0)
+        {
+            return false;
+        }
+
+        var target = state.Actors.Values
+            .Where(actor =>
+                string.Equals(actor.Kind, "mob", StringComparison.Ordinal) &&
+                !actor.IsMimic &&
+                !string.Equals(actor.ActorId, mob.ActorId, StringComparison.Ordinal) &&
+                actor.Hp > 0 &&
+                actor.Hp < actor.MaxHp &&
+                ComputeChebyshevDistance(mob, actor.TileX, actor.TileY) <= config.AbilityRangeTiles)
+            .OrderBy(actor => ComputeChebyshevDistance(mob, actor.TileX, actor.TileY))
+            .ThenBy(actor => actor.ActorId, StringComparer.Ordinal)
+            .FirstOrDefault();
+
+        if (target is null)
+        {
+            return false;
+        }
+
+        var healed = Math.Min(config.AbilityDamage, target.MaxHp - target.Hp);
+        if (healed <= 0)
+        {
+            return false;
+        }
+
+        target.Hp += healed;
+        EmitFxForTiles(events, new[] { (target.TileX, target.TileY) }, config.AbilityFxId, config.AttackElement);
+        events.Add(new HealNumberEventDto(
+            ActorId: target.ActorId,
+            Amount: healed,
+            Source: ArenaConfig.EliteDocHealSource));
+        return true;
+    }
+
+    private static bool TryCastElitePumpkinBurst(
+        StoredBattle state,
+        StoredActor mob,
+        StoredActor player,
+        MobArchetypeConfig config,
+        List<BattleEventDto> events)
+    {
+        if (config.AbilityDamage <= 0 || config.AbilityRangeTiles <= 0)
+        {
+            return false;
+        }
+
+        var distance = ComputeChebyshevDistance(mob, player.TileX, player.TileY);
+        if (distance > config.AbilityRangeTiles)
+        {
+            return false;
+        }
+
+        var affectedTiles = BuildSquareTiles(player.TileX, player.TileY, 1, includeCenter: true).ToList();
+        EmitFxForTiles(events, affectedTiles, config.AbilityFxId, config.AttackElement);
+        ApplyDamageToPlayer(
+            state,
+            events,
+            player,
+            ResolveMobOutgoingDamage(state, mob, config.AbilityDamage),
+            config.AttackElement,
+            attacker: mob);
+        return true;
+    }
+
+    private static bool TryCastEliteIceZombieFrostPatch(
+        StoredBattle state,
+        StoredActor mob,
+        StoredActor player,
+        MobArchetypeConfig config,
+        List<BattleEventDto> events)
+    {
+        if (config.AbilityDamage <= 0 || config.AbilityRangeTiles <= 0)
+        {
+            return false;
+        }
+
+        var distance = ComputeChebyshevDistance(mob, player.TileX, player.TileY);
+        if (distance > config.AbilityRangeTiles)
+        {
+            return false;
+        }
+
+        var affectedTiles = BuildSquareTiles(player.TileX, player.TileY, 1, includeCenter: true).ToList();
+        EmitFxForTiles(events, affectedTiles, config.AbilityFxId, config.AttackElement);
+        AddDamagingHazardDecalZone(
+            state,
+            affectedTiles.Select(tile => new TilePos(tile.TileX, tile.TileY)),
+            ArenaConfig.EliteIceZombieHazardDurationMs,
+            config.AbilityDamage,
+            ArenaConfig.EliteIceZombieHazardEntityType);
+        return true;
+    }
+
     private static void AddDamagingHazardDecal(
         StoredBattle state,
         int tileX,
@@ -6156,7 +6258,13 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             MobArchetypeConfig config,
             List<BattleEventDto> events)
         {
-            return false;
+            return slot.Archetype switch
+            {
+                MobArchetype.EliteDoc => TryCastEliteDocHeal(state, mob, config, events),
+                MobArchetype.ElitePumpkinDude => TryCastElitePumpkinBurst(state, mob, player, config, events),
+                MobArchetype.EliteIceZombie => TryCastEliteIceZombieFrostPatch(state, mob, player, config, events),
+                _ => false
+            };
         }
     }
 

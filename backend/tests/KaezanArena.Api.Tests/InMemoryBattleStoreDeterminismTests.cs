@@ -471,7 +471,7 @@ public sealed class InMemoryBattleStoreDeterminismTests
     {
         var store = new InMemoryBattleStore();
         var start = store.StartBattle("arena-run-end-defeat", "player-run-end-defeat", 1337);
-        var playerActorId = Assert.Single(start.Actors.Where(actor => actor.Kind == "player")).ActorId;
+        var playerActorId = Assert.Single(start.Actors, actor => actor.Kind == "player").ActorId;
         SetActorHp(store, start.BattleId, playerActorId, hp: 0);
 
         var step = store.StepBattle(start.BattleId, clientTick: null, commands: []);
@@ -832,6 +832,142 @@ public sealed class InMemoryBattleStoreDeterminismTests
             .ToList();
         Assert.NotEmpty(elites);
         Assert.All(elites, elite => Assert.Null(elite.BuffSourceEliteId));
+    }
+
+    [Fact]
+    public void EliteAbilityCooldowns_AreEnabledBelowThirtySeconds()
+    {
+        Assert.InRange(ArenaConfig.EliteDocAbilityCooldownMs, 1, 29_999);
+        Assert.InRange(ArenaConfig.ElitePumpkinDudeAbilityCooldownMs, 1, 29_999);
+        Assert.InRange(ArenaConfig.EliteIceZombieAbilityCooldownMs, 1, 29_999);
+    }
+
+    [Fact]
+    public void ApplyMobAbilities_EliteDocAbility_HealsNearestWoundedMob()
+    {
+        var store = new InMemoryBattleStore();
+        var start = store.StartBattle("arena-elite-doc-heal", "player-elite-doc-heal", 1337);
+        RemoveAllMobs(store, start.BattleId);
+        ConfigureMobSlot(store, start.BattleId, 1, MobArchetype.EliteDoc);
+        ConfigureMobSlot(store, start.BattleId, 2, MobArchetype.MeleeBrute);
+        ConfigureMobSlot(store, start.BattleId, 3, MobArchetype.MeleeBrute);
+
+        var docId = AddStoredMobActor(
+            store,
+            start.BattleId,
+            slotIndex: 1,
+            archetype: MobArchetype.EliteDoc,
+            isElite: true,
+            tileX: 1,
+            tileY: 1,
+            hp: 90,
+            maxHp: 90);
+        var nearestWoundedId = AddStoredMobActor(
+            store,
+            start.BattleId,
+            slotIndex: 2,
+            archetype: MobArchetype.MeleeBrute,
+            isElite: false,
+            tileX: 2,
+            tileY: 1,
+            hp: 10,
+            maxHp: 40);
+        var farWoundedId = AddStoredMobActor(
+            store,
+            start.BattleId,
+            slotIndex: 3,
+            archetype: MobArchetype.MeleeBrute,
+            isElite: false,
+            tileX: 6,
+            tileY: 6,
+            hp: 10,
+            maxHp: 40);
+
+        var events = InvokeMobAbilities(store, start.BattleId);
+
+        var heal = Assert.Single(events.OfType<HealNumberEventDto>(), evt =>
+            string.Equals(evt.Source, ArenaConfig.EliteDocHealSource, StringComparison.Ordinal));
+        Assert.Equal(nearestWoundedId, heal.ActorId);
+        Assert.Equal(ArenaConfig.EliteDocAbilityDamage, heal.Amount);
+        Assert.Equal(10 + ArenaConfig.EliteDocAbilityDamage, ReadActorHp(store, start.BattleId, nearestWoundedId));
+        Assert.Equal(10, ReadActorHp(store, start.BattleId, farWoundedId));
+        Assert.Contains(events.OfType<FxSpawnEventDto>(), evt =>
+            string.Equals(evt.FxId, ArenaConfig.HealFxId, StringComparison.Ordinal) &&
+            evt.TileX == 2 &&
+            evt.TileY == 1);
+    }
+
+    [Fact]
+    public void ApplyMobAbilities_ElitePumpkinDudeAbility_BurstsAroundPlayer()
+    {
+        var store = new InMemoryBattleStore();
+        var start = store.StartBattle("arena-elite-pumpkin-burst", "player-elite-pumpkin-burst", 1337);
+        RemoveAllMobs(store, start.BattleId);
+        ConfigureMobSlot(store, start.BattleId, 1, MobArchetype.ElitePumpkinDude);
+        var pumpkinId = AddStoredMobActor(
+            store,
+            start.BattleId,
+            slotIndex: 1,
+            archetype: MobArchetype.ElitePumpkinDude,
+            isElite: true,
+            tileX: 2,
+            tileY: 2,
+            hp: 100,
+            maxHp: 100);
+
+        var events = InvokeMobAbilities(store, start.BattleId);
+
+        Assert.Contains(events.OfType<DamageNumberEventDto>(), evt =>
+            string.Equals(evt.AttackerEntityId, pumpkinId, StringComparison.Ordinal) &&
+            string.Equals(evt.TargetEntityId, start.Actors.Single(actor => actor.Kind == "player").ActorId, StringComparison.Ordinal) &&
+            evt.ElementType == ElementType.Fire &&
+            evt.DamageAmount > 0);
+        var burstFxTiles = events
+            .OfType<FxSpawnEventDto>()
+            .Where(evt => string.Equals(evt.FxId, ArenaConfig.ExoriFxId, StringComparison.Ordinal))
+            .Select(evt => (evt.TileX, evt.TileY))
+            .OrderBy(tile => tile.TileY)
+            .ThenBy(tile => tile.TileX)
+            .ToList();
+        Assert.Equal(9, burstFxTiles.Count);
+        Assert.Contains((3, 3), burstFxTiles);
+    }
+
+    [Fact]
+    public void ApplyMobAbilities_EliteIceZombieAbility_CreatesFrostHazardAroundPlayer()
+    {
+        var store = new InMemoryBattleStore();
+        var start = store.StartBattle("arena-elite-ice-hazard", "player-elite-ice-hazard", 1337);
+        RemoveAllMobs(store, start.BattleId);
+        ConfigureMobSlot(store, start.BattleId, 1, MobArchetype.EliteIceZombie);
+        _ = AddStoredMobActor(
+            store,
+            start.BattleId,
+            slotIndex: 1,
+            archetype: MobArchetype.EliteIceZombie,
+            isElite: true,
+            tileX: 1,
+            tileY: 3,
+            hp: 110,
+            maxHp: 110);
+
+        var events = InvokeMobAbilities(store, start.BattleId);
+
+        var snapshot = ReadBattleSnapshot(store, start.BattleId);
+        var hazardDecals = snapshot.Decals
+            .Where(decal =>
+                decal.DecalKind == DecalKind.DamagingHazard &&
+                string.Equals(decal.EntityType, ArenaConfig.EliteIceZombieHazardEntityType, StringComparison.Ordinal))
+            .ToList();
+        Assert.Equal(9, hazardDecals.Count);
+        Assert.All(hazardDecals, decal =>
+        {
+            Assert.Equal(ArenaConfig.EliteIceZombieHazardDurationMs, decal.RemainingMs);
+            Assert.Equal(ArenaConfig.EliteIceZombieHazardDurationMs, decal.TotalMs);
+        });
+        Assert.Contains(hazardDecals, decal => decal.TileX == 3 && decal.TileY == 3);
+        Assert.Equal(9, events.OfType<FxSpawnEventDto>().Count(evt =>
+            string.Equals(evt.FxId, ArenaConfig.MobShamanStormPulseFxId, StringComparison.Ordinal)));
     }
 
     [Fact]
@@ -2171,6 +2307,139 @@ public sealed class InMemoryBattleStoreDeterminismTests
         var hpProperty = actor.GetType().GetProperty("Hp");
         Assert.NotNull(hpProperty);
         hpProperty.SetValue(actor, Math.Max(0, hp));
+    }
+
+    private static int ReadActorHp(InMemoryBattleStore store, string battleId, string actorId)
+    {
+        var actor = GetStoredActor(store, battleId, actorId);
+        var hpProperty = actor.GetType().GetProperty("Hp");
+        Assert.NotNull(hpProperty);
+        return Assert.IsType<int>(hpProperty.GetValue(actor));
+    }
+
+    private static BattleSnapshot ReadBattleSnapshot(InMemoryBattleStore store, string battleId)
+    {
+        var state = GetStoredBattle(store, battleId);
+        var toSnapshotMethod = typeof(InMemoryBattleStore).GetMethod(
+            "ToSnapshot",
+            BindingFlags.Static | BindingFlags.NonPublic);
+        Assert.NotNull(toSnapshotMethod);
+
+        var snapshot = toSnapshotMethod.Invoke(
+            null,
+            [state, Array.Empty<BattleEventDto>(), Array.Empty<CommandResultDto>()]);
+        Assert.NotNull(snapshot);
+        return Assert.IsType<BattleSnapshot>(snapshot);
+    }
+
+    private static IReadOnlyList<BattleEventDto> InvokeMobAbilities(InMemoryBattleStore store, string battleId)
+    {
+        var state = GetStoredBattle(store, battleId);
+        var events = new List<BattleEventDto>();
+        var method = typeof(InMemoryBattleStore).GetMethod(
+            "ApplyMobAbilities",
+            BindingFlags.Static | BindingFlags.NonPublic);
+        Assert.NotNull(method);
+
+        method.Invoke(null, [state, events]);
+        return events;
+    }
+
+    private static void ConfigureMobSlot(
+        InMemoryBattleStore store,
+        string battleId,
+        int slotIndex,
+        MobArchetype archetype)
+    {
+        var slot = GetMobSlot(store, battleId, slotIndex);
+
+        var archetypeProperty = slot.GetType().GetProperty("Archetype");
+        Assert.NotNull(archetypeProperty);
+        archetypeProperty.SetValue(slot, archetype);
+
+        var abilityCooldownProperty = slot.GetType().GetProperty("AbilityCooldownRemainingMs");
+        Assert.NotNull(abilityCooldownProperty);
+        abilityCooldownProperty.SetValue(slot, 0);
+
+        var attackCooldownProperty = slot.GetType().GetProperty("AttackCooldownRemainingMs");
+        Assert.NotNull(attackCooldownProperty);
+        attackCooldownProperty.SetValue(slot, 999_999);
+
+        var moveCooldownProperty = slot.GetType().GetProperty("MoveCooldownRemainingMs");
+        Assert.NotNull(moveCooldownProperty);
+        moveCooldownProperty.SetValue(slot, 999_999);
+    }
+
+    private static object GetMobSlot(InMemoryBattleStore store, string battleId, int slotIndex)
+    {
+        var state = GetStoredBattle(store, battleId);
+        var mobSlotsProperty = state.GetType().GetProperty("MobSlots");
+        Assert.NotNull(mobSlotsProperty);
+        var mobSlots = mobSlotsProperty.GetValue(state) as IDictionary;
+        Assert.NotNull(mobSlots);
+        var slot = mobSlots[slotIndex];
+        Assert.NotNull(slot);
+        return slot!;
+    }
+
+    private static string AddStoredMobActor(
+        InMemoryBattleStore store,
+        string battleId,
+        int slotIndex,
+        MobArchetype archetype,
+        bool isElite,
+        int tileX,
+        int tileY,
+        int hp,
+        int maxHp)
+    {
+        var state = GetStoredBattle(store, battleId);
+        var actorsProperty = state.GetType().GetProperty("Actors");
+        Assert.NotNull(actorsProperty);
+        var actors = actorsProperty.GetValue(state) as IDictionary;
+        Assert.NotNull(actors);
+
+        var slot = GetMobSlot(store, battleId, slotIndex);
+        var actorIdProperty = slot.GetType().GetProperty("ActorId");
+        Assert.NotNull(actorIdProperty);
+        var actorId = Assert.IsType<string>(actorIdProperty.GetValue(slot));
+
+        var storedActorType = typeof(InMemoryBattleStore).GetNestedType("StoredActor", BindingFlags.NonPublic);
+        Assert.NotNull(storedActorType);
+        var actor = Activator.CreateInstance(
+            storedActorType!,
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+            binder: null,
+            args:
+            [
+                actorId,
+                "mob",
+                (MobArchetype?)archetype,
+                isElite,
+                null,
+                ArenaConfig.FacingUp,
+                tileX,
+                tileY,
+                Math.Max(0, hp),
+                Math.Max(0, maxHp),
+                0,
+                0,
+                (int?)slotIndex,
+                false,
+                false,
+                0,
+                false,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            culture: null);
+        Assert.NotNull(actor);
+
+        actors[actorId] = actor;
+        return actorId;
     }
 
     private static void SetActorTile(InMemoryBattleStore store, string battleId, string actorId, int tileX, int tileY)
