@@ -45,6 +45,11 @@ Account state persistence (backend):
 - Configure a custom directory with `AccountState:StorageDirectory` in configuration/environment variables.
 - If the directory or files are missing, backend starts safely and seeds accounts in memory as before.
 
+Analytics (backend):
+- Run results are posted by the frontend to `POST /api/v1/analytics/run-result` (schema-free JSON body, returns 204).
+- Results are appended to daily JSONL files at `backend/src/KaezanArena.Api/.data/analytics/run-results-{yyyyMMdd}.jsonl`.
+- Configure a custom directory with `Analytics:StorageDirectory` in configuration/environment variables.
+
 ## Run Frontend
 
 ```powershell
@@ -163,12 +168,13 @@ Four permanent Elemental Arenas, always accessible regardless of Account Level. 
   - `Sylwen` -> `Whisper Shot`
   - `Mirai` -> `Rend Claw`
 - Signature AA cadence scales with passive-card `PercentAttackSpeedBonus` (faster attack speed -> lower signature AA cooldown, down to the configured attack cooldown floor)
-- Kit skill cooldowns (Exori Min, Exori, Exori Mas, and character kit skills) are not affected by attack speed; they use `GlobalCooldownReductionPercent` instead
+- Kit skill cooldowns (character kit skills) are not affected by attack speed; they use `GlobalCooldownReductionPercent` instead
 - Q/W/E/R trigger immediate manual `cast_skill` commands for active character kit slots (Skill 1/2/3/Ultimate)
 - Manual casts follow normal cooldown and GCD checks; if a skill is on cooldown the keypress is ignored
 - `R` manual cast is routed through backend `TryFireUltimate` for the active character ultimate; it fires only when `UltimateGauge >= ArenaConfig.UltimateConfig.GaugeMax`, otherwise it silently skips (no error)
 - Assist continues firing other skills normally after a manual cast
-- Loot awarding (`awardLootSources`) is fire-and-forget after each `stepBattle` response; `battleRequestInFlight` is released before loot HTTP work starts, preventing game-loop stalls during mass-kill moments (for example, Blood Fang)
+- Loot awarding (`awardLootSources`) still runs outside the step loop so `battleRequestInFlight` is released before loot HTTP work starts, preventing game-loop stalls during mass-kill moments (for example, Blood Fang)
+- Loot award requests are persisted in a local retry queue before the HTTP call and removed only after `/api/v1/account/award-drops` confirms success; failures retry with capped backoff using the existing run/source idempotency keys, so sigil/material drops are not silently lost on transient network errors or arena navigation
 - Account progression now includes Account Level + Account XP (Lv. 1-100), earned from runs and kills
 - Zone selection happens before each run (Zone 1-5), with unlock gates at Account Lv. 1/21/41/61/81
 - Zone multipliers scale mob HP and outgoing damage on top of normal run scaling
@@ -192,7 +198,8 @@ Four permanent Elemental Arenas, always accessible regardless of Account Level. 
 - Kaeros is primarily earned through Daily Contracts completion (not regular kill/run baseline rewards)
 - Completing Daily Contracts also grants Account XP rewards in addition to Kaeros
 - Character progression uses Mastery (Mastery Level + Mastery XP), earned from run completion and kills
-- Mastery milestones every 10 levels grant Kaeros, Echo Fragments, and additional Sigil slots (up to 5)
+- Sigil slots unlock at specific Mastery levels: slot 1 at level 1, slot 2 at level 2, slot 3 at level 4, slot 4 at level 6, slot 5 at level 8
+- Mastery milestones every 10 levels grant Kaeros and Echo Fragments (not additional Sigil slots)
 - The first mastery barrier is at level 10: progression to level 11 requires spending Hollow Essence
 - Sigils are account-wide inventory items and are equipped per character in 5 ordered slots
   - Slot tiers are fixed by level range: Hollow (1-20), Brave (21-40), Awakened (41-60), Exalted (61-80), Ascendant (81-95)
@@ -314,6 +321,29 @@ Four permanent Elemental Arenas, always accessible regardless of Account Level. 
   - Active ranged weapons today: Sigil Bolt (single target), Shotgun (dragon-wave cone AoE + knockback), and Void Ricochet (bounce + pierce segments)
   - Void Ricochet projectiles are emitted per segment and rendered sequentially segment-by-segment on the frontend
 
+## Boss System
+
+A boss spawns at **2:45 into the run (165 seconds)**. Mob spawning pauses for 5 seconds when the boss appears. The boss spawns at the furthest walkable tile from the player. Killing the boss ends the run immediately with the `victory_boss` outcome.
+
+All bosses have **30% physical damage resistance** and a unique ability on a per-boss cooldown.
+
+| Boss | Zones | HP | Element | Weak To | Ability |
+|------|-------|----|---------|---------|---------|
+| The Demon Lord | 1–2 | 400 | Fire | Ice | AoE slam centered on the player |
+| Plague Titan | 3–4 | 500 | Earth | Fire | Plague AoE + spawns 2 Tiny Zombies on adjacent tiles |
+| The Ascendant | 5 | 350 | Energy | Physical | Fires projectiles in all 4 cardinal directions |
+
+Boss definitions are data-driven in `ArenaConfig.BossConfig`. The boss for each run is selected deterministically by zone index at spawn time.
+
+## Mimic System
+
+Mimics are disguised enemies that replace chest spawns with a **20% probability** (maximum 1 active mimic at a time). A dormant mimic appears identical to a chest; interacting with it activates the mimic as a combat actor.
+
+- **Stats:** 60 HP, 3 auto-attack damage, 1200ms attack cooldown
+- **Kill reward:** +40 Echo Fragments bonus on top of any normal drop
+
+Mimic behavior is defined in `ArenaConfig.MimicConfig` and handled by `InMemoryBattleStore.MimicSystem.cs` and `InMemoryBattleStore.PoiSystem.cs`.
+
 ## Frontend FX Sprites
 
 The following `anim_strip_rows` FX assets are registered in `frontend/src/assets/packs/arena_v1_0x72_bdragon/asset-pack.json`:
@@ -333,7 +363,7 @@ These are used by frontend combat FX as follows:
 
 All weapon, character, and species IDs are defined as named constants in `backend/src/KaezanArena.Api/Battle/ArenaConfig.cs`:
 
-- `ArenaConfig.WeaponIds` - stable weapon/skill IDs (e.g. `WeaponIds.ExoriMin = "weapon:exori_min"`)
+- `ArenaConfig.WeaponIds` - stable weapon/skill IDs (e.g. `WeaponIds.ShotgunId = "weapon:shotgun"`)
 - `ArenaConfig.SkillIds` - hero skill IDs for fixed kits (Mirai, Sylwen, Velvet)
 - `ArenaConfig.PassiveIds` - hero passive IDs for fixed kits
 - `ArenaConfig.KitIds` - fixed-kit IDs (e.g. `kit:mirai`, `kit:sylwen`, `kit:velvet`)

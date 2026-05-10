@@ -50,7 +50,7 @@ import {
   StepBattleRequest,
   StepBattleResponse
 } from "../../api/battle-api.service";
-import { buildDropSourceKey, dedupeDropSources, mapMobTypeToSpecies } from "./loot-source.helpers";
+import { buildDropSourceKey, dedupeDropSources, mapMobTypeToSpecies, normalizeDropSourceType } from "./loot-source.helpers";
 import {
   collectReadyPulseSkillIds,
   computeCooldownFraction,
@@ -280,8 +280,23 @@ type BeginRunOptions = Readonly<{
   seedOverride: number | null;
   replayRecording: RunRecording | null;
 }>;
+type PendingLootAward = Readonly<{
+  id: string;
+  accountId: string;
+  characterId: string;
+  battleId: string;
+  awardScopeId: string;
+  sources: DropSource[];
+  attemptCount: number;
+  nextAttemptAtMs: number;
+  createdAtMs: number;
+  updatedAtMs: number;
+}>;
 export const TOOLS_TAB_STORAGE_KEY = "kaezan_arena_tools_tab_v1";
 export const RIGHT_INFO_TAB_STORAGE_KEY = TOOLS_TAB_STORAGE_KEY;
+const LOOT_AWARD_RETRY_STORAGE_KEY = "kaezan_pending_loot_awards_v1";
+const LOOT_AWARD_RETRY_BASE_DELAY_MS = 1_000;
+const LOOT_AWARD_RETRY_MAX_DELAY_MS = 30_000;
 const ASSIST_CONFIG_DEBOUNCE_MS = 200;
 const RUN_INITIAL_LEVEL = 1;
 const RUN_INITIAL_XP = 0;
@@ -634,6 +649,9 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
   private readonly sentLootSourceKeys = new Set<string>();
   private readonly seenAwardedDropEventIds = new Set<string>();
   private readonly runAwardedSourceKeys = new Set<string>();
+  private readonly pendingLootAwards = new Map<string, PendingLootAward>();
+  private lootAwardRetryTimerId: ReturnType<typeof setTimeout> | null = null;
+  private lootAwardRetryInFlight = false;
   private runAwardScopeId = "";
   private runStartCraftedSnapshotByInstanceId = new Map<string, RunEquipmentSnapshot>();
   private readonly runResultLogger = new RunResultLogger();
@@ -1463,6 +1481,8 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.syncSceneActiveCharacterId();
     this.activeFxCount = 0;
     await this.loadAccountState();
+    this.loadPendingLootAwards();
+    void this.flushPendingLootAwards();
 
     const canvas = this.canvasRef?.nativeElement;
     if (!canvas || !this.scene) {
@@ -1556,6 +1576,7 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
     this.stopAutoStepLoop();
     this.clearShieldBreakPulse();
     this.clearLevelUpPulse();
+    this.clearLootAwardRetryTimer();
 
   }
 
@@ -3582,38 +3603,324 @@ export class ArenaPageComponent implements AfterViewInit, OnDestroy {
       return;
     }
 
-    const dedupedKeys = dedupedSources.map((source) => buildDropSourceKey(awardScopeId, source));
+    const pendingAward = this.buildPendingLootAward(character.characterId, battleId, awardScopeId, dedupedSources);
+    this.queuePendingLootAward(pendingAward);
+
     try {
       const response = await this.accountStore.awardDrops(character.characterId, battleId, dedupedSources, awardScopeId);
-
-      const newlyAwarded = response.awarded.filter((drop) => {
-        if (this.seenAwardedDropEventIds.has(drop.dropEventId)) {
-          return false;
-        }
-
-        this.seenAwardedDropEventIds.add(drop.dropEventId);
-        return true;
-      });
-      this.runInAngularZone(() => {
-        this.mergeCharacterIntoAccountState(response.character);
-        this.syncAccountStateFromStore();
-        this.runResultLogger.recordAwardDrops(newlyAwarded, response.character);
-        this.recordRunLootSourcesFromRequest(dedupedSources);
-        if (newlyAwarded.length > 0) {
-          this.lootFeed = [...newlyAwarded, ...this.lootFeed].slice(0, 50);
-          this.recordEconomyMetricsFromDrops(newlyAwarded);
-          this.recordRunPayoutFromAwardedDrops(newlyAwarded);
-        }
-      });
+      this.removePendingLootAward(pendingAward.id);
+      this.applyAwardDropsResponse(response, dedupedSources, true);
     } catch (error) {
-      for (const key of dedupedKeys) {
-        this.sentLootSourceKeys.delete(key);
-      }
+      this.markPendingLootAwardFailed(pendingAward.id, error);
 
       this.runInAngularZone(() => {
-        this.battleLog = `awardDrops failed: ${String(error)}`;
+        this.battleLog = `awardDrops queued for retry: ${String(error)}`;
       });
     }
+  }
+
+  private applyAwardDropsResponse(
+    response: Awaited<ReturnType<AccountStore["awardDrops"]>>,
+    requestedSources: ReadonlyArray<DropSource>,
+    recordForCurrentRun: boolean
+  ): void {
+    const newlyAwarded = response.awarded.filter((drop) => {
+      if (this.seenAwardedDropEventIds.has(drop.dropEventId)) {
+        return false;
+      }
+
+      this.seenAwardedDropEventIds.add(drop.dropEventId);
+      return true;
+    });
+
+    this.runInAngularZone(() => {
+      this.mergeCharacterIntoAccountState(response.character);
+      this.syncAccountStateFromStore();
+      if (!recordForCurrentRun) {
+        return;
+      }
+
+      this.runResultLogger.recordAwardDrops(newlyAwarded, response.character);
+      this.recordRunLootSourcesFromRequest(requestedSources);
+      if (newlyAwarded.length > 0) {
+        this.lootFeed = [...newlyAwarded, ...this.lootFeed].slice(0, 50);
+        this.recordEconomyMetricsFromDrops(newlyAwarded);
+        this.recordRunPayoutFromAwardedDrops(newlyAwarded);
+      }
+    });
+  }
+
+  private buildPendingLootAward(
+    characterId: string,
+    battleId: string,
+    awardScopeId: string,
+    sources: ReadonlyArray<DropSource>
+  ): PendingLootAward {
+    const accountId = this.accountStore.accountId();
+    const now = Date.now();
+    const sourceKey = sources
+      .map((source) => buildDropSourceKey(awardScopeId, source))
+      .sort()
+      .join("|");
+
+    return {
+      id: `${accountId}:${characterId}:${awardScopeId}:${sourceKey}`,
+      accountId,
+      characterId,
+      battleId,
+      awardScopeId,
+      sources: sources.map((source) => ({ ...source })),
+      attemptCount: 0,
+      nextAttemptAtMs: now,
+      createdAtMs: now,
+      updatedAtMs: now
+    };
+  }
+
+  private queuePendingLootAward(award: PendingLootAward): void {
+    this.pendingLootAwards.set(award.id, award);
+    this.persistPendingLootAwards();
+  }
+
+  private removePendingLootAward(awardId: string): void {
+    if (!this.pendingLootAwards.delete(awardId)) {
+      return;
+    }
+
+    this.persistPendingLootAwards();
+    this.scheduleLootAwardRetry();
+  }
+
+  private markPendingLootAwardFailed(awardId: string, error: unknown): void {
+    const existing = this.pendingLootAwards.get(awardId);
+    if (!existing) {
+      return;
+    }
+
+    const attemptCount = existing.attemptCount + 1;
+    const retryDelayMs = this.computeLootAwardRetryDelayMs(attemptCount);
+    const updated = {
+      ...existing,
+      attemptCount,
+      nextAttemptAtMs: Date.now() + retryDelayMs,
+      updatedAtMs: Date.now()
+    };
+
+    this.pendingLootAwards.set(awardId, updated);
+    this.persistPendingLootAwards();
+    this.scheduleLootAwardRetry();
+    console.warn("[arena] awardDrops queued for retry", error);
+  }
+
+  private postponePendingLootAward(awardId: string, delayMs: number): void {
+    const existing = this.pendingLootAwards.get(awardId);
+    if (!existing) {
+      return;
+    }
+
+    this.pendingLootAwards.set(awardId, {
+      ...existing,
+      nextAttemptAtMs: Date.now() + Math.max(0, Math.floor(delayMs)),
+      updatedAtMs: Date.now()
+    });
+    this.persistPendingLootAwards();
+  }
+
+  private async flushPendingLootAwards(): Promise<void> {
+    if (this.lootAwardRetryInFlight || this.pendingLootAwards.size === 0 || this.isReplayInProgress) {
+      this.scheduleLootAwardRetry();
+      return;
+    }
+
+    this.lootAwardRetryInFlight = true;
+    try {
+      const now = Date.now();
+      const dueAwards = [...this.pendingLootAwards.values()]
+        .filter((award) => award.nextAttemptAtMs <= now)
+        .sort((left, right) => left.createdAtMs - right.createdAtMs || left.id.localeCompare(right.id));
+
+      for (const award of dueAwards) {
+        if (!this.pendingLootAwards.has(award.id)) {
+          continue;
+        }
+
+        if (award.accountId !== this.accountStore.accountId()) {
+          this.postponePendingLootAward(award.id, LOOT_AWARD_RETRY_MAX_DELAY_MS);
+          continue;
+        }
+
+        try {
+          const response = await this.accountStore.awardDrops(
+            award.characterId,
+            award.battleId,
+            award.sources,
+            award.awardScopeId
+          );
+          this.removePendingLootAward(award.id);
+          this.applyAwardDropsResponse(response, award.sources, this.shouldRecordPendingLootAwardForCurrentRun(award));
+        } catch (error) {
+          this.markPendingLootAwardFailed(award.id, error);
+        }
+      }
+    } finally {
+      this.lootAwardRetryInFlight = false;
+      this.scheduleLootAwardRetry();
+    }
+  }
+
+  private shouldRecordPendingLootAwardForCurrentRun(award: PendingLootAward): boolean {
+    const currentCharacterId = this.selectedCharacter?.characterId ?? "";
+    return this.isInRun &&
+      award.characterId === currentCharacterId &&
+      award.awardScopeId.length > 0 &&
+      award.awardScopeId === this.runAwardScopeId;
+  }
+
+  private scheduleLootAwardRetry(): void {
+    this.clearLootAwardRetryTimer();
+    if (this.pendingLootAwards.size === 0) {
+      return;
+    }
+
+    const now = Date.now();
+    const nextAttemptAtMs = Math.min(...[...this.pendingLootAwards.values()].map((award) => award.nextAttemptAtMs));
+    const delayMs = Math.max(0, nextAttemptAtMs - now);
+    this.lootAwardRetryTimerId = setTimeout(() => {
+      this.lootAwardRetryTimerId = null;
+      void this.flushPendingLootAwards();
+    }, delayMs);
+  }
+
+  private clearLootAwardRetryTimer(): void {
+    if (!this.lootAwardRetryTimerId) {
+      return;
+    }
+
+    clearTimeout(this.lootAwardRetryTimerId);
+    this.lootAwardRetryTimerId = null;
+  }
+
+  private computeLootAwardRetryDelayMs(attemptCount: number): number {
+    const safeAttemptCount = Math.max(0, Math.floor(attemptCount));
+    return Math.min(
+      LOOT_AWARD_RETRY_MAX_DELAY_MS,
+      LOOT_AWARD_RETRY_BASE_DELAY_MS * (2 ** Math.max(0, safeAttemptCount - 1))
+    );
+  }
+
+  private loadPendingLootAwards(): void {
+    this.pendingLootAwards.clear();
+    if (!this.canUseStorage()) {
+      return;
+    }
+
+    try {
+      const raw = window.localStorage.getItem(LOOT_AWARD_RETRY_STORAGE_KEY);
+      if (!raw) {
+        return;
+      }
+
+      const parsed = JSON.parse(raw) as unknown;
+      if (!Array.isArray(parsed)) {
+        window.localStorage.removeItem(LOOT_AWARD_RETRY_STORAGE_KEY);
+        return;
+      }
+
+      for (const value of parsed) {
+        const award = this.normalizeStoredPendingLootAward(value);
+        if (award) {
+          this.pendingLootAwards.set(award.id, award);
+        }
+      }
+    } catch {
+      try {
+        window.localStorage.removeItem(LOOT_AWARD_RETRY_STORAGE_KEY);
+      } catch {
+        // Ignore cleanup failures; a future load can try again.
+      }
+    }
+  }
+
+  private persistPendingLootAwards(): void {
+    if (!this.canUseStorage()) {
+      return;
+    }
+
+    try {
+      if (this.pendingLootAwards.size === 0) {
+        window.localStorage.removeItem(LOOT_AWARD_RETRY_STORAGE_KEY);
+        return;
+      }
+
+      const serializable = [...this.pendingLootAwards.values()]
+        .sort((left, right) => left.createdAtMs - right.createdAtMs || left.id.localeCompare(right.id));
+      window.localStorage.setItem(LOOT_AWARD_RETRY_STORAGE_KEY, JSON.stringify(serializable));
+    } catch {
+      // The in-memory retry queue still protects awards for the current page lifetime.
+    }
+  }
+
+  private normalizeStoredPendingLootAward(value: unknown): PendingLootAward | null {
+    if (!value || typeof value !== "object") {
+      return null;
+    }
+
+    const record = value as Record<string, unknown>;
+    const id = this.readString(record["id"]);
+    const accountId = this.readString(record["accountId"]);
+    const characterId = this.readString(record["characterId"]);
+    const battleId = this.readString(record["battleId"]);
+    const awardScopeId = this.readString(record["awardScopeId"]);
+    const sources = this.normalizeStoredDropSources(record["sources"]);
+    if (!id || !accountId || !characterId || !battleId || !awardScopeId || sources.length === 0) {
+      return null;
+    }
+
+    const now = Date.now();
+    return {
+      id,
+      accountId,
+      characterId,
+      battleId,
+      awardScopeId,
+      sources,
+      attemptCount: Math.max(0, Math.floor(this.readNumber(record["attemptCount"]) ?? 0)),
+      nextAttemptAtMs: Math.max(0, Math.floor(this.readNumber(record["nextAttemptAtMs"]) ?? now)),
+      createdAtMs: Math.max(0, Math.floor(this.readNumber(record["createdAtMs"]) ?? now)),
+      updatedAtMs: Math.max(0, Math.floor(this.readNumber(record["updatedAtMs"]) ?? now))
+    };
+  }
+
+  private normalizeStoredDropSources(value: unknown): DropSource[] {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+
+    const sources: DropSource[] = [];
+    for (const entry of value) {
+      if (!entry || typeof entry !== "object") {
+        continue;
+      }
+
+      const record = entry as Record<string, unknown>;
+      const tick = this.readNumber(record["tick"]);
+      const sourceType = this.readString(record["sourceType"]);
+      const sourceId = this.readString(record["sourceId"]);
+      if (tick === null || !sourceType || !sourceId) {
+        continue;
+      }
+
+      const zoneIndex = this.readNumber(record["zoneIndex"]);
+      sources.push({
+        tick,
+        sourceType: normalizeDropSourceType(sourceType),
+        sourceId,
+        species: this.readString(record["species"]) ?? null,
+        ...(zoneIndex === null ? {} : { zoneIndex: this.clampZoneIndex(zoneIndex) })
+      });
+    }
+
+    return sources;
   }
 
   private recordRunPayoutFromAwardedDrops(awarded: ReadonlyArray<DropEvent>): void {

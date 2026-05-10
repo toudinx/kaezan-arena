@@ -7,7 +7,7 @@
 }
 
 .arena-select {
-  width: min(1240px, calc(100vw - 28px));
+  width: min(900px, calc(100vw - 28px));
   height: 100%;
   min-height: 0;
   margin: 0 auto;
@@ -46,7 +46,6 @@
   font-size: 0.72rem;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  text-decoration: none;
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
@@ -87,7 +86,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 32px;
+  gap: 28px;
   min-height: 0;
   padding: 20px 0;
 }
@@ -105,56 +104,52 @@
 
 .mode-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 18px;
   width: 100%;
-  max-width: 760px;
 }
 
 .mode-card {
+  --card-accent: #7f8ea8;
+  --card-glow: rgba(127, 142, 168, 0.12);
+
   position: relative;
   display: flex;
   flex-direction: column;
-  border-radius: 16px;
+  border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   background: rgba(10, 12, 26, 0.9);
-  text-decoration: none;
   color: var(--text-primary, #f5f5fa);
+  font: inherit;
   overflow: hidden;
   cursor: pointer;
+  min-height: 280px;
   transition:
     border-color 0.2s ease,
     transform 0.18s ease,
     box-shadow 0.2s ease;
-  min-height: 280px;
+  text-align: left;
 }
 
 .mode-card:hover {
   transform: translateY(-2px);
-  border-color: var(--mode-accent, rgba(255, 255, 255, 0.28));
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5), 0 0 0 1px var(--mode-accent, rgba(255, 255, 255, 0.1));
+  border-color: var(--card-accent);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5), 0 0 0 1px color-mix(in srgb, var(--card-accent) 35%, transparent);
 }
 
 .mode-card:focus-visible {
-  outline: 2px solid var(--mode-accent, rgba(255, 255, 255, 0.5));
+  outline: 2px solid var(--card-accent);
   outline-offset: 3px;
 }
 
-.mode-card--zone {
-  --mode-accent: rgba(45, 227, 200, 0.55);
-  --mode-glow: rgba(45, 227, 200, 0.12);
-}
-
-.mode-card--elemental {
-  --mode-accent: rgba(192, 132, 252, 0.55);
-  --mode-glow: rgba(192, 132, 252, 0.12);
-}
+.mode-card--standard { --card-accent: #2dd4bf; --card-glow: rgba(45, 212, 191, 0.12); }
+.mode-card--elemental { --card-accent: #c084fc; --card-glow: rgba(192, 132, 252, 0.13); }
 
 .mode-card__glow {
   position: absolute;
   inset: 0;
   opacity: 0;
-  background: radial-gradient(60% 60% at 50% 0%, var(--mode-glow, transparent), transparent 80%);
+  background: radial-gradient(70% 60% at 50% 0%, var(--card-glow), transparent 80%);
   transition: opacity 0.25s ease;
   pointer-events: none;
 }
@@ -168,63 +163,66 @@
   z-index: 1;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
   padding: 28px 24px 24px;
   height: 100%;
 }
 
-.mode-card__kicker {
-  font-size: 10px;
-  letter-spacing: 0.24em;
+.mode-card__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--card-accent);
+  background: color-mix(in srgb, var(--card-accent) 14%, transparent);
+  color: var(--card-accent);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.2em;
   text-transform: uppercase;
-  font-weight: 800;
-  color: var(--mode-accent, rgba(245, 245, 250, 0.55));
-  filter: brightness(1.6);
+  width: fit-content;
 }
 
-.mode-card__title {
-  margin: 0;
-  font-size: 28px;
+.mode-card__name {
+  margin: 4px 0 0;
+  font-size: 26px;
   font-weight: 900;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.03em;
   line-height: 1.1;
   color: #ffffff;
 }
 
-.mode-card__body {
-  margin: 4px 0 0;
+.mode-card__description {
+  margin: 2px 0 0;
   font-size: 13px;
-  line-height: 1.6;
-  color: rgba(203, 213, 225, 0.78);
+  line-height: 1.55;
+  color: rgba(203, 213, 225, 0.7);
   flex: 1;
 }
 
 .mode-card__cta {
   display: inline-block;
-  margin-top: 12px;
+  margin-top: 10px;
   padding: 8px 16px;
-  border-radius: 8px;
-  border: 1px solid var(--mode-accent, rgba(255, 255, 255, 0.2));
+  border-radius: 7px;
+  border: 1px solid var(--card-accent);
   background: transparent;
   color: #f5f5fa;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   width: fit-content;
-  transition: background 0.15s, border-color 0.15s;
+  transition: background 0.15s;
 }
 
 .mode-card:hover .mode-card__cta {
-  background: color-mix(in srgb, var(--mode-accent, transparent) 18%, transparent);
+  background: color-mix(in srgb, var(--card-accent) 16%, transparent);
 }
 
 @media (max-width: 600px) {
   .mode-grid {
     grid-template-columns: 1fr;
-  }
-
-  .mode-card {
-    min-height: 200px;
   }
 }

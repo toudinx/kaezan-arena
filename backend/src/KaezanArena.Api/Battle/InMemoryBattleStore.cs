@@ -34,9 +34,6 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         MobArchetype.EliteDoc,
         MobArchetype.EliteIceZombie,
     ];
-    // Offensive priority for the Assist: ExoriMas -> Exori -> ExoriMin.
-    // Ultimate auto-cast is handled separately by the Ultimate gauge.
-    // Heal and Guard are excluded — defensive survivability is now passive-card-only.
     private static readonly IReadOnlyDictionary<string, IReadOnlyList<string>> FixedWeaponKitByPlayerClassId =
         new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal)
         {
@@ -72,9 +69,6 @@ public sealed partial class InMemoryBattleStore : IBattleStore
     private static readonly string[] AssistOffenseWeaponPriority =
     [
         ArenaConfig.WeaponIds.VoidRicochetId,
-        ArenaConfig.WeaponIds.ExoriMas,
-        ArenaConfig.WeaponIds.Exori,
-        ArenaConfig.WeaponIds.ExoriMin,
         ArenaConfig.WeaponIds.ShotgunId,
         ArenaConfig.WeaponIds.SigilBolt
     ];
@@ -491,7 +485,7 @@ public sealed partial class InMemoryBattleStore : IBattleStore
                 AbilityDamage: ArenaConfig.EliteDocAbilityDamage,
                 AbilityRangeTiles: ArenaConfig.EliteDocAbilityRangeTiles,
                 AbilityCooldownMs: ArenaConfig.EliteDocAbilityCooldownMs,
-                AbilityFxId: ArenaConfig.HealFxId,
+                AbilityFxId: ArenaConfig.HitSmallFxId,
                 AttackElement: ElementType.Earth,
                 WeakTo: ElementType.Fire,
                 ResistantTo: ElementType.Physical,
@@ -1787,53 +1781,6 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             return explicitDispatchResult.Value;
         }
 
-        if (string.Equals(normalizedSkillId, ArenaConfig.ExoriSkillId, StringComparison.Ordinal))
-        {
-            var hitAnyTarget = ApplyAreaSquareSkill(
-                state,
-                events,
-                player,
-                radius: 1,
-                damage: 10,
-                fxId: ArenaConfig.ExoriFxId,
-                element: ArenaConfig.ExoriElement,
-                ref pendingLifeLeechHeal);
-            ApplyPlayerCooldownsForCast(state, skill);
-            GrantPlayerShield(state, events, ArenaConfig.PlayerShieldGainPerAction);
-            return SkillCastResult.Ok(hitAnyTarget ? null : ArenaConfig.NoTargetReason);
-        }
-
-        if (string.Equals(normalizedSkillId, ArenaConfig.ExoriMasSkillId, StringComparison.Ordinal))
-        {
-            var hitAnyTarget = ApplyAreaDiamondSkill(
-                state,
-                events,
-                player,
-                radius: 2,
-                damage: 7,
-                fxId: ArenaConfig.ExoriMasFxId,
-                element: ArenaConfig.ExoriMasElement,
-                ref pendingLifeLeechHeal);
-            ApplyPlayerCooldownsForCast(state, skill);
-            GrantPlayerShield(state, events, ArenaConfig.PlayerShieldGainPerAction);
-            return SkillCastResult.Ok(hitAnyTarget ? null : ArenaConfig.NoTargetReason);
-        }
-
-        if (string.Equals(normalizedSkillId, ArenaConfig.ExoriMinSkillId, StringComparison.Ordinal))
-        {
-            var hitAnyTarget = ApplyFrontalMeleeSkill(
-                state,
-                events,
-                player,
-                damage: 15,
-                fxId: ArenaConfig.ExoriMinFxId,
-                element: ArenaConfig.ExoriMinElement,
-                ref pendingLifeLeechHeal);
-            ApplyPlayerCooldownsForCast(state, skill);
-            GrantPlayerShield(state, events, ArenaConfig.PlayerShieldGainPerAction);
-            return SkillCastResult.Ok(hitAnyTarget ? null : ArenaConfig.NoTargetReason);
-        }
-
         if (string.Equals(normalizedSkillId, ArenaConfig.SkillIds.MiraiPrimalRoar, StringComparison.Ordinal))
         {
             var hitAnyTarget = ApplyTileSkill(
@@ -1951,44 +1898,6 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             ApplyPlayerCooldownsForCast(state, skill);
             GrantPlayerShield(state, events, ArenaConfig.PlayerShieldGainPerAction);
             return SkillCastResult.Ok(null);
-        }
-
-        if (string.Equals(normalizedSkillId, ArenaConfig.HealSkillId, StringComparison.Ordinal))
-        {
-            ApplySelfHealSkill(state, events, player, skill);
-            ApplyPlayerCooldownsForCast(state, skill);
-            return SkillCastResult.Ok(null);
-        }
-
-        if (string.Equals(normalizedSkillId, ArenaConfig.GuardSkillId, StringComparison.Ordinal))
-        {
-            ApplyGuardSkill(events, player, skill);
-            ApplyPlayerCooldownsForCast(state, skill);
-            return SkillCastResult.Ok(null);
-        }
-
-        if (string.Equals(normalizedSkillId, ArenaConfig.AvalancheSkillId, StringComparison.Ordinal))
-        {
-            var targetResolution = TryResolveAvalancheCastTarget(state, player);
-            if (!targetResolution.HasTarget)
-            {
-                return SkillCastResult.Fail(targetResolution.FailReason ?? ArenaConfig.NoTargetReason);
-            }
-
-            var hitAnyTarget = ApplyGroundSquareSkillAt(
-                state,
-                events,
-                targetResolution.TileX,
-                targetResolution.TileY,
-                radius: 1,
-                damage: ArenaConfig.AvalancheDamage,
-                fxId: ArenaConfig.AvalancheFxId,
-                element: ArenaConfig.AvalancheElement,
-                attacker: player,
-                ref pendingLifeLeechHeal);
-            ApplyPlayerCooldownsForCast(state, skill);
-            GrantPlayerShield(state, events, ArenaConfig.PlayerShieldGainPerAction);
-            return SkillCastResult.Ok(hitAnyTarget ? null : ArenaConfig.NoTargetReason);
         }
 
         return SkillCastResult.Fail(ArenaConfig.UnknownSkillReason);
@@ -4024,44 +3933,6 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         return targetMobIds.Count > 0;
     }
 
-    private static AvalancheCastTargetResolution TryResolveAvalancheCastTarget(StoredBattle state, StoredActor player)
-    {
-        // Find the in-range tile whose 3x3 square (radius 1) would hit the most mobs.
-        // Scan row-major (Y then X) for a deterministic tie-break — first tile with max count wins.
-        int? bestX = null;
-        int? bestY = null;
-        var bestCount = 0;
-
-        for (var cy = 0; cy < ArenaConfig.Height; cy++)
-        {
-            for (var cx = 0; cx < ArenaConfig.Width; cx++)
-            {
-                if (ComputeManhattanDistance(player.TileX, player.TileY, cx, cy) > ArenaConfig.AvalancheRangeTilesManhattan)
-                {
-                    continue;
-                }
-
-                var affectedTiles = BuildSquareTiles(cx, cy, radius: 1, includeCenter: true)
-                    .Where(t => IsInBounds(t.TileX, t.TileY))
-                    .ToList();
-                var count = ResolveMobIdsOnTiles(state, affectedTiles).Count();
-                if (count > bestCount)
-                {
-                    bestCount = count;
-                    bestX = cx;
-                    bestY = cy;
-                }
-            }
-        }
-
-        if (bestX is null || bestCount == 0)
-        {
-            return AvalancheCastTargetResolution.Fail(ArenaConfig.NoTargetReason);
-        }
-
-        return AvalancheCastTargetResolution.Success(bestX.Value, bestY!.Value);
-    }
-
     private static bool ApplyTileSkill(
         StoredBattle state,
         List<BattleEventDto> events,
@@ -5063,57 +4934,6 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         _ = ApplyPlayerHeal(state, events, player, pendingLifeLeechHeal, "life_leech");
     }
 
-    private static int ApplySelfHealSkill(StoredBattle state, List<BattleEventDto> events, StoredActor player, StoredSkill skill)
-    {
-        if (player.Hp <= 0)
-        {
-            return 0;
-        }
-
-        var maxHealAmount = ComputePercentValue(player.MaxHp, ResolveSkillHealPercent(skill));
-
-        events.Add(new FxSpawnEventDto(
-            FxId: ArenaConfig.HealFxId,
-            TileX: player.TileX,
-            TileY: player.TileY,
-            Layer: "hitFx",
-            DurationMs: 620,
-            Element: ArenaConfig.HealElement));
-
-        return ApplyPlayerHeal(state, events, player, maxHealAmount, "skill_heal");
-    }
-
-    private static int ApplyGuardSkill(List<BattleEventDto> events, StoredActor player, StoredSkill skill)
-    {
-        if (player.Hp <= 0 || player.MaxShield <= 0)
-        {
-            return 0;
-        }
-
-        var guardAmount = ComputePercentValue(player.MaxHp, ResolveSkillGuardPercent(skill));
-        var previousShield = player.Shield;
-        player.Shield = Math.Min(player.MaxShield, player.Shield + guardAmount);
-        var appliedShield = Math.Max(0, player.Shield - previousShield);
-
-        events.Add(new FxSpawnEventDto(
-            FxId: ArenaConfig.GuardFxId,
-            TileX: player.TileX,
-            TileY: player.TileY,
-            Layer: "hitFx",
-            DurationMs: 620,
-            Element: ArenaConfig.GuardElement));
-
-        if (appliedShield > 0)
-        {
-            events.Add(new HealNumberEventDto(
-                ActorId: player.ActorId,
-                Amount: appliedShield,
-                Source: "shield_gain"));
-        }
-
-        return appliedShield;
-    }
-
     private static int ComputePercentValue(int maxValue, int percent)
     {
         if (maxValue <= 0 || percent <= 0)
@@ -5643,19 +5463,6 @@ public sealed partial class InMemoryBattleStore : IBattleStore
     {
         return MobShapePlanner.BuildForwardConeTiles(mob.TileX, mob.TileY, mob.FacingDirection)
             .Any(tile => tile.TileX == tileX && tile.TileY == tileY);
-    }
-
-    private readonly record struct AvalancheCastTargetResolution(bool HasTarget, int TileX, int TileY, string? FailReason)
-    {
-        public static AvalancheCastTargetResolution Success(int tileX, int tileY)
-        {
-            return new AvalancheCastTargetResolution(true, tileX, tileY, null);
-        }
-
-        public static AvalancheCastTargetResolution Fail(string reason)
-        {
-            return new AvalancheCastTargetResolution(false, 0, 0, reason);
-        }
     }
 
     private readonly record struct SkillCastResult(bool Success, string? Reason)

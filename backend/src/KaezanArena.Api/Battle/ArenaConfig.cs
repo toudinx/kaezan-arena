@@ -90,34 +90,18 @@ public static class ArenaConfig
     #endregion
 
     #region Skill IDs
-    public const string ExoriSkillId = "exori";
-    public const string ExoriMasSkillId = "exori_mas";
-    public const string ExoriMinSkillId = "exori_min";
     public const string SigilBoltSkillId = "sigil_bolt";
     public const string ShotgunSkillId = "shotgun";
     public const string VoidRicochetSkillId = "void_ricochet";
-    public const string HealSkillId = "heal";
-    public const string GuardSkillId = "guard";
-    public const string AvalancheSkillId = "avalanche";
     #endregion
 
     #region Skill FX IDs
-    public const string ExoriFxId = "fx.skill.exori";
-    public const string ExoriMasFxId = "fx.skill.exori_mas";
-    public const string ExoriMinFxId = "fx.skill.exori_min";
-    public const string HealFxId = "fx.hit.small";
-    public const string GuardFxId = "fx.hit.small";
-    public const string AvalancheFxId = "fx.skill.exori_mas";
     public const string HitSmallFxId = "fx.hit.small";
+    public const string ExoriFxId = "fx.skill.exori";       // reused by Pumpkin Dude elite ability
+    public const string AvalancheFxId = "fx.skill.exori_mas"; // reused by Thornfall ground FX
     #endregion
 
     #region Skill Element Types
-    public const ElementType ExoriElement = ElementType.Fire;
-    public const ElementType ExoriMasElement = ElementType.Energy;
-    public const ElementType ExoriMinElement = ElementType.Ice;
-    public const ElementType HealElement = ElementType.Holy;
-    public const ElementType GuardElement = ElementType.Energy;
-    public const ElementType AvalancheElement = ElementType.Ice;
     public const ElementType DefaultMobElement = ElementType.Physical;
     #endregion
 
@@ -136,15 +120,9 @@ public static class ArenaConfig
     #endregion
 
     #region Skill Cooldowns
-    public const int ExoriCooldownTotalMs = 1200;
-    public const int ExoriMasCooldownTotalMs = 2000;
-    public const int ExoriMinCooldownTotalMs = 800;
     public const int SigilBoltCooldownTotalMs = SigilBoltCooldownMs;
     public const int ShotgunCooldownTotalMs = ShotgunCooldownMs;
     public const int VoidRicochetCooldownTotalMs = VoidRicochetCooldownMs;
-    public const int HealCooldownTotalMs = 7000;
-    public const int GuardCooldownTotalMs = 10000;
-    public const int AvalancheCooldownTotalMs = 2500;
     #endregion
 
     #region Skill Leveling
@@ -159,12 +137,6 @@ public static class ArenaConfig
     public const int UltimateLevelThreeCardThreshold = 6;
     #endregion
 
-    #region Skill Effects
-    public const int AvalancheDamage = 3;
-    public const int AvalancheRangeTilesManhattan = 3;
-    public const int HealPercentOfMaxHp = 22;
-    public const int GuardPercentOfMaxHp = 10;
-    #endregion
 
     public static class UltimateConfig
     {
@@ -469,19 +441,19 @@ public static class ArenaConfig
     public static class ZoneConfig
     {
         public const int ZoneCount = 5;
-        public const int AccountLevelCap = 10;
-        public static readonly int[] AccountLevelToUnlockZone = [1, 2, 4, 6, 8];
+        public const int AccountLevelCap = 100;
+        public static readonly int[] AccountLevelToUnlockZone = [1, 21, 41, 61, 81];
 
         // HP and damage multipliers per zone (applied on top of existing run scaling)
         public static readonly float[] ZoneHpMultiplier = [1.0f, 1.5f, 2.2f, 3.2f, 4.5f];
         public static readonly float[] ZoneDmgMultiplier = [1.0f, 1.4f, 2.0f, 2.8f, 3.8f];
 
         // Account XP sources
-        public const int AccountXpPerRunCompleted = 50;
-        public const int AccountXpPerKill = 1;
+        public const int AccountXpPerRunCompleted = 300;
+        public const int AccountXpPerKill = 3;
 
-        // XP required per account level (linear: level * 200 + 100)
-        public static int XpRequiredForLevel(int level) => (Math.Max(1, level) * 200) + 100;
+        // XP required per account level. Zone 2 at level 21 ≈ 26 avg runs; Zone 5 at level 81 ≈ 303 runs.
+        public static int XpRequiredForLevel(int level) => (Math.Max(1, level) * 30) + 150;
     }
 
     public static class BestiaryConfig
@@ -749,7 +721,6 @@ public static class ArenaConfig
 
     #region Buff IDs
     public const string HealingAmplifierBuffId = "healing_amplifier";
-    public const string AntiRangedPressureBuffId = "anti_ranged_pressure";
     public const string ThornsBoostBuffId = "thorns_boost";
     public const string DamageBoostBuffId = "damage_boost";
     #endregion
@@ -770,7 +741,6 @@ public static class ArenaConfig
 
     #region Buff Bonus Values
     public const int HealAmplifierBonusPercent = 10;
-    public const int AntiRangedPressureReductionPercent = 20;
     public const int ThornsBoostBonusPercent = 30;
     public const int DamageBoostBonusPercent = 25;
     #endregion
@@ -946,15 +916,9 @@ public static class ArenaConfig
         public const string RendClaw = "weapon:rend_claw";
         public const string WhisperShot = "weapon:whisper_shot";
         public const string VoidChain = "weapon:void_chain";
-        public const string ExoriMin  = "weapon:exori_min";
-        public const string Exori     = "weapon:exori";
-        public const string ExoriMas  = "weapon:exori_mas";
         public const string SigilBolt = "weapon:sigil_bolt";
         public const string ShotgunId = "weapon:shotgun";
         public const string VoidRicochetId = "weapon:void_ricochet";
-        public const string Avalanche = "weapon:avalanche";
-        public const string Heal      = "weapon:heal";
-        public const string Guard     = "weapon:guard";
     }
 
     public static class SkillIds
@@ -1112,15 +1076,9 @@ public static class ArenaConfig
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
             [WeaponIds.AutoAttackRanged] = "#22d3ee",
-            [WeaponIds.ExoriMin] = "#7dd3fc",
-            [WeaponIds.Exori] = "#ff9f2d",
-            [WeaponIds.ExoriMas] = "#a78bfa",
             [WeaponIds.SigilBolt] = "#22d3ee",
             [WeaponIds.ShotgunId] = "#fb7185",
-            [WeaponIds.VoidRicochetId] = "#8b5cf6",
-            [WeaponIds.Avalanche] = "#93c5fd",
-            [WeaponIds.Heal] = "#fde68a",
-            [WeaponIds.Guard] = "#93c5fd"
+            [WeaponIds.VoidRicochetId] = "#8b5cf6"
         };
 
     /// <summary>Stable character IDs. Values are the authoritative keys for display name lookup.</summary>
@@ -1142,7 +1100,8 @@ public static class ArenaConfig
             [
                 SkillIds.MiraiPrimalRoar,
                 SkillIds.MiraiCollapseField,
-                SkillIds.MiraiRendClaw
+                SkillIds.MiraiRendClaw,
+                UltimateConfig.UltimateSkillId
             ],
             [CharacterIds.Sylwen] =
             [
@@ -1256,15 +1215,9 @@ public static class ArenaConfig
             [WeaponIds.RendClaw]       = "Rend Claw",
             [WeaponIds.WhisperShot]     = "Whisper Shot",
             [WeaponIds.VoidChain]       = "Void Chain",
-            [WeaponIds.ExoriMin]        = "Exori Min",
-            [WeaponIds.Exori]           = "Exori",
-            [WeaponIds.ExoriMas]        = "Exori Mas",
             [WeaponIds.SigilBolt]       = "Sigil Bolt",
             [WeaponIds.ShotgunId]       = "Shotgun",
             [WeaponIds.VoidRicochetId]  = "Void Ricochet",
-            [WeaponIds.Avalanche]       = "Avalanche",
-            [WeaponIds.Heal]            = "Heal",
-            [WeaponIds.Guard]           = "Guard",
             [CharacterIds.Mirai]           = "Mirai",
             [CharacterIds.Sylwen]          = "Sylwen",
             [CharacterIds.Velvet]          = "Velvet",
@@ -1315,15 +1268,9 @@ public static class ArenaConfig
             [SkillIds.MiraiRendClaw] = WeaponIds.RendClaw,
             [SkillIds.SylwenWhisperShot] = WeaponIds.WhisperShot,
             [SkillIds.VelvetVoidChain] = WeaponIds.VoidChain,
-            [ExoriSkillId]     = WeaponIds.Exori,
-            [ExoriMinSkillId]  = WeaponIds.ExoriMin,
-            [ExoriMasSkillId]  = WeaponIds.ExoriMas,
             [SigilBoltSkillId] = WeaponIds.SigilBolt,
             [ShotgunSkillId]   = WeaponIds.ShotgunId,
             [VoidRicochetSkillId] = WeaponIds.VoidRicochetId,
-            [AvalancheSkillId] = WeaponIds.Avalanche,
-            [HealSkillId]      = WeaponIds.Heal,
-            [GuardSkillId]     = WeaponIds.Guard,
         };
 
     /// <summary>Returns the display name for a simulation skill ID, or null if not found.</summary>
@@ -1342,15 +1289,9 @@ public static class ArenaConfig
             [WeaponIds.RendClaw] = SkillIds.MiraiRendClaw,
             [WeaponIds.WhisperShot] = SkillIds.SylwenWhisperShot,
             [WeaponIds.VoidChain] = SkillIds.VelvetVoidChain,
-            [WeaponIds.Exori]     = ExoriSkillId,
-            [WeaponIds.ExoriMin]  = ExoriMinSkillId,
-            [WeaponIds.ExoriMas]  = ExoriMasSkillId,
             [WeaponIds.SigilBolt] = SigilBoltSkillId,
             [WeaponIds.ShotgunId] = ShotgunSkillId,
             [WeaponIds.VoidRicochetId] = VoidRicochetSkillId,
-            [WeaponIds.Avalanche] = AvalancheSkillId,
-            [WeaponIds.Heal]      = HealSkillId,
-            [WeaponIds.Guard]     = GuardSkillId,
         };
 
     private static readonly IReadOnlySet<string> SignatureAutoAttackSkillIds =

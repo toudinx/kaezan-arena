@@ -212,9 +212,10 @@ public sealed class AccountV1Controller : ControllerBase
             }
 
             if (!string.Equals(source.SourceType, "mob", StringComparison.OrdinalIgnoreCase)
-                && !string.Equals(source.SourceType, "chest", StringComparison.OrdinalIgnoreCase))
+                && !string.Equals(source.SourceType, "chest", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(source.SourceType, "mimic", StringComparison.OrdinalIgnoreCase))
             {
-                return BadRequest(BuildValidationError("sourceType must be 'mob' or 'chest'"));
+                return BadRequest(BuildValidationError("sourceType must be 'mob', 'chest', or 'mimic'"));
             }
 
             if (string.IsNullOrWhiteSpace(source.SourceId))

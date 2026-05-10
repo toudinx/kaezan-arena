@@ -1,4 +1,5 @@
 using KaezanArena.Api.Account;
+using KaezanArena.Api.Analytics;
 using KaezanArena.Api.Battle;
 using KaezanArena.Api.Contracts.Battle;
 using KaezanArena.Api.Middleware;
@@ -198,6 +199,7 @@ builder.Services.AddSingleton<IAccountStatePersistence>(
                 : Path.GetFullPath(Path.Combine(environment.ContentRootPath, configuredStoragePath.Trim()));
         return new JsonFileAccountStatePersistence(resolvedStoragePath);
     });
+builder.Services.AddSingleton<RunResultStore>();
 builder.Services.AddSingleton<IAccountStateStore, InMemoryAccountStateStore>();
 builder.Services.AddSingleton<IBattleStore>(serviceProvider =>
     new InMemoryBattleStore(

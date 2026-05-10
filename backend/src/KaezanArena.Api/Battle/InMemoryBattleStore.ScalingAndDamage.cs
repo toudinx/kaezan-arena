@@ -63,13 +63,7 @@ public sealed partial class InMemoryBattleStore
             return 0;
         }
 
-        var adjustedDamage = baseDamage;
-        if (isRangedAutoAttack && IsBuffActive(state, ArenaConfig.AntiRangedPressureBuffId))
-        {
-            adjustedDamage = ApplyPercentReduction(adjustedDamage, ArenaConfig.AntiRangedPressureReductionPercent);
-        }
-
-        return Math.Max(1, adjustedDamage);
+        return Math.Max(1, baseDamage);
     }
 
     private static int ApplyOutgoingDamageModifiers(StoredBattle state, int baseDamage)

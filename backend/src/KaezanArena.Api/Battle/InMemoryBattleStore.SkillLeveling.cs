@@ -5,15 +5,9 @@ public sealed partial class InMemoryBattleStore
     private static readonly IReadOnlyDictionary<string, int> SkillBaseCooldownTotalMsById =
         new Dictionary<string, int>(StringComparer.Ordinal)
         {
-            [ArenaConfig.ExoriSkillId] = ArenaConfig.ExoriCooldownTotalMs,
-            [ArenaConfig.ExoriMasSkillId] = ArenaConfig.ExoriMasCooldownTotalMs,
-            [ArenaConfig.ExoriMinSkillId] = ArenaConfig.ExoriMinCooldownTotalMs,
             [ArenaConfig.SigilBoltSkillId] = ArenaConfig.SigilBoltCooldownTotalMs,
             [ArenaConfig.ShotgunSkillId] = ArenaConfig.ShotgunCooldownTotalMs,
             [ArenaConfig.VoidRicochetSkillId] = ArenaConfig.VoidRicochetCooldownTotalMs,
-            [ArenaConfig.HealSkillId] = ArenaConfig.HealCooldownTotalMs,
-            [ArenaConfig.GuardSkillId] = ArenaConfig.GuardCooldownTotalMs,
-            [ArenaConfig.AvalancheSkillId] = ArenaConfig.AvalancheCooldownTotalMs,
             [ArenaConfig.SkillIds.MiraiRendClaw] = ArenaConfig.SkillConfig.MiraiRendClawCooldownMs,
             [ArenaConfig.SkillIds.MiraiPrimalRoar] = ArenaConfig.SkillConfig.MiraiPrimalRoarCooldownMs,
             [ArenaConfig.SkillIds.MiraiCollapseField] = ArenaConfig.SkillConfig.MiraiCollapseFieldCooldownMs,
@@ -91,16 +85,6 @@ public sealed partial class InMemoryBattleStore
     {
         var reduction = ResolveSkillBonusLevels(skill) * ArenaConfig.SkillCooldownReductionPerLevelPercent;
         return Math.Clamp(reduction, 0, ArenaConfig.SkillCooldownReductionMaxPercent);
-    }
-
-    private static int ResolveSkillHealPercent(StoredSkill skill)
-    {
-        return ResolveSkillScaledPercent(ArenaConfig.HealPercentOfMaxHp, skill);
-    }
-
-    private static int ResolveSkillGuardPercent(StoredSkill skill)
-    {
-        return ResolveSkillScaledPercent(ArenaConfig.GuardPercentOfMaxHp, skill);
     }
 
     private static int ResolveSkillScaledPercent(int basePercent, StoredSkill skill)
