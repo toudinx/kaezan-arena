@@ -172,6 +172,7 @@ Four permanent Elemental Arenas, always accessible regardless of Account Level. 
 - Account progression now includes Account Level + Account XP (Lv. 1-100), earned from runs and kills
 - Zone selection happens before each run (Zone 1-5), with unlock gates at Account Lv. 1/21/41/61/81
 - Zone multipliers scale mob HP and outgoing damage on top of normal run scaling
+- Spawn pacing uses a server-authoritative non-linear curve: the first 10 seconds hold at 2 concurrent mobs, the mid-run ramps faster than the old linear curve, and the cap reaches 10 before the final stretch
 - Mob visual tier aura is derived from run zone (same sprite, no texture edits):
   - Zone 1 / Hollow: no aura
   - Zone 2 / Brave: subtle green glow

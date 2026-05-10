@@ -11,9 +11,11 @@ public sealed partial class InMemoryBattleStore
         var normalizedRunProgress = ArenaConfig.RunDurationMs <= 0
             ? 1.0d
             : clampedNowMs / (double)ArenaConfig.RunDurationMs;
+        var spawnPacingProgress = ResolveSpawnPacingProgress(clampedNowMs);
 
-        var baseMaxAlive = ArenaConfig.EarlyMobConcurrentCap + (int)Math.Floor(
-            (ArenaConfig.MaxAliveMobs - ArenaConfig.EarlyMobConcurrentCap) * normalizedRunProgress);
+        var baseMaxAlive = ArenaConfig.EarlyMobConcurrentCap + (int)Math.Round(
+            (ArenaConfig.MaxAliveMobs - ArenaConfig.EarlyMobConcurrentCap) * spawnPacingProgress,
+            MidpointRounding.AwayFromZero);
         var killDrivenMobCapBonus = Math.Min(1, Math.Max(0, state.TotalKills) / 70);
         var maxAliveMobs = Math.Clamp(
             baseMaxAlive + killDrivenMobCapBonus,
@@ -30,6 +32,28 @@ public sealed partial class InMemoryBattleStore
         return new SpawnPacingDirector(
             MaxAliveMobs: maxAliveMobs,
             EliteSpawnChancePercent: eliteSpawnChancePercent);
+    }
+
+    private static double ResolveSpawnPacingProgress(long clampedNowMs)
+    {
+        var orientationMs = Math.Clamp(
+            ArenaConfig.SpawnPacingOrientationMs,
+            0L,
+            ArenaConfig.RunDurationMs);
+        if (clampedNowMs <= orientationMs)
+        {
+            return 0.0d;
+        }
+
+        var pacingWindowMs = ArenaConfig.RunDurationMs - orientationMs;
+        if (pacingWindowMs <= 0)
+        {
+            return 1.0d;
+        }
+
+        var progressAfterOrientation = Clamp01((clampedNowMs - orientationMs) / (double)pacingWindowMs);
+        var inverseProgress = 1.0d - progressAfterOrientation;
+        return Clamp01(1.0d - (inverseProgress * inverseProgress));
     }
 
     private static int ApplyIncomingDamageModifiers(StoredBattle state, int baseDamage, bool isRangedAutoAttack)

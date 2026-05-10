@@ -79,6 +79,7 @@ public static class ArenaConfig
     public const int MobSpawnRingMinDistance = 2;
     public const int MobSpawnRingMaxDistance = 4;
     public const int EarlyMobConcurrentCap = 2;
+    public const long SpawnPacingOrientationMs = 10_000;
     #endregion
 
     #region Ranged Mob Behavior

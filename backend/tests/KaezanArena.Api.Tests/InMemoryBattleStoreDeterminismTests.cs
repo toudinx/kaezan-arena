@@ -362,6 +362,33 @@ public sealed class InMemoryBattleStoreDeterminismTests
     }
 
     [Fact]
+    public void StepBattle_SpawnPacingDirector_UsesNonLinearRampWithOpeningHoldAndEndPlateau()
+    {
+        var store = new InMemoryBattleStore();
+        var start = store.StartBattle("arena-spawn-pacing-curve", "player-spawn-pacing-curve", 1337);
+
+        Assert.Equal(ArenaConfig.EarlyMobConcurrentCap, start.SpawnPacing.MaxAliveMobs);
+
+        SetBattleTick(store, start.BattleId, (int)(ArenaConfig.SpawnPacingOrientationMs / StepDeltaMs) - 1);
+        var opening = store.StepBattle(start.BattleId, clientTick: null, commands: []);
+
+        SetBattleTick(store, start.BattleId, (60_000 / StepDeltaMs) - 1);
+        var midEscalation = store.StepBattle(start.BattleId, clientTick: null, commands: []);
+
+        SetBattleTick(store, start.BattleId, (120_000 / StepDeltaMs) - 1);
+        var lateMidEscalation = store.StepBattle(start.BattleId, clientTick: null, commands: []);
+
+        SetBattleTick(store, start.BattleId, (150_000 / StepDeltaMs) - 1);
+        var plateau = store.StepBattle(start.BattleId, clientTick: null, commands: []);
+
+        Assert.Equal(ArenaConfig.SpawnPacingOrientationMs, opening.RunTimeMs);
+        Assert.Equal(ArenaConfig.EarlyMobConcurrentCap, opening.SpawnPacing.MaxAliveMobs);
+        Assert.Equal(6, midEscalation.SpawnPacing.MaxAliveMobs);
+        Assert.Equal(9, lateMidEscalation.SpawnPacing.MaxAliveMobs);
+        Assert.Equal(ArenaConfig.MaxAliveMobs, plateau.SpawnPacing.MaxAliveMobs);
+    }
+
+    [Fact]
     public void StepBattle_LateMobSpawn_HasHigherMaxHpThanEarlySpawn()
     {
         var store = new InMemoryBattleStore();
