@@ -225,9 +225,10 @@ Four permanent Elemental Arenas, always accessible regardless of Account Level. 
   - Active character is always one of: `character:mirai`, `character:sylwen`, or `character:velvet`
   - Character art is remapped by ID only (no file moves/renames): `character:mirai` uses the former Kaelis Vex art, `character:sylwen` is unchanged, and `character:velvet` uses the former Kaelis Dawn art
   - Ultimate gauge starts at **0** each run and auto-fires when full
+  - Ultimate gauge damage-taken fill rate is per-character: Mirai 4 per damage point (melee/risk synergy), Sylwen and Velvet 2 per damage point (reward DPS skill play, not taking hits); kill fill is 12 for all characters
   - Ultimates evolve during the run based on total cards collected:
-    - Level 1: fewer than 3 cards collected
-    - Level 2: 3 to 5 cards collected
+    - Level 1: fewer than 2 cards collected
+    - Level 2: 2 to 5 cards collected
     - Level 3: 6 or more cards collected
   - Assist order is kit-driven per active character; Ultimate auto-casts when ready (Mirai priority checks Ultimate first, then offensive skills)
     - Mirai: Blood Fang (Ultimate) -> Primal Roar -> Collapse Field
@@ -310,8 +311,10 @@ Four permanent Elemental Arenas, always accessible regardless of Account Level. 
 - Heal and Guard removed from kit - survivability comes from passive cards only
 - **Left-click** a POI (chest, altar) to interact
 - **Right-click** a mob to lock it as the priority target
-- Level-up and chest card choices draw from the same passive-only card pool
+- Level-up and chest card choices draw from the same passive-only card pool (15 cards as of 1.5)
 - Chest card choices offer passive cards only (max 4 distinct types, max 3 stacks per type)
+- **Ranged Deflection** passive card: reduces ranged mob damage taken by 20% per stack (max 3 stacks = 60%); this activates the `AntiRangedPressure` path in `ApplyIncomingDamageModifiers`
+- Attack speed bonus from cards is capped at `MaxPercentAttackSpeedBonus = 150%` (effective AA cooldown floor ~240ms at base 600ms)
 - All simulation constants are in `backend/src/KaezanArena.Api/Battle/ArenaConfig.cs`
 - Ranged weapon infrastructure is implemented and shared by all ranged weapons:
   - Shared backend helpers: `HasLineOfSight` (stubbed), `ResolveRangedTarget`, `ApplyRangedDamageToMob`

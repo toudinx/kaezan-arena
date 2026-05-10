@@ -63,6 +63,16 @@ public sealed partial class InMemoryBattleStore
             return 0;
         }
 
+        if (isRangedAutoAttack)
+        {
+            var deflectionStacks = GetCardStackCount(state, ArenaConfig.RangedDeflectionCardId);
+            if (deflectionStacks > 0)
+            {
+                var reductionPercent = deflectionStacks * ArenaConfig.RangedDeflectionDamageReductionPercent;
+                baseDamage = Math.Max(1, baseDamage - baseDamage * reductionPercent / 100);
+            }
+        }
+
         return Math.Max(1, baseDamage);
     }
 

@@ -133,7 +133,7 @@ public static class ArenaConfig
     #endregion
 
     #region Ultimate Leveling
-    public const int UltimateLevelTwoCardThreshold = 3;
+    public const int UltimateLevelTwoCardThreshold = 2;
     public const int UltimateLevelThreeCardThreshold = 6;
     #endregion
 
@@ -142,7 +142,11 @@ public static class ArenaConfig
     {
         public const int GaugeMax = 100;
         public const int GaugePerKill = 12;
-        public const int GaugePerDamageTaken = 3; // per damage point received
+        // Per-character damage-taken fill rates — Mirai higher (melee/risk synergy with Blood Fang),
+        // Sylwen/Velvet lower (reward DPS skill play, not taking hits).
+        public const int GaugePerDamageTakenMirai = 4;
+        public const int GaugePerDamageTakenSylwen = 2;
+        public const int GaugePerDamageTakenVelvet = 2;
         public const string UltimateSkillId = "skill:ultimate";
     }
 
@@ -609,7 +613,14 @@ public static class ArenaConfig
     public const int MaxCardOfferCount = 3;
     public const int MaxCardSelectionsPerRun = 12;
     public const int MaxDistinctPassiveCards = 4;
+    // Balance baseline (tuned 2026-05-10, no telemetry yet):
+    // Base AA cooldown ~600ms. At MaxPercentAttackSpeedBonus = 150, effective floor = 600 / 2.5 = 240ms.
+    // MaxGlobalCooldownReductionPercent = 60 caps GCD at 40% of base (800ms -> 320ms).
     public const int MaxGlobalCooldownReductionPercent = 60;
+    public const int MaxPercentAttackSpeedBonus = 150;
+    // Ranged Deflection card — passive ranged damage reduction per stack.
+    public const string RangedDeflectionCardId = "ranged_deflection";
+    public const int RangedDeflectionDamageReductionPercent = 20;
     public const string CardTagOffense = "offense";
     public const string CardTagDefense = "defense";
     public const string CardTagUtility = "utility";
@@ -723,6 +734,7 @@ public static class ArenaConfig
     public const string HealingAmplifierBuffId = "healing_amplifier";
     public const string ThornsBoostBuffId = "thorns_boost";
     public const string DamageBoostBuffId = "damage_boost";
+    public const string AntiRangedPressureBuffId = "buff:anti_ranged_pressure";
     #endregion
 
     #region POI Spawn Parameters

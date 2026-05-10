@@ -136,6 +136,14 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             [MobArchetype.EliteIceZombie]    = ArenaConfig.SpeciesIds.EliteIceZombie,
             [MobArchetype.Mimic]             = "mimic",
         };
+    // Card incompatibility rationale:
+    // arcane_tempo (3x = 60% GCDReduction, exactly at cap) and overclocked_reflex
+    // (3x = 75% GCDReduction + 60% AtkSpeed) cannot coexist. Together they would yield
+    // 60% GCDReduction + 60% AtkSpeed from just 2 card slots with overclocked_reflex's CDR
+    // absorbed entirely by the cap — a dominant build with no meaningful tradeoff.
+    // Verified 2026-05-10: no other current card pairs produce broken numeric state.
+    // battle_hymn (3x = 60% GCDReduction) combined with arcane_tempo wastes stacks at the cap
+    // but does not cause incorrect behavior; it is intentionally not banned.
     private static readonly IReadOnlySet<string> IncompatibleCardPairs =
         new HashSet<string>(StringComparer.Ordinal)
         {
@@ -218,12 +226,12 @@ public sealed partial class InMemoryBattleStore : IBattleStore
         new(
             Id: "arcane_tempo",
             Name: "Arcane Tempo",
-            Description: "+30% global cooldown reduction.",
+            Description: "+20% global cooldown reduction.",
             Tags: [ArenaConfig.CardTagUtility, ArenaConfig.CardTagMobility],
             RarityWeight: 30,
             MaxStacks: 3,
             ScalingParams: new CardScalingParams(BaseStackMultiplierPercent: 100, AdditionalStackMultiplierPercent: 70),
-            Effects: new CardEffectBundle(GlobalCooldownReductionPercent: 30)),
+            Effects: new CardEffectBundle(GlobalCooldownReductionPercent: 20)),
         new(
             Id: "crushing_momentum",
             Name: "Crushing Momentum",
@@ -268,7 +276,16 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             RarityWeight: 50,
             MaxStacks: 3,
             ScalingParams: new CardScalingParams(BaseStackMultiplierPercent: 100, AdditionalStackMultiplierPercent: 85),
-            Effects: new CardEffectBundle(FlatDamageBonus: 8, GlobalCooldownReductionPercent: 20))
+            Effects: new CardEffectBundle(FlatDamageBonus: 8, GlobalCooldownReductionPercent: 20)),
+        new(
+            Id: ArenaConfig.RangedDeflectionCardId,
+            Name: "Ranged Deflection",
+            Description: $"-{ArenaConfig.RangedDeflectionDamageReductionPercent}% ranged damage taken per stack.",
+            Tags: [ArenaConfig.CardTagDefense],
+            RarityWeight: 40,
+            MaxStacks: 3,
+            ScalingParams: new CardScalingParams(BaseStackMultiplierPercent: 100, AdditionalStackMultiplierPercent: 100),
+            Effects: new CardEffectBundle())
     ];
     private static readonly IReadOnlyDictionary<string, CardDefinition> CardById =
         CardPool.ToDictionary(card => card.Id, StringComparer.Ordinal);
@@ -1451,7 +1468,9 @@ public sealed partial class InMemoryBattleStore : IBattleStore
     private static int ResolvePlayerAutoAttackCooldownMs(StoredBattle state)
     {
         var baseCooldownMs = ArenaConfig.GetSignatureAutoAttackBaseCooldownMsForCharacterId(state.PlayerActorId);
-        var attackSpeedBonusPercent = Math.Max(0, state.PlayerModifiers.PercentAttackSpeedBonus);
+        var attackSpeedBonusPercent = Math.Min(
+            ArenaConfig.MaxPercentAttackSpeedBonus,
+            Math.Max(0, state.PlayerModifiers.PercentAttackSpeedBonus));
         var attackSpeedMultiplier = 1d + (attackSpeedBonusPercent / 100d);
         if (string.Equals(state.PlayerClassId, ArenaConfig.PlayerClassSylwen, StringComparison.Ordinal) &&
             state.WindBreakActive &&
@@ -4153,9 +4172,14 @@ public sealed partial class InMemoryBattleStore : IBattleStore
             HitKind: hitKind,
             IsResistanceHit: isPlayerResistanceHit));
 
-        AddUltimateGauge(
-            state,
-            damageAppliedToPlayer * ArenaConfig.UltimateConfig.GaugePerDamageTaken);
+        var damageTakenGaugeRate = state.PlayerClassId switch
+        {
+            ArenaConfig.PlayerClassMirai  => ArenaConfig.UltimateConfig.GaugePerDamageTakenMirai,
+            ArenaConfig.PlayerClassSylwen => ArenaConfig.UltimateConfig.GaugePerDamageTakenSylwen,
+            ArenaConfig.PlayerClassVelvet => ArenaConfig.UltimateConfig.GaugePerDamageTakenVelvet,
+            _                             => ArenaConfig.UltimateConfig.GaugePerDamageTakenMirai,
+        };
+        AddUltimateGauge(state, damageAppliedToPlayer * damageTakenGaugeRate);
 
         TryApplyCollapseFieldReflectDamage(
             state,
